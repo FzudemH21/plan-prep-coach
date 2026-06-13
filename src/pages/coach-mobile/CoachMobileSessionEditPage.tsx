@@ -3,8 +3,10 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronDown, ChevronRight, Plus, Minus, Check,
   Info, RefreshCw, Dumbbell, Trash2, Link2, AlignLeft,
-  ArrowUp, ArrowDown, Settings2,
+  GripVertical, Settings2,
 } from 'lucide-react';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import type { DropResult, DragStart } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import type { AthleteScheduleEntry, ExerciseSummary, SessionSummary } from '@/hooks/useAthleteApp';
@@ -711,6 +713,9 @@ export default function CoachMobileSessionEditPage() {
     return new Set(init.map(s => s.id));
   });
 
+  // Saved expand state while a drag gesture is in progress (auto-expand for cross-section drop)
+  const [expandedBeforeDrag, setExpandedBeforeDrag] = useState<Set<string> | null>(null);
+
   const prevModeRef = useRef<Mode>('view');
   useEffect(() => {
     if (prevModeRef.current === mode) return;
@@ -839,6 +844,100 @@ export default function CoachMobileSessionEditPage() {
     }) }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allSections, session]);
+
+  // ── Drag-and-drop handlers ─────────────────────────────────────────────────
+  function onDragStart(initial: DragStart) {
+    if (initial.type === 'EXERCISE') {
+      // Expand all sections so cross-section drop targets are visible
+      setExpandedBeforeDrag(expandedSections);
+      setExpandedSections(new Set(allSections.map(s => s.id)));
+    }
+  }
+
+  function onDragEnd(result: DropResult) {
+    // Restore pre-drag expand state if we auto-expanded
+    if (expandedBeforeDrag !== null) {
+      setExpandedSections(expandedBeforeDrag);
+      setExpandedBeforeDrag(null);
+    }
+
+    const { source, destination, type } = result;
+    if (!destination) return;
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+
+    if (type === 'SECTION') {
+      // Reorder sections — assign fresh sequential order values
+      const reordered = [...allSections];
+      const [moved] = reordered.splice(source.index, 1);
+      reordered.splice(destination.index, 0, moved);
+      const orderMap = new Map(reordered.map((s, i) => [s.id, i]));
+
+      updateSession(s => ({
+        ...s,
+        exercises: s.exercises.map(ex => ({
+          ...ex,
+          sectionOrder: orderMap.has(ex.sectionId ?? '__none__')
+            ? orderMap.get(ex.sectionId ?? '__none__')!
+            : ex.sectionOrder,
+        })),
+      }));
+      setExtraSections(prev => prev.map(sec => ({
+        ...sec,
+        order: orderMap.has(sec.id) ? orderMap.get(sec.id)! : sec.order,
+      })));
+      return;
+    }
+
+    if (type === 'EXERCISE') {
+      const sourceSectionId = source.droppableId;
+      const destSectionId = destination.droppableId;
+      const sourceSection = allSections.find(s => s.id === sourceSectionId);
+      const destSection = allSections.find(s => s.id === destSectionId);
+      if (!sourceSection || !destSection) return;
+
+      if (sourceSectionId === destSectionId) {
+        // Within-section reorder
+        const exs = [...sourceSection.exercises];
+        const [movedEx] = exs.splice(source.index, 1);
+        exs.splice(destination.index, 0, movedEx);
+        const orderMap = new Map(exs.map((ex, i) => [ex.id, i]));
+        updateSession(s => ({
+          ...s,
+          exercises: s.exercises.map(ex => ({
+            ...ex,
+            order: orderMap.has(ex.id) ? orderMap.get(ex.id)! : ex.order,
+          })),
+        }));
+      } else {
+        // Cross-section move
+        const srcExs = [...sourceSection.exercises];
+        const [movedEx] = srcExs.splice(source.index, 1);
+        const dstExs = [...destSection.exercises];
+        dstExs.splice(destination.index, 0, movedEx);
+        const srcOrderMap = new Map(srcExs.map((ex, i) => [ex.id, i]));
+        const dstOrderMap = new Map(dstExs.map((ex, i) => [ex.id, i]));
+
+        updateSession(s => ({
+          ...s,
+          exercises: s.exercises.map(ex => {
+            if (ex.id === movedEx.id) {
+              return {
+                ...ex,
+                sectionId: destSectionId,
+                sectionName: destSection.name,
+                sectionOrder: destSection.order,
+                order: dstOrderMap.get(ex.id) ?? destination.index,
+                mobileEdited: true,
+              };
+            }
+            if (srcOrderMap.has(ex.id)) return { ...ex, order: srcOrderMap.get(ex.id)! };
+            if (dstOrderMap.has(ex.id)) return { ...ex, order: dstOrderMap.get(ex.id)! };
+            return ex;
+          }),
+        }));
+      }
+    }
+  }
 
   function handleSupersetLink(targetId: string) {
     if (!supersetSourceId) return;
@@ -1210,231 +1309,244 @@ export default function CoachMobileSessionEditPage() {
         {session.intensity ? <IntensityBadge intensity={session.intensity} /> : <span className="text-xs text-muted-foreground italic">Tap to set…</span>}
       </button>
 
-      {allSections.length > 0 && expandedSections.size === 0 && (
-        <p className="px-4 pt-3 pb-1 text-xs text-muted-foreground shrink-0">Tap a section to expand and edit · Use ↑↓ to reorder</p>
+      {allSections.length > 0 && expandedSections.size === 0 && expandedBeforeDrag === null && (
+        <p className="px-4 pt-3 pb-1 text-xs text-muted-foreground shrink-0">Tap to expand · Drag ≡ to reorder</p>
       )}
 
-      {/* Section list */}
+      {/* Section list — drag & drop for both sections and exercises (incl. cross-section) */}
       <div className="flex-1 overflow-y-auto">
-        <div className="px-4 py-4 space-y-3 pb-10">
-          {allSections.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No sections yet. Create a section first, then add exercises.</p>
-          ) : allSections.map((section, secIdx) => {
-            const isExpanded = expandedSections.has(section.id);
-            return (
-              <div key={section.id} className="rounded-xl border bg-card overflow-hidden">
-                {/* Section header */}
-                <button className="w-full flex items-center gap-2 px-3 py-2.5 bg-muted/30 text-left active:bg-muted/50 transition-colors"
-                  onClick={() => toggleSection(section.id)}>
-                  {/* Reorder buttons */}
-                  <div className="flex flex-col gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => moveSection(section.id, 'up')} disabled={secIdx === 0}
-                      className={cn('w-5 h-5 rounded flex items-center justify-center transition-colors',
-                        secIdx === 0 ? 'text-muted-foreground/20 cursor-default' : 'text-muted-foreground hover:text-foreground hover:bg-muted active:opacity-60')}>
-                      <ArrowUp className="h-3 w-3" />
-                    </button>
-                    <button onClick={() => moveSection(section.id, 'down')} disabled={secIdx === allSections.length - 1}
-                      className={cn('w-5 h-5 rounded flex items-center justify-center transition-colors',
-                        secIdx === allSections.length - 1 ? 'text-muted-foreground/20 cursor-default' : 'text-muted-foreground hover:text-foreground hover:bg-muted active:opacity-60')}>
-                      <ArrowDown className="h-3 w-3" />
-                    </button>
-                  </div>
+        <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
+          <Droppable droppableId="sections" type="SECTION">
+            {(secListDrop) => (
+              <div ref={secListDrop.innerRef} {...secListDrop.droppableProps}
+                className="px-4 py-4 space-y-3 pb-10">
+                {allSections.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">No sections yet. Create a section first, then add exercises.</p>
+                ) : allSections.map((section, secIdx) => {
+                  const isExpanded = expandedSections.has(section.id);
+                  return (
+                    <Draggable key={section.id} draggableId={section.id} index={secIdx}>
+                      {(secDrag, secSnap) => (
+                        <div ref={secDrag.innerRef} {...secDrag.draggableProps}
+                          className={cn('rounded-xl border bg-card overflow-hidden',
+                            secSnap.isDragging && 'shadow-lg ring-1 ring-primary/30 opacity-95')}>
 
-                  <span className="flex-1 text-sm font-semibold truncate">{section.name}</span>
-                  <span className="text-xs text-muted-foreground shrink-0">{section.exercises.length} ex</span>
-
-                  {/* Notes toggle */}
-                  <div onClick={e => e.stopPropagation()}>
-                    <button onClick={() => setSectionNotesOpen(prev => { const n = new Set(prev); n.has(section.id) ? n.delete(section.id) : n.add(section.id); return n; })}
-                      className={cn('w-7 h-7 rounded-full flex items-center justify-center transition-colors',
-                        sectionNotesOpen.has(section.id) ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted')}>
-                      <AlignLeft className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-
-                  {/* Delete section */}
-                  <div onClick={e => e.stopPropagation()}>
-                    <button onClick={() => deleteSection(section.id)}
-                      className="w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-
-                  <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform shrink-0', isExpanded && 'rotate-180')} />
-                </button>
-
-                {/* Section notes */}
-                {sectionNotesOpen.has(section.id) && (
-                  <div className="px-3 pb-2 border-b bg-muted/10">
-                    <textarea value={sectionNotesMap[section.id] ?? section.notes ?? ''}
-                      onChange={e => setSectionNotesMap(prev => ({ ...prev, [section.id]: e.target.value }))}
-                      placeholder="Section notes…" rows={2}
-                      className="w-full text-sm border rounded-lg px-3 py-2 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground/50 mt-2" />
-                  </div>
-                )}
-
-                {/* Exercises (when expanded) */}
-                {isExpanded && (
-                  <div>
-                    {section.exercises.length === 0 ? (
-                      <p className="text-xs text-muted-foreground text-center py-4 px-3 border border-dashed rounded-lg mx-3 my-2">
-                        No exercises yet — add one below
-                      </p>
-                    ) : section.exercises.map((ex, exIdx) => {
-                      const params = getParamColumns(ex);
-                      const sets = getSetCount(ex);
-                      const hasNotes = exerciseNotesOpen.has(ex.id);
-
-                      return (
-                        <div key={ex.id}>
-                          {/* Exercise card */}
-                          <div className={cn('border-t', exIdx === 0 && 'border-t')}>
-                            {/* Exercise header */}
-                            <div className="flex items-center justify-between px-3 py-2 bg-muted/10 gap-1.5">
-                              {/* Reorder */}
-                              <div className="flex flex-col gap-0.5 shrink-0">
-                                <button onClick={() => moveExercise(ex.id, 'up')} disabled={exIdx === 0}
-                                  className={cn('w-5 h-5 rounded flex items-center justify-center',
-                                    exIdx === 0 ? 'text-muted-foreground/20 cursor-default' : 'text-muted-foreground hover:text-foreground hover:bg-muted active:opacity-60')}>
-                                  <ArrowUp className="h-3 w-3" />
-                                </button>
-                                <button onClick={() => moveExercise(ex.id, 'down')} disabled={exIdx === section.exercises.length - 1}
-                                  className={cn('w-5 h-5 rounded flex items-center justify-center',
-                                    exIdx === section.exercises.length - 1 ? 'text-muted-foreground/20 cursor-default' : 'text-muted-foreground hover:text-foreground hover:bg-muted active:opacity-60')}>
-                                  <ArrowDown className="h-3 w-3" />
-                                </button>
-                              </div>
-
-                              {ex.isCircuit && <RefreshCw className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
-                              <p className="text-sm font-semibold truncate flex-1 min-w-0">{ex.name}</p>
-
-                              {/* Param config */}
-                              {!ex.isCircuit && (
-                                <button onClick={() => { setParamConfigTarget(ex); setParamConfigOpen(true); }}
-                                  className="w-7 h-7 rounded-full flex items-center justify-center transition-colors text-muted-foreground hover:text-primary hover:bg-primary/10 shrink-0"
-                                  title="Configure visible parameters">
-                                  <Settings2 className="h-3.5 w-3.5" />
-                                </button>
-                              )}
-
-                              {/* Exercise notes toggle */}
-                              <button onClick={() => setExerciseNotesOpen(prev => { const n = new Set(prev); n.has(ex.id) ? n.delete(ex.id) : n.add(ex.id); return n; })}
-                                className={cn('w-7 h-7 rounded-full flex items-center justify-center transition-colors shrink-0',
-                                  hasNotes || ex.notes ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-primary hover:bg-primary/10')}
-                                title="Exercise notes">
-                                <AlignLeft className="h-3.5 w-3.5" />
-                              </button>
-
-                              {/* Sets ± */}
-                              {!ex.isCircuit && (
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <span className="text-xs text-muted-foreground">Sets</span>
-                                  <button onClick={() => changeSetCount(ex.id, -1)}
-                                    className="w-6 h-6 rounded-full border bg-background flex items-center justify-center active:bg-accent">
-                                    <Minus className="h-3 w-3" />
-                                  </button>
-                                  <span className="text-sm font-bold w-4 text-center tabular-nums">{sets}</span>
-                                  <button onClick={() => changeSetCount(ex.id, +1)}
-                                    className="w-6 h-6 rounded-full border bg-background flex items-center justify-center active:bg-accent">
-                                    <Plus className="h-3 w-3" />
-                                  </button>
-                                </div>
-                              )}
-
-                              {/* Delete */}
-                              <button onClick={() => deleteExercise(ex.id)}
-                                className="w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
+                          {/* Section header — grip handle + expand button + actions */}
+                          <div className="flex items-center gap-1.5 px-3 py-2.5 bg-muted/30">
+                            {/* Section drag handle */}
+                            <div {...secDrag.dragHandleProps}
+                              className="flex items-center justify-center w-6 h-6 text-muted-foreground/50 shrink-0 cursor-grab active:cursor-grabbing touch-none">
+                              <GripVertical className="h-4 w-4" />
                             </div>
 
-                            {/* Exercise notes textarea */}
-                            {(hasNotes || ex.notes) && (
-                              <div className="px-3 pt-1.5 pb-2 bg-muted/5">
-                                <textarea value={ex.notes ?? ''} onChange={e => updateExercise(ex.id, x => ({ ...x, notes: e.target.value, mobileEdited: true }))}
-                                  placeholder="Exercise notes…" rows={2}
-                                  className="w-full text-sm border rounded-lg px-3 py-2 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground/50" />
-                              </div>
-                            )}
+                            {/* Expand/collapse — takes remaining space */}
+                            <button onClick={() => toggleSection(section.id)}
+                              className="flex-1 flex items-center gap-2 text-left min-w-0">
+                              <span className="flex-1 text-sm font-semibold truncate">{section.name}</span>
+                              <span className="text-xs text-muted-foreground shrink-0">{section.exercises.length} ex</span>
+                              <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform shrink-0', isExpanded && 'rotate-180')} />
+                            </button>
 
-                            {/* Params table */}
-                            {params.length > 0 && !ex.isCircuit && (
-                              <div className="overflow-x-auto">
-                                <table className="w-full">
-                                  <thead>
-                                    <tr className="border-b bg-muted/10">
-                                      <th className="text-left px-3 py-1.5 text-xs font-medium text-muted-foreground w-8">Set</th>
-                                      {params.map(p => (
-                                        <th key={p} className="text-left px-2 py-1.5 text-xs font-medium text-muted-foreground">{p}</th>
-                                      ))}
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {Array.from({ length: sets }, (_, i) => (
-                                      <tr key={i} className={cn('border-b last:border-0', i % 2 === 1 && 'bg-muted/10')}>
-                                        <td className="px-3 py-2 text-xs font-medium text-muted-foreground">{i + 1}</td>
-                                        {params.map(p => (
-                                          <td key={p} className="px-2 py-1.5">
-                                            <input type="text" inputMode="decimal" value={getPlannedValue(ex, p, i)}
-                                              onChange={e => setParamValue(ex.id, p, i, e.target.value)}
-                                              className="w-16 h-7 text-xs border rounded-md px-2 bg-background focus:outline-none focus:ring-1 focus:ring-primary" />
-                                          </td>
-                                        ))}
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
+                            {/* Notes toggle */}
+                            <button
+                              onClick={() => setSectionNotesOpen(prev => { const n = new Set(prev); n.has(section.id) ? n.delete(section.id) : n.add(section.id); return n; })}
+                              className={cn('w-7 h-7 rounded-full flex items-center justify-center transition-colors shrink-0',
+                                sectionNotesOpen.has(section.id) ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted')}>
+                              <AlignLeft className="h-3.5 w-3.5" />
+                            </button>
 
-                            {/* Circuit info + exercise list */}
-                            {ex.isCircuit && (
-                              <>
-                                <div className="px-3 py-2 text-xs text-muted-foreground border-b">
-                                  {ex.circuitRounds ?? 3} rounds · {ex.circuitExercises?.length ?? 0} exercises
-                                </div>
-                                <CircuitExerciseList ex={ex} />
-                              </>
-                            )}
+                            {/* Delete section */}
+                            <button onClick={() => deleteSection(section.id)}
+                              className="w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                           </div>
 
-                          {/* Superset connector BETWEEN exercises */}
-                          {exIdx < section.exercises.length - 1 && (
-                            <SupersetConnector
-                              exA={ex} exB={section.exercises[exIdx + 1]}
-                              onLink={() => linkAdjacentAsSuperset(ex, section.exercises[exIdx + 1])}
-                              onUnlink={() => removeFromSuperset(section.exercises[exIdx + 1].id)}
-                              editMode
-                            />
+                          {/* Section notes */}
+                          {sectionNotesOpen.has(section.id) && (
+                            <div className="px-3 pb-2 border-b bg-muted/10">
+                              <textarea value={sectionNotesMap[section.id] ?? section.notes ?? ''}
+                                onChange={e => setSectionNotesMap(prev => ({ ...prev, [section.id]: e.target.value }))}
+                                placeholder="Section notes…" rows={2}
+                                className="w-full text-sm border rounded-lg px-3 py-2 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground/50 mt-2" />
+                            </div>
+                          )}
+
+                          {/* Exercise droppable — always mounted for cross-section drops */}
+                          <Droppable droppableId={section.id} type="EXERCISE">
+                            {(exListDrop, exListSnap) => (
+                              <div ref={exListDrop.innerRef} {...exListDrop.droppableProps}
+                                className={cn('transition-colors',
+                                  exListSnap.isDraggingOver && !isExpanded && 'min-h-12 bg-primary/5 border-t',
+                                  exListSnap.isDraggingOver && isExpanded && 'bg-primary/5')}>
+                                {isExpanded && (
+                                  <>
+                                    {section.exercises.length === 0 ? (
+                                      <p className="text-xs text-muted-foreground text-center py-4 px-3 border border-dashed rounded-lg mx-3 my-2">
+                                        No exercises yet — add one below
+                                      </p>
+                                    ) : section.exercises.map((ex, exIdx) => {
+                                      const params = getParamColumns(ex);
+                                      const sets = getSetCount(ex);
+                                      const hasNotes = exerciseNotesOpen.has(ex.id);
+                                      return (
+                                        <Draggable key={ex.id} draggableId={ex.id} index={exIdx}>
+                                          {(exDrag, exSnap) => (
+                                            <div ref={exDrag.innerRef} {...exDrag.draggableProps}
+                                              className={cn(exSnap.isDragging && 'shadow-md opacity-95')}>
+                                              {/* Exercise card */}
+                                              <div className="border-t">
+                                                {/* Exercise header */}
+                                                <div className="flex items-center justify-between px-3 py-2 bg-muted/10 gap-1.5">
+                                                  {/* Exercise drag handle */}
+                                                  <div {...exDrag.dragHandleProps}
+                                                    className="flex items-center justify-center w-6 h-6 text-muted-foreground/40 shrink-0 cursor-grab active:cursor-grabbing touch-none">
+                                                    <GripVertical className="h-4 w-4" />
+                                                  </div>
+
+                                                  {ex.isCircuit && <RefreshCw className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                                                  <p className="text-sm font-semibold truncate flex-1 min-w-0">{ex.name}</p>
+
+                                                  {/* Param config */}
+                                                  {!ex.isCircuit && (
+                                                    <button onClick={() => { setParamConfigTarget(ex); setParamConfigOpen(true); }}
+                                                      className="w-7 h-7 rounded-full flex items-center justify-center transition-colors text-muted-foreground hover:text-primary hover:bg-primary/10 shrink-0"
+                                                      title="Configure visible parameters">
+                                                      <Settings2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                  )}
+
+                                                  {/* Exercise notes toggle */}
+                                                  <button
+                                                    onClick={() => setExerciseNotesOpen(prev => { const n = new Set(prev); n.has(ex.id) ? n.delete(ex.id) : n.add(ex.id); return n; })}
+                                                    className={cn('w-7 h-7 rounded-full flex items-center justify-center transition-colors shrink-0',
+                                                      hasNotes || ex.notes ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-primary hover:bg-primary/10')}
+                                                    title="Exercise notes">
+                                                    <AlignLeft className="h-3.5 w-3.5" />
+                                                  </button>
+
+                                                  {/* Sets ± */}
+                                                  {!ex.isCircuit && (
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                      <span className="text-xs text-muted-foreground">Sets</span>
+                                                      <button onClick={() => changeSetCount(ex.id, -1)}
+                                                        className="w-6 h-6 rounded-full border bg-background flex items-center justify-center active:bg-accent">
+                                                        <Minus className="h-3 w-3" />
+                                                      </button>
+                                                      <span className="text-sm font-bold w-4 text-center tabular-nums">{sets}</span>
+                                                      <button onClick={() => changeSetCount(ex.id, +1)}
+                                                        className="w-6 h-6 rounded-full border bg-background flex items-center justify-center active:bg-accent">
+                                                        <Plus className="h-3 w-3" />
+                                                      </button>
+                                                    </div>
+                                                  )}
+
+                                                  {/* Delete */}
+                                                  <button onClick={() => deleteExercise(ex.id)}
+                                                    className="w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0">
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                  </button>
+                                                </div>
+
+                                                {/* Exercise notes textarea */}
+                                                {(hasNotes || ex.notes) && (
+                                                  <div className="px-3 pt-1.5 pb-2 bg-muted/5">
+                                                    <textarea value={ex.notes ?? ''} onChange={e => updateExercise(ex.id, x => ({ ...x, notes: e.target.value, mobileEdited: true }))}
+                                                      placeholder="Exercise notes…" rows={2}
+                                                      className="w-full text-sm border rounded-lg px-3 py-2 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground/50" />
+                                                  </div>
+                                                )}
+
+                                                {/* Params table */}
+                                                {params.length > 0 && !ex.isCircuit && (
+                                                  <div className="overflow-x-auto">
+                                                    <table className="w-full">
+                                                      <thead>
+                                                        <tr className="border-b bg-muted/10">
+                                                          <th className="text-left px-3 py-1.5 text-xs font-medium text-muted-foreground w-8">Set</th>
+                                                          {params.map(p => (
+                                                            <th key={p} className="text-left px-2 py-1.5 text-xs font-medium text-muted-foreground">{p}</th>
+                                                          ))}
+                                                        </tr>
+                                                      </thead>
+                                                      <tbody>
+                                                        {Array.from({ length: sets }, (_, i) => (
+                                                          <tr key={i} className={cn('border-b last:border-0', i % 2 === 1 && 'bg-muted/10')}>
+                                                            <td className="px-3 py-2 text-xs font-medium text-muted-foreground">{i + 1}</td>
+                                                            {params.map(p => (
+                                                              <td key={p} className="px-2 py-1.5">
+                                                                <input type="text" inputMode="decimal" value={getPlannedValue(ex, p, i)}
+                                                                  onChange={e => setParamValue(ex.id, p, i, e.target.value)}
+                                                                  className="w-16 h-7 text-xs border rounded-md px-2 bg-background focus:outline-none focus:ring-1 focus:ring-primary" />
+                                                              </td>
+                                                            ))}
+                                                          </tr>
+                                                        ))}
+                                                      </tbody>
+                                                    </table>
+                                                  </div>
+                                                )}
+
+                                                {/* Circuit info + exercise list */}
+                                                {ex.isCircuit && (
+                                                  <>
+                                                    <div className="px-3 py-2 text-xs text-muted-foreground border-b">
+                                                      {ex.circuitRounds ?? 3} rounds · {ex.circuitExercises?.length ?? 0} exercises
+                                                    </div>
+                                                    <CircuitExerciseList ex={ex} />
+                                                  </>
+                                                )}
+                                              </div>
+
+                                              {/* Superset connector BETWEEN exercises */}
+                                              {exIdx < section.exercises.length - 1 && (
+                                                <SupersetConnector
+                                                  exA={ex} exB={section.exercises[exIdx + 1]}
+                                                  onLink={() => linkAdjacentAsSuperset(ex, section.exercises[exIdx + 1])}
+                                                  onUnlink={() => removeFromSuperset(section.exercises[exIdx + 1].id)}
+                                                  editMode
+                                                />
+                                              )}
+                                            </div>
+                                          )}
+                                        </Draggable>
+                                      );
+                                    })}
+                                  </>
+                                )}
+                                {exListDrop.placeholder}
+                              </div>
+                            )}
+                          </Droppable>
+
+                          {/* Add exercise / circuit buttons — shown when expanded */}
+                          {isExpanded && (
+                            <div className="flex gap-2 p-3 border-t">
+                              <button onClick={() => { setPickerTargetSectionId(section.id); setExercisePickerOpen(true); }}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed text-xs text-muted-foreground hover:text-primary hover:border-primary active:opacity-60 transition-colors">
+                                <Plus className="h-3.5 w-3.5" /> Add Exercise
+                              </button>
+                              <button onClick={() => { setPickerTargetSectionId(section.id); setExercisePickerOpen(true); }}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed text-xs text-muted-foreground hover:text-primary hover:border-primary active:opacity-60 transition-colors">
+                                <RefreshCw className="h-3.5 w-3.5" /> Circuit
+                              </button>
+                            </div>
                           )}
                         </div>
-                      );
-                    })}
+                      )}
+                    </Draggable>
+                  );
+                })}
+                {secListDrop.placeholder}
 
-                    {/* Add exercise / circuit buttons */}
-                    <div className="flex gap-2 p-3 border-t">
-                      <button onClick={() => { setPickerTargetSectionId(section.id); setExercisePickerOpen(true); }}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed text-xs text-muted-foreground hover:text-primary hover:border-primary active:opacity-60 transition-colors">
-                        <Plus className="h-3.5 w-3.5" /> Add Exercise
-                      </button>
-                      <button onClick={() => { setPickerTargetSectionId(section.id); setExercisePickerOpen(true); }}
-                        className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed text-xs text-muted-foreground hover:text-primary hover:border-primary active:opacity-60 transition-colors">
-                        <RefreshCw className="h-3.5 w-3.5" /> Circuit
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <button onClick={() => setNewSectionDialogOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed text-sm text-muted-foreground hover:text-primary hover:border-primary active:opacity-60 transition-colors">
+                  <Plus className="h-4 w-4" /> New Section
+                </button>
               </div>
-            );
-          })}
-
-          <button onClick={() => setNewSectionDialogOpen(true)}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed text-sm text-muted-foreground hover:text-primary hover:border-primary active:opacity-60 transition-colors">
-            <Plus className="h-4 w-4" /> New Section
-          </button>
-
-          {/* Exercises can only be added inside sections — no top-level Add Exercise button */}
-        </div>
+            )}
+          </Droppable>
+        </DragDropContext>
       </div>
 
       {/* ── Sheets & Dialogs ── */}
