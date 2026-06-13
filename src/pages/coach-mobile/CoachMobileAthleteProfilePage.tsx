@@ -489,18 +489,53 @@ export default function CoachMobileAthleteProfilePage() {
         })
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        // Unique constraint violation: another process (e.g. syncAthleteSchedule) created
+        // the row concurrently between our UPDATE (0 rows) and this INSERT. Retry with UPDATE.
+        if ((error as { code?: string }).code === '23505') {
+          const { error: retryErr } = await supabase
+            .from('athlete_schedule')
+            .update(patch)
+            .eq('athlete_connection_id', connection.id)
+            .eq('date', dateStr);
+          if (retryErr) throw retryErr;
+          setSchedule(prev => {
+            const exists = prev.some(e => e.date === dateStr);
+            if (exists) return prev.map(e => e.date === dateStr ? { ...e, ...patch } : e);
+            return [...prev, {
+              id: dateStr,
+              date: dateStr,
+              intensity: patch.intensity ?? null,
+              sessions: patch.sessions ?? [],
+              events: [],
+              programName: null,
+              mesocycleName: null,
+              microcycleName: null,
+            }].sort((a, b) => a.date.localeCompare(b.date));
+          });
+          return;
+        }
+        throw error;
+      }
       if (data) {
-        setSchedule(prev => [...prev, {
-          id: (data as Record<string, unknown>).id as string,
-          date: dateStr,
-          intensity: patch.intensity ?? null,
-          sessions: patch.sessions ?? [],
-          events: [],
-          programName: null,
-          mesocycleName: null,
-          microcycleName: null,
-        }].sort((a, b) => a.date.localeCompare(b.date)));
+        setSchedule(prev => {
+          // Avoid duplicate entries if an optimistic update already added this date
+          if (prev.some(e => e.date === dateStr)) {
+            return prev.map(e => e.date === dateStr
+              ? { ...e, id: (data as Record<string, unknown>).id as string, ...patch }
+              : e);
+          }
+          return [...prev, {
+            id: (data as Record<string, unknown>).id as string,
+            date: dateStr,
+            intensity: patch.intensity ?? null,
+            sessions: patch.sessions ?? [],
+            events: [],
+            programName: null,
+            mesocycleName: null,
+            microcycleName: null,
+          }].sort((a, b) => a.date.localeCompare(b.date));
+        });
       }
     }
   }, [connection, setSchedule]);
@@ -593,46 +628,91 @@ export default function CoachMobileAthleteProfilePage() {
     const movedSession = srcEntry.sessions[source.index];
     if (!movedSession) return;
 
+    if (sourceDate === destDate) {
+      // Within-day reorder
+      const sessions = [...srcEntry.sessions];
+      const [mv] = sessions.splice(source.index, 1);
+      sessions.splice(destination.index, 0, mv);
+      const reordered = sessions.map((s, i) => ({ ...s, order: i }));
+
+      // Optimistic update — show result immediately
+      setSchedule(prev => prev.map(e => e.date === sourceDate ? { ...e, sessions: reordered } : e));
+      setMutating(true);
+      try {
+        await upsertDayRow(sourceDate, { sessions: reordered });
+      } catch {
+        // Rollback
+        setSchedule(prev => prev.map(e => e.date === sourceDate ? { ...e, sessions: srcEntry.sessions } : e));
+        toast({ title: 'Error', description: 'Could not reorder session.', variant: 'destructive' });
+      } finally {
+        setMutating(false);
+      }
+      return;
+    }
+
+    // Cross-day move — remove from source, insert into destination
+    const srcSessions = [...srcEntry.sessions];
+    srcSessions.splice(source.index, 1);
+    const newSrc = srcSessions.map((s, i) => ({ ...s, order: i }));
+
+    const dstEntry = schedMap.get(destDate);
+    const dstSessions = [...(dstEntry?.sessions ?? [])];
+    // Track the original plan date so syncAthleteSchedule can reverse the
+    // plan's session placement and honour this mobile rearrangement.
+    const originalDate = movedSession.originalDate ?? sourceDate;
+    const isBackToOriginal = destDate === originalDate;
+    const taggedSession: typeof movedSession = {
+      ...movedSession,
+      mobileRearranged: isBackToOriginal ? undefined : true,
+      originalDate: isBackToOriginal ? undefined : originalDate,
+    };
+    dstSessions.splice(destination.index, 0, taggedSession);
+    const newDst = dstSessions.map((s, i) => ({ ...s, order: i }));
+
+    // Optimistic update — move session in UI immediately, before any Supabase call.
+    // This prevents the session from disappearing if one of the two writes partially
+    // completes before the other fails.
+    setSchedule(prev => {
+      const next = prev.map(e => {
+        if (e.date === sourceDate) return { ...e, sessions: newSrc };
+        if (e.date === destDate)   return { ...e, sessions: newDst };
+        return e;
+      });
+      // If destDate had no local entry yet, add one
+      if (!prev.some(e => e.date === destDate)) {
+        next.push({
+          id: destDate,
+          date: destDate,
+          intensity: null,
+          sessions: newDst,
+          events: [],
+          programName: null,
+          mesocycleName: null,
+          microcycleName: null,
+        });
+        next.sort((a, b) => a.date.localeCompare(b.date));
+      }
+      return next;
+    });
+
     setMutating(true);
     try {
-      if (sourceDate === destDate) {
-        // Within-day reorder
-        const sessions = [...srcEntry.sessions];
-        const [mv] = sessions.splice(source.index, 1);
-        sessions.splice(destination.index, 0, mv);
-        const reordered = sessions.map((s, i) => ({ ...s, order: i }));
-        await upsertDayRow(sourceDate, { sessions: reordered });
-      } else {
-        // Cross-day move — remove from source, insert into destination
-        const srcSessions = [...srcEntry.sessions];
-        srcSessions.splice(source.index, 1);
-        const newSrc = srcSessions.map((s, i) => ({ ...s, order: i }));
-
-        const dstEntry = schedMap.get(destDate);
-        const dstSessions = [...(dstEntry?.sessions ?? [])];
-        // Track the original plan date so syncAthleteSchedule can reverse the
-        // plan's session placement and honour this mobile rearrangement.
-        const originalDate = movedSession.originalDate ?? sourceDate;
-        const isBackToOriginal = destDate === originalDate;
-        const taggedSession: typeof movedSession = {
-          ...movedSession,
-          mobileRearranged: isBackToOriginal ? undefined : true,
-          originalDate: isBackToOriginal ? undefined : originalDate,
-        };
-        dstSessions.splice(destination.index, 0, taggedSession);
-        const newDst = dstSessions.map((s, i) => ({ ...s, order: i }));
-
-        await Promise.all([
-          upsertDayRow(sourceDate, { sessions: newSrc }),
-          upsertDayRow(destDate,   { sessions: newDst }),
-        ]);
-      }
+      await Promise.all([
+        upsertDayRow(sourceDate, { sessions: newSrc }),
+        upsertDayRow(destDate,   { sessions: newDst }),
+      ]);
     } catch {
+      // Rollback to original state
+      setSchedule(prev => prev.map(e => {
+        if (e.date === sourceDate) return { ...e, sessions: srcEntry.sessions };
+        if (e.date === destDate)   return { ...e, sessions: dstEntry?.sessions ?? [] };
+        return e;
+      }));
       toast({ title: 'Error', description: 'Could not move session.', variant: 'destructive' });
     } finally {
       setMutating(false);
     }
-  }, [schedule, upsertDayRow, toast]);
+  }, [schedule, setSchedule, upsertDayRow, toast]);
 
   if (!athlete) {
     return (
