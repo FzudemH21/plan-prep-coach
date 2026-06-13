@@ -301,12 +301,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
             })),
           });
         });
-        // DEBUG: log entries with mobile-edited exercises
-        map.forEach((entry, date) => {
-          const hasEdited = entry.sessions.some(s => (s.exercises as any[]).some((ex: any) => ex.mobileEdited));
-          if (hasEdited) console.log(`[liveScheduleMap] ${date} HAS mobileEdited exercises`, entry.sessions.map(s => s.exercises));
-        });
-        console.log(`[liveScheduleMap] built ${map.size} entries`);
         setLiveScheduleMap(map);
       });
   }, [athlete.id, connectionsLoading, getConnectionForAthlete]);
@@ -385,9 +379,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     const connection = getConnectionForAthlete(athlete.id);
     if (!connection) {
       // Distinguish: connections still loading vs. athlete has no invite link
-      if (connectionsLoading) {
-        console.log('[autoSync] connections still loading — sync deferred to next edit');
-      } else {
+      if (!connectionsLoading) {
         console.warn('[autoSync] no connection found for athlete', athlete.id,
           '— schedule sync skipped. Open the athlete profile → Invite tab and create an invite link to enable app sync.');
       }
@@ -395,7 +387,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     }
     const assignment = editing.selectedAssignment;
     if (!assignment) return;
-    console.log(`[autoSync] ▶ syncing | connectionId=${connection.id} | trainingDays=${editing.trainingDays.length} | exercises=${editing.exerciseDistribution.length}`);
     syncAthleteSchedule(
       connection.id,
       assignment,
@@ -461,7 +452,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
               Object.keys(localPv).some(k => assignedMesoIds.has(k));
             if (hasMatch) {
               loadSyncParamValues = localPv as typeof editing.parameterValues;
-              console.log('[loadSync] recovered parameterValues from wizard localStorage —', Object.keys(localPv).length, 'mesocycle key(s)');
             }
           }
         }
@@ -470,13 +460,11 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       }
 
       if (Object.keys(loadSyncParamValues).length === 0) {
-        console.log('[loadSync] skipping — empty parameterValues for periodization exercises; assign-time sync already wrote the correct data');
         return;
       }
     }
 
     loadSyncedRef.current.add(selectedAssignmentId);
-    console.log(`[loadSync] ▶ syncing on load | assignmentId=${selectedAssignmentId} | trainingDays=${editing.trainingDays.length} | supersets dates=${Object.keys(editing.supersets ?? {}).join(', ') || '(none)'}`);
     syncAthleteSchedule(
       connection.id,
       editing.selectedAssignment,
@@ -657,10 +645,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       }
     });
 
-    console.log('[CACHE-EFFECT] assignments:', assignments.map(a => a.id), '| cache keys:', Object.keys(cache), '| hasNewData:', hasNewData);
     // Only update if we found new data
     if (hasNewData || Object.keys(cache).length !== Object.keys(assignmentDataCache).length) {
-      console.log('[CACHE-EFFECT] updating cache');
       setAssignmentDataCache(cache);
     }
   }, [assignments]); // intentionally exclude assignmentDataCache to prevent infinite loop
@@ -937,7 +923,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           return isWithinInterval(date, { start: assignmentStart, end: assignmentEnd });
         });
 
-        if (dayAssignments.length > 0) console.log('[RENDER-RANGE]', dateString, 'assignments covering date:', dayAssignments.map(a => a.id.slice(-6) + '(' + a.programName + ')'));
         dayAssignments.forEach(assignment => {
           assignmentId = assignment.id;
           programName = assignment.programName;
@@ -1005,7 +990,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
             const hasExercises = cachedData?.exerciseDistribution?.some((ex: any) => ex.dayDate === dateString);
             const splitState = cachedData?.daySplitStates?.[dateString];
             const isTrainingDay = hasExercises || trainingDay?.isTrainingDay || (splitState !== undefined && splitState > 0);
-            if (dateString <= '2025-12-31') console.log('[RENDER-CACHE]', dateString, 'assignId:', assignment.id.slice(-6), '| cachedData?', !!cachedData, '| splitState:', splitState, '| trainingDay?', !!trainingDay, '| hasExercises:', hasExercises, '| isTrainingDay:', isTrainingDay);
 
             if (isTrainingDay) {
               for (let sessionIdx = 0; sessionIdx < numSessions; sessionIdx++) {
@@ -1212,8 +1196,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   }, [editing]);
 
   const handleAssignProgram = useCallback(async (assignment: Omit<AthleteCalendarAssignment, 'id' | 'createdAt'>) => {
-    console.log('[ASSIGN] handleAssignProgram called, programId:', assignment.programId, 'startDate:', assignment.startDate, 'endDate:', assignment.endDate, 'assignedMesocycles:', assignment.assignedMesocycles?.length);
-
     // When an assignment is already active, merge program sessions into it instead of
     // creating a separate assignment. This keeps all sessions equal regardless of origin.
     const mergeIntoExisting = !!selectedAssignmentId;
@@ -1222,7 +1204,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     const newAssignment = mergeIntoExisting
       ? null
       : await athleteData.createCalendarAssignment(athlete.id, assignment);
-    console.log('[ASSIGN] mergeIntoExisting:', mergeIntoExisting, '| newAssignment:', newAssignment?.id ?? 'none');
 
     // Process program workout data with shifted dates
     if ((mergeIntoExisting || newAssignment) && assignment.programId) {
@@ -1267,7 +1248,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 Object.keys(localPv).some(k => programMesoIds.has(k));
               if (hasMatch) {
                 program = { ...program, parameterValues: localPv };
-                console.log('[ASSIGN] recovered parameterValues from wizard localStorage —', Object.keys(localPv).length, 'mesocycle key(s)');
               }
             }
           }
@@ -1450,7 +1430,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           // (e.g. plan re-saved after mesocycle structure was regenerated). Fall
           // back to all shifted training days so the calendar is never blank.
           if (filteredTrainingDays.length === 0 && shiftedTrainingDays.length > 0) {
-            console.log('[ASSIGN] Mesocycle ID mismatch — including all shifted training days');
             filteredTrainingDays = shiftedTrainingDays;
           }
 
@@ -1461,7 +1440,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           // derive valid dates from the recalculated assignedMesocycles date ranges.
           // This path may be slightly off for partial selections but avoids data loss.
           if (validDates.size === 0 && (assignment.assignedMesocycles || []).length > 0) {
-            console.log('[ASSIGN] No training days with meso/micro IDs found — falling back to assignedMesocycles date ranges');
             assignment.assignedMesocycles.forEach(meso => {
               const mesoStart = parseDateStr(meso.startDate);
               const mesoEnd = parseDateStr(meso.endDate);
@@ -1470,8 +1448,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
               });
             });
           }
-
-          console.log('[ASSIGN] validDates size:', validDates.size, '| filteredTrainingDays:', filteredTrainingDays.length, '| sample dates:', Array.from(validDates).slice(0, 5));
 
           // Filter all shifted data to validDates.
           // If validDates is still empty, skip filtering (include everything).
@@ -1490,8 +1466,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           const filteredDaySplitStates = validDates.size > 0
             ? Object.fromEntries(Object.entries(shiftedDaySplitStates).filter(([d]) => validDates.has(d)))
             : shiftedDaySplitStates;
-
-          console.log('[ASSIGN] after filter — exercises:', filteredExercises.length, '| sections:', filteredSections.length, '| daySplitStates keys:', Object.keys(filteredDaySplitStates).length);
 
           // Fallback: if the program had no daySplitStates or trainingDays stored,
           // build them from the assignment's already-shifted mesocycles so the
@@ -1524,7 +1498,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 return acc;
               }, {});
             }
-            console.log('[ASSIGN] built trainingDays + splitStates from dailyIntensityData, days:', finalTrainingDays.length);
           }
 
           if (Object.keys(finalDaySplitStates).length === 0 && assignment.assignedMesocycles?.length > 0) {
@@ -1574,11 +1547,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
             if (finalTrainingDays.length === 0) {
               finalTrainingDays = trainingDaysList;
             }
-            console.log('[ASSIGN] built daySplitStates from mesocycles, keys:', Object.keys(finalDaySplitStates).length, 'sample:', Object.entries(finalDaySplitStates).slice(0, 3));
-          } else {
-            console.log('[ASSIGN] daySplitStates from program data, keys:', Object.keys(finalDaySplitStates).length);
           }
-          console.log('[ASSIGN] finalTrainingDays.length:', finalTrainingDays.length, 'finalDaySplitStates keys:', Object.keys(finalDaySplitStates).length);
 
           // SYNC: build filteredDailyIntensity from finalTrainingDays if it came out empty.
           // This covers the common case where program.dailyIntensityData was absent or its
@@ -1590,7 +1559,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
               mesocycleId: td.mesocycleId,
               microcycleId: td.microcycleId,
             }));
-            console.log('[ASSIGN] built filteredDailyIntensity from finalTrainingDays:', filteredDailyIntensity.length);
           }
 
           // CLAMP: off-intensity days must have 0 sessions.
@@ -1676,7 +1644,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
           if (mergeIntoExisting) {
             // MERGE PATH: add program sessions into the current active assignment
-            console.log('[ASSIGN] merging into existing assignment:', selectedAssignmentId);
             editing.mergeSessionData(
               filteredExercises,
               filteredSections,
@@ -1717,12 +1684,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 .eq('coach_user_id', user.id)
                 .maybeSingle();
               mergeConnectionId = connRow?.id;
-              if (mergeConnectionId) {
-                console.log('[ASSIGN] merge: resolved connectionId via direct Supabase query');
-              }
             }
             if (mergeConnectionId) {
-              console.log(`[ASSIGN] merge: syncing | connectionId=${mergeConnectionId} | days=${finalTrainingDays.length} | exercises=${filteredExercises.length}`);
               syncAthleteSchedule(
                 mergeConnectionId,
                 assignment as AthleteCalendarAssignment,
@@ -1758,7 +1721,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
             };
 
             localStorage.setItem(storageKey, JSON.stringify(dataToSave));
-            console.log('[ASSIGN] saved to localStorage key:', storageKey, '| daySplitStates keys:', Object.keys(dataToSave.daySplitStates).length, '| trainingDays:', dataToSave.trainingDays.length);
 
             // Sync to athlete_schedule so the athlete app can read sessions.
             // Use React state first; fall back to a direct Supabase query if connections
@@ -1772,12 +1734,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 .eq('coach_user_id', user.id)
                 .maybeSingle();
               createConnectionId = connRow?.id;
-              if (createConnectionId) {
-                console.log('[ASSIGN] create: resolved connectionId via direct Supabase query');
-              }
             }
             if (createConnectionId) {
-              console.log(`[ASSIGN] create: syncing | connectionId=${createConnectionId} | days=${dataToSave.trainingDays.length} | exercises=${dataToSave.exerciseDistribution.length}`);
               syncAthleteSchedule(
                 createConnectionId,
                 newAssignment,
@@ -1799,7 +1757,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
             await transferTestsEvents();
 
             // Update cache immediately
-            console.log('[ASSIGN] calling setAssignmentDataCache for:', newAssignment.id);
             setAssignmentDataCache(prev => ({
               ...prev,
               [newAssignment.id]: dataToSave,
