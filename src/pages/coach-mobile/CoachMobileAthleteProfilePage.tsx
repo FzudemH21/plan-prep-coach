@@ -586,7 +586,16 @@ export default function CoachMobileAthleteProfilePage() {
 
         const dstEntry = schedMap.get(destDate);
         const dstSessions = [...(dstEntry?.sessions ?? [])];
-        dstSessions.splice(destination.index, 0, { ...movedSession });
+        // Track the original plan date so syncAthleteSchedule can reverse the
+        // plan's session placement and honour this mobile rearrangement.
+        const originalDate = movedSession.originalDate ?? sourceDate;
+        const isBackToOriginal = destDate === originalDate;
+        const taggedSession: typeof movedSession = {
+          ...movedSession,
+          mobileRearranged: isBackToOriginal ? undefined : true,
+          originalDate: isBackToOriginal ? undefined : originalDate,
+        };
+        dstSessions.splice(destination.index, 0, taggedSession);
         const newDst = dstSessions.map((s, i) => ({ ...s, order: i }));
 
         await Promise.all([

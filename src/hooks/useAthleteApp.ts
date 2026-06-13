@@ -87,6 +87,12 @@ export interface SessionSummary {
   notes?: string;
   intensity?: string;   // session-level planned intensity
   exercises: ExerciseSummary[];
+  /** Set when a coach moves this session to a different day on mobile.
+   *  syncAthleteSchedule uses this to preserve the rearrangement across plan re-syncs. */
+  mobileRearranged?: boolean;
+  /** The plan date this session originally lived on (before any mobile rearrangement).
+   *  syncAthleteSchedule uses this to remove the session from the wrong plan date. */
+  originalDate?: string;
 }
 
 export interface AthleteCalendarEvent {

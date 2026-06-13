@@ -87,6 +87,12 @@ export interface SessionSummary {
   notes?: string;
   intensity?: string;   // session-level planned intensity
   exercises: ExerciseSummary[];
+  /** Set when a coach moves this session to a different day on mobile.
+   *  syncAthleteSchedule reads this flag before DELETE/UPSERT and re-applies the
+   *  rearrangement so plan re-syncs from the desktop don't revert mobile moves. */
+  mobileRearranged?: boolean;
+  /** The plan date this session originally lived on (before any mobile rearrangement). */
+  originalDate?: string;
 }
 
 interface ExerciseEntry {
@@ -601,6 +607,8 @@ export async function syncAthleteSchedule(
   const mobileDayIntensityMap = new Map<string, string>();
   // Session-level intensity + notes: `${date}-${sIdx}` → { intensity?, notes? }
   const mobileSessionMetaMap = new Map<string, { intensity?: string; notes?: string }>();
+  // Sessions repositioned by the mobile coach app: { targetDate, session }
+  const rearrangedSessions: Array<{ targetDate: string; session: SessionSummary }> = [];
   try {
     const FETCH_BATCH = 200;
     for (let fi = 0; fi < allDates.length; fi += FETCH_BATCH) {
@@ -625,6 +633,11 @@ export async function syncAthleteSchedule(
             if (session.notes) sessionMeta.notes = session.notes;
             if (sessionMeta.intensity || sessionMeta.notes) {
               mobileSessionMetaMap.set(`${row.date}-${sIdx}`, sessionMeta);
+            }
+
+            // Collect sessions repositioned on the mobile coach app
+            if ((session as SessionSummary).mobileRearranged) {
+              rearrangedSessions.push({ targetDate: row.date, session: session as SessionSummary });
             }
 
             const addedExs: ExerciseSummary[] = [];
@@ -726,6 +739,51 @@ export async function syncAthleteSchedule(
       }
     }
     console.log(`[syncAthleteSchedule] preserved mobile intensities/notes for ${mobileDayIntensityMap.size} dates`);
+  }
+
+  // ── Apply mobile session rearrangements ──────────────────────────────────────
+  // Sessions dragged between days on the mobile coach app are flagged with
+  // mobileRearranged: true and carry an originalDate so we know which plan
+  // date to remove them from.  We modify `rows` here — before DELETE/UPSERT —
+  // so the plan rebuild produces the correct arrangement.
+  if (rearrangedSessions.length > 0) {
+    console.log(`[syncAthleteSchedule] applying ${rearrangedSessions.length} session rearrangement(s)`);
+    for (const { targetDate, session } of rearrangedSessions) {
+      // Remove the session from its original plan date row
+      if (session.originalDate) {
+        const origRow = rows.find(r => r.date === session.originalDate);
+        if (origRow) {
+          origRow.sessions = origRow.sessions.filter(s => s.id !== session.id);
+          console.log(`[syncAthleteSchedule] removed rearranged session ${session.id} from plan date ${session.originalDate}`);
+        }
+      }
+
+      // Add/keep the session on the target date row
+      let targetRow = rows.find(r => r.date === targetDate);
+      if (!targetRow) {
+        // Target is a non-plan date (rest day) — create a row and include it
+        const meta = mesoByDate.get(targetDate);
+        targetRow = {
+          athlete_connection_id: connectionId,
+          date: targetDate,
+          intensity: null,
+          sessions: [],
+          events: eventsByDate.get(targetDate) ?? [],
+          program_name: programName,
+          mesocycle_name: meta?.mesoName ?? null,
+          microcycle_name: meta?.microName ?? null,
+        };
+        rows.push(targetRow);
+        // Ensure the rest-day date is covered by DELETE so the UPSERT is clean
+        if (!allDates.includes(targetDate)) allDates.push(targetDate);
+      }
+
+      if (!targetRow.sessions.some(s => s.id === session.id)) {
+        targetRow.sessions = [...targetRow.sessions, session]
+          .sort((a, b) => a.order - b.order);
+        console.log(`[syncAthleteSchedule] added rearranged session ${session.id} to target date ${targetDate}`);
+      }
+    }
   }
 
   console.log(`[syncAthleteSchedule] plan: DELETE ${allDates.length} dates → UPSERT ${rows.length} training-day rows`);
