@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, Zap, BookOpen, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAthletes } from '@/hooks/useAthletes';
@@ -340,7 +340,10 @@ type Tab = 'overview' | 'training';
 export default function CoachMobileAthleteProfilePage() {
   const { athleteId } = useParams<{ athleteId: string }>();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>('overview');
+  const location = useLocation();
+  // Restore the tab the user was on before navigating into a session (returnState from session edit)
+  const restoredTab = (location.state as { tab?: Tab } | null)?.tab;
+  const [tab, setTab] = useState<Tab>(restoredTab ?? 'overview');
 
   const today = new Date().toISOString().slice(0, 10);
   const [weekMonday, setWeekMonday] = useState<string>(() => getMondayOf(today));
@@ -938,7 +941,12 @@ export default function CoachMobileAthleteProfilePage() {
                               key={s.id}
                               className={cn('transition-opacity cursor-pointer active:scale-[0.98]', isPast && 'opacity-60')}
                               onClick={() => navigate(`/coach-mobile/athletes/${athleteId}/session`, {
-                                state: { entry, sessionIdx: sIdx, connectionId: connection?.id },
+                                state: {
+                                  entry, sessionIdx: sIdx, connectionId: connection?.id,
+                                  // Return to the training tab so back lands on the calendar, not overview
+                                  returnPath: `/coach-mobile/athletes/${athleteId}`,
+                                  returnState: { tab },
+                                },
                               })}
                             >
                               <CardContent className="flex items-center gap-3 p-3">

@@ -636,7 +636,14 @@ function CircuitExerciseList({ ex }: { ex: ExerciseSummary }) {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Mode = 'view' | 'edit';
-interface LocationState { entry: AthleteScheduleEntry; sessionIdx: number; connectionId?: string }
+interface LocationState {
+  entry: AthleteScheduleEntry;
+  sessionIdx: number;
+  connectionId?: string;
+  /** Path to navigate back to instead of history -1 (e.g. athlete profile so the correct tab is restored) */
+  returnPath?: string;
+  returnState?: Record<string, unknown>;
+}
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -1156,7 +1163,7 @@ export default function CoachMobileSessionEditPage() {
     return (
       <div className="flex flex-col h-full bg-background">
         <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
-          <button onClick={() => navigate(-1)}
+          <button onClick={() => state?.returnPath ? navigate(state.returnPath, { state: state.returnState ?? null }) : navigate(-1)}
             className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors shrink-0">
             <ChevronLeft className="h-5 w-5" />
           </button>
