@@ -219,6 +219,36 @@ function computeLiveVisibilityOverrides(
   return overrides;
 }
 
+/**
+ * Normalizes per-set parameter values by propagating plain-key values to empty
+ * per-set keys. Mobile's getPlannedValue() displays the plain key as a visual
+ * fallback when a per-set key is empty, making ALL sets appear filled even though
+ * only Reps_set1/Reps are stored. This function makes the stored data match what
+ * mobile shows, so desktop renders identical values for all sets.
+ */
+function propagatePlainKeyValues(
+  params: Record<string, string | number>
+): Record<string, string | number> {
+  const setsKey = Object.keys(params).find(k => /^sets?$/i.test(k));
+  const setCount = setsKey ? Number(params[setsKey]) : 0;
+  if (setCount === 0) return params;
+
+  const result = { ...params };
+  for (const key of Object.keys(params)) {
+    if (/^sets?$/i.test(key) || /_set\d+$/i.test(key) || key.endsWith('_unit')) continue;
+    const plainVal = params[key];
+    if (plainVal === '' || plainVal === null || plainVal === undefined) continue;
+    for (let si = 1; si <= setCount; si++) {
+      const perSetKey = `${key}_set${si}`;
+      const cur = result[perSetKey];
+      if (!(perSetKey in result) || cur === '' || cur === null || cur === undefined) {
+        result[perSetKey] = plainVal;
+      }
+    }
+  }
+  return result;
+}
+
 function buildSectionsFromLiveExercises(
   liveExercises: LiveExerciseForDesktop[]
 ): WorkoutSection[] {
@@ -241,7 +271,9 @@ function buildSectionsFromLiveExercises(
       });
     }
 
-    const parameters: Record<string, string | number> = { ...(ex.plannedParams ?? {}) };
+    // Propagate plain-key values to empty per-set keys so all set rows show the
+    // same value that mobile displayed via its getPlannedValue() fallback.
+    const parameters = propagatePlainKeyValues({ ...(ex.plannedParams ?? {}) });
 
     const workoutEx: WorkoutExercise = {
       id: ex.id,
@@ -1126,7 +1158,9 @@ export function WorkoutSessionSheet({
                   console.log(`[WorkoutSessionSheet] ✅ APPLYING override to ex id=${ex.id.slice(-8)} libId=${ex.exerciseId?.slice(-8)} name=${ex.exerciseName}`);
                   return {
                     ...ex,
-                    parameters: overrides ? { ...ex.parameters, ...overrides } : ex.parameters,
+                    parameters: overrides
+                      ? propagatePlainKeyValues({ ...ex.parameters, ...overrides })
+                      : ex.parameters,
                     notes: liveNotes !== undefined ? liveNotes : ex.notes,
                   };
                 }),
@@ -1301,7 +1335,9 @@ export function WorkoutSessionSheet({
           console.log(`[WorkoutSessionSheet] ✅ late override ex id=${ex.id.slice(-8)} libId=${ex.exerciseId?.slice(-8)} name=${ex.exerciseName}`);
           return {
             ...ex,
-            parameters: overrides ? { ...ex.parameters, ...overrides } : ex.parameters,
+            parameters: overrides
+              ? propagatePlainKeyValues({ ...ex.parameters, ...overrides })
+              : ex.parameters,
             notes: liveNotes !== undefined ? liveNotes : ex.notes,
           };
         }),
