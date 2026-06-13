@@ -447,7 +447,8 @@ export default function CoachMobileAthleteProfilePage() {
       const { error } = await supabase
         .from('athlete_schedule')
         .update(patch)
-        .eq('id', existing.id);
+        .eq('athlete_connection_id', connection.id)
+        .eq('date', dateStr);
       if (error) throw error;
       setSchedule(prev => prev.map(e =>
         e.date === dateStr ? { ...e, ...patch } : e
@@ -575,18 +576,18 @@ export default function CoachMobileAthleteProfilePage() {
         const sessions = [...srcEntry.sessions];
         const [mv] = sessions.splice(source.index, 1);
         sessions.splice(destination.index, 0, mv);
-        sessions.forEach((s, i) => { s.order = i; });
-        await upsertDayRow(sourceDate, { sessions });
+        const reordered = sessions.map((s, i) => ({ ...s, order: i }));
+        await upsertDayRow(sourceDate, { sessions: reordered });
       } else {
         // Cross-day move — remove from source, insert into destination
-        const newSrc = [...srcEntry.sessions];
-        newSrc.splice(source.index, 1);
-        newSrc.forEach((s, i) => { s.order = i; });
+        const srcSessions = [...srcEntry.sessions];
+        srcSessions.splice(source.index, 1);
+        const newSrc = srcSessions.map((s, i) => ({ ...s, order: i }));
 
         const dstEntry = schedMap.get(destDate);
-        const newDst = [...(dstEntry?.sessions ?? [])];
-        newDst.splice(destination.index, 0, { ...movedSession });
-        newDst.forEach((s, i) => { s.order = i; });
+        const dstSessions = [...(dstEntry?.sessions ?? [])];
+        dstSessions.splice(destination.index, 0, { ...movedSession });
+        const newDst = dstSessions.map((s, i) => ({ ...s, order: i }));
 
         await Promise.all([
           upsertDayRow(sourceDate, { sessions: newSrc }),
