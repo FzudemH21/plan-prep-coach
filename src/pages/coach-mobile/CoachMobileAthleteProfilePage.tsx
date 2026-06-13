@@ -454,7 +454,6 @@ export default function CoachMobileAthleteProfilePage() {
       .eq('date', dateStr)
       .select('id');
 
-    console.log('[upsertDayRow]', dateStr, '| updError:', updError, '| updatedRows:', JSON.stringify(updatedRows));
     if (updError) throw updError;
 
     if (((updatedRows as Array<{ id: string }> | null) ?? []).length > 0) {
@@ -657,17 +656,11 @@ export default function CoachMobileAthleteProfilePage() {
     dstSessions.splice(destination.index, 0, taggedSession);
     const newDst = dstSessions.map((s, i) => ({ ...s, order: i }));
 
-    console.log('[drag] cross-day', sourceDate, '→', destDate,
-      '| newSrc len:', newSrc.length, 'newDst len:', newDst.length);
-
     // Optimistic update — move session in UI immediately, before any Supabase call.
     // This prevents the session from disappearing if one of the two writes partially
     // completes before the other fails.
     setSchedule(prev => {
-      const srcInPrev = prev.some(e => e.date === sourceDate);
       const dstInPrev = prev.some(e => e.date === destDate);
-      console.log('[drag optimistic] srcInPrev:', srcInPrev, 'dstInPrev:', dstInPrev,
-        '| prev dates:', prev.map(e => e.date).join(','));
       const next = prev.map(e => {
         if (e.date === sourceDate) return { ...e, sessions: newSrc };
         if (e.date === destDate)   return { ...e, sessions: newDst };
@@ -696,9 +689,8 @@ export default function CoachMobileAthleteProfilePage() {
         upsertDayRow(sourceDate, { sessions: newSrc }),
         upsertDayRow(destDate,   { sessions: newDst }),
       ]);
-      console.log('[drag] both upserts succeeded');
     } catch (err) {
-      console.error('[drag] upsert error → rolling back:', err);
+      console.error('[drag] upsert failed → rolling back:', err);
       // Rollback to original state
       setSchedule(prev => prev.map(e => {
         if (e.date === sourceDate) return { ...e, sessions: srcEntry.sessions };
