@@ -442,9 +442,8 @@ export function AthleteCalendarDayCell({
                             if (Date.now() - dragEndTime < 500) return;
                             if (isCompleted && completedLog && onCompletedSessionClick) {
                               onCompletedSessionClick(completedLog);
-                            } else if (isInProgress) {
-                              // In-progress: no sheet to open yet — click is a no-op
                             } else {
+                              // In-progress sessions are still openable by the coach.
                               onSessionClick?.(day.dateString, session.sessionIndex, session.assignmentId || day.assignmentId || '');
                             }
                           }}

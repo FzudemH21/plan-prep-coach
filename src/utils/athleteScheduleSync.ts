@@ -586,11 +586,12 @@ export async function syncAthleteSchedule(
     ...[...eventsByDate.keys()].filter(d => !trainingDayDates.has(d)),
   ];
 
-  // ── Preserve mobile-edited plannedParams AND mobile-added exercises ───────────
+  // ── Preserve mobile-edited content AND mobile-added exercises ───────────────
   // Before deleting rows, read existing athlete_schedule data and collect:
-  //   1. exercises flagged mobileEdited: true  → preserve their plannedParams
+  //   1. exercises flagged mobileEdited: true  → preserve their full content
+  //      (plannedParams, notes, sectionNotes, visibleParams, etc.)
   //   2. exercises flagged mobileAdded: true   → re-append after sync (not in plan)
-  const mobileParamsMap = new Map<string, Map<string, Record<string, string | number>>>();
+  const mobileParamsMap = new Map<string, Map<string, ExerciseSummary>>();
   // mobileAddedMap: date → sessionOrder → exercises[]
   const mobileAddedMap = new Map<string, Map<number, ExerciseSummary[]>>();
   try {
@@ -610,15 +611,15 @@ export async function syncAthleteSchedule(
             const addedExs: ExerciseSummary[] = [];
             for (const ex of (session.exercises ?? [])) {
               const exTyped = ex as ExerciseSummary;
-              // Collect mobileEdited params for preservation
-              if (exTyped.mobileEdited && ex.plannedParams) {
-                const params = ex.plannedParams as Record<string, string | number>;
+              // Collect mobileEdited exercises for preservation (full object, not just params).
+              // This preserves plannedParams, notes, sectionNotes, visibleParams, etc.
+              if (exTyped.mobileEdited) {
                 // Key by both the stored exercise id AND the stable library id so that
                 // the lookup succeeds even when ExerciseDistribution.id has changed
                 // (e.g. after the AI re-adds exercises with a new dist-ai-… id).
-                exMap.set(ex.id, params);
+                exMap.set(exTyped.id, exTyped);
                 const libId = exTyped.exerciseLibraryId;
-                if (libId) exMap.set(libId, params);
+                if (libId) exMap.set(libId, exTyped);
               }
               // Collect mobileAdded exercises for re-appending
               if (exTyped.mobileAdded) {
@@ -650,8 +651,16 @@ export async function syncAthleteSchedule(
           const preserved = exMap.get(ex.id)
             ?? exMap.get((ex as ExerciseSummary).exerciseLibraryId ?? '');
           if (!preserved) return ex;
-          // Keep mobile-edited params and re-assert the flag so future syncs preserve them.
-          return { ...ex, plannedParams: preserved, mobileEdited: true };
+          // Restore content fields edited on mobile while keeping structural fields
+          // (sectionId, name, order, methodKey, etc.) from the freshly computed plan.
+          return {
+            ...ex,
+            plannedParams: preserved.plannedParams ?? ex.plannedParams,
+            visibleParams: preserved.visibleParams ?? ex.visibleParams,
+            notes: preserved.notes,
+            sectionNotes: preserved.sectionNotes ?? ex.sectionNotes,
+            mobileEdited: true,
+          };
         }),
       }));
     }
