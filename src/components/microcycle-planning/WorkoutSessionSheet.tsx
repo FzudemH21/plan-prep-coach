@@ -150,9 +150,94 @@ interface WorkoutSessionSheetProps {
         sectionId?: string;
         /** Section-level notes edited on mobile. */
         sectionNotes?: string;
+        /** True when this exercise was added via the mobile coach app (not in the plan). */
+        mobileAdded?: boolean;
+        mobileEdited?: boolean;
+        // Fields needed to render mobile-added exercises on desktop:
+        name?: string;
+        order?: number;
+        isCircuit?: boolean;
+        methodKey?: string;
+        plannedSets?: number;
+        sectionName?: string;
+        sectionOrder?: number;
+        supersetId?: string;
+        circuitRounds?: string;
       }>;
     }>;
   };
+}
+
+/**
+ * Converts LiveScheduleExercise[] → WorkoutSection[] so that exercises added
+ * via the mobile coach app (mobileAdded: true) can be rendered on the desktop
+ * even when the plan's exerciseDistribution has no entries for that date.
+ */
+function buildSectionsFromLiveExercises(
+  liveExercises: Array<{
+    id: string;
+    exerciseLibraryId?: string;
+    plannedParams?: Record<string, string | number>;
+    notes?: string;
+    sectionId?: string;
+    sectionNotes?: string;
+    mobileAdded?: boolean;
+    name?: string;
+    order?: number;
+    isCircuit?: boolean;
+    methodKey?: string;
+    plannedSets?: number;
+    sectionName?: string;
+    sectionOrder?: number;
+    supersetId?: string;
+    circuitRounds?: string;
+  }>
+): WorkoutSection[] {
+  const sectionMap = new Map<string, { section: WorkoutSection; sectionOrder: number }>();
+
+  for (let i = 0; i < liveExercises.length; i++) {
+    const ex = liveExercises[i];
+    const sectionId = ex.sectionId ?? 'section-0';
+
+    if (!sectionMap.has(sectionId)) {
+      sectionMap.set(sectionId, {
+        sectionOrder: ex.sectionOrder ?? 0,
+        section: {
+          id: sectionId,
+          name: ex.sectionName ?? 'Workout',
+          order: ex.sectionOrder ?? 0,
+          comments: ex.sectionNotes,
+          exercises: [],
+        },
+      });
+    }
+
+    const parameters: Record<string, string | number> = { ...(ex.plannedParams ?? {}) };
+
+    const workoutEx: WorkoutExercise = {
+      id: ex.id,
+      exerciseId: ex.exerciseLibraryId ?? ex.id,
+      exerciseName: ex.name ?? 'Exercise',
+      methodId: ex.methodKey ?? '',
+      categoryName: '',
+      order: ex.order ?? i,
+      parameters,
+      notes: ex.notes,
+      supersetId: ex.supersetId,
+      isCircuit: ex.isCircuit,
+      circuitRounds: ex.circuitRounds,
+      parameterSource: 'toolbox',
+    };
+
+    sectionMap.get(sectionId)!.section.exercises.push(workoutEx);
+  }
+
+  return Array.from(sectionMap.values())
+    .sort((a, b) => a.sectionOrder - b.sectionOrder)
+    .map(({ section }) => ({
+      ...section,
+      exercises: section.exercises.sort((a, b) => a.order - b.order),
+    }));
 }
 
 export function WorkoutSessionSheet({
@@ -1018,6 +1103,36 @@ export function WorkoutSessionSheet({
                 }),
               }));
             }
+            // Append mobile-added exercises not present in the plan for this date
+            {
+              const existingIds = new Set<string>();
+              sectionsToSet.forEach(s => s.exercises.forEach(ex => {
+                existingIds.add(ex.id);
+                if (ex.exerciseId) existingIds.add(ex.exerciseId);
+              }));
+              const mobileOnlyExsFresh = (liveSession.exercises ?? []).filter(ex =>
+                ex.mobileAdded &&
+                !existingIds.has(ex.id) &&
+                !existingIds.has(ex.exerciseLibraryId ?? ' ')
+              );
+              if (mobileOnlyExsFresh.length > 0) {
+                console.log(`[WorkoutSessionSheet] ✅ appending ${mobileOnlyExsFresh.length} mobile-added exercise(s) at fresh open`);
+                const liveSecs = buildSectionsFromLiveExercises(mobileOnlyExsFresh);
+                const sectionMap = new Map(sectionsToSet.map(s => [s.id, s]));
+                liveSecs.forEach(liveSection => {
+                  const existing = sectionMap.get(liveSection.id);
+                  if (existing) {
+                    sectionMap.set(liveSection.id, {
+                      ...existing,
+                      exercises: [...existing.exercises, ...liveSection.exercises],
+                    });
+                  } else {
+                    sectionMap.set(liveSection.id, liveSection);
+                  }
+                });
+                sectionsToSet = Array.from(sectionMap.values()).sort((a, b) => a.order - b.order);
+              }
+            }
           }
         }
         freshlyAddedExerciseIdsRef.current.clear();
@@ -1070,10 +1185,23 @@ export function WorkoutSessionSheet({
       
       prevExerciseCountRef.current = currentCount;
     } else if (isOpen && exercises.length === 0 && !hasInitializedRef.current) {
-      // Opening for a new/empty session — reset to blank so stale exercises from a
-      // previously-viewed session don't bleed through (workoutSections useState only
-      // runs on mount, not on subsequent opens).
-      setWorkoutSections([{ id: 'section-0', name: 'Uncategorized', order: 0, exercises: [] }]);
+      // Opening for a new/empty session — no plan exercises for this date.
+      // Check if there are mobile-added exercises in the live schedule (e.g. exercises
+      // added by the mobile coach app on a day that has no plan exercises).
+      let initSections: WorkoutSection[] = [{ id: 'section-0', name: 'Uncategorized', order: 0, exercises: [] }];
+      if (liveScheduleEntry) {
+        liveOverrideAppliedRef.current = true;
+        const liveSession = liveScheduleEntry.sessions[sessionIndex];
+        if (liveSession) {
+          if (liveSession.notes !== undefined && liveSession.notes !== null) setSessionComments(liveSession.notes);
+          if (liveSession.intensity) setSessionIntensity(liveSession.intensity as IntensityLevel);
+          if ((liveSession.exercises ?? []).length > 0) {
+            initSections = buildSectionsFromLiveExercises(liveSession.exercises);
+            console.log(`[WorkoutSessionSheet] built ${initSections.length} section(s) from ${liveSession.exercises.length} live exercises (mobile-added)`);
+          }
+        }
+      }
+      setWorkoutSections(initSections);
       hasInitializedRef.current = true;
       prevExerciseCountRef.current = 0;
     }
@@ -1127,21 +1255,58 @@ export function WorkoutSessionSheet({
     if (!hasAnyOverride) return;
 
     console.log(`[WorkoutSessionSheet] late live override — overrideMap=${overrideMap.size} exNotes=${exNotesMap.size} secNotes=${sectionNotesMapLive.size}`);
-    setWorkoutSections(prev => prev.map(section => ({
-      ...section,
-      comments: sectionNotesMapLive.get(section.id) ?? section.comments,
-      exercises: section.exercises.map(ex => {
-        const overrides = overrideMap.get(ex.id) ?? overrideMap.get(ex.exerciseId ?? '');
-        const liveNotes = exNotesMap.get(ex.id) ?? exNotesMap.get(ex.exerciseId ?? '');
-        if (!overrides && liveNotes === undefined) return ex;
-        console.log(`[WorkoutSessionSheet] ✅ late override ex id=${ex.id.slice(-8)} libId=${ex.exerciseId?.slice(-8)} name=${ex.exerciseName}`);
-        return {
-          ...ex,
-          parameters: overrides ? { ...ex.parameters, ...overrides } : ex.parameters,
-          notes: liveNotes !== undefined ? liveNotes : ex.notes,
-        };
-      }),
-    })));
+    setWorkoutSections(prev => {
+      // Step 1: apply overrides to plan exercises already in workoutSections
+      const withOverrides = prev.map(section => ({
+        ...section,
+        comments: sectionNotesMapLive.get(section.id) ?? section.comments,
+        exercises: section.exercises.map(ex => {
+          const overrides = overrideMap.get(ex.id) ?? overrideMap.get(ex.exerciseId ?? '');
+          const liveNotes = exNotesMap.get(ex.id) ?? exNotesMap.get(ex.exerciseId ?? '');
+          if (!overrides && liveNotes === undefined) return ex;
+          console.log(`[WorkoutSessionSheet] ✅ late override ex id=${ex.id.slice(-8)} libId=${ex.exerciseId?.slice(-8)} name=${ex.exerciseName}`);
+          return {
+            ...ex,
+            parameters: overrides ? { ...ex.parameters, ...overrides } : ex.parameters,
+            notes: liveNotes !== undefined ? liveNotes : ex.notes,
+          };
+        }),
+      }));
+
+      // Step 2: append mobile-added exercises that have no counterpart in the plan
+      const existingIds = new Set<string>();
+      withOverrides.forEach(s => s.exercises.forEach(ex => {
+        existingIds.add(ex.id);
+        if (ex.exerciseId) existingIds.add(ex.exerciseId);
+      }));
+
+      const mobileOnlyExs = (liveSession.exercises ?? []).filter(ex =>
+        ex.mobileAdded &&
+        !existingIds.has(ex.id) &&
+        !existingIds.has(ex.exerciseLibraryId ?? ' ')
+      );
+
+      if (mobileOnlyExs.length === 0) return withOverrides;
+
+      console.log(`[WorkoutSessionSheet] ✅ appending ${mobileOnlyExs.length} mobile-added exercise(s) from late override`);
+      const liveSections = buildSectionsFromLiveExercises(mobileOnlyExs);
+
+      // Merge live sections into plan sections (add to matching section or create new)
+      const sectionMap = new Map(withOverrides.map(s => [s.id, s]));
+      liveSections.forEach(liveSection => {
+        const existing = sectionMap.get(liveSection.id);
+        if (existing) {
+          sectionMap.set(liveSection.id, {
+            ...existing,
+            exercises: [...existing.exercises, ...liveSection.exercises],
+          });
+        } else {
+          sectionMap.set(liveSection.id, liveSection);
+        }
+      });
+
+      return Array.from(sectionMap.values()).sort((a, b) => a.order - b.order);
+    });
   }, [isOpen, liveScheduleEntry, sessionIndex]);
 
   // External parameter update (e.g. from AI set_exercise_params action) — full rebuild
