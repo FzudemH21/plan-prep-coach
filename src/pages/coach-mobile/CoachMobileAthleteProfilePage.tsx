@@ -1010,12 +1010,16 @@ export default function CoachMobileAthleteProfilePage() {
 
       {/* ── Day intensity picker ── */}
       <Sheet open={dayIntensityPickerOpen} onOpenChange={o => { if (!o) { setDayIntensityPickerOpen(false); setDayActionTarget(null); } }}>
-        <SheetContent side="bottom" className="rounded-t-2xl pb-8 max-h-[70vh]">
-          <SheetHeader className="mb-4">
+        <SheetContent
+          side="bottom"
+          className="rounded-t-2xl flex flex-col sm:w-[480px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
+          style={{ maxHeight: '75vh', paddingBottom: 'max(env(safe-area-inset-bottom), 24px)' }}
+        >
+          <SheetHeader className="mb-4 px-4 pt-4 shrink-0">
             <SheetTitle>Day Intensity</SheetTitle>
           </SheetHeader>
-          <ScrollArea className="max-h-[50vh]">
-            <div className="grid grid-cols-1 gap-2 pb-2">
+          <div className="overflow-y-auto flex-1 px-4">
+            <div className="grid grid-cols-1 gap-2 pb-4">
               {intensityLevels.map(([key, cfg]) => {
                 const currentIntensity = dayActionTarget ? (scheduleMap.get(dayActionTarget)?.intensity ?? null) : null;
                 return (
@@ -1045,7 +1049,7 @@ export default function CoachMobileAthleteProfilePage() {
                 Clear intensity
               </button>
             </div>
-          </ScrollArea>
+          </div>
         </SheetContent>
       </Sheet>
 
@@ -1077,11 +1081,15 @@ export default function CoachMobileAthleteProfilePage() {
 
       {/* ── Session library picker ── */}
       <Sheet open={sessionLibraryPickerOpen} onOpenChange={o => { if (!o) { setSessionLibraryPickerOpen(false); setDayActionTarget(null); } }}>
-        <SheetContent side="bottom" className="rounded-t-2xl pb-8 max-h-[80vh] flex flex-col">
-          <SheetHeader className="mb-3 shrink-0">
+        <SheetContent
+          side="bottom"
+          className="rounded-t-2xl flex flex-col sm:w-[480px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
+          style={{ maxHeight: '80vh', paddingBottom: 'max(env(safe-area-inset-bottom), 24px)' }}
+        >
+          <SheetHeader className="mb-3 shrink-0 px-4 pt-4">
             <SheetTitle>Add Session from Library</SheetTitle>
           </SheetHeader>
-          <ScrollArea className="flex-1">
+          <div className="overflow-y-auto flex-1 px-4">
             <div className="space-y-2 pb-4">
               {sessionLibraryEntries.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
@@ -1105,7 +1113,7 @@ export default function CoachMobileAthleteProfilePage() {
                 </button>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         </SheetContent>
       </Sheet>
     </div>
