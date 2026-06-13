@@ -477,8 +477,11 @@ export default function CoachMobileAthleteProfilePage() {
         }].sort((a, b) => a.date.localeCompare(b.date));
       });
     } else {
-      // No row found in Supabase — INSERT a new row
-      const { data, error } = await supabase
+      // No row found in Supabase — INSERT a new row.
+      // Do NOT use .select().single() here: if RLS blocks the coach from SELECTing
+      // back the row it just inserted, Supabase throws PGRST116 even though the
+      // INSERT succeeded. We know what we inserted so we update local state directly.
+      const { error: insError } = await supabase
         .from('athlete_schedule')
         .insert({
           athlete_connection_id: connection.id,
@@ -486,57 +489,41 @@ export default function CoachMobileAthleteProfilePage() {
           sessions: patch.sessions ?? [],
           events: [],
           intensity: patch.intensity ?? null,
-        })
-        .select()
-        .single();
-      if (error) {
-        // Unique constraint violation: another process (e.g. syncAthleteSchedule) created
-        // the row concurrently between our UPDATE (0 rows) and this INSERT. Retry with UPDATE.
-        if ((error as { code?: string }).code === '23505') {
+        });
+
+      if (insError) {
+        // Unique constraint: another process (e.g. syncAthleteSchedule) created
+        // the row concurrently between our UPDATE (0 rows) and this INSERT.
+        // Retry with a plain UPDATE — no .select() to avoid RLS SELECT issues.
+        if ((insError as { code?: string }).code === '23505') {
           const { error: retryErr } = await supabase
             .from('athlete_schedule')
             .update(patch)
             .eq('athlete_connection_id', connection.id)
             .eq('date', dateStr);
           if (retryErr) throw retryErr;
-          setSchedule(prev => {
-            const exists = prev.some(e => e.date === dateStr);
-            if (exists) return prev.map(e => e.date === dateStr ? { ...e, ...patch } : e);
-            return [...prev, {
-              id: dateStr,
-              date: dateStr,
-              intensity: patch.intensity ?? null,
-              sessions: patch.sessions ?? [],
-              events: [],
-              programName: null,
-              mesocycleName: null,
-              microcycleName: null,
-            }].sort((a, b) => a.date.localeCompare(b.date));
-          });
-          return;
+        } else {
+          throw insError;
         }
-        throw error;
       }
-      if (data) {
-        setSchedule(prev => {
-          // Avoid duplicate entries if an optimistic update already added this date
-          if (prev.some(e => e.date === dateStr)) {
-            return prev.map(e => e.date === dateStr
-              ? { ...e, id: (data as Record<string, unknown>).id as string, ...patch }
-              : e);
-          }
-          return [...prev, {
-            id: (data as Record<string, unknown>).id as string,
-            date: dateStr,
-            intensity: patch.intensity ?? null,
-            sessions: patch.sessions ?? [],
-            events: [],
-            programName: null,
-            mesocycleName: null,
-            microcycleName: null,
-          }].sort((a, b) => a.date.localeCompare(b.date));
-        });
-      }
+
+      // Update local state from patch data (we don't need the DB row back)
+      setSchedule(prev => {
+        if (prev.some(e => e.date === dateStr)) {
+          // Entry already exists (e.g. from an optimistic update) — just apply the patch
+          return prev.map(e => e.date === dateStr ? { ...e, ...patch } : e);
+        }
+        return [...prev, {
+          id: dateStr,   // temporary id; real UUID is only needed if we query this row
+          date: dateStr,
+          intensity: patch.intensity ?? null,
+          sessions: patch.sessions ?? [],
+          events: [],
+          programName: null,
+          mesocycleName: null,
+          microcycleName: null,
+        }].sort((a, b) => a.date.localeCompare(b.date));
+      });
     }
   }, [connection, setSchedule]);
 
