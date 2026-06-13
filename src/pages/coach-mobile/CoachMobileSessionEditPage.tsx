@@ -978,11 +978,21 @@ export default function CoachMobileSessionEditPage() {
       const sessionsWithFlag = entry.sessions.map((s, i) =>
         i !== sessionIdx ? s : {
           ...s,
-          exercises: s.exercises.map(ex => ({
-            ...ex,
-            mobileEdited: true,
-            sectionNotes: ex.sectionId ? (sectionNotesMap[ex.sectionId] ?? ex.sectionNotes) : ex.sectionNotes,
-          })),
+          exercises: s.exercises.map(ex => {
+            // Ensure plannedParams always contains the set count so the desktop
+            // WorkoutSectionCard knows how many parameter rows to render.
+            const effectiveSets = getSetCount(ex);
+            const params = { ...(ex.plannedParams ?? {}) };
+            const hasSetsKey = Object.keys(params).some(k => /^sets?$/i.test(k));
+            if (!hasSetsKey && !ex.isCircuit) params['Sets'] = effectiveSets;
+            return {
+              ...ex,
+              plannedParams: params,
+              plannedSets: effectiveSets,
+              mobileEdited: true,
+              sectionNotes: ex.sectionId ? (sectionNotesMap[ex.sectionId] ?? ex.sectionNotes) : ex.sectionNotes,
+            };
+          }),
         },
       );
       // Identify the row by (athlete_connection_id, date) rather than by the row UUID.
