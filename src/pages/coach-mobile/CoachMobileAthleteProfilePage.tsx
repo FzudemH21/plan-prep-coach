@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, Zap, BookOpen, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, Zap, BookOpen, Check, GripVertical, Trash2 } from 'lucide-react';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import type { DropResult } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
@@ -537,6 +539,67 @@ export default function CoachMobileAthleteProfilePage() {
     }
   }, [dayActionTarget, schedule, upsertDayRow, toast]);
 
+  const handleDeleteSession = useCallback(async (dateStr: string, sessionIdx: number) => {
+    const dayEntry = schedule.find(e => e.date === dateStr);
+    if (!dayEntry) return;
+    const newSessions = dayEntry.sessions
+      .filter((_, i) => i !== sessionIdx)
+      .map((s, i) => ({ ...s, order: i }));
+    setMutating(true);
+    try {
+      await upsertDayRow(dateStr, { sessions: newSessions });
+    } catch {
+      toast({ title: 'Error', description: 'Could not delete session.', variant: 'destructive' });
+    } finally {
+      setMutating(false);
+    }
+  }, [schedule, upsertDayRow, toast]);
+
+  const onSessionDragEnd = useCallback(async (result: DropResult) => {
+    const { source, destination } = result;
+    if (!destination) return;
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+
+    const sourceDate = source.droppableId;
+    const destDate   = destination.droppableId;
+    const schedMap   = new Map(schedule.map(e => [e.date, e]));
+    const srcEntry   = schedMap.get(sourceDate);
+    if (!srcEntry) return;
+    const movedSession = srcEntry.sessions[source.index];
+    if (!movedSession) return;
+
+    setMutating(true);
+    try {
+      if (sourceDate === destDate) {
+        // Within-day reorder
+        const sessions = [...srcEntry.sessions];
+        const [mv] = sessions.splice(source.index, 1);
+        sessions.splice(destination.index, 0, mv);
+        sessions.forEach((s, i) => { s.order = i; });
+        await upsertDayRow(sourceDate, { sessions });
+      } else {
+        // Cross-day move — remove from source, insert into destination
+        const newSrc = [...srcEntry.sessions];
+        newSrc.splice(source.index, 1);
+        newSrc.forEach((s, i) => { s.order = i; });
+
+        const dstEntry = schedMap.get(destDate);
+        const newDst = [...(dstEntry?.sessions ?? [])];
+        newDst.splice(destination.index, 0, { ...movedSession });
+        newDst.forEach((s, i) => { s.order = i; });
+
+        await Promise.all([
+          upsertDayRow(sourceDate, { sessions: newSrc }),
+          upsertDayRow(destDate,   { sessions: newDst }),
+        ]);
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Could not move session.', variant: 'destructive' });
+    } finally {
+      setMutating(false);
+    }
+  }, [schedule, upsertDayRow, toast]);
+
   if (!athlete) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-muted-foreground text-sm">
@@ -885,133 +948,174 @@ export default function CoachMobileAthleteProfilePage() {
               Loading schedule…
             </div>
           ) : (
-            <ScrollArea className="flex-1">
-              <div className="px-4 space-y-2 py-3 pb-6">
-                {weekDays.map(dateStr => {
-                  const entry    = scheduleMap.get(dateStr) ?? null;
-                  const isToday  = dateStr === today;
-                  const isPast   = dateStr < today;
-                  const { weekday, dateLabel } = formatDayHeader(dateStr);
-                  const hasSessions = (entry?.sessions.length ?? 0) > 0;
+            <DragDropContext onDragEnd={onSessionDragEnd}>
+              <div className="flex-1 overflow-y-auto">
+                <div className="px-4 space-y-2 py-3 pb-6">
+                  {weekDays.map(dateStr => {
+                    const entry    = scheduleMap.get(dateStr) ?? null;
+                    const isToday  = dateStr === today;
+                    const isPast   = dateStr < today;
+                    const { weekday, dateLabel } = formatDayHeader(dateStr);
+                    const hasSessions = (entry?.sessions.length ?? 0) > 0;
 
-                  return (
-                    <div
-                      key={dateStr}
-                      className={cn(
-                        'rounded-xl p-3 space-y-2',
-                        isToday && 'bg-primary/5 ring-1 ring-primary/20',
-                      )}
-                    >
-                      {/* Day header */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={cn(
-                          'text-sm font-semibold',
-                          isToday ? 'text-primary' : isPast ? 'text-muted-foreground' : 'text-foreground'
-                        )}>
-                          {weekday}
-                        </span>
-                        <span className="text-xs text-muted-foreground">{dateLabel}</span>
-                        {isToday && (
-                          <span className="text-xs font-medium text-primary bg-primary/10 rounded-full px-2 py-0.5">
-                            Today
-                          </span>
+                    return (
+                      <div
+                        key={dateStr}
+                        className={cn(
+                          'rounded-xl p-3 space-y-2',
+                          isToday && 'bg-primary/5 ring-1 ring-primary/20',
                         )}
-                      </div>
-
-                      {/* Daily intensity — tap to edit */}
-                      <button
-                        onClick={() => {
-                          setDayActionTarget(dateStr);
-                          setDayIntensityPickerOpen(true);
-                        }}
-                        className="flex items-center gap-1.5 active:opacity-60 transition-opacity"
                       >
-                        {entry?.intensity
-                          ? <IntensityBadge intensity={entry.intensity} />
-                          : <span className="text-xs text-muted-foreground/50 italic flex items-center gap-1">
-                              <Zap className="h-3 w-3" /> Set intensity
-                            </span>}
-                      </button>
-
-                      {/* Sessions */}
-                      {hasSessions && (
-                        <div className="space-y-1.5">
-                          {entry!.sessions.map((s, sIdx) => (
-                            <Card
-                              key={s.id}
-                              className={cn('transition-opacity cursor-pointer active:scale-[0.98]', isPast && 'opacity-60')}
-                              onClick={() => navigate(`/coach-mobile/athletes/${athleteId}/session`, {
-                                state: {
-                                  entry, sessionIdx: sIdx, connectionId: connection?.id,
-                                  // Return to the training tab so back lands on the calendar, not overview
-                                  returnPath: `/coach-mobile/athletes/${athleteId}`,
-                                  returnState: { tab },
-                                },
-                              })}
-                            >
-                              <CardContent className="flex items-center gap-3 p-3">
-                                <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
-                                  <Dumbbell className="h-3.5 w-3.5 text-primary" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate">{s.name || 'Session'}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {s.exerciseCount} exercise{s.exerciseCount !== 1 ? 's' : ''}
-                                  </p>
-                                  {s.intensity && (
-                                    <div className="mt-1.5">
-                                      <IntensityBadge intensity={s.intensity} />
-                                    </div>
-                                  )}
-                                </div>
-                                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                              </CardContent>
-                            </Card>
-                          ))}
+                        {/* Day header */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={cn(
+                            'text-sm font-semibold',
+                            isToday ? 'text-primary' : isPast ? 'text-muted-foreground' : 'text-foreground'
+                          )}>
+                            {weekday}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{dateLabel}</span>
+                          {isToday && (
+                            <span className="text-xs font-medium text-primary bg-primary/10 rounded-full px-2 py-0.5">
+                              Today
+                            </span>
+                          )}
                         </div>
-                      )}
 
-                      {/* Rest-day label when no sessions */}
-                      {!hasSessions && (
-                        <div className={cn(
-                          'flex items-center gap-1.5 text-xs py-0.5',
-                          isPast ? 'text-muted-foreground/30' : 'text-slate-400'
-                        )}>
-                          <BedDouble className="h-3.5 w-3.5 shrink-0" />
-                          <span>Rest day</span>
-                        </div>
-                      )}
-
-                      {/* Per-day action buttons */}
-                      <div className="flex gap-1.5 pt-0.5">
+                        {/* Daily intensity — tap to edit */}
                         <button
                           onClick={() => {
                             setDayActionTarget(dateStr);
-                            setNewSessionDialogOpen(true);
+                            setDayIntensityPickerOpen(true);
                           }}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border bg-background hover:bg-muted active:opacity-60 transition-colors"
+                          className="flex items-center gap-1.5 active:opacity-60 transition-opacity"
                         >
-                          <Plus className="h-3 w-3" />
-                          Session
+                          {entry?.intensity
+                            ? <IntensityBadge intensity={entry.intensity} />
+                            : <span className="text-xs text-muted-foreground/50 italic flex items-center gap-1">
+                                <Zap className="h-3 w-3" /> Set intensity
+                              </span>}
                         </button>
-                        {sessionLibraryEntries.length > 0 && (
+
+                        {/* Sessions droppable — always mounted so cross-day drops work */}
+                        <Droppable droppableId={dateStr} type="SESSION">
+                          {(sessDrop, sessDropSnap) => (
+                            <div
+                              ref={sessDrop.innerRef}
+                              {...sessDrop.droppableProps}
+                              className={cn(
+                                'space-y-1.5 rounded-lg transition-colors',
+                                sessDropSnap.isDraggingOver && 'bg-primary/5 min-h-12',
+                              )}
+                            >
+                              {hasSessions ? entry!.sessions.map((s, sIdx) => (
+                                <Draggable key={s.id} draggableId={s.id} index={sIdx}>
+                                  {(sessDrag, sessSnap) => (
+                                    <div
+                                      ref={sessDrag.innerRef}
+                                      {...sessDrag.draggableProps}
+                                      className={cn(sessSnap.isDragging && 'shadow-lg opacity-95')}
+                                    >
+                                      <Card className={cn('overflow-hidden', isPast && 'opacity-60')}>
+                                        <CardContent className="flex items-center gap-1.5 p-2.5">
+                                          {/* Drag handle */}
+                                          <div
+                                            {...sessDrag.dragHandleProps}
+                                            className="flex items-center justify-center w-7 h-7 text-muted-foreground/40 shrink-0 cursor-grab active:cursor-grabbing touch-none"
+                                          >
+                                            <GripVertical className="h-4 w-4" />
+                                          </div>
+
+                                          {/* Tap to open session */}
+                                          <button
+                                            className="flex items-center gap-2 flex-1 min-w-0 text-left active:opacity-70"
+                                            onClick={() => navigate(`/coach-mobile/athletes/${athleteId}/session`, {
+                                              state: {
+                                                entry, sessionIdx: sIdx, connectionId: connection?.id,
+                                                returnPath: `/coach-mobile/athletes/${athleteId}`,
+                                                returnState: { tab },
+                                              },
+                                            })}
+                                          >
+                                            <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                                              <Dumbbell className="h-3 w-3 text-primary" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                              <p className="text-sm font-medium truncate">{s.name || 'Session'}</p>
+                                              <p className="text-xs text-muted-foreground">
+                                                {s.exerciseCount} exercise{s.exerciseCount !== 1 ? 's' : ''}
+                                              </p>
+                                              {s.intensity && (
+                                                <div className="mt-1">
+                                                  <IntensityBadge intensity={s.intensity} />
+                                                </div>
+                                              )}
+                                            </div>
+                                            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                                          </button>
+
+                                          {/* Delete session */}
+                                          <button
+                                            onClick={() => handleDeleteSession(dateStr, sIdx)}
+                                            disabled={mutating}
+                                            className="w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 active:opacity-60 transition-colors shrink-0"
+                                            aria-label="Delete session"
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </button>
+                                        </CardContent>
+                                      </Card>
+                                    </div>
+                                  )}
+                                </Draggable>
+                              )) : (
+                                /* Rest-day label — hide when dragging over so the drop zone shows cleanly */
+                                !sessDropSnap.isDraggingOver && (
+                                  <div className={cn(
+                                    'flex items-center gap-1.5 text-xs py-0.5',
+                                    isPast ? 'text-muted-foreground/30' : 'text-slate-400'
+                                  )}>
+                                    <BedDouble className="h-3.5 w-3.5 shrink-0" />
+                                    <span>Rest day</span>
+                                  </div>
+                                )
+                              )}
+                              {sessDrop.placeholder}
+                            </div>
+                          )}
+                        </Droppable>
+
+                        {/* Per-day action buttons */}
+                        <div className="flex gap-1.5 pt-0.5">
                           <button
                             onClick={() => {
                               setDayActionTarget(dateStr);
-                              setSessionLibraryPickerOpen(true);
+                              setNewSessionDialogOpen(true);
                             }}
                             className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border bg-background hover:bg-muted active:opacity-60 transition-colors"
                           >
-                            <BookOpen className="h-3 w-3" />
-                            From Library
+                            <Plus className="h-3 w-3" />
+                            Session
                           </button>
-                        )}
+                          {sessionLibraryEntries.length > 0 && (
+                            <button
+                              onClick={() => {
+                                setDayActionTarget(dateStr);
+                                setSessionLibraryPickerOpen(true);
+                              }}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border bg-background hover:bg-muted active:opacity-60 transition-colors"
+                            >
+                              <BookOpen className="h-3 w-3" />
+                              From Library
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </ScrollArea>
+            </DragDropContext>
           )}
         </div>
       )}
