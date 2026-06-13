@@ -674,6 +674,20 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
   // Wrapper: clear day in editing state AND patch assignmentDataCache so non-selected
   // assignment rendering (cache path) immediately reflects the cleared state.
+  // Optimistic wrapper: remove the session from liveScheduleMap immediately so
+  // the calendar reflects the deletion without waiting for autoSync → realtime.
+  const handleDeleteSession = useCallback((dayDate: string, sessionIndex: number) => {
+    setLiveScheduleMap(prev => {
+      const entry = prev.get(dayDate);
+      if (!entry) return prev;
+      const newSessions = entry.sessions.filter((_, idx) => idx !== sessionIndex);
+      const next = new Map(prev);
+      next.set(dayDate, { ...entry, sessions: newSessions });
+      return next;
+    });
+    editing.handleDeleteSession(dayDate, sessionIndex);
+  }, [editing]);
+
   const handleClearDay = useCallback((dayDate: string) => {
     // Block clearing if any session on this day has been completed by the athlete
     const hasCompleted = Array.from(sessionLogs.keys()).some(key => key.startsWith(`${dayDate}-`));
@@ -2073,7 +2087,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 onSectionDuplicate={editing.handleSectionDuplicate}
                 onSectionDelete={editing.handleSectionDelete}
                 onCopySession={editing.handleCopySession}
-                onDeleteSession={editing.handleDeleteSession}
+                onDeleteSession={handleDeleteSession}
                 onPasteSession={editing.handlePasteSession}
                 copiedSession={editing.copiedSession}
                 onCopyDay={editing.handleCopyDay}
@@ -2129,7 +2143,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                       // Session operations
                       copiedSession={editing.copiedSession}
                       onCopySession={editing.handleCopySession}
-                      onDeleteSession={editing.handleDeleteSession}
+                      onDeleteSession={handleDeleteSession}
                       onPasteSession={editing.handlePasteSession}
                       // Intensity editing
                       onIntensityChange={editing.handleDayIntensityChange}
