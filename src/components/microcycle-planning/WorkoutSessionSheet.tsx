@@ -1457,12 +1457,17 @@ export function WorkoutSessionSheet({
     return totalSessionsOnDay === 1;
   }, [totalSessionsOnDay]);
 
-  // Get current intensity for the day
+  // Get current intensity for the day.
+  // In Athlete Calendar context (useExternalIntensityOnly), prefer the Supabase row
+  // intensity (mobile-edited) over the plan-derived daily intensity data.
   const currentIntensity = useMemo(() => {
+    if (useExternalIntensityOnly && liveScheduleEntry?.rowIntensity) {
+      return liveScheduleEntry.rowIntensity as IntensityLevel;
+    }
     if (!dailyIntensityData) return 'moderate' as IntensityLevel;
     const dayIntensity = dailyIntensityData.find(di => di.date === dayDate);
     return dayIntensity?.intensity || 'moderate' as IntensityLevel;
-  }, [dailyIntensityData, dayDate]);
+  }, [dailyIntensityData, dayDate, useExternalIntensityOnly, liveScheduleEntry]);
 
   // Load session metadata, intensity, and supersets from localStorage
   useEffect(() => {
@@ -1470,18 +1475,25 @@ export function WorkoutSessionSheet({
       // Use session name from trainingDay.sessionNames (synced with Step 1)
       setSessionName(sessionNameFromState || `Session ${sessionIndex + 1}`);
       
-      // Load comments from localStorage (workoutSessions_* format)
-      const key = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
-      const stored = localStorage.getItem(key);
-      if (stored) {
-        try {
-          const { comments } = JSON.parse(stored);
-          setSessionComments(comments || '');
-        } catch {
+      // Load comments: in Athlete Calendar context prefer live Supabase session notes
+      // (set by mobile coach app) — same pattern as session intensity above.
+      // Fall back to localStorage in the standard Training Wizard context.
+      if (useExternalIntensityOnly) {
+        const liveNotes = liveScheduleEntry?.sessions[sessionIndex]?.notes;
+        setSessionComments(liveNotes != null ? liveNotes : '');
+      } else {
+        const key = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
+        const stored = localStorage.getItem(key);
+        if (stored) {
+          try {
+            const { comments } = JSON.parse(stored);
+            setSessionComments(comments || '');
+          } catch {
+            setSessionComments('');
+          }
+        } else {
           setSessionComments('');
         }
-      } else {
-        setSessionComments('');
       }
 
       // Load session intensity - behavior depends on context
