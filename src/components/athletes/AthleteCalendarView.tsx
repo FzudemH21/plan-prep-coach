@@ -99,21 +99,46 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
   // Live athlete_schedule data — reflects any session rearrangements the athlete made
   // AND any mobile-coach-app param edits. Keyed by date string.
+  interface LiveScheduleExercise {
+    id: string;
+    /** Stable library exercise ID — fallback lookup key when the distribution id has changed. */
+    exerciseLibraryId?: string;
+    plannedParams?: Record<string, string | number>;
+    visibleParams?: string[];
+    /** Exercise-level notes edited on mobile. */
+    notes?: string;
+    /** Section-level notes (stored per-exercise so they survive plan syncs). */
+    sectionId?: string;
+    sectionNotes?: string;
+    /** True when this exercise was added via the mobile coach app (not in the plan). */
+    mobileAdded?: boolean;
+    mobileEdited?: boolean;
+    // Fields needed to render mobile-added exercises on desktop:
+    name?: string;
+    order?: number;
+    isCircuit?: boolean;
+    methodKey?: string;
+    plannedSets?: number;
+    sectionName?: string;
+    sectionOrder?: number;
+    supersetId?: string;
+    circuitRounds?: string;
+    circuitExercises?: unknown[];
+  }
   interface LiveScheduleSession {
     id: string;
     sessionName: string;
     exerciseCount: number;
     intensity: string | null;
-    /** Exercise param overrides set via mobile coach or athlete app */
-    exercises: Array<{
-      id: string;
-      /** Stable library exercise ID — fallback lookup key when the distribution id has changed. */
-      exerciseLibraryId?: string;
-      plannedParams?: Record<string, string | number>;
-    }>;
+    /** Session-level notes edited on mobile. */
+    notes?: string;
+    /** All exercises from athlete_schedule — includes mobile-edited and mobile-added. */
+    exercises: LiveScheduleExercise[];
   }
   interface LiveScheduleEntry {
     rowId: string;
+    /** Day-level intensity from the athlete_schedule row (editable on mobile). */
+    rowIntensity?: string | null;
     sessions: LiveScheduleSession[];
   }
   const [liveScheduleMap, setLiveScheduleMap] = useState<Map<string, LiveScheduleEntry>>(new Map());
@@ -257,19 +282,22 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         if (!data) return;
         const map = new Map<string, LiveScheduleEntry>();
         data.forEach((row: Record<string, unknown>) => {
+          // Cast broadly — we capture all fields that mobile coach can edit.
           type RawSession = {
-            id: string; name: string; exerciseCount: number; intensity?: string;
-            exercises?: Array<{ id: string; exerciseLibraryId?: string; plannedParams?: Record<string, string | number> }>;
+            id: string; name: string; exerciseCount: number; intensity?: string; notes?: string;
+            exercises?: LiveScheduleExercise[];
           };
           const rawSessions = (row.sessions as RawSession[]) ?? [];
           map.set(row.date as string, {
             rowId: row.id as string,
+            rowIntensity: row.intensity as string | null,
             sessions: rawSessions.map(s => ({
               id: s.id,
               sessionName: s.name,
               exerciseCount: s.exerciseCount ?? 0,
               intensity: s.intensity ?? null,
-              exercises: s.exercises ?? [],
+              notes: s.notes,
+              exercises: (s.exercises ?? []) as LiveScheduleExercise[],
             })),
           });
         });
@@ -289,33 +317,42 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     const connection = getConnectionForAthlete(athlete.id);
     if (!connection || connectionsLoading) return;
 
+    // Helper: build a LiveScheduleEntry from a raw Supabase row.
+    const buildLiveEntry = (row: Record<string, unknown>): LiveScheduleEntry => {
+      type RawSession = {
+        id: string; name: string; exerciseCount: number; intensity?: string; notes?: string;
+        exercises?: LiveScheduleExercise[];
+      };
+      const rawSessions = (row.sessions as RawSession[]) ?? [];
+      return {
+        rowId: row.id as string,
+        rowIntensity: row.intensity as string | null,
+        sessions: rawSessions.map(s => ({
+          id: s.id,
+          sessionName: s.name,
+          exerciseCount: s.exerciseCount ?? 0,
+          intensity: s.intensity ?? null,
+          notes: s.notes,
+          exercises: (s.exercises ?? []) as LiveScheduleExercise[],
+        })),
+      };
+    };
+
     const channel = supabase
       .channel(`athlete_schedule_live_${connection.id}`)
       .on(
         'postgres_changes' as any,
         {
-          event: 'UPDATE',
+          // Listen to both UPDATE (mobile coach save) and INSERT (post auto-sync upsert)
+          event: '*',
           schema: 'public',
           table: 'athlete_schedule',
           filter: `athlete_connection_id=eq.${connection.id}`,
         },
-        (payload: { new: Record<string, unknown> }) => {
+        (payload: { eventType: string; new: Record<string, unknown> }) => {
+          if (payload.eventType === 'DELETE') return; // ignore deletes
           const row = payload.new;
-          type RawSession = {
-            id: string; name: string; exerciseCount: number; intensity?: string;
-            exercises?: Array<{ id: string; exerciseLibraryId?: string; plannedParams?: Record<string, string | number> }>;
-          };
-          const rawSessions = (row.sessions as RawSession[]) ?? [];
-          const entry: LiveScheduleEntry = {
-            rowId: row.id as string,
-            sessions: rawSessions.map(s => ({
-              id: s.id,
-              sessionName: s.name,
-              exerciseCount: s.exerciseCount ?? 0,
-              intensity: s.intensity ?? null,
-              exercises: s.exercises ?? [],
-            })),
-          };
+          const entry = buildLiveEntry(row);
           setLiveScheduleMap(prev => {
             const next = new Map(prev);
             next.set(row.date as string, entry);
@@ -989,15 +1026,19 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         });
       }
 
-      // Compute day-level intensity for the overview square
-      // This is SEPARATE from session intensities for multi-session days
+      // Compute day-level intensity for the overview square.
+      // Priority: live Supabase value (mobile coach edits) > plan state > default.
       let dayIntensityForSquare: IntensityLevel = 'moderate';
       if (selectedAssignmentId) {
         const liveDayIntensity = editing.dailyIntensityData.find(
           (d: any) => d.date === dateString
         );
         const liveTrainingDay = editing.trainingDays.find((td: any) => td.date === dateString);
-        if (liveDayIntensity?.intensity) {
+        const liveRowIntensity = liveScheduleMap.get(dateString)?.rowIntensity;
+        if (liveRowIntensity) {
+          // Live Supabase value wins — reflects any mobile coach intensity edit.
+          dayIntensityForSquare = liveRowIntensity as IntensityLevel;
+        } else if (liveDayIntensity?.intensity) {
           dayIntensityForSquare = liveDayIntensity.intensity as IntensityLevel;
         } else if (liveTrainingDay?.intensity) {
           dayIntensityForSquare = liveTrainingDay.intensity;

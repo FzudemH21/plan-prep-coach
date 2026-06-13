@@ -591,23 +591,42 @@ export async function syncAthleteSchedule(
   //   1. exercises flagged mobileEdited: true  → preserve their full content
   //      (plannedParams, notes, sectionNotes, visibleParams, etc.)
   //   2. exercises flagged mobileAdded: true   → re-append after sync (not in plan)
+  //   3. day-level intensity                   → preserved per date
+  //   4. session-level intensity               → preserved per date+sessionIdx
+  //   5. session-level notes                   → preserved per date+sessionIdx
   const mobileParamsMap = new Map<string, Map<string, ExerciseSummary>>();
   // mobileAddedMap: date → sessionOrder → exercises[]
   const mobileAddedMap = new Map<string, Map<number, ExerciseSummary[]>>();
+  // Day-level intensity: date → intensity string
+  const mobileDayIntensityMap = new Map<string, string>();
+  // Session-level intensity + notes: `${date}-${sIdx}` → { intensity?, notes? }
+  const mobileSessionMetaMap = new Map<string, { intensity?: string; notes?: string }>();
   try {
     const FETCH_BATCH = 200;
     for (let fi = 0; fi < allDates.length; fi += FETCH_BATCH) {
       const dateBatch = allDates.slice(fi, fi + FETCH_BATCH);
       const { data: existingData } = await supabase
         .from('athlete_schedule')
-        .select('date, sessions')
+        .select('date, intensity, sessions')
         .eq('athlete_connection_id', connectionId)
         .in('date', dateBatch);
       if (existingData) {
-        for (const row of existingData as Array<{ date: string; sessions: SessionSummary[] }>) {
-          const exMap = new Map<string, Record<string, string | number>>();
+        for (const row of existingData as Array<{ date: string; intensity?: string | null; sessions: SessionSummary[] }>) {
+          // Preserve day-level intensity if set
+          if (row.intensity) mobileDayIntensityMap.set(row.date, row.intensity);
+
+          const exMap = new Map<string, ExerciseSummary>();
           for (let sIdx = 0; sIdx < (row.sessions ?? []).length; sIdx++) {
             const session = row.sessions[sIdx];
+
+            // Preserve session-level intensity and notes
+            const sessionMeta: { intensity?: string; notes?: string } = {};
+            if (session.intensity) sessionMeta.intensity = session.intensity;
+            if (session.notes) sessionMeta.notes = session.notes;
+            if (sessionMeta.intensity || sessionMeta.notes) {
+              mobileSessionMetaMap.set(`${row.date}-${sIdx}`, sessionMeta);
+            }
+
             const addedExs: ExerciseSummary[] = [];
             for (const ex of (session.exercises ?? [])) {
               const exTyped = ex as ExerciseSummary;
@@ -683,6 +702,30 @@ export async function syncAthleteSchedule(
       });
     }
     console.log(`[syncAthleteSchedule] re-appended mobile-added exercises for ${mobileAddedMap.size} dates`);
+  }
+
+  // Apply preserved day-level and session-level intensities / notes from mobile.
+  // These are overwritten by the plan rebuild above, so re-apply them here.
+  if (mobileDayIntensityMap.size > 0 || mobileSessionMetaMap.size > 0) {
+    for (const row of rows) {
+      // Day intensity
+      const preservedDayIntensity = mobileDayIntensityMap.get(row.date);
+      if (preservedDayIntensity) row.intensity = preservedDayIntensity;
+
+      // Session intensity + notes
+      if (mobileSessionMetaMap.size > 0) {
+        row.sessions = row.sessions.map((session, sIdx) => {
+          const meta = mobileSessionMetaMap.get(`${row.date}-${sIdx}`);
+          if (!meta) return session;
+          return {
+            ...session,
+            ...(meta.intensity ? { intensity: meta.intensity } : {}),
+            ...(meta.notes ? { notes: meta.notes } : {}),
+          };
+        });
+      }
+    }
+    console.log(`[syncAthleteSchedule] preserved mobile intensities/notes for ${mobileDayIntensityMap.size} dates`);
   }
 
   console.log(`[syncAthleteSchedule] plan: DELETE ${allDates.length} dates → UPSERT ${rows.length} training-day rows`);
