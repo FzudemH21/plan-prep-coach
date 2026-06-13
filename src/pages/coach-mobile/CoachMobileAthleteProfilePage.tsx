@@ -1,19 +1,26 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, Zap, BookOpen, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { supabase } from '@/lib/supabase';
-import type { AthleteScheduleEntry } from '@/hooks/useAthleteApp';
+import type { AthleteScheduleEntry, SessionSummary, ExerciseSummary } from '@/hooks/useAthleteApp';
 import { format, parseISO } from 'date-fns';
-import { IntensityBadge } from '@/components/athlete-app/IntensityBadge';
+import { IntensityBadge, INTENSITY_CONFIG } from '@/components/athlete-app/IntensityBadge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useAthleteCheckins, wellnessComposite, type AthleteCheckin } from '@/hooks/useAthleteCheckins';
 import { DEFAULT_MONITORING_CONFIG } from '@/types/athlete';
 import { FRONT_REGIONS, BACK_REGIONS, nrsSeverityColor, nrsSeverityStroke, svgRegionKey } from '@/lib/bodyMapData';
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { useSessionLibrary } from '@/hooks/useSessionLibrary';
+import type { SessionLibraryEntry } from '@/types/sessionLibrary';
+import { useToast } from '@/hooks/use-toast';
 
 // ── Monitoring helpers ─────────────────────────────────────────────────────────
 
@@ -291,7 +298,39 @@ function useAthleteSchedule(connectionId: string | null) {
       });
   }, [connectionId]);
 
-  return { schedule, loading };
+  return { schedule, setSchedule, loading };
+}
+
+// ── Session library → SessionSummary conversion ───────────────────────────────
+
+function sessionLibraryToSummary(entry: SessionLibraryEntry, order: number): SessionSummary {
+  const exercises: ExerciseSummary[] = entry.exercises.map((ex, i) => {
+    const section = entry.sections.find(s => s.id === ex.sectionId);
+    return {
+      id: `mobile_lib_ex_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 4)}`,
+      name: ex.exerciseName,
+      order: ex.order ?? i,
+      sectionId: ex.sectionId,
+      sectionName: section?.name,
+      sectionOrder: section?.order,
+      exerciseLibraryId: ex.exerciseId,
+      isCircuit: ex.isCircuit,
+      circuitRounds: ex.isCircuit ? (ex as unknown as Record<string, unknown>).circuitRounds as string | undefined : undefined,
+      mobileEdited: true,
+      mobileAdded: true,
+      plannedSets: 3,
+      plannedParams: { Sets: 3, Reps_set1: '', Reps_set2: '', Reps_set3: '' },
+      visibleParams: ['Reps'],
+    };
+  });
+  return {
+    id: `mobile_lib_session_${Date.now()}`,
+    name: entry.name,
+    order,
+    methodCount: 0,
+    exerciseCount: exercises.length,
+    exercises,
+  };
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -311,7 +350,22 @@ export default function CoachMobileAthleteProfilePage() {
 
   const athlete = athletes.find(a => a.id === athleteId);
   const connection = connections.find(c => c.athleteLocalId === athleteId);
-  const { schedule, loading: schedLoading } = useAthleteSchedule(connection?.id ?? null);
+  const { schedule, setSchedule, loading: schedLoading } = useAthleteSchedule(connection?.id ?? null);
+  const { entries: sessionLibraryEntries } = useSessionLibrary();
+  const { toast } = useToast();
+
+  // ── Training-tab mutation state ────────────────────────────────────────────────
+  const [dayActionTarget, setDayActionTarget] = useState<string | null>(null);
+  const [dayIntensityPickerOpen, setDayIntensityPickerOpen] = useState(false);
+  const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
+  const [newSessionName, setNewSessionName] = useState('');
+  const [sessionLibraryPickerOpen, setSessionLibraryPickerOpen] = useState(false);
+  const [mutating, setMutating] = useState(false);
+
+  // Intensity levels for picker
+  const intensityLevels = Object.entries(INTENSITY_CONFIG)
+    .filter(([k]) => /^\d+$/.test(k))
+    .sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
 
   // ── Monitoring ────────────────────────────────────────────────────────────────
   const monitoringEnabled   = connection?.monitoringEnabled ?? false;
@@ -375,6 +429,110 @@ export default function CoachMobileAthleteProfilePage() {
     });
     return () => { cancelled = true; };
   }, [connection?.id, customBlockParamIds]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Mutation helpers ──────────────────────────────────────────────────────────
+
+  const upsertDayRow = useCallback(async (
+    dateStr: string,
+    patch: Partial<{ intensity: string | null; sessions: SessionSummary[] }>,
+  ) => {
+    if (!connection) return;
+    const existing = schedule.find(e => e.date === dateStr);
+    if (existing) {
+      const { error } = await supabase
+        .from('athlete_schedule')
+        .update(patch)
+        .eq('id', existing.id);
+      if (error) throw error;
+      setSchedule(prev => prev.map(e =>
+        e.date === dateStr ? { ...e, ...patch } : e
+      ));
+    } else {
+      const { data, error } = await supabase
+        .from('athlete_schedule')
+        .insert({
+          athlete_connection_id: connection.id,
+          date: dateStr,
+          sessions: patch.sessions ?? [],
+          events: [],
+          intensity: patch.intensity ?? null,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      if (data) {
+        setSchedule(prev => [...prev, {
+          id: (data as Record<string, unknown>).id as string,
+          date: dateStr,
+          intensity: patch.intensity ?? null,
+          sessions: patch.sessions ?? [],
+          events: [],
+          programName: null,
+          mesocycleName: null,
+          microcycleName: null,
+        }].sort((a, b) => a.date.localeCompare(b.date)));
+      }
+    }
+  }, [connection, schedule, setSchedule]);
+
+  const handleSetDayIntensity = useCallback(async (intensity: string | null) => {
+    if (!dayActionTarget) return;
+    setMutating(true);
+    try {
+      await upsertDayRow(dayActionTarget, { intensity });
+      setDayIntensityPickerOpen(false);
+      setDayActionTarget(null);
+    } catch {
+      toast({ title: 'Error', description: 'Could not update intensity.', variant: 'destructive' });
+    } finally {
+      setMutating(false);
+    }
+  }, [dayActionTarget, upsertDayRow, toast]);
+
+  const handleCreateSession = useCallback(async () => {
+    if (!dayActionTarget) return;
+    const name = newSessionName.trim() || 'Session';
+    const existing = schedule.find(e => e.date === dayActionTarget);
+    const order = existing?.sessions.length ?? 0;
+    const newSession: SessionSummary = {
+      id: `mobile_session_${Date.now()}`,
+      name,
+      order,
+      methodCount: 0,
+      exerciseCount: 0,
+      exercises: [],
+    };
+    const sessions = [...(existing?.sessions ?? []), newSession];
+    setMutating(true);
+    try {
+      await upsertDayRow(dayActionTarget, { sessions });
+      setNewSessionDialogOpen(false);
+      setNewSessionName('');
+      setDayActionTarget(null);
+    } catch {
+      toast({ title: 'Error', description: 'Could not create session.', variant: 'destructive' });
+    } finally {
+      setMutating(false);
+    }
+  }, [dayActionTarget, newSessionName, schedule, upsertDayRow, toast]);
+
+  const handleAddFromLibrary = useCallback(async (libEntry: SessionLibraryEntry) => {
+    if (!dayActionTarget) return;
+    const existing = schedule.find(e => e.date === dayActionTarget);
+    const order = existing?.sessions.length ?? 0;
+    const newSession = sessionLibraryToSummary(libEntry, order);
+    const sessions = [...(existing?.sessions ?? []), newSession];
+    setMutating(true);
+    try {
+      await upsertDayRow(dayActionTarget, { sessions });
+      setSessionLibraryPickerOpen(false);
+      setDayActionTarget(null);
+    } catch {
+      toast({ title: 'Error', description: 'Could not add session from library.', variant: 'destructive' });
+    } finally {
+      setMutating(false);
+    }
+  }, [dayActionTarget, schedule, upsertDayRow, toast]);
 
   if (!athlete) {
     return (
@@ -757,11 +915,23 @@ export default function CoachMobileAthleteProfilePage() {
                         )}
                       </div>
 
-                      {/* Daily intensity badge */}
-                      {entry?.intensity && <IntensityBadge intensity={entry.intensity} />}
+                      {/* Daily intensity — tap to edit */}
+                      <button
+                        onClick={() => {
+                          setDayActionTarget(dateStr);
+                          setDayIntensityPickerOpen(true);
+                        }}
+                        className="flex items-center gap-1.5 active:opacity-60 transition-opacity"
+                      >
+                        {entry?.intensity
+                          ? <IntensityBadge intensity={entry.intensity} />
+                          : <span className="text-xs text-muted-foreground/50 italic flex items-center gap-1">
+                              <Zap className="h-3 w-3" /> Set intensity
+                            </span>}
+                      </button>
 
-                      {/* Sessions or rest day */}
-                      {hasSessions ? (
+                      {/* Sessions */}
+                      {hasSessions && (
                         <div className="space-y-1.5">
                           {entry!.sessions.map((s, sIdx) => (
                             <Card
@@ -791,15 +961,44 @@ export default function CoachMobileAthleteProfilePage() {
                             </Card>
                           ))}
                         </div>
-                      ) : (
+                      )}
+
+                      {/* Rest-day label when no sessions */}
+                      {!hasSessions && (
                         <div className={cn(
-                          'flex items-center gap-1.5 text-xs py-1',
-                          isPast ? 'text-muted-foreground/40' : 'text-slate-400'
+                          'flex items-center gap-1.5 text-xs py-0.5',
+                          isPast ? 'text-muted-foreground/30' : 'text-slate-400'
                         )}>
                           <BedDouble className="h-3.5 w-3.5 shrink-0" />
                           <span>Rest day</span>
                         </div>
                       )}
+
+                      {/* Per-day action buttons */}
+                      <div className="flex gap-1.5 pt-0.5">
+                        <button
+                          onClick={() => {
+                            setDayActionTarget(dateStr);
+                            setNewSessionDialogOpen(true);
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border bg-background hover:bg-muted active:opacity-60 transition-colors"
+                        >
+                          <Plus className="h-3 w-3" />
+                          Session
+                        </button>
+                        {sessionLibraryEntries.length > 0 && (
+                          <button
+                            onClick={() => {
+                              setDayActionTarget(dateStr);
+                              setSessionLibraryPickerOpen(true);
+                            }}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border bg-background hover:bg-muted active:opacity-60 transition-colors"
+                          >
+                            <BookOpen className="h-3 w-3" />
+                            From Library
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -808,6 +1007,107 @@ export default function CoachMobileAthleteProfilePage() {
           )}
         </div>
       )}
+
+      {/* ── Day intensity picker ── */}
+      <Sheet open={dayIntensityPickerOpen} onOpenChange={o => { if (!o) { setDayIntensityPickerOpen(false); setDayActionTarget(null); } }}>
+        <SheetContent side="bottom" className="rounded-t-2xl pb-8 max-h-[70vh]">
+          <SheetHeader className="mb-4">
+            <SheetTitle>Day Intensity</SheetTitle>
+          </SheetHeader>
+          <ScrollArea className="max-h-[50vh]">
+            <div className="grid grid-cols-1 gap-2 pb-2">
+              {intensityLevels.map(([key, cfg]) => {
+                const currentIntensity = dayActionTarget ? (scheduleMap.get(dayActionTarget)?.intensity ?? null) : null;
+                return (
+                  <button
+                    key={key}
+                    disabled={mutating}
+                    onClick={() => handleSetDayIntensity(key)}
+                    className={cn(
+                      'flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left active:opacity-70 transition-colors',
+                      currentIntensity === key ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
+                    )}
+                  >
+                    {currentIntensity === key
+                      ? <Check className="h-4 w-4 text-primary shrink-0" />
+                      : <div className="w-4 shrink-0" />}
+                    <span className={cn('text-sm font-medium px-2.5 py-1 rounded-full', cfg.color)}>
+                      {cfg.label}
+                    </span>
+                  </button>
+                );
+              })}
+              <button
+                disabled={mutating}
+                onClick={() => handleSetDayIntensity(null)}
+                className="text-xs text-muted-foreground py-3 text-center active:opacity-70"
+              >
+                Clear intensity
+              </button>
+            </div>
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
+
+      {/* ── New session dialog ── */}
+      <Dialog open={newSessionDialogOpen} onOpenChange={o => { if (!o) { setNewSessionDialogOpen(false); setNewSessionName(''); setDayActionTarget(null); } }}>
+        <DialogContent className="w-[calc(100vw-32px)] max-w-[380px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>New Session</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <Input
+              value={newSessionName}
+              onChange={e => setNewSessionName(e.target.value)}
+              placeholder="Session name (e.g. Morning Training)"
+              onKeyDown={e => { if (e.key === 'Enter') handleCreateSession(); }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setNewSessionDialogOpen(false); setNewSessionName(''); setDayActionTarget(null); }}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateSession} disabled={mutating}>
+              {mutating ? 'Creating…' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Session library picker ── */}
+      <Sheet open={sessionLibraryPickerOpen} onOpenChange={o => { if (!o) { setSessionLibraryPickerOpen(false); setDayActionTarget(null); } }}>
+        <SheetContent side="bottom" className="rounded-t-2xl pb-8 max-h-[80vh] flex flex-col">
+          <SheetHeader className="mb-3 shrink-0">
+            <SheetTitle>Add Session from Library</SheetTitle>
+          </SheetHeader>
+          <ScrollArea className="flex-1">
+            <div className="space-y-2 pb-4">
+              {sessionLibraryEntries.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No sessions in your library yet.
+                </p>
+              ) : sessionLibraryEntries.map(entry => (
+                <button
+                  key={entry.id}
+                  disabled={mutating}
+                  onClick={() => handleAddFromLibrary(entry)}
+                  className="w-full flex items-start gap-3 px-3 py-3 rounded-xl border hover:bg-muted/50 active:bg-muted text-left transition-colors"
+                >
+                  <BookOpen className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{entry.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {entry.exercises.length} exercise{entry.exercises.length !== 1 ? 's' : ''}
+                      {entry.sections.length > 0 ? ` · ${entry.sections.length} section${entry.sections.length !== 1 ? 's' : ''}` : ''}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

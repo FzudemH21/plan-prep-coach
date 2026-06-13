@@ -72,6 +72,9 @@ export interface ExerciseSummary {
    *  Exercises with this flag have their plannedParams preserved across plan syncs
    *  (syncAthleteSchedule will not overwrite them). */
   mobileEdited?: boolean;
+  /** True when the exercise was added on the mobile coach app (not in the plan).
+   *  Re-appended to the session after each plan sync so they survive desktop resyncs. */
+  mobileAdded?: boolean;
 }
 
 export interface SessionSummary {
@@ -583,11 +586,13 @@ export async function syncAthleteSchedule(
     ...[...eventsByDate.keys()].filter(d => !trainingDayDates.has(d)),
   ];
 
-  // ── Preserve mobile-edited plannedParams ──────────────────────────────────────
-  // Before deleting rows, read existing athlete_schedule data and collect any
-  // exercises flagged mobileEdited: true.  Those params survived from a mobile
-  // coach save and must not be overwritten by the plan-derived sync values.
+  // ── Preserve mobile-edited plannedParams AND mobile-added exercises ───────────
+  // Before deleting rows, read existing athlete_schedule data and collect:
+  //   1. exercises flagged mobileEdited: true  → preserve their plannedParams
+  //   2. exercises flagged mobileAdded: true   → re-append after sync (not in plan)
   const mobileParamsMap = new Map<string, Map<string, Record<string, string | number>>>();
+  // mobileAddedMap: date → sessionOrder → exercises[]
+  const mobileAddedMap = new Map<string, Map<number, ExerciseSummary[]>>();
   try {
     const FETCH_BATCH = 200;
     for (let fi = 0; fi < allDates.length; fi += FETCH_BATCH) {
@@ -600,17 +605,29 @@ export async function syncAthleteSchedule(
       if (existingData) {
         for (const row of existingData as Array<{ date: string; sessions: SessionSummary[] }>) {
           const exMap = new Map<string, Record<string, string | number>>();
-          for (const session of (row.sessions ?? [])) {
+          for (let sIdx = 0; sIdx < (row.sessions ?? []).length; sIdx++) {
+            const session = row.sessions[sIdx];
+            const addedExs: ExerciseSummary[] = [];
             for (const ex of (session.exercises ?? [])) {
-              if ((ex as ExerciseSummary).mobileEdited && ex.plannedParams) {
+              const exTyped = ex as ExerciseSummary;
+              // Collect mobileEdited params for preservation
+              if (exTyped.mobileEdited && ex.plannedParams) {
                 const params = ex.plannedParams as Record<string, string | number>;
                 // Key by both the stored exercise id AND the stable library id so that
                 // the lookup succeeds even when ExerciseDistribution.id has changed
                 // (e.g. after the AI re-adds exercises with a new dist-ai-… id).
                 exMap.set(ex.id, params);
-                const libId = (ex as ExerciseSummary).exerciseLibraryId;
+                const libId = exTyped.exerciseLibraryId;
                 if (libId) exMap.set(libId, params);
               }
+              // Collect mobileAdded exercises for re-appending
+              if (exTyped.mobileAdded) {
+                addedExs.push(exTyped);
+              }
+            }
+            if (addedExs.length > 0) {
+              if (!mobileAddedMap.has(row.date)) mobileAddedMap.set(row.date, new Map());
+              mobileAddedMap.get(row.date)!.set(sIdx, addedExs);
             }
           }
           if (exMap.size > 0) mobileParamsMap.set(row.date, exMap);
@@ -639,6 +656,24 @@ export async function syncAthleteSchedule(
       }));
     }
     console.log(`[syncAthleteSchedule] preserved mobile edits for ${mobileParamsMap.size} dates`);
+  }
+
+  // Re-append mobile-added exercises (coach added them via mobile — not in the plan).
+  if (mobileAddedMap.size > 0) {
+    for (const row of rows) {
+      const bySession = mobileAddedMap.get(row.date);
+      if (!bySession) continue;
+      row.sessions = row.sessions.map((session, sIdx) => {
+        const addedExs = bySession.get(sIdx) ?? [];
+        if (addedExs.length === 0) return session;
+        return {
+          ...session,
+          exercises: [...session.exercises, ...addedExs],
+          exerciseCount: session.exerciseCount + addedExs.length,
+        };
+      });
+    }
+    console.log(`[syncAthleteSchedule] re-appended mobile-added exercises for ${mobileAddedMap.size} dates`);
   }
 
   console.log(`[syncAthleteSchedule] plan: DELETE ${allDates.length} dates → UPSERT ${rows.length} training-day rows`);

@@ -72,6 +72,9 @@ export interface ExerciseSummary {
   /** True when plannedParams were directly edited on the mobile coach app.
    *  Preserved across plan syncs — syncAthleteSchedule will not overwrite these. */
   mobileEdited?: boolean;
+  /** True when the exercise was added on the mobile coach app (not in the plan's ExerciseDistribution).
+   *  Re-appended to the session after plan syncs so mobile-added exercises survive desktop resyncs. */
+  mobileAdded?: boolean;
 }
 
 export interface SessionSummary {

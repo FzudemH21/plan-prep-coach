@@ -2,7 +2,7 @@ import { useState, useRef, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronDown, Plus, Minus, Check,
-  Info, RefreshCw, Dumbbell,
+  Info, RefreshCw, Dumbbell, Trash2, Link2, Unlink2, AlignLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
@@ -12,10 +12,13 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
+import type { CustomLibrary, CustomExercise, Circuit } from '@/contexts/CustomLibrariesContext';
 
-// ── Helpers (mirrors AthleteSessionPage logic) ────────────────────────────────
+// ── Section helpers ───────────────────────────────────────────────────────────
 
 interface SectionData {
   id: string;
@@ -48,6 +51,14 @@ function groupIntoSections(exercises: ExerciseSummary[]): SectionData[] {
 
 function getSetCount(ex: ExerciseSummary): number {
   if (ex.isCircuit) return Math.max(1, Number(ex.circuitRounds ?? 3));
+  // Prefer plannedParams['Sets'] as canonical set count (matches desktop).
+  if (ex.plannedParams) {
+    const setsKey = Object.keys(ex.plannedParams).find(k => /^sets?$/i.test(k));
+    if (setsKey) {
+      const n = Number(ex.plannedParams[setsKey]);
+      if (n > 0) return n;
+    }
+  }
   return ex.plannedSets && ex.plannedSets > 0 ? ex.plannedSets : 3;
 }
 
@@ -92,7 +103,17 @@ function getPlannedValue(ex: ExerciseSummary, paramName: string, setIdx: number)
   return '';
 }
 
-// ── Exercise detail dialog (video / description) ──────────────────────────────
+function initSectionNotesMap(exercises: ExerciseSummary[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const ex of exercises) {
+    if (ex.sectionId && ex.sectionNotes && !map[ex.sectionId]) {
+      map[ex.sectionId] = ex.sectionNotes;
+    }
+  }
+  return map;
+}
+
+// ── Exercise detail dialog ─────────────────────────────────────────────────────
 
 interface ExerciseDetailTarget { name: string; videoUrl?: string; description?: string }
 
@@ -134,6 +155,267 @@ function ExerciseDetailDialog({
   );
 }
 
+// ── Intensity picker sheet ─────────────────────────────────────────────────────
+
+function IntensityPickerSheet({
+  open,
+  title,
+  current,
+  onSelect,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  current: string | null | undefined;
+  onSelect: (v: string | null) => void;
+  onClose: () => void;
+}) {
+  const levels = Object.entries(INTENSITY_CONFIG)
+    .filter(([k]) => /^\d+$/.test(k))
+    .sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+
+  return (
+    <Sheet open={open} onOpenChange={o => { if (!o) onClose(); }}>
+      <SheetContent side="bottom" className="rounded-t-2xl pb-8 max-h-[70vh]">
+        <SheetHeader className="mb-4">
+          <SheetTitle>{title}</SheetTitle>
+        </SheetHeader>
+        <ScrollArea className="max-h-[50vh]">
+          <div className="grid grid-cols-1 gap-2 pb-2">
+            {levels.map(([key, cfg]) => (
+              <button
+                key={key}
+                onClick={() => onSelect(key)}
+                className={cn(
+                  'flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left active:opacity-70 transition-colors',
+                  current === key ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
+                )}
+              >
+                {current === key
+                  ? <Check className="h-4 w-4 text-primary shrink-0" />
+                  : <div className="w-4 shrink-0" />}
+                <span className={cn('text-sm font-medium px-2.5 py-1 rounded-full', cfg.color)}>
+                  {cfg.label}
+                </span>
+              </button>
+            ))}
+            <button
+              onClick={() => onSelect(null)}
+              className="text-xs text-muted-foreground py-3 text-center active:opacity-70"
+            >
+              Clear intensity
+            </button>
+          </div>
+        </ScrollArea>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ── Exercise / Circuit picker sheet ───────────────────────────────────────────
+
+function ExercisePickerSheet({
+  open,
+  onClose,
+  onSelectExercise,
+  onSelectCircuit,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSelectExercise: (lib: CustomLibrary, ex: CustomExercise) => void;
+  onSelectCircuit: (circuit: Circuit, lib: CustomLibrary) => void;
+}) {
+  const { libraries } = useCustomLibraries();
+  const [tab, setTab] = useState<'exercises' | 'circuits'>('exercises');
+  const [libIdx, setLibIdx] = useState(0);
+  const [search, setSearch] = useState('');
+
+  // Reset search when opened
+  useEffect(() => {
+    if (open) { setSearch(''); setLibIdx(0); setTab('exercises'); }
+  }, [open]);
+
+  function getExName(lib: CustomLibrary, ex: CustomExercise): string {
+    const nameCol =
+      lib.columns.find(c => c.required) ??
+      lib.columns.find(c => !c.role) ??
+      lib.columns[0];
+    return nameCol ? (String(ex.data[nameCol.id] ?? '') || 'Exercise') : 'Exercise';
+  }
+
+  const currentLib = libraries[libIdx] ?? null;
+  const allCircuits = libraries.flatMap(lib => (lib.circuits ?? []).map(c => ({ circuit: c, lib })));
+
+  const filteredExercises = currentLib
+    ? currentLib.exercises.filter(ex => {
+        if (!search) return true;
+        return getExName(currentLib, ex).toLowerCase().includes(search.toLowerCase());
+      })
+    : [];
+
+  return (
+    <Sheet open={open} onOpenChange={o => { if (!o) onClose(); }}>
+      <SheetContent side="bottom" className="rounded-t-2xl pb-safe max-h-[85vh] flex flex-col gap-0 p-0">
+        <div className="px-4 pt-4 pb-3 border-b shrink-0">
+          <SheetHeader>
+            <SheetTitle>Add to Session</SheetTitle>
+          </SheetHeader>
+          {/* Tab bar */}
+          <div className="flex gap-0 border rounded-lg overflow-hidden mt-3">
+            {(['exercises', 'circuits'] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={cn(
+                  'flex-1 py-2 text-sm font-medium capitalize transition-colors',
+                  tab === t
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground bg-background'
+                )}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {tab === 'exercises' ? (
+          <div className="flex flex-col flex-1 min-h-0 px-4 pt-3 gap-2">
+            {/* Library selector */}
+            {libraries.length > 1 && (
+              <div className="flex gap-1 flex-wrap shrink-0">
+                {libraries.map((l, i) => (
+                  <button
+                    key={l.id}
+                    onClick={() => setLibIdx(i)}
+                    className={cn(
+                      'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+                      libIdx === i
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'border-border text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    {l.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            {/* Search */}
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search exercises…"
+              className="w-full h-9 border rounded-lg px-3 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary shrink-0"
+            />
+            {/* Exercise list */}
+            <ScrollArea className="flex-1 -mx-1">
+              <div className="space-y-0.5 pb-6 px-1">
+                {libraries.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-8">No exercise libraries found.</p>
+                )}
+                {filteredExercises.length === 0 && libraries.length > 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-8">No exercises match your search.</p>
+                )}
+                {filteredExercises.map(ex => (
+                  <button
+                    key={ex.id}
+                    onClick={() => { if (currentLib) onSelectExercise(currentLib, ex); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 active:bg-muted text-left transition-colors"
+                  >
+                    <Plus className="h-4 w-4 text-primary shrink-0" />
+                    <span className="text-sm">{getExName(currentLib!, ex)}</span>
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        ) : (
+          /* Circuits */
+          <ScrollArea className="flex-1 px-4 pt-3">
+            <div className="space-y-0.5 pb-6">
+              {allCircuits.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No circuits in your libraries.</p>
+              ) : allCircuits.map(({ circuit, lib: cLib }) => (
+                <button
+                  key={circuit.id}
+                  onClick={() => onSelectCircuit(circuit, cLib)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 active:bg-muted text-left transition-colors"
+                >
+                  <RefreshCw className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{circuit.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {circuit.exercises.length} ex · {circuit.rounds ?? 3} rounds · {cLib.name}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </ScrollArea>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ── Superset picker sheet ─────────────────────────────────────────────────────
+
+function SupersetPickerSheet({
+  open,
+  sourceId,
+  sectionExercises,
+  onLink,
+  onClose,
+}: {
+  open: boolean;
+  sourceId: string | null;
+  sectionExercises: ExerciseSummary[];
+  onLink: (targetId: string) => void;
+  onClose: () => void;
+}) {
+  const sourceEx = sectionExercises.find(e => e.id === sourceId);
+  const candidates = sectionExercises.filter(e => {
+    if (e.id === sourceId) return false;
+    if (e.isCircuit) return false;
+    if (sourceEx?.supersetId && e.supersetId === sourceEx.supersetId) return false;
+    return true;
+  });
+
+  return (
+    <Sheet open={open} onOpenChange={o => { if (!o) onClose(); }}>
+      <SheetContent side="bottom" className="rounded-t-2xl pb-8">
+        <SheetHeader className="mb-4">
+          <SheetTitle>Link to Superset</SheetTitle>
+        </SheetHeader>
+        {sourceEx && (
+          <p className="text-xs text-muted-foreground mb-3">
+            Linking with: <span className="font-semibold text-foreground">{sourceEx.name}</span>
+          </p>
+        )}
+        {candidates.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-6">
+            No other exercises available to link in this section.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {candidates.map(ex => (
+              <button
+                key={ex.id}
+                onClick={() => onLink(ex.id)}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl border hover:bg-muted/50 active:bg-muted transition-colors text-left"
+              >
+                <Link2 className="h-4 w-4 text-primary shrink-0" />
+                <span className="text-sm font-medium">{ex.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Mode = 'view' | 'edit';
@@ -143,36 +425,70 @@ interface LocationState {
   sessionIdx: number;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function CoachMobileSessionEditPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const { libraries } = useCustomLibraries();
 
   const state = location.state as LocationState | null;
-  // Keep original entry so Cancel can restore it
   const originalEntry = useRef<AthleteScheduleEntry | null>(state?.entry ?? null);
 
   const [mode, setMode] = useState<Mode>('view');
   const [entry, setEntry] = useState<AthleteScheduleEntry | null>(state?.entry ?? null);
   const sessionIdx = state?.sessionIdx ?? 0;
   const [saving, setSaving] = useState(false);
-  const [intensityPickerOpen, setIntensityPickerOpen] = useState(false);
+
+  // ── New state ──────────────────────────────────────────────────────────────
+  const [sectionNotesMap, setSectionNotesMap] = useState<Record<string, string>>({});
+  const [sectionNotesOpen, setSectionNotesOpen] = useState<Set<string>>(new Set());
+  const [extraSections, setExtraSections] = useState<Array<{ id: string; name: string }>>([]);
+  const [newSectionDialogOpen, setNewSectionDialogOpen] = useState(false);
+  const [newSectionName, setNewSectionName] = useState('');
+
+  // Intensity pickers
+  const [dayIntensityOpen, setDayIntensityOpen] = useState(false);
+  const [sessionIntensityOpen, setSessionIntensityOpen] = useState(false);
+
+  // Exercise/circuit picker
+  const [exercisePickerOpen, setExercisePickerOpen] = useState(false);
+  const [pickerTargetSectionId, setPickerTargetSectionId] = useState<string | null>(null);
+
+  // Superset picker
+  const [supersetPickerOpen, setSupersetPickerOpen] = useState(false);
+  const [supersetSourceId, setSupersetSourceId] = useState<string | null>(null);
+  const [supersetSectionId, setSupersetSectionId] = useState<string | null>(null);
+
+  // Exercise detail dialog
   const [detailTarget, setDetailTarget] = useState<ExerciseDetailTarget | null>(null);
 
-  // Sections derived before guard so hooks are never called conditionally
+  // ── Derived sections ───────────────────────────────────────────────────────
+
   const sections = useMemo(
     () => groupIntoSections(entry?.sessions[sessionIdx]?.exercises ?? []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [entry?.sessions[sessionIdx]?.exercises]
+    [entry?.sessions[sessionIdx]?.exercises],
   );
+
+  const allSections = useMemo(() => {
+    const existingIds = new Set(sections.map(s => s.id));
+    const extra = extraSections
+      .filter(s => !existingIds.has(s.id))
+      .map((s, i) => ({
+        id: s.id,
+        name: s.name,
+        order: sections.length + i,
+        notes: undefined as string | undefined,
+        exercises: [] as ExerciseSummary[],
+      }));
+    return [...sections, ...extra];
+  }, [sections, extraSections]);
 
   // All sections start expanded
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set<string>());
   const expandedInitRef = useRef(false);
-
-  // Initialise expanded set once sections are known (safe: effect runs after render)
   useEffect(() => {
     if (!expandedInitRef.current && sections.length > 0) {
       expandedInitRef.current = true;
@@ -180,7 +496,16 @@ export default function CoachMobileSessionEditPage() {
     }
   }, [sections]);
 
-  // ── Guards ──────────────────────────────────────────────────────────────────
+  // Init section notes map once from entry
+  const sectionNotesInitRef = useRef(false);
+  useEffect(() => {
+    if (!entry || sectionNotesInitRef.current) return;
+    sectionNotesInitRef.current = true;
+    setSectionNotesMap(initSectionNotesMap(entry.sessions[sessionIdx]?.exercises ?? []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry?.id]);
+
+  // ── Guards ─────────────────────────────────────────────────────────────────
 
   if (!entry || !state) {
     return (
@@ -192,6 +517,8 @@ export default function CoachMobileSessionEditPage() {
 
   const session: SessionSummary = entry.sessions[sessionIdx];
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
   function toggleSection(id: string) {
     setExpandedSections(prev => {
       const next = new Set(prev);
@@ -200,19 +527,31 @@ export default function CoachMobileSessionEditPage() {
     });
   }
 
-  // ── Edit helpers ────────────────────────────────────────────────────────────
+  function toggleSectionNotes(id: string) {
+    setSectionNotesOpen(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
 
-  function updateExercise(exId: string, updater: (ex: ExerciseSummary) => ExerciseSummary) {
+  // ── Edit helpers ───────────────────────────────────────────────────────────
+
+  function updateSession(updater: (s: SessionSummary) => SessionSummary) {
     setEntry(prev => {
       if (!prev) return prev;
-      const sessions = prev.sessions.map((s, i) =>
-        i !== sessionIdx ? s : {
-          ...s,
-          exercises: s.exercises.map(ex => ex.id === exId ? updater(ex) : ex),
-        }
-      );
-      return { ...prev, sessions };
+      return {
+        ...prev,
+        sessions: prev.sessions.map((s, i) => i !== sessionIdx ? s : updater(s)),
+      };
     });
+  }
+
+  function updateExercise(exId: string, updater: (ex: ExerciseSummary) => ExerciseSummary) {
+    updateSession(s => ({
+      ...s,
+      exercises: s.exercises.map(ex => ex.id === exId ? updater(ex) : ex),
+    }));
   }
 
   function setParamValue(exId: string, paramName: string, setIdx: number, value: string) {
@@ -231,20 +570,14 @@ export default function CoachMobileSessionEditPage() {
     const next = Math.max(1, current + delta);
     updateExercise(exId, e => {
       const newParams = { ...(e.plannedParams ?? {}) };
-
-      // Update the canonical Sets parameter so the desktop overlay sees the right row count.
       const setsKey = Object.keys(newParams).find(k => /^sets?$/i.test(k)) ?? 'Sets';
       newParams[setsKey] = next;
-
-      // Collect all per-set parameter bases (e.g. "Reps" from "Reps_set1").
       const paramBases = new Set<string>();
       for (const key of Object.keys(newParams)) {
         const m = key.match(/^(.+)_set\d+$/);
         if (m && m[1] !== setsKey) paramBases.add(m[1]);
       }
-
       if (next > current) {
-        // Adding sets: seed blank entries for any new set indices.
         for (const base of paramBases) {
           for (let i = current + 1; i <= next; i++) {
             const k = `${base}_set${i}`;
@@ -252,41 +585,179 @@ export default function CoachMobileSessionEditPage() {
           }
         }
       } else if (next < current) {
-        // Removing sets: drop the entries beyond the new count.
         for (const base of paramBases) {
           for (let i = next + 1; i <= current; i++) {
             delete newParams[`${base}_set${i}`];
           }
         }
       }
-
       return { ...e, plannedSets: next, plannedParams: newParams };
     });
   }
 
-  function setDayIntensity(intensity: string | null) {
-    setEntry(prev => prev ? { ...prev, intensity } : prev);
-    setIntensityPickerOpen(false);
+  function deleteExercise(exId: string) {
+    updateSession(s => ({
+      ...s,
+      exercises: s.exercises.filter(ex => ex.id !== exId),
+    }));
+  }
+
+  function deleteSection(sectionId: string) {
+    setExtraSections(prev => prev.filter(s => s.id !== sectionId));
+    updateSession(s => ({
+      ...s,
+      exercises: s.exercises.filter(ex => ex.sectionId !== sectionId),
+    }));
+  }
+
+  function addSection() {
+    const name = newSectionName.trim() || 'New Section';
+    const id = `mobile_sec_${Date.now()}`;
+    setExtraSections(prev => [...prev, { id, name }]);
+    setNewSectionName('');
+    setNewSectionDialogOpen(false);
+    // Auto-expand the new section
+    setExpandedSections(prev => new Set([...prev, id]));
+  }
+
+  function handleSupersetLink(targetId: string) {
+    if (!supersetSourceId) return;
+    const sourceEx = session.exercises.find(e => e.id === supersetSourceId);
+    const existingSupersetId = sourceEx?.supersetId;
+    const newSupersetId = existingSupersetId ?? `ss_mobile_${Date.now()}`;
+    updateSession(s => ({
+      ...s,
+      exercises: s.exercises.map(ex => {
+        if (ex.id === supersetSourceId || ex.id === targetId) {
+          return { ...ex, supersetId: newSupersetId };
+        }
+        return ex;
+      }),
+    }));
+    setSupersetPickerOpen(false);
+    setSupersetSourceId(null);
+    setSupersetSectionId(null);
+  }
+
+  function removeFromSuperset(exId: string) {
+    updateSession(s => ({
+      ...s,
+      exercises: s.exercises.map(ex => {
+        if (ex.id !== exId) return ex;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { supersetId: _removed, ...rest } = ex;
+        return rest as ExerciseSummary;
+      }),
+    }));
+  }
+
+  function addExerciseFromLibrary(lib: CustomLibrary, ex: CustomExercise) {
+    const sectionId = pickerTargetSectionId;
+    const targetSection = allSections.find(s => s.id === sectionId);
+    const nameCol =
+      lib.columns.find(c => c.required) ??
+      lib.columns.find(c => !c.role) ??
+      lib.columns[0];
+    const name = nameCol ? (String(ex.data[nameCol.id] ?? '') || 'Exercise') : 'Exercise';
+    const videoCol = lib.columns.find(c => c.role === 'video');
+    const descCol = lib.columns.find(c => c.role === 'description');
+    const videoUrl =
+      (videoCol ? String(ex.data[videoCol.id] ?? '') : '') ||
+      (ex.videoUrl ?? undefined);
+    const description =
+      (descCol ? String(ex.data[descCol.id] ?? '') : '') ||
+      (ex.description ?? undefined);
+
+    const order = (entry?.sessions[sessionIdx]?.exercises.length ?? 0);
+    const newEx: ExerciseSummary = {
+      id: `mobile_ex_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name,
+      order,
+      sectionId: targetSection?.id,
+      sectionName: targetSection?.name,
+      sectionOrder: targetSection?.order,
+      exerciseLibraryId: ex.id,
+      exerciseVideoUrl: videoUrl || undefined,
+      exerciseDescription: description || undefined,
+      mobileEdited: true,
+      mobileAdded: true,
+      plannedSets: 3,
+      plannedParams: { Sets: 3, Reps_set1: '', Reps_set2: '', Reps_set3: '' },
+      visibleParams: ['Reps'],
+    };
+    updateSession(s => ({ ...s, exercises: [...s.exercises, newEx] }));
+    setExercisePickerOpen(false);
+    // Also expand the target section so the new exercise is visible
+    if (targetSection?.id) {
+      setExpandedSections(prev => new Set([...prev, targetSection.id]));
+    }
+  }
+
+  function addCircuitFromLibrary(circuit: Circuit) {
+    const sectionId = pickerTargetSectionId;
+    const targetSection = allSections.find(s => s.id === sectionId);
+    const order = (entry?.sessions[sessionIdx]?.exercises.length ?? 0);
+    const newEx: ExerciseSummary = {
+      id: `mobile_circuit_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: circuit.name,
+      order,
+      sectionId: targetSection?.id,
+      sectionName: targetSection?.name,
+      sectionOrder: targetSection?.order,
+      isCircuit: true,
+      circuitRounds: circuit.rounds ?? '3',
+      circuitRestBetweenRounds: circuit.restBetweenRounds,
+      circuitRestBetweenExercises: circuit.restBetweenExercises,
+      circuitComments: circuit.comments,
+      circuitExercises: circuit.exercises.map(e => ({
+        id: e.id,
+        exerciseId: e.exerciseId,
+        exerciseName: e.exerciseName,
+        reps: e.reps,
+        time: e.time,
+        distance: e.distance,
+        enabledParams: e.enabledParams,
+        order: e.order,
+      })),
+      mobileEdited: true,
+      mobileAdded: true,
+      plannedSets: 1,
+      plannedParams: { Sets: 1 },
+    };
+    updateSession(s => ({ ...s, exercises: [...s.exercises, newEx] }));
+    setExercisePickerOpen(false);
+    if (targetSection?.id) {
+      setExpandedSections(prev => new Set([...prev, targetSection.id]));
+    }
   }
 
   function handleCancel() {
     setEntry(originalEntry.current);
+    setExtraSections([]);
+    setSectionNotesMap(
+      initSectionNotesMap(originalEntry.current?.sessions[sessionIdx]?.exercises ?? [])
+    );
+    setSectionNotesOpen(new Set());
     setMode('view');
   }
 
-  // ── Save ────────────────────────────────────────────────────────────────────
+  // ── Save ───────────────────────────────────────────────────────────────────
 
   async function handleSave() {
     if (!entry) return;
     setSaving(true);
     try {
-      // Stamp mobileEdited: true on every exercise in the edited session so that
-      // syncAthleteSchedule (triggered by desktop loads) preserves these params
-      // instead of overwriting them with plan-derived values.
       const sessionsWithFlag = entry.sessions.map((s, i) =>
         i !== sessionIdx ? s : {
           ...s,
-          exercises: s.exercises.map(ex => ({ ...ex, mobileEdited: true })),
+          exercises: s.exercises.map(ex => ({
+            ...ex,
+            mobileEdited: true,
+            // Apply section notes from the local map
+            sectionNotes: ex.sectionId
+              ? (sectionNotesMap[ex.sectionId] ?? ex.sectionNotes)
+              : ex.sectionNotes,
+          })),
         }
       );
       const { error } = await supabase
@@ -304,16 +775,12 @@ export default function CoachMobileSessionEditPage() {
     }
   }
 
-  const intensityLevels = Object.entries(INTENSITY_CONFIG)
-    .filter(([k]) => /^\d+$/.test(k))
-    .sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
-
-  // ── VIEW MODE — matches AthleteSessionPage overview phase ──────────────────
+  // ── VIEW MODE ──────────────────────────────────────────────────────────────
 
   if (mode === 'view') {
     return (
       <div className="flex flex-col h-full bg-background">
-        {/* Header (matches athlete app: back left, title center, Edit right) */}
+        {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
           <button
             onClick={() => navigate(-1)}
@@ -348,7 +815,16 @@ export default function CoachMobileSessionEditPage() {
                 {/* Day intensity */}
                 {entry.intensity && (
                   <div className="pb-1">
+                    <p className="text-xs text-muted-foreground mb-1">Day Intensity</p>
                     <IntensityBadge intensity={entry.intensity} />
+                  </div>
+                )}
+
+                {/* Session intensity */}
+                {session.intensity && (
+                  <div className="pb-1">
+                    <p className="text-xs text-muted-foreground mb-1">Session Intensity</p>
+                    <IntensityBadge intensity={session.intensity} />
                   </div>
                 )}
 
@@ -359,18 +835,20 @@ export default function CoachMobileSessionEditPage() {
                   </p>
                 )}
 
-                {/* Collapsible section cards — same structure as athlete app */}
+                {/* Collapsible section cards */}
                 {sections.map(sec => {
                   const isOpen = expandedSections.has(sec.id);
                   return (
                     <Card key={sec.id} className="overflow-hidden">
-                      {/* Section header — tap to toggle */}
                       <button
                         className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 active:bg-muted/60 transition-colors"
                         onClick={() => toggleSection(sec.id)}
                       >
                         <div className="text-left">
                           <p className="font-semibold text-sm">{sec.name}</p>
+                          {sec.notes && (
+                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{sec.notes}</p>
+                          )}
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {sec.exercises.length} exercise{sec.exercises.length !== 1 ? 's' : ''}
                           </p>
@@ -383,11 +861,16 @@ export default function CoachMobileSessionEditPage() {
                         />
                       </button>
 
-                      {/* Exercise list */}
                       {isOpen && (
                         <div className="border-t divide-y divide-border/50">
                           {sec.exercises.map((ex, i) => (
-                            <div key={ex.id} className="flex items-center gap-3 px-4 py-2.5">
+                            <div
+                              key={ex.id}
+                              className={cn(
+                                'flex items-center gap-3 px-4 py-2.5',
+                                ex.supersetId && 'border-l-2 border-primary/40 pl-3'
+                              )}
+                            >
                               <span className="text-xs text-muted-foreground w-4 shrink-0 text-right tabular-nums">
                                 {i + 1}
                               </span>
@@ -403,7 +886,7 @@ export default function CoachMobileSessionEditPage() {
                                       videoUrl: ex.exerciseVideoUrl,
                                       description: ex.exerciseDescription,
                                     })}
-                                    className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60 transition-colors"
+                                    className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60"
                                     aria-label="View exercise details"
                                   >
                                     <Info className="h-3.5 w-3.5" />
@@ -429,7 +912,6 @@ export default function CoachMobileSessionEditPage() {
               </div>
             </ScrollArea>
 
-            {/* Bottom CTA */}
             <div className="p-4 border-t shrink-0">
               <Button className="w-full" onClick={() => setMode('edit')}>
                 Edit Session
@@ -443,7 +925,12 @@ export default function CoachMobileSessionEditPage() {
     );
   }
 
-  // ── EDIT MODE — inline param editing ───────────────────────────────────────
+  // ── EDIT MODE ──────────────────────────────────────────────────────────────
+
+  // Collect exercises in same section as supersetSourceId (for picker)
+  const supersetSectionExercises = supersetSectionId
+    ? (allSections.find(s => s.id === supersetSectionId)?.exercises ?? [])
+    : [];
 
   return (
     <div className="flex flex-col h-full">
@@ -464,9 +951,23 @@ export default function CoachMobileSessionEditPage() {
         </Button>
       </div>
 
-      {/* Day intensity row */}
+      {/* Session notes */}
+      <div className="px-4 pt-3 pb-2 border-b shrink-0">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">
+          Session Notes
+        </p>
+        <textarea
+          value={session.notes ?? ''}
+          onChange={e => updateSession(s => ({ ...s, notes: e.target.value }))}
+          placeholder="Add notes for this session…"
+          rows={2}
+          className="w-full text-sm border rounded-lg px-3 py-2 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground/50"
+        />
+      </div>
+
+      {/* Day intensity */}
       <button
-        onClick={() => setIntensityPickerOpen(true)}
+        onClick={() => setDayIntensityOpen(true)}
         className="flex items-center justify-between px-4 py-3 border-b shrink-0 w-full text-left active:bg-accent/40"
       >
         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -477,48 +978,145 @@ export default function CoachMobileSessionEditPage() {
           : <span className="text-xs text-muted-foreground italic">Tap to set…</span>}
       </button>
 
-      {/* Exercise list */}
+      {/* Session intensity */}
+      <button
+        onClick={() => setSessionIntensityOpen(true)}
+        className="flex items-center justify-between px-4 py-3 border-b shrink-0 w-full text-left active:bg-accent/40"
+      >
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Session Intensity
+        </p>
+        {session.intensity
+          ? <IntensityBadge intensity={session.intensity} />
+          : <span className="text-xs text-muted-foreground italic">Tap to set…</span>}
+      </button>
+
+      {/* Section list */}
       <ScrollArea className="flex-1">
         <div className="px-4 py-4 space-y-5 pb-10">
-          {sections.length === 0 ? (
+          {allSections.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
-              No exercises in this session.
+              No sections yet. Add exercises or create a section.
             </p>
-          ) : sections.map(section => (
-            <div key={section.id} className="space-y-3">
-              {/* Section label */}
-              {sections.length > 1 && (
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          ) : allSections.map(section => (
+            <div key={section.id} className="space-y-2">
+              {/* Section header */}
+              <div className="flex items-center gap-2">
+                <p className="flex-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground truncate">
                   {section.name}
                 </p>
+                {/* Notes toggle */}
+                <button
+                  onClick={() => toggleSectionNotes(section.id)}
+                  className={cn(
+                    'w-7 h-7 rounded-full flex items-center justify-center transition-colors',
+                    sectionNotesOpen.has(section.id)
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  )}
+                  aria-label="Toggle section notes"
+                  title="Section notes"
+                >
+                  <AlignLeft className="h-3.5 w-3.5" />
+                </button>
+                {/* Delete section */}
+                <button
+                  onClick={() => deleteSection(section.id)}
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                  aria-label="Delete section"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* Section notes textarea */}
+              {sectionNotesOpen.has(section.id) && (
+                <textarea
+                  value={sectionNotesMap[section.id] ?? section.notes ?? ''}
+                  onChange={e =>
+                    setSectionNotesMap(prev => ({ ...prev, [section.id]: e.target.value }))
+                  }
+                  placeholder="Section notes…"
+                  rows={2}
+                  className="w-full text-sm border rounded-lg px-3 py-2 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground/50"
+                />
               )}
 
-              {section.exercises.map(ex => {
+              {/* Exercises */}
+              {section.exercises.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-3 border border-dashed rounded-xl">
+                  No exercises yet — add one below
+                </p>
+              ) : section.exercises.map(ex => {
                 const params = getParamColumns(ex);
                 const sets = getSetCount(ex);
+                const inSuperset = !!ex.supersetId;
 
                 return (
-                  <div key={ex.id} className="rounded-xl border bg-card overflow-hidden">
-                    {/* Exercise name + sets control */}
-                    <div className="flex items-center justify-between px-3 py-2.5 bg-muted/30 border-b gap-3">
+                  <div
+                    key={ex.id}
+                    className={cn(
+                      'rounded-xl border bg-card overflow-hidden',
+                      inSuperset && 'border-l-4 border-l-primary/60'
+                    )}
+                  >
+                    {/* Exercise header */}
+                    <div className="flex items-center justify-between px-3 py-2.5 bg-muted/30 border-b gap-2">
                       <p className="text-sm font-semibold truncate flex-1 min-w-0">{ex.name}</p>
+
+                      {/* Superset link/unlink */}
+                      {!ex.isCircuit && (
+                        <button
+                          onClick={() => {
+                            if (inSuperset) {
+                              removeFromSuperset(ex.id);
+                            } else {
+                              setSupersetSourceId(ex.id);
+                              setSupersetSectionId(section.id);
+                              setSupersetPickerOpen(true);
+                            }
+                          }}
+                          className={cn(
+                            'w-7 h-7 rounded-full flex items-center justify-center transition-colors shrink-0',
+                            inSuperset
+                              ? 'bg-primary/10 text-primary hover:bg-destructive/10 hover:text-destructive'
+                              : 'text-muted-foreground hover:text-primary hover:bg-primary/10'
+                          )}
+                          aria-label={inSuperset ? 'Remove from superset' : 'Add to superset'}
+                          title={inSuperset ? 'Remove from superset' : 'Link to superset'}
+                        >
+                          {inSuperset ? <Unlink2 className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
+                        </button>
+                      )}
+
                       {/* Sets ± */}
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-xs text-muted-foreground">Sets</span>
-                        <button
-                          onClick={() => changeSetCount(ex.id, -1)}
-                          className="w-6 h-6 rounded-full border bg-background flex items-center justify-center active:bg-accent"
-                        >
-                          <Minus className="h-3 w-3" />
-                        </button>
-                        <span className="text-sm font-bold w-5 text-center">{sets}</span>
-                        <button
-                          onClick={() => changeSetCount(ex.id, +1)}
-                          className="w-6 h-6 rounded-full border bg-background flex items-center justify-center active:bg-accent"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
-                      </div>
+                      {!ex.isCircuit && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-xs text-muted-foreground">Sets</span>
+                          <button
+                            onClick={() => changeSetCount(ex.id, -1)}
+                            className="w-6 h-6 rounded-full border bg-background flex items-center justify-center active:bg-accent"
+                          >
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <span className="text-sm font-bold w-4 text-center tabular-nums">{sets}</span>
+                          <button
+                            onClick={() => changeSetCount(ex.id, +1)}
+                            className="w-6 h-6 rounded-full border bg-background flex items-center justify-center active:bg-accent"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Delete */}
+                      <button
+                        onClick={() => deleteExercise(ex.id)}
+                        className="w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                        aria-label="Delete exercise"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
 
                     {/* Params table */}
@@ -563,51 +1161,138 @@ export default function CoachMobileSessionEditPage() {
                         </table>
                       </div>
                     )}
+
+                    {/* Circuit info */}
+                    {ex.isCircuit && (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">
+                        {ex.circuitRounds ?? 3} rounds · {ex.circuitExercises?.length ?? 0} exercises
+                      </div>
+                    )}
                   </div>
                 );
               })}
+
+              {/* Add exercise / circuit buttons */}
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => {
+                    setPickerTargetSectionId(section.id);
+                    setExercisePickerOpen(true);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed text-xs text-muted-foreground hover:text-primary hover:border-primary active:opacity-60 transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Exercise
+                </button>
+                <button
+                  onClick={() => {
+                    setPickerTargetSectionId(section.id);
+                    setExercisePickerOpen(true);
+                  }}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed text-xs text-muted-foreground hover:text-primary hover:border-primary active:opacity-60 transition-colors"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Circuit
+                </button>
+              </div>
             </div>
           ))}
+
+          {/* Add section */}
+          <button
+            onClick={() => setNewSectionDialogOpen(true)}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed text-sm text-muted-foreground hover:text-primary hover:border-primary active:opacity-60 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            New Section
+          </button>
+
+          {/* If no sections at all, also show quick add */}
+          {allSections.length === 0 && libraries.length > 0 && (
+            <button
+              onClick={() => {
+                setPickerTargetSectionId('__none__');
+                setExercisePickerOpen(true);
+              }}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border text-sm font-medium hover:bg-muted/50 active:opacity-60 transition-colors"
+            >
+              <Dumbbell className="h-4 w-4 text-primary" />
+              Add Exercise
+            </button>
+          )}
         </div>
       </ScrollArea>
 
-      {/* Intensity picker bottom sheet */}
-      <Sheet open={intensityPickerOpen} onOpenChange={setIntensityPickerOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl pb-8 max-h-[70vh]">
-          <SheetHeader className="mb-4">
-            <SheetTitle>Day Intensity</SheetTitle>
-          </SheetHeader>
-          <ScrollArea className="max-h-[50vh]">
-            <div className="grid grid-cols-1 gap-2 pb-2">
-              {intensityLevels.map(([key, cfg]) => (
-                <button
-                  key={key}
-                  onClick={() => setDayIntensity(key)}
-                  className={cn(
-                    'flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left active:opacity-70 transition-colors',
-                    entry.intensity === key
-                      ? 'border-primary bg-primary/5'
-                      : 'hover:bg-muted/50'
-                  )}
-                >
-                  {entry.intensity === key
-                    ? <Check className="h-4 w-4 text-primary shrink-0" />
-                    : <div className="w-4 shrink-0" />}
-                  <span className={cn('text-sm font-medium px-2.5 py-1 rounded-full', cfg.color)}>
-                    {cfg.label}
-                  </span>
-                </button>
-              ))}
-              <button
-                onClick={() => setDayIntensity(null)}
-                className="text-xs text-muted-foreground py-3 text-center active:opacity-70"
-              >
-                Clear intensity
-              </button>
-            </div>
-          </ScrollArea>
-        </SheetContent>
-      </Sheet>
+      {/* ── Sheets & Dialogs ── */}
+
+      {/* Day intensity picker */}
+      <IntensityPickerSheet
+        open={dayIntensityOpen}
+        title="Day Intensity"
+        current={entry.intensity}
+        onSelect={v => {
+          setEntry(prev => prev ? { ...prev, intensity: v } : prev);
+          setDayIntensityOpen(false);
+        }}
+        onClose={() => setDayIntensityOpen(false)}
+      />
+
+      {/* Session intensity picker */}
+      <IntensityPickerSheet
+        open={sessionIntensityOpen}
+        title="Session Intensity"
+        current={session.intensity}
+        onSelect={v => {
+          updateSession(s => ({ ...s, intensity: v ?? undefined }));
+          setSessionIntensityOpen(false);
+        }}
+        onClose={() => setSessionIntensityOpen(false)}
+      />
+
+      {/* Exercise / circuit picker */}
+      <ExercisePickerSheet
+        open={exercisePickerOpen}
+        onClose={() => setExercisePickerOpen(false)}
+        onSelectExercise={(lib, ex) => addExerciseFromLibrary(lib, ex)}
+        onSelectCircuit={(circuit) => addCircuitFromLibrary(circuit)}
+      />
+
+      {/* Superset picker */}
+      <SupersetPickerSheet
+        open={supersetPickerOpen}
+        sourceId={supersetSourceId}
+        sectionExercises={supersetSectionExercises}
+        onLink={handleSupersetLink}
+        onClose={() => {
+          setSupersetPickerOpen(false);
+          setSupersetSourceId(null);
+          setSupersetSectionId(null);
+        }}
+      />
+
+      {/* New section dialog */}
+      <Dialog open={newSectionDialogOpen} onOpenChange={o => { if (!o) setNewSectionDialogOpen(false); }}>
+        <DialogContent className="w-[calc(100vw-32px)] max-w-[380px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>New Section</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <Input
+              value={newSectionName}
+              onChange={e => setNewSectionName(e.target.value)}
+              placeholder="Section name (e.g. Warm-up)"
+              onKeyDown={e => { if (e.key === 'Enter') addSection(); }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setNewSectionDialogOpen(false)}>Cancel</Button>
+            <Button onClick={addSection}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ExerciseDetailDialog target={detailTarget} onClose={() => setDetailTarget(null)} />
     </div>
   );
 }
