@@ -938,7 +938,7 @@ export default function CoachMobileAthleteProfilePage() {
                               key={s.id}
                               className={cn('transition-opacity cursor-pointer active:scale-[0.98]', isPast && 'opacity-60')}
                               onClick={() => navigate(`/coach-mobile/athletes/${athleteId}/session`, {
-                                state: { entry, sessionIdx: sIdx },
+                                state: { entry, sessionIdx: sIdx, connectionId: connection?.id },
                               })}
                             >
                               <CardContent className="flex items-center gap-3 p-3">

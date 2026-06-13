@@ -634,7 +634,7 @@ function CircuitExerciseList({ ex }: { ex: ExerciseSummary }) {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Mode = 'view' | 'edit';
-interface LocationState { entry: AthleteScheduleEntry; sessionIdx: number }
+interface LocationState { entry: AthleteScheduleEntry; sessionIdx: number; connectionId?: string }
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -647,6 +647,9 @@ export default function CoachMobileSessionEditPage() {
 
   const state = location.state as LocationState | null;
   const originalEntry = useRef<AthleteScheduleEntry | null>(state?.entry ?? null);
+  // connectionId from navigation state — used to identify the row by (athlete_connection_id, date)
+  // instead of by the row UUID (which changes after every loadSync/autoSync DELETE+UPSERT).
+  const connectionId = state?.connectionId ?? null;
 
   const [mode, setMode] = useState<Mode>('view');
   const [entry, setEntry] = useState<AthleteScheduleEntry | null>(state?.entry ?? null);
@@ -936,11 +939,21 @@ export default function CoachMobileSessionEditPage() {
 
   // ── Auto-save intensity from view mode ────────────────────────────────────
 
+  /** Build a Supabase query filter that targets the row by (connection_id, date) when possible,
+   *  falling back to the UUID. This is critical because loadSync/autoSync DELETEs and re-INSERTs
+   *  rows (generating new UUIDs), so a stale UUID from the initial fetch will miss the row. */
+  function buildRowFilter(query: ReturnType<typeof supabase.from>) {
+    if (connectionId) {
+      return (query as any).eq('athlete_connection_id', connectionId).eq('date', entry!.date);
+    }
+    return (query as any).eq('id', entry!.id);
+  }
+
   async function autoSaveDayIntensity(newIntensity: string | null) {
     const updated = { ...entry, intensity: newIntensity };
     setEntry(updated);
     try {
-      await supabase.from('athlete_schedule').update({ intensity: newIntensity }).eq('id', entry.id);
+      await buildRowFilter(supabase.from('athlete_schedule').update({ intensity: newIntensity }));
       originalEntry.current = updated;
     } catch { toast({ title: 'Error saving intensity', variant: 'destructive' }); }
     setDayIntensityOpen(false);
@@ -950,7 +963,7 @@ export default function CoachMobileSessionEditPage() {
     const updatedSessions = entry.sessions.map((s, i) => i !== sessionIdx ? s : { ...s, intensity: newIntensity ?? undefined });
     setEntry(prev => prev ? { ...prev, sessions: updatedSessions } : prev);
     try {
-      await supabase.from('athlete_schedule').update({ sessions: updatedSessions }).eq('id', entry.id);
+      await buildRowFilter(supabase.from('athlete_schedule').update({ sessions: updatedSessions }));
       originalEntry.current = { ...entry, sessions: updatedSessions };
     } catch { toast({ title: 'Error saving intensity', variant: 'destructive' }); }
     setSessionIntensityOpen(false);
@@ -972,11 +985,26 @@ export default function CoachMobileSessionEditPage() {
           })),
         },
       );
-      const { error } = await supabase
-        .from('athlete_schedule')
-        .update({ sessions: sessionsWithFlag, intensity: entry.intensity })
-        .eq('id', entry.id);
-      if (error) throw error;
+      // Identify the row by (athlete_connection_id, date) rather than by the row UUID.
+      // The UUID changes after every loadSync/autoSync DELETE+UPSERT, so updating by UUID
+      // silently hits 0 rows when the desktop has re-synced since the mobile app last fetched.
+      let queryError: unknown = null;
+      if (connectionId) {
+        const { error } = await supabase
+          .from('athlete_schedule')
+          .update({ sessions: sessionsWithFlag, intensity: entry.intensity })
+          .eq('athlete_connection_id', connectionId)
+          .eq('date', entry.date);
+        queryError = error;
+      } else {
+        // Fallback: use the row UUID (works if the row hasn't been re-synced since mobile fetched)
+        const { error } = await supabase
+          .from('athlete_schedule')
+          .update({ sessions: sessionsWithFlag, intensity: entry.intensity })
+          .eq('id', entry.id);
+        queryError = error;
+      }
+      if (queryError) throw queryError;
       originalEntry.current = { ...entry, sessions: sessionsWithFlag };
       toast({ title: 'Saved ✓', description: 'Session updated in athlete schedule.' });
       setMode('view');
