@@ -1218,7 +1218,7 @@ export default function CoachMobileSessionEditPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 py-4 space-y-3 pb-10">
           {allSections.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No sections yet. Add exercises or create a section.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">No sections yet. Create a section first, then add exercises.</p>
           ) : allSections.map((section, secIdx) => {
             const isExpanded = expandedSections.has(section.id);
             return (
@@ -1433,12 +1433,7 @@ export default function CoachMobileSessionEditPage() {
             <Plus className="h-4 w-4" /> New Section
           </button>
 
-          {allSections.length === 0 && libraries.length > 0 && (
-            <button onClick={() => { setPickerTargetSectionId('__none__'); setExercisePickerOpen(true); }}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border text-sm font-medium hover:bg-muted/50 active:opacity-60 transition-colors">
-              <Dumbbell className="h-4 w-4 text-primary" /> Add Exercise
-            </button>
-          )}
+          {/* Exercises can only be added inside sections — no top-level Add Exercise button */}
         </div>
       </div>
 

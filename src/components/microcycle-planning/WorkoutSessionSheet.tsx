@@ -1300,6 +1300,20 @@ export function WorkoutSessionSheet({
       setSessionIntensity(liveSession.intensity as IntensityLevel);
     }
 
+    // ── Pure mobile session: no plan exercises → replace sections entirely ──────
+    // The init effect set an "Uncategorized" placeholder when liveScheduleEntry
+    // was not yet available; now that live data has arrived, replace it entirely
+    // instead of merging so the ghost Uncategorized section doesn't persist.
+    if (exercises.length === 0 && (liveSession.exercises ?? []).length > 0) {
+      const liveSecs = buildSectionsFromLiveExercises(liveSession.exercises);
+      setWorkoutSections(liveSecs);
+      const visOverrides = computeLiveVisibilityOverrides(liveSession.exercises);
+      if (Object.keys(visOverrides).length > 0) {
+        setParameterVisibilityOverrides(prev => ({ ...prev, ...visOverrides }));
+      }
+      return;
+    }
+
     // Per-exercise overrides
     const overrideMap = new Map<string, Record<string, string | number>>();
     const exNotesMap = new Map<string, string>();
