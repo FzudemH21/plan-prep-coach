@@ -609,6 +609,8 @@ export async function syncAthleteSchedule(
   const mobileSessionMetaMap = new Map<string, { intensity?: string; notes?: string }>();
   // Sessions repositioned by the mobile coach app: { targetDate, session }
   const rearrangedSessions: Array<{ targetDate: string; session: SessionSummary }> = [];
+  // Full existing sessions per date — ground truth for rearranged dates
+  const existingSessionsMap = new Map<string, SessionSummary[]>();
   try {
     const FETCH_BATCH = 200;
     for (let fi = 0; fi < allDates.length; fi += FETCH_BATCH) {
@@ -664,6 +666,8 @@ export async function syncAthleteSchedule(
             }
           }
           if (exMap.size > 0) mobileParamsMap.set(row.date, exMap);
+          // Store full session array so the rearrangement logic can restore it
+          existingSessionsMap.set(row.date, (row.sessions ?? []) as SessionSummary[]);
         }
       }
     }
@@ -742,47 +746,69 @@ export async function syncAthleteSchedule(
   }
 
   // ── Apply mobile session rearrangements ──────────────────────────────────────
-  // Sessions dragged between days on the mobile coach app are flagged with
-  // mobileRearranged: true and carry an originalDate so we know which plan
-  // date to remove them from.  We modify `rows` here — before DELETE/UPSERT —
-  // so the plan rebuild produces the correct arrangement.
+  // Sessions dragged between days on mobile carry mobileRearranged: true.
+  //
+  // Rather than patching plan rows (which creates duplicates when the target date
+  // already has plan sessions with the same name), we instead use the existing
+  // athlete_schedule data as the ground truth for every date involved in a
+  // rearrangement.  This avoids the "copy" problem entirely.
+  //
+  // Delete-takes-precedence: if a rearranged session was deleted from the plan on
+  // the desktop, we skip the rearrangement so the plan deletion wins.
   if (rearrangedSessions.length > 0) {
-    console.log(`[syncAthleteSchedule] applying ${rearrangedSessions.length} session rearrangement(s)`);
+    console.log(`[syncAthleteSchedule] processing ${rearrangedSessions.length} session rearrangement(s)`);
+
+    const lockedDates = new Set<string>();
+
     for (const { targetDate, session } of rearrangedSessions) {
-      // Remove the session from its original plan date row
-      if (session.originalDate) {
-        const origRow = rows.find(r => r.date === session.originalDate);
-        if (origRow) {
-          origRow.sessions = origRow.sessions.filter(s => s.id !== session.id);
-          console.log(`[syncAthleteSchedule] removed rearranged session ${session.id} from plan date ${session.originalDate}`);
-        }
+      // Check if the session still exists in the plan (it might have been deleted
+      // on the desktop).  We look for the session ID in the plan row for its
+      // original date BEFORE any modification.
+      const stillInPlan = session.originalDate
+        ? (rows.find(r => r.date === session.originalDate)
+               ?.sessions.some(s => s.id === session.id) ?? false)
+        : false;
+
+      if (!stillInPlan) {
+        console.log(`[syncAthleteSchedule] session ${session.id} no longer in plan — skipping rearrangement (plan delete takes precedence)`);
+        continue;
       }
 
-      // Add/keep the session on the target date row
-      let targetRow = rows.find(r => r.date === targetDate);
-      if (!targetRow) {
-        // Target is a non-plan date (rest day) — create a row and include it
-        const meta = mesoByDate.get(targetDate);
-        targetRow = {
+      lockedDates.add(targetDate);
+      if (session.originalDate) lockedDates.add(session.originalDate);
+    }
+
+    // For each locked date, replace the plan-computed sessions with the existing
+    // athlete_schedule sessions (written by the mobile drag).  This is the last
+    // step before DELETE/UPSERT so it overwrites any plan reconstruction.
+    for (const lockedDate of lockedDates) {
+      const existingSessions = existingSessionsMap.get(lockedDate);
+      if (existingSessions === undefined) continue; // date not in athlete_schedule — skip
+
+      const planRow = rows.find(r => r.date === lockedDate);
+      if (planRow) {
+        planRow.sessions = existingSessions;
+        console.log(`[syncAthleteSchedule] locked ${lockedDate}: using existing ${existingSessions.length} session(s) from athlete_schedule`);
+      } else if (existingSessions.length > 0) {
+        // Rearrangement target was a rest day — create a row so the UPSERT covers it
+        const meta = mesoByDate.get(lockedDate);
+        rows.push({
           athlete_connection_id: connectionId,
-          date: targetDate,
+          date: lockedDate,
           intensity: null,
-          sessions: [],
-          events: eventsByDate.get(targetDate) ?? [],
+          sessions: existingSessions,
+          events: eventsByDate.get(lockedDate) ?? [],
           program_name: programName,
           mesocycle_name: meta?.mesoName ?? null,
           microcycle_name: meta?.microName ?? null,
-        };
-        rows.push(targetRow);
-        // Ensure the rest-day date is covered by DELETE so the UPSERT is clean
-        if (!allDates.includes(targetDate)) allDates.push(targetDate);
+        });
+        if (!allDates.includes(lockedDate)) allDates.push(lockedDate);
+        console.log(`[syncAthleteSchedule] locked ${lockedDate}: created rest-day row with ${existingSessions.length} session(s)`);
       }
+    }
 
-      if (!targetRow.sessions.some(s => s.id === session.id)) {
-        targetRow.sessions = [...targetRow.sessions, session]
-          .sort((a, b) => a.order - b.order);
-        console.log(`[syncAthleteSchedule] added rearranged session ${session.id} to target date ${targetDate}`);
-      }
+    if (lockedDates.size > 0) {
+      console.log(`[syncAthleteSchedule] locked ${lockedDates.size} date(s) to mobile arrangement`);
     }
   }
 
