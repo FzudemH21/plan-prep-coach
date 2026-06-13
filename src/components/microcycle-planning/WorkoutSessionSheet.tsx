@@ -163,6 +163,9 @@ interface WorkoutSessionSheetProps {
         sectionOrder?: number;
         supersetId?: string;
         circuitRounds?: string;
+        /** Which parameter columns the mobile coach made visible — used to restore
+         *  column visibility on the desktop so hidden params stay hidden. */
+        visibleParams?: string[];
       }>;
     }>;
   };
@@ -173,25 +176,51 @@ interface WorkoutSessionSheetProps {
  * via the mobile coach app (mobileAdded: true) can be rendered on the desktop
  * even when the plan's exerciseDistribution has no entries for that date.
  */
+type LiveExerciseForDesktop = {
+  id: string;
+  exerciseLibraryId?: string;
+  plannedParams?: Record<string, string | number>;
+  notes?: string;
+  sectionId?: string;
+  sectionNotes?: string;
+  mobileAdded?: boolean;
+  name?: string;
+  order?: number;
+  isCircuit?: boolean;
+  methodKey?: string;
+  plannedSets?: number;
+  sectionName?: string;
+  sectionOrder?: number;
+  supersetId?: string;
+  circuitRounds?: string;
+  visibleParams?: string[];
+};
+
+/**
+ * Computes ParameterVisibilityOverrides from mobile-set visibleParams.
+ * Params in visibleParams → true, all others found in plannedParams → false.
+ */
+function computeLiveVisibilityOverrides(
+  liveExercises: LiveExerciseForDesktop[]
+): ParameterVisibilityOverrides {
+  const overrides: ParameterVisibilityOverrides = {};
+  for (const ex of liveExercises) {
+    if (!ex.visibleParams || ex.visibleParams.length === 0) continue;
+    const visible = new Set(ex.visibleParams);
+    // Collect all parameter base names from plannedParams
+    for (const key of Object.keys(ex.plannedParams ?? {})) {
+      if (/^sets?$/i.test(key)) continue;
+      if (key.endsWith('_unit')) continue;
+      const m = key.match(/^(.+)_set\d+$/);
+      const base = m ? m[1] : key;
+      overrides[base] = visible.has(base);
+    }
+  }
+  return overrides;
+}
+
 function buildSectionsFromLiveExercises(
-  liveExercises: Array<{
-    id: string;
-    exerciseLibraryId?: string;
-    plannedParams?: Record<string, string | number>;
-    notes?: string;
-    sectionId?: string;
-    sectionNotes?: string;
-    mobileAdded?: boolean;
-    name?: string;
-    order?: number;
-    isCircuit?: boolean;
-    methodKey?: string;
-    plannedSets?: number;
-    sectionName?: string;
-    sectionOrder?: number;
-    supersetId?: string;
-    circuitRounds?: string;
-  }>
+  liveExercises: LiveExerciseForDesktop[]
 ): WorkoutSection[] {
   const sectionMap = new Map<string, { section: WorkoutSection; sectionOrder: number }>();
 
@@ -1197,6 +1226,11 @@ export function WorkoutSessionSheet({
           if (liveSession.intensity) setSessionIntensity(liveSession.intensity as IntensityLevel);
           if ((liveSession.exercises ?? []).length > 0) {
             initSections = buildSectionsFromLiveExercises(liveSession.exercises);
+            // Restore mobile-set column visibility so hidden params stay hidden on desktop
+            const visOverrides = computeLiveVisibilityOverrides(liveSession.exercises);
+            if (Object.keys(visOverrides).length > 0) {
+              setParameterVisibilityOverrides(visOverrides);
+            }
             console.log(`[WorkoutSessionSheet] built ${initSections.length} section(s) from ${liveSession.exercises.length} live exercises (mobile-added)`);
           }
         }
@@ -1307,6 +1341,12 @@ export function WorkoutSessionSheet({
 
       return Array.from(sectionMap.values()).sort((a, b) => a.order - b.order);
     });
+
+    // Restore mobile-set column visibility for the appended exercises
+    const visOverrides = computeLiveVisibilityOverrides(liveSession.exercises ?? []);
+    if (Object.keys(visOverrides).length > 0) {
+      setParameterVisibilityOverrides(prev => ({ ...prev, ...visOverrides }));
+    }
   }, [isOpen, liveScheduleEntry, sessionIndex]);
 
   // External parameter update (e.g. from AI set_exercise_params action) — full rebuild
@@ -1410,9 +1450,14 @@ export function WorkoutSessionSheet({
 
       // Load session intensity - behavior depends on context
       if (useExternalIntensityOnly) {
-        // In Athlete Calendar context: always use day intensity from props
-        // Don't read from global localStorage keys that won't match shifted dates
-        setSessionIntensity(currentIntensity || 'moderate');
+        // In Athlete Calendar context: prefer session-level intensity from Supabase
+        // (set by mobile coach app) over the plan-derived day intensity.
+        // Fall back to day intensity when Supabase data hasn't arrived yet.
+        const liveSessionIntensity = liveScheduleEntry?.sessions[sessionIndex]?.intensity;
+        const resolvedIntensity = (liveSessionIntensity != null && liveSessionIntensity !== '')
+          ? liveSessionIntensity
+          : (currentIntensity || 'moderate');
+        setSessionIntensity(resolvedIntensity as IntensityLevel);
       } else {
         // In Training Wizard context: try localStorage first, then fall back to day intensity
         const intensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
@@ -1448,7 +1493,7 @@ export function WorkoutSessionSheet({
         }
       }
     }
-  }, [isOpen, mesocycleId, dayDate, sessionIndex, currentIntensity]);
+  }, [isOpen, mesocycleId, dayDate, sessionIndex, currentIntensity, liveScheduleEntry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync local supersets state when supersetsProp changes from Step 1
   useEffect(() => {

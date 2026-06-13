@@ -985,6 +985,32 @@ export default function CoachMobileSessionEditPage() {
             const params = { ...(ex.plannedParams ?? {}) };
             const hasSetsKey = Object.keys(params).some(k => /^sets?$/i.test(k));
             if (!hasSetsKey && !ex.isCircuit) params['Sets'] = effectiveSets;
+
+            // Propagate plain-key values to empty per-set keys so the desktop
+            // shows the same values as mobile. Mobile's getPlannedValue() falls back
+            // to the plain key when a per-set key is empty, giving the appearance
+            // of "all sets filled" — but the stored data stays empty. Fix at save
+            // time so both apps agree on the actual stored values.
+            if (!ex.isCircuit) {
+              const paramBases = new Set<string>();
+              for (const key of Object.keys(params)) {
+                if (/^sets?$/i.test(key)) continue;
+                const m = key.match(/^(.+)_set\d+$/);
+                if (m) paramBases.add(m[1]);
+                else paramBases.add(key);
+              }
+              for (const base of paramBases) {
+                const plainVal = params[base];
+                if (plainVal === undefined || plainVal === null || plainVal === '') continue;
+                for (let si = 1; si <= effectiveSets; si++) {
+                  const k = `${base}_set${si}`;
+                  if (!(k in params) || params[k] === '' || params[k] === null || params[k] === undefined) {
+                    params[k] = plainVal;
+                  }
+                }
+              }
+            }
+
             return {
               ...ex,
               plannedParams: params,
