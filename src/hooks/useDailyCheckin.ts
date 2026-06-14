@@ -105,7 +105,8 @@ export function useDailyCheckin(connectionId: string | null) {
   const [recentCheckins, setRecentCheckins] = useState<DailyCheckin[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const _todayD = new Date();
+  const today = `${_todayD.getFullYear()}-${String(_todayD.getMonth() + 1).padStart(2, '0')}-${String(_todayD.getDate()).padStart(2, '0')}`;
 
   const load = useCallback(async () => {
     if (!athleteId) { setLoading(false); return; }
@@ -122,11 +123,12 @@ export function useDailyCheckin(connectionId: string | null) {
 
       const ninetyDaysAgo = new Date();
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      const ninetyDaysAgoStr = `${ninetyDaysAgo.getFullYear()}-${String(ninetyDaysAgo.getMonth() + 1).padStart(2, '0')}-${String(ninetyDaysAgo.getDate()).padStart(2, '0')}`;
       const { data: recent } = await supabase
         .from('athlete_daily_checkins')
         .select('*')
         .eq('athlete_connection_id', athleteId)
-        .gte('date', ninetyDaysAgo.toISOString().slice(0, 10))
+        .gte('date', ninetyDaysAgoStr)
         .order('date', { ascending: false });
 
       setRecentCheckins((recent ?? []).map((r) => fromDb(r as DbRow)));
