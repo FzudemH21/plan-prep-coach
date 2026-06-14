@@ -51,7 +51,8 @@ function formatNextDate(dateStr: string): string {
 
 function addDays(dateStr: string, n: number): string {
   const d = new Date(dateStr + 'T12:00:00');
-  return new Date(d.getTime() + n * 86400000).toISOString().slice(0, 10);
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────

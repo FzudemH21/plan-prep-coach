@@ -16,7 +16,8 @@ import { cn } from '@/lib/utils';
 
 function addDays(dateStr: string, n: number): string {
   const d = new Date(dateStr + 'T12:00:00');
-  return new Date(d.getTime() + n * 86400000).toISOString().slice(0, 10);
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** Monday of the week containing dateStr (Monday-based weeks). */
@@ -24,7 +25,8 @@ function getMondayOf(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00');
   const dow = d.getDay(); // 0=Sun
   const diff = dow === 0 ? -6 : 1 - dow;
-  return new Date(d.getTime() + diff * 86400000).toISOString().slice(0, 10);
+  d.setDate(d.getDate() + diff);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** Format date as DD.MM. (no year) */
@@ -157,7 +159,8 @@ function DaySection({
   canMove?: boolean;
   onEnterTestResult: (ev: AthleteCalendarEvent, date: string) => void;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const _now = new Date();
+  const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
   const isPast = dateStr < today;
   const { weekday, dateLabel } = formatDayHeader(dateStr);
   const hasSessions = (entry?.sessions.length ?? 0) > 0;
@@ -298,7 +301,8 @@ function DaySection({
 export default function AthletePlanPage() {
   const { connection, schedule, loading, error, getSessionLog, moveSession, submitTestResult } = useAthleteApp();
 
-  const today = new Date().toISOString().slice(0, 10);
+  const _now = new Date();
+  const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
   const currentWeekMonday = getMondayOf(today);
   const weeksAhead = connection?.weeksAhead ?? 4;
 
