@@ -1253,12 +1253,15 @@ export function WorkoutSessionSheet({
       // added by the mobile coach app on a day that has no plan exercises).
       let initSections: WorkoutSection[] = [{ id: 'section-0', name: 'Uncategorized', order: 0, exercises: [] }];
       if (liveScheduleEntry) {
-        liveOverrideAppliedRef.current = true;
         const liveSession = liveScheduleEntry.sessions[sessionIndex];
         if (liveSession) {
           if (liveSession.notes !== undefined && liveSession.notes !== null) setSessionComments(liveSession.notes);
           if (liveSession.intensity) setSessionIntensity(liveSession.intensity as IntensityLevel);
           if ((liveSession.exercises ?? []).length > 0) {
+            // Only lock the override flag when we actually got exercises — if exercises
+            // are empty here (Supabase sync not yet complete), leave the flag false so the
+            // race-condition effect below can re-apply once the data arrives.
+            liveOverrideAppliedRef.current = true;
             initSections = buildSectionsFromLiveExercises(liveSession.exercises);
             // Restore mobile-set column visibility so hidden params stay hidden on desktop
             const visOverrides = computeLiveVisibilityOverrides(liveSession.exercises);
