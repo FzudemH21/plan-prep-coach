@@ -348,13 +348,15 @@ export default function CoachMobileAthleteProfilePage() {
   const restoredTab = (location.state as { tab?: Tab } | null)?.tab;
   const [tab, setTab] = useState<Tab>(restoredTab ?? 'overview');
 
-  // If a notification navigates to this page while it's already mounted (same route),
-  // useState initial value won't re-run — sync tab from location.state changes.
+  // Sync tab from location.state on every navigation — location.key changes even when
+  // path and state are identical (e.g. notification clicked twice to same tab), so this
+  // handles both the first visit and repeated navigations to the same athlete page.
   useEffect(() => {
-    if (restoredTab && restoredTab !== tab) {
-      setTab(restoredTab);
+    const state = location.state as { tab?: Tab } | null;
+    if (state?.tab) {
+      setTab(state.tab);
     }
-  }, [restoredTab]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = new Date().toISOString().slice(0, 10);
   const [weekMonday, setWeekMonday] = useState<string>(() => getMondayOf(today));
