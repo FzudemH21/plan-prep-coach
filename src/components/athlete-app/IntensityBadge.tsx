@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { migrateLegacyIntensity } from '@/utils/intensityScale';
 
 export const INTENSITY_CONFIG: Record<string, { label: string; color: string }> = {
   // Borg CR10
@@ -26,23 +27,17 @@ export const INTENSITY_CONFIG: Record<string, { label: string; color: string }> 
 
 export function getDotColor(intensity: string | null): string {
   if (!intensity) return 'bg-slate-300';
-  const num = parseInt(intensity);
-  if (!isNaN(num)) {
-    if (num <= 2) return 'bg-green-400';
-    if (num <= 4) return 'bg-yellow-400';
-    if (num <= 6) return 'bg-orange-400';
-    return 'bg-red-500';
-  }
-  if (intensity === 'easy' || intensity === 'easy-moderate') return 'bg-green-400';
-  if (intensity === 'moderate') return 'bg-yellow-400';
-  if (intensity === 'moderate-hard' || intensity === 'hard') return 'bg-orange-400';
-  if (intensity === 'extremely-hard') return 'bg-red-500';
-  return 'bg-slate-300';
+  const num = parseInt(migrateLegacyIntensity(intensity));
+  if (num <= 2) return 'bg-green-400';
+  if (num <= 4) return 'bg-yellow-400';
+  if (num <= 6) return 'bg-orange-400';
+  return 'bg-red-500';
 }
 
 export function IntensityBadge({ intensity }: { intensity: string | null }) {
   if (!intensity) return null;
-  const config = INTENSITY_CONFIG[intensity] ?? { label: intensity, color: 'bg-slate-100 text-slate-600' };
+  const borgLevel = migrateLegacyIntensity(intensity);
+  const config = INTENSITY_CONFIG[borgLevel] ?? { label: borgLevel, color: 'bg-slate-100 text-slate-600' };
   return (
     <span className={cn('inline-flex items-center rounded-full px-3 py-1 text-sm font-medium', config.color)}>
       {config.label}
