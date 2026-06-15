@@ -377,10 +377,10 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   useEffect(() => {
     if (!editing.lastSavedAt || !selectedAssignmentId) return;
     // Skip if the desktop has no exercise data to contribute.
-    // This happens when the assignment was created on mobile: no localStorage key exists,
-    // `initializeFromAssignment` runs with empty exerciseDistribution, but lastSavedAt
-    // may still be non-null from a previous assignment viewed in the same session.
-    // Syncing empty exercises would DELETE the Supabase rows the mobile assign-flow wrote.
+    // Guard A: mobile-created flag — set when initializeFromAssignment runs (no localStorage key).
+    // While exercises are still empty, refuse to sync regardless of other conditions.
+    if (editing.isMobileCreated && editing.exerciseDistribution.length === 0) return;
+    // Guard B: belt-and-suspenders — also skip if exercises are empty and no localStorage key exists.
     if (
       editing.exerciseDistribution.length === 0 &&
       !localStorage.getItem(`athlete-assignment-${selectedAssignmentId}`)

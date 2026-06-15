@@ -81,6 +81,14 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
 
   // Flag to prevent auto-save during initial load
   const [isInitializing, setIsInitializing] = useState(false);
+
+  // True when the current assignment was loaded via initializeFromAssignment (no localStorage key),
+  // meaning it was created on mobile. While this flag is set AND exerciseDistribution is empty,
+  // the auto-save must NOT write to localStorage — doing so would cause the auto-sync to fire
+  // and overwrite Supabase rows that the mobile assign-flow already wrote correctly.
+  // Cleared when exercises are present (coach adds exercises on desktop) or when the assignment
+  // is reloaded from a localStorage snapshot.
+  const [isMobileCreated, setIsMobileCreated] = useState(false);
   
   // === CRITICAL REFS FOR STABILITY ===
   // These refs prevent the "flicker then disappear" bug caused by reload loops
@@ -190,6 +198,9 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     const intensities = days.map(d => ({ date: d.date, intensity: d.intensity }));
     setDailyIntensityData(intensities);
 
+    // Mark this assignment as mobile-created so the auto-save skips it while exercises are empty.
+    setIsMobileCreated(true);
+
     // Set fingerprint for the initialized state.
     // CRITICAL: must include every key that the auto-save effect includes in savePayload,
     // otherwise the fingerprints differ and the auto-save fires with empty exercises —
@@ -233,8 +244,10 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     
     const storageKey = `athlete-assignment-${assignmentId}`;
     const savedData = localStorage.getItem(storageKey);
-    
+
     if (savedData) {
+      // Assignment loaded from desktop localStorage — not mobile-created
+      setIsMobileCreated(false);
       try {
         const parsed = JSON.parse(savedData);
         const storedExercises = parsed.exerciseDistribution || [];
@@ -312,7 +325,11 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     if (loadingAssignmentIdRef.current !== null) return;
     // 4. This assignment hasn't been successfully loaded yet
     if (loadedAssignmentIdRef.current !== selectedAssignmentId) return;
-    
+    // 5. Mobile-created assignment with no exercises yet — do NOT write to localStorage.
+    // Writing an empty exerciseDistribution would cause the auto-sync to overwrite Supabase
+    // rows that the mobile assign-flow already wrote with the correct session exercises.
+    if (isMobileCreated && exerciseDistribution.length === 0) return;
+
     // Build full save payload for accurate fingerprinting
     const savePayload = {
       exerciseDistribution,
@@ -370,6 +387,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   }, [
     selectedAssignmentId,
     isInitializing,
+    isMobileCreated,
     exerciseDistribution,
     sessionSections,
     supersets,
@@ -1994,6 +2012,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     // State
     lastSavedAt,
     isInitializing,
+    isMobileCreated,
     exerciseDistribution,
     sessionSections,
     supersets,

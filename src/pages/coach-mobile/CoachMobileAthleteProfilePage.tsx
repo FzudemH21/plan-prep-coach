@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, Zap, BookOpen, Check, GripVertical, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, Zap, BookOpen, Check, GripVertical, Trash2, MessageCircle } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useAthleteCheckins, wellnessComposite, type AthleteCheckin } from '@/hooks/useAthleteCheckins';
@@ -347,10 +348,18 @@ export default function CoachMobileAthleteProfilePage() {
   const restoredTab = (location.state as { tab?: Tab } | null)?.tab;
   const [tab, setTab] = useState<Tab>(restoredTab ?? 'overview');
 
+  // If a notification navigates to this page while it's already mounted (same route),
+  // useState initial value won't re-run — sync tab from location.state changes.
+  useEffect(() => {
+    if (restoredTab && restoredTab !== tab) {
+      setTab(restoredTab);
+    }
+  }, [restoredTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const today = new Date().toISOString().slice(0, 10);
   const [weekMonday, setWeekMonday] = useState<string>(() => getMondayOf(today));
 
-  const { athletes } = useAthletes();
+  const { athletes, updateAthlete } = useAthletes();
   const { connections } = useAthleteConnections();
 
   const athlete = athletes.find(a => a.id === athleteId);
@@ -359,13 +368,42 @@ export default function CoachMobileAthleteProfilePage() {
   const { entries: sessionLibraryEntries } = useSessionLibrary();
   const { toast } = useToast();
 
+  // ── Session logs for the visible week — keyed by "date|sessionId" ─────────
+  interface SessionLogSummary { durationSeconds: number | null; borgRating: number | null; completedAt: string | null; }
+  const [sessionLogs, setSessionLogs] = useState<Map<string, SessionLogSummary>>(new Map());
+  useEffect(() => {
+    if (!connection?.id) return;
+    const weekEnd = addDays(weekMonday, 6);
+    supabase
+      .from('athlete_session_logs')
+      .select('date, session_id, completed_at, duration_seconds, borg_rating')
+      .eq('athlete_connection_id', connection.id)
+      .gte('date', weekMonday)
+      .lte('date', weekEnd)
+      .not('completed_at', 'is', null)
+      .then(({ data }) => {
+        const m = new Map<string, SessionLogSummary>();
+        for (const r of (data ?? []) as Record<string, unknown>[]) {
+          m.set(`${r.date}|${r.session_id}`, {
+            durationSeconds: r.duration_seconds as number | null,
+            borgRating: r.borg_rating as number | null,
+            completedAt: r.completed_at as string | null,
+          });
+        }
+        setSessionLogs(m);
+      });
+  }, [connection?.id, weekMonday]);
+
   // ── Training-tab mutation state ────────────────────────────────────────────────
   const [dayActionTarget, setDayActionTarget] = useState<string | null>(null);
   const [dayIntensityPickerOpen, setDayIntensityPickerOpen] = useState(false);
   const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
   const [newSessionName, setNewSessionName] = useState('');
   const [sessionLibraryPickerOpen, setSessionLibraryPickerOpen] = useState(false);
+  const [sessionSourcePickerOpen, setSessionSourcePickerOpen] = useState(false);
   const [mutating, setMutating] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesInput, setNotesInput] = useState('');
 
   // Intensity levels for picker
   const intensityLevels = Object.entries(INTENSITY_CONFIG)
@@ -727,13 +765,22 @@ export default function CoachMobileAthleteProfilePage() {
   return (
     <div className="flex flex-col h-full">
       {/* Back button */}
-      <div className="flex items-center gap-3 px-4 pt-4 pb-2 shrink-0">
+      <div className="flex items-center px-4 pt-4 pb-2 shrink-0">
         <button
           onClick={() => navigate('/coach-mobile/athletes')}
           className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-accent -ml-1"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
+        <div className="flex-1" />
+        {connection?.athleteAuthUserId && (
+          <button
+            onClick={() => navigate(`/coach-mobile/athletes/${athleteId}/chat`)}
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-accent text-muted-foreground hover:text-foreground"
+          >
+            <MessageCircle className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
       {/* Profile card */}
@@ -824,6 +871,50 @@ export default function CoachMobileAthleteProfilePage() {
                 </div>
               ))}
             </div>
+
+            {/* Notes card */}
+            <div className="rounded-xl border bg-card p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Notes
+                </h3>
+                <button
+                  onClick={() => { setNotesInput(athlete.notes ?? ''); setEditingNotes(true); }}
+                  className="text-xs text-primary hover:underline active:opacity-60"
+                >
+                  {athlete.notes ? 'Edit' : 'Add'}
+                </button>
+              </div>
+              {athlete.notes ? (
+                <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">{athlete.notes}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">No notes yet.</p>
+              )}
+            </div>
+
+            {/* Notes edit dialog */}
+            <Dialog open={editingNotes} onOpenChange={o => { if (!o) setEditingNotes(false); }}>
+              <DialogContent className="w-[calc(100vw-32px)] max-w-[380px] rounded-2xl">
+                <DialogHeader>
+                  <DialogTitle>Notes for {fullName}</DialogTitle>
+                </DialogHeader>
+                <div className="py-2">
+                  <Textarea
+                    value={notesInput}
+                    onChange={e => setNotesInput(e.target.value)}
+                    placeholder="Add notes about this athlete…"
+                    className="min-h-[140px] resize-none"
+                  />
+                </div>
+                <DialogFooter className="gap-2">
+                  <Button variant="outline" onClick={() => setEditingNotes(false)}>Cancel</Button>
+                  <Button onClick={async () => {
+                    await updateAthlete(athleteId!, { notes: notesInput.trim() || undefined });
+                    setEditingNotes(false);
+                  }}>Save</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             {/* ── Monitoring cards ── */}
             {connection && monitoringEnabled && (
@@ -1070,6 +1161,7 @@ export default function CoachMobileAthleteProfilePage() {
                         )}
                       >
                         {/* Day header */}
+                        {/* Day header */}
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={cn(
                             'text-sm font-semibold',
@@ -1119,7 +1211,7 @@ export default function CoachMobileAthleteProfilePage() {
                                       {...sessDrag.draggableProps}
                                       className={cn(sessSnap.isDragging && 'shadow-lg opacity-95')}
                                     >
-                                      <Card className={cn('overflow-hidden', isPast && 'opacity-60')}>
+                                      <Card className={cn('overflow-hidden', isPast && 'opacity-60', sessionLogs.has(`${dateStr}|${s.id}`) && 'bg-green-50 border-green-200')}>
                                         <CardContent className="flex items-center gap-1.5 p-2.5">
                                           {/* Drag handle */}
                                           <div
@@ -1140,15 +1232,42 @@ export default function CoachMobileAthleteProfilePage() {
                                               },
                                             })}
                                           >
-                                            <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
-                                              <Dumbbell className="h-3 w-3 text-primary" />
-                                            </div>
+                                            {(() => {
+                                              const log = sessionLogs.get(`${dateStr}|${s.id}`);
+                                              return log ? (
+                                                <div className="w-7 h-7 rounded-md bg-green-100 flex items-center justify-center shrink-0">
+                                                  <Check className="h-3 w-3 text-green-600" />
+                                                </div>
+                                              ) : (
+                                                <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                                                  <Dumbbell className="h-3 w-3 text-primary" />
+                                                </div>
+                                              );
+                                            })()}
                                             <div className="flex-1 min-w-0">
                                               <p className="text-sm font-medium truncate">{s.name || 'Session'}</p>
-                                              <p className="text-xs text-muted-foreground">
-                                                {s.exerciseCount} exercise{s.exerciseCount !== 1 ? 's' : ''}
-                                              </p>
-                                              {s.intensity && (
+                                              {(() => {
+                                                const log = sessionLogs.get(`${dateStr}|${s.id}`);
+                                                if (log) {
+                                                  const mins = log.durationSeconds !== null ? Math.round(log.durationSeconds / 60) : null;
+                                                  const rpe = log.borgRating;
+                                                  const srpe = rpe !== null && mins !== null ? rpe * mins : null;
+                                                  return (
+                                                    <p className="text-xs text-green-700 mt-0.5">
+                                                      Completed
+                                                      {mins !== null && ` · ${mins} min`}
+                                                      {rpe !== null && ` · RPE ${rpe}`}
+                                                      {srpe !== null && ` · sRPE: ${srpe} AU`}
+                                                    </p>
+                                                  );
+                                                }
+                                                return (
+                                                  <p className="text-xs text-muted-foreground">
+                                                    {s.exerciseCount} exercise{s.exerciseCount !== 1 ? 's' : ''}
+                                                  </p>
+                                                );
+                                              })()}
+                                              {s.intensity && !sessionLogs.has(`${dateStr}|${s.id}`) && (
                                                 <div className="mt-1">
                                                   <IntensityBadge intensity={s.intensity} />
                                                 </div>
@@ -1189,29 +1308,28 @@ export default function CoachMobileAthleteProfilePage() {
                         </Droppable>
 
                         {/* Per-day action buttons */}
-                        <div className="flex gap-1.5 pt-0.5">
+                        <div className="flex gap-1.5 pt-0.5 flex-wrap">
                           <button
                             onClick={() => {
                               setDayActionTarget(dateStr);
-                              setNewSessionDialogOpen(true);
+                              if (sessionLibraryEntries.length > 0) {
+                                setSessionSourcePickerOpen(true);
+                              } else {
+                                setNewSessionDialogOpen(true);
+                              }
                             }}
                             className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border bg-background hover:bg-muted active:opacity-60 transition-colors"
                           >
                             <Plus className="h-3 w-3" />
                             Session
                           </button>
-                          {sessionLibraryEntries.length > 0 && (
-                            <button
-                              onClick={() => {
-                                setDayActionTarget(dateStr);
-                                setSessionLibraryPickerOpen(true);
-                              }}
-                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border bg-background hover:bg-muted active:opacity-60 transition-colors"
-                            >
-                              <BookOpen className="h-3 w-3" />
-                              From Library
-                            </button>
-                          )}
+                          <button
+                            onClick={() => navigate(`/coach-mobile/athletes/${athleteId}/assign-program?startDate=${dateStr}`)}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border bg-background hover:bg-muted active:opacity-60 transition-colors"
+                          >
+                            <BookOpen className="h-3 w-3" />
+                            Assign training program
+                          </button>
                         </div>
                       </div>
                     );
@@ -1264,6 +1382,47 @@ export default function CoachMobileAthleteProfilePage() {
                 Clear intensity
               </button>
             </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* ── Session source picker ── */}
+      <Sheet open={sessionSourcePickerOpen} onOpenChange={o => { if (!o) { setSessionSourcePickerOpen(false); setDayActionTarget(null); } }}>
+        <SheetContent
+          side="bottom"
+          className="rounded-t-2xl flex flex-col sm:w-[480px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 24px)' }}
+        >
+          <SheetHeader className="mb-4 px-4 pt-4 shrink-0">
+            <SheetTitle>Add Session</SheetTitle>
+          </SheetHeader>
+          <div className="px-4 pb-2 space-y-3">
+            <button
+              onClick={() => { setSessionSourcePickerOpen(false); setNewSessionDialogOpen(true); }}
+              className="w-full flex items-center gap-3 p-4 rounded-xl border bg-card hover:bg-muted active:opacity-70 text-left transition-colors"
+            >
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <Plus className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Create from scratch</p>
+                <p className="text-xs text-muted-foreground">Name a new empty session</p>
+              </div>
+            </button>
+            <button
+              onClick={() => { setSessionSourcePickerOpen(false); setSessionLibraryPickerOpen(true); }}
+              className="w-full flex items-center gap-3 p-4 rounded-xl border bg-card hover:bg-muted active:opacity-70 text-left transition-colors"
+            >
+              <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                <BookOpen className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Choose from library</p>
+                <p className="text-xs text-muted-foreground">
+                  {sessionLibraryEntries.length} session{sessionLibraryEntries.length !== 1 ? 's' : ''} available
+                </p>
+              </div>
+            </button>
           </div>
         </SheetContent>
       </Sheet>
