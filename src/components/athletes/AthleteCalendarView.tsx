@@ -376,6 +376,15 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   // requiring a full plan re-assignment.
   useEffect(() => {
     if (!editing.lastSavedAt || !selectedAssignmentId) return;
+    // Skip if the desktop has no exercise data to contribute.
+    // This happens when the assignment was created on mobile: no localStorage key exists,
+    // `initializeFromAssignment` runs with empty exerciseDistribution, but lastSavedAt
+    // may still be non-null from a previous assignment viewed in the same session.
+    // Syncing empty exercises would DELETE the Supabase rows the mobile assign-flow wrote.
+    if (
+      editing.exerciseDistribution.length === 0 &&
+      !localStorage.getItem(`athlete-assignment-${selectedAssignmentId}`)
+    ) return;
     const connection = getConnectionForAthlete(athlete.id);
     if (!connection) {
       // Distinguish: connections still loading vs. athlete has no invite link
