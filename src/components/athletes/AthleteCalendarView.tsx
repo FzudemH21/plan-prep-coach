@@ -426,6 +426,13 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     if (connectionsLoading) return;
     if (loadSyncedRef.current.has(selectedAssignmentId)) return;
 
+    // Skip if there is no localStorage snapshot for this assignment.
+    // Assignments created on mobile never write a desktop localStorage entry,
+    // so `initializeFromAssignment` is used and exerciseDistribution is empty.
+    // Syncing an empty payload would DELETE the Supabase rows the mobile
+    // assign-flow wrote, making the training calendar appear blank on next open.
+    if (!localStorage.getItem(`athlete-assignment-${selectedAssignmentId}`)) return;
+
     const connection = getConnectionForAthlete(athlete.id);
     if (!connection) return;
 
