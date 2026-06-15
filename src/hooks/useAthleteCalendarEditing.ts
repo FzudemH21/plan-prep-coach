@@ -224,6 +224,12 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     loadingAssignmentIdRef.current = assignmentId;
     loadedAssignmentIdRef.current = null; // Mark as not yet loaded
     setIsInitializing(true);
+    // Reset lastSavedAt so a stale value from a previously-edited assignment in this
+    // session cannot re-trigger the auto-sync with the new assignment's empty exercises.
+    // Without this, switching from an edited assignment A to a mobile-created assignment B
+    // keeps lastSavedAt non-null; any connectionsLoading toggle then fires the auto-sync
+    // against B with exerciseDistribution=[] and deletes the Supabase data mobile wrote.
+    setLastSavedAt(null);
     
     const storageKey = `athlete-assignment-${assignmentId}`;
     const savedData = localStorage.getItem(storageKey);
