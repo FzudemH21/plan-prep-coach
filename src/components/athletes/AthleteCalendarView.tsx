@@ -852,6 +852,25 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     setCompletedSheetOpen(true);
   }, []);
 
+  // For mobile-created assignments (no localStorage data), derive per-day intensities
+  // from the program's planned dailyIntensityData, shifted to the assignment's start date.
+  // This gives meaningful intensity colours even when athlete_schedule.intensity is null
+  // (old syncs that pre-date the intensity-merge fix in CoachMobileAssignProgramPage).
+  const programIntensityMap = useMemo(() => {
+    if (!editing.isMobileCreated) return null;
+    const assignment = editing.selectedAssignment;
+    if (!assignment?.programId) return null;
+    const program = getProgram(assignment.programId);
+    if (!program?.dailyIntensityData?.length) return null;
+    const origDate = parseDateStr(assignment.originalStartDate ?? assignment.startDate);
+    const newDate = parseDateStr(assignment.startDate);
+    const shifted = shiftDailyIntensityDates(program.dailyIntensityData, origDate, newDate);
+    const map = new Map<string, string>();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    shifted.forEach((di: any) => { if (di.date && di.intensity) map.set(di.date, di.intensity); });
+    return map;
+  }, [editing.isMobileCreated, editing.selectedAssignment, getProgram]);
+
   // Calculate calendar days based on view mode (for calendar view)
   // IMPORTANT: For the currently selected assignment, read from live editing state
   // to ensure immediate visual feedback after paste/copy operations
@@ -1047,7 +1066,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       }
 
       // Compute day-level intensity for the overview square.
-      // Priority: live Supabase value (mobile coach edits) > plan state > default.
+      // Priority: live Supabase value > program planned intensity (mobile-created) > editing state > default.
       let dayIntensityForSquare: IntensityLevel = 'moderate';
       if (selectedAssignmentId) {
         const liveDayIntensity = editing.dailyIntensityData.find(
@@ -1058,6 +1077,10 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         if (liveRowIntensity) {
           // Live Supabase value wins — reflects any mobile coach intensity edit.
           dayIntensityForSquare = liveRowIntensity as IntensityLevel;
+        } else if (programIntensityMap?.get(dateString)) {
+          // Mobile-created assignment: use planned intensity from the program
+          // (athlete_schedule.intensity is null for syncs that pre-date the intensity fix).
+          dayIntensityForSquare = programIntensityMap.get(dateString) as IntensityLevel;
         } else if (liveDayIntensity?.intensity) {
           dayIntensityForSquare = liveDayIntensity.intensity as IntensityLevel;
         } else if (liveTrainingDay?.intensity) {
@@ -1093,7 +1116,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         calendarEvents: getEventsForDate(athlete.id, dateString),
       };
     });
-  }, [calendarDateRange, viewMode, assignments, assignmentDataCache, selectedAssignmentId, editing.exerciseDistribution, editing.daySplitStates, editing.trainingDays, editing.dailyIntensityData, editing.sessionIntensities, getEventsForDate, athlete.id, liveScheduleMap]);
+  }, [calendarDateRange, viewMode, assignments, assignmentDataCache, selectedAssignmentId, editing.exerciseDistribution, editing.daySplitStates, editing.trainingDays, editing.dailyIntensityData, editing.sessionIntensities, getEventsForDate, athlete.id, liveScheduleMap, programIntensityMap]);
 
   // Group days into weeks
   const weeks = useMemo(() => groupDaysIntoWeeks(calendarDays), [calendarDays]);
