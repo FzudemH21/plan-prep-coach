@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import React from 'react';
+import React, { useState } from 'react';
 import { AthleteCalendarDayCell, AthleteCalendarDay } from './AthleteCalendarDayCell';
 import { Button } from '@/components/ui/button';
 import { MoreVertical, Copy, Trash2, ClipboardPaste } from 'lucide-react';
@@ -9,6 +9,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { ExerciseDistribution, SessionSection } from '@/types/microcycle-planning';
 import { IntensityLevel } from '@/types/training';
 import { AthletePerformanceParameter } from '@/types/athlete';
@@ -102,8 +112,31 @@ export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow
 }: AthleteCalendarWeekRowProps) {
   const weekStartDate = format(week[0].date, 'yyyy-MM-dd');
   const hasExercisesInWeek = week.some(day => day.sessions.length > 0);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
 
   return (
+    <>
+    <AlertDialog open={confirmClearOpen} onOpenChange={setConfirmClearOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Clear entire week?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will delete all sessions and reset every day of the week of{' '}
+            {format(week[0].date, 'MMM d')}. This cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={() => { onClearWeek?.(weekStartDate); setConfirmClearOpen(false); }}
+          >
+            Clear week
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
     <div className="space-y-2 group/week">
       {/* Week Header */}
       <div className="flex items-center gap-2 pl-1 min-h-[32px]">
@@ -124,8 +157,8 @@ export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow
                   </DropdownMenuItem>
                 )}
                 {onClearWeek && (
-                  <DropdownMenuItem 
-                    onClick={() => onClearWeek(weekStartDate)}
+                  <DropdownMenuItem
+                    onClick={() => setConfirmClearOpen(true)}
                     className="text-destructive focus:text-destructive"
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
@@ -187,5 +220,6 @@ export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow
         ))}
       </div>
     </div>
+    </>
   );
 });

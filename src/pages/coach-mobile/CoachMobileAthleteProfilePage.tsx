@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, Zap, BookOpen, Check, GripVertical, Trash2, MessageCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, BookOpen, Check, GripVertical, Trash2, MessageCircle } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useAthleteCheckins, wellnessComposite, type AthleteCheckin } from '@/hooks/useAthleteCheckins';
 import { DEFAULT_MONITORING_CONFIG } from '@/types/athlete';
 import { FRONT_REGIONS, BACK_REGIONS, nrsSeverityColor, nrsSeverityStroke, svgRegionKey } from '@/lib/bodyMapData';
@@ -400,6 +401,7 @@ export default function CoachMobileAthleteProfilePage() {
   const [dayActionTarget, setDayActionTarget] = useState<string | null>(null);
   const [dayIntensityPickerOpen, setDayIntensityPickerOpen] = useState(false);
   const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
+  const [clearWeekConfirmOpen, setClearWeekConfirmOpen] = useState(false);
   const [newSessionName, setNewSessionName] = useState('');
   const [sessionLibraryPickerOpen, setSessionLibraryPickerOpen] = useState(false);
   const [sessionSourcePickerOpen, setSessionSourcePickerOpen] = useState(false);
@@ -1166,7 +1168,7 @@ export default function CoachMobileAthleteProfilePage() {
               {formatWeekRange(weekMonday)}
             </p>
             <button
-              onClick={handleClearWeek}
+              onClick={() => setClearWeekConfirmOpen(true)}
               disabled={mutating}
               className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-destructive/10 active:bg-destructive/20 text-muted-foreground hover:text-destructive shrink-0 transition-colors"
               aria-label="Clear week"
@@ -1233,9 +1235,7 @@ export default function CoachMobileAthleteProfilePage() {
                         >
                           {entry?.intensity
                             ? <IntensityBadge intensity={entry.intensity} />
-                            : <span className="text-xs text-muted-foreground/50 italic flex items-center gap-1">
-                                <Zap className="h-3 w-3" /> Set intensity
-                              </span>}
+                            : <span className="opacity-40"><IntensityBadge intensity="0" /></span>}
                         </button>
 
                         {/* Sessions droppable — always mounted so cross-day drops work */}
@@ -1508,6 +1508,27 @@ export default function CoachMobileAthleteProfilePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Clear week confirmation ── */}
+      <AlertDialog open={clearWeekConfirmOpen} onOpenChange={setClearWeekConfirmOpen}>
+        <AlertDialogContent className="w-[calc(100vw-32px)] max-w-[380px] rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear entire week?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete all sessions for the week of {formatWeekRange(weekMonday)}. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { handleClearWeek(); setClearWeekConfirmOpen(false); }}
+            >
+              Clear week
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Session library picker ── */}
       <Sheet open={sessionLibraryPickerOpen} onOpenChange={o => { if (!o) { setSessionLibraryPickerOpen(false); setDayActionTarget(null); } }}>
