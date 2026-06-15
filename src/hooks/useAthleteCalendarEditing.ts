@@ -176,6 +176,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     setSessionSections([]);
     setSupersets({});
     setParameterValues({});
+    setSessionIntensities({});
     setTestEventDays({});
 
     // Build initial daySplitStates (1 session per training day)
@@ -189,7 +190,10 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     const intensities = days.map(d => ({ date: d.date, intensity: d.intensity }));
     setDailyIntensityData(intensities);
 
-    // Set fingerprint for the initialized state
+    // Set fingerprint for the initialized state.
+    // CRITICAL: must include every key that the auto-save effect includes in savePayload,
+    // otherwise the fingerprints differ and the auto-save fires with empty exercises —
+    // triggering an auto-sync that clobbers Supabase rows written by the mobile assign-flow.
     const initFingerprint = JSON.stringify({
       exerciseDistribution: [],
       sessionSections: [],
@@ -198,6 +202,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       dailyIntensity: intensities,
       trainingDays: days,
       daySplitStates: splitStates,
+      sessionIntensities: {},
       testEventDays: {},
     });
     lastSavedStateRef.current = initFingerprint;
