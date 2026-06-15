@@ -1124,17 +1124,14 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       }
 
       // Override sessions with live athlete_schedule data so the coach sees
-      // any rearrangements the athlete made in the athlete app.
-      // Guards:
-      //   1. assignmentId must be set — prevents stale rows from old programs (which
-      //      are still in athlete_schedule after re-assignment) from appearing on dates
-      //      that no current assignment covers.
-      //   2. !editingClearedDay — when the coach explicitly cleared this day in the
-      //      editing state (daySplitStates[date] === 0), don't let a not-yet-deleted
-      //      Supabase row resurrect it before the delete propagates.
+      // the exact sessions the mobile assign-flow wrote to Supabase.
+      // Guard: assignmentId must be set — prevents stale rows from old programs
+      // from appearing on dates that no current assignment covers.
+      // No editingClearedDay guard needed: handleClearDay now removes the entry
+      // from liveScheduleMap optimistically, so cleared days already have
+      // liveEntry === undefined and the override cannot fire.
       const liveEntry = liveScheduleMap.get(dateString);
-      const editingClearedDay = usedLiveEditingState && editing.daySplitStates[dateString] === 0;
-      if (liveEntry !== undefined && assignmentId && !editingClearedDay) {
+      if (liveEntry !== undefined && assignmentId) {
         sessions.length = 0;
         liveEntry.sessions.forEach((s, idx) => {
           sessions.push({

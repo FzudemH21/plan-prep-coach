@@ -187,10 +187,14 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     setSessionIntensities({});
     setTestEventDays({});
 
-    // Build initial daySplitStates (1 session per training day)
+    // Initialize all daySplitStates to 0 for mobile-created assignments.
+    // buildTrainingDaysFromAssignment treats every day in a microcycle as a training
+    // day, but the actual program only places sessions on specific days. Starting at 0
+    // prevents ghost sessions from showing; liveScheduleMap (Supabase) provides the
+    // authoritative session list via the liveEntry override in calendarDays.
     const splitStates: Record<string, number> = {};
     days.forEach(day => {
-      splitStates[day.date] = day.intensity === 'off' ? 0 : 1;
+      splitStates[day.date] = 0;
     });
     setDaySplitStates(splitStates);
 
