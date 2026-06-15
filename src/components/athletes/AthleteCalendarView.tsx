@@ -727,7 +727,26 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         },
       };
     });
-  }, [editing.handleClearDay, selectedAssignmentId]);
+    // Remove from liveScheduleMap immediately so the calendar reflects the clear
+    // before auto-sync or Supabase realtime catches up.
+    setLiveScheduleMap(prev => {
+      const next = new Map(prev);
+      next.delete(dayDate);
+      return next;
+    });
+    // Also delete the Supabase row directly — mobile-created assignments skip
+    // auto-sync entirely, so without this the row would never be cleaned up and
+    // would reappear via the realtime subscription on the next mutation.
+    const connection = getConnectionForAthlete(athlete.id);
+    if (connection) {
+      supabase
+        .from('athlete_schedule')
+        .delete()
+        .eq('athlete_connection_id', connection.id)
+        .eq('date', dayDate)
+        .then(() => { /* ignore result — liveScheduleMap already cleared optimistically */ });
+    }
+  }, [editing.handleClearDay, selectedAssignmentId, getConnectionForAthlete, athlete.id, sessionLogs, toast]);
 
   // Wrapper: clear week in editing state AND patch assignmentDataCache.
   const handleClearWeek = useCallback((weekStartDate: string) => {
@@ -781,7 +800,23 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         },
       };
     });
-  }, [editing.handleClearDay, selectedAssignmentId, sessionLogs, toast]);
+    // Remove cleared dates from liveScheduleMap immediately.
+    setLiveScheduleMap(prev => {
+      const next = new Map(prev);
+      clearableDates.forEach(date => next.delete(date));
+      return next;
+    });
+    // Delete Supabase rows directly — needed for mobile-created assignments that skip auto-sync.
+    const connection = getConnectionForAthlete(athlete.id);
+    if (connection && clearableDates.length > 0) {
+      supabase
+        .from('athlete_schedule')
+        .delete()
+        .eq('athlete_connection_id', connection.id)
+        .in('date', clearableDates)
+        .then(() => { /* ignore result — liveScheduleMap already cleared optimistically */ });
+    }
+  }, [editing.handleClearDay, selectedAssignmentId, sessionLogs, toast, getConnectionForAthlete, athlete.id]);
 
   // Build mesocycle from assignment for MasterPlannerGrid
   const currentMesocycleFromAssignment = useMemo(() => {
@@ -1090,8 +1125,16 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
       // Override sessions with live athlete_schedule data so the coach sees
       // any rearrangements the athlete made in the athlete app.
+      // Guards:
+      //   1. assignmentId must be set — prevents stale rows from old programs (which
+      //      are still in athlete_schedule after re-assignment) from appearing on dates
+      //      that no current assignment covers.
+      //   2. !editingClearedDay — when the coach explicitly cleared this day in the
+      //      editing state (daySplitStates[date] === 0), don't let a not-yet-deleted
+      //      Supabase row resurrect it before the delete propagates.
       const liveEntry = liveScheduleMap.get(dateString);
-      if (liveEntry !== undefined) {
+      const editingClearedDay = usedLiveEditingState && editing.daySplitStates[dateString] === 0;
+      if (liveEntry !== undefined && assignmentId && !editingClearedDay) {
         sessions.length = 0;
         liveEntry.sessions.forEach((s, idx) => {
           sessions.push({
