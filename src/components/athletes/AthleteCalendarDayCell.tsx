@@ -208,6 +208,12 @@ export function AthleteCalendarDayCell({
                 style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(day.intensity)) }}
                 title={`Day Intensity: ${getBorgLabelFull(migrateLegacyIntensity(day.intensity))}`}
               />
+            ) : !hasTraining ? (
+              <div
+                className="w-5 h-5 rounded-sm border shrink-0 opacity-40"
+                style={{ backgroundColor: getBorgBg('0') }}
+                title="Rest day (0 – Rest)"
+              />
             ) : null}
           </div>
 

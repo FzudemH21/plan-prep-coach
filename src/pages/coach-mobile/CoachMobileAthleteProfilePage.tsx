@@ -642,6 +642,41 @@ export default function CoachMobileAthleteProfilePage() {
     }
   }, [schedule, upsertDayRow, toast]);
 
+  const handleClearDay = useCallback(async (dateStr: string) => {
+    if (!connection) return;
+    setSchedule(prev => prev.filter(e => e.date !== dateStr));
+    setMutating(true);
+    try {
+      await supabase
+        .from('athlete_schedule')
+        .delete()
+        .eq('athlete_connection_id', connection.id)
+        .eq('date', dateStr);
+    } catch {
+      toast({ title: 'Error', description: 'Could not clear day.', variant: 'destructive' });
+    } finally {
+      setMutating(false);
+    }
+  }, [connection, toast]);
+
+  const handleClearWeek = useCallback(async () => {
+    if (!connection) return;
+    const days = Array.from({ length: 7 }, (_, i) => addDays(weekMonday, i));
+    setSchedule(prev => prev.filter(e => !days.includes(e.date)));
+    setMutating(true);
+    try {
+      await supabase
+        .from('athlete_schedule')
+        .delete()
+        .eq('athlete_connection_id', connection.id)
+        .in('date', days);
+    } catch {
+      toast({ title: 'Error', description: 'Could not clear week.', variant: 'destructive' });
+    } finally {
+      setMutating(false);
+    }
+  }, [connection, weekMonday, toast]);
+
   const onSessionDragEnd = useCallback(async (result: DropResult) => {
     const { source, destination } = result;
     if (!destination) return;
@@ -1131,6 +1166,15 @@ export default function CoachMobileAthleteProfilePage() {
               {formatWeekRange(weekMonday)}
             </p>
             <button
+              onClick={handleClearWeek}
+              disabled={mutating}
+              className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-destructive/10 active:bg-destructive/20 text-muted-foreground hover:text-destructive shrink-0 transition-colors"
+              aria-label="Clear week"
+              title="Clear entire week"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+            <button
               onClick={() => setWeekMonday(nextMonday)}
               className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted active:bg-muted/80 shrink-0"
               aria-label="Next week"
@@ -1332,6 +1376,16 @@ export default function CoachMobileAthleteProfilePage() {
                             <BookOpen className="h-3 w-3" />
                             Assign training program
                           </button>
+                          {hasSessions && (
+                            <button
+                              onClick={() => handleClearDay(dateStr)}
+                              disabled={mutating}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-destructive/30 text-destructive hover:bg-destructive/10 active:opacity-60 transition-colors"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Clear day
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
