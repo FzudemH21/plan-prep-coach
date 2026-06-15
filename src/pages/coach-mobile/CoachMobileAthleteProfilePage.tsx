@@ -800,6 +800,7 @@ export default function CoachMobileAthleteProfilePage() {
   const nextMonday = addDays(weekMonday, 7);
   const weekDays   = Array.from({ length: 7 }, (_, i) => addDays(weekMonday, i));
   const scheduleMap = new Map(schedule.map(e => [e.date, e]));
+  const isCurrentWeek = weekMonday === getMondayOf(today);
 
   return (
     <div className="flex flex-col h-full">
@@ -1154,7 +1155,7 @@ export default function CoachMobileAthleteProfilePage() {
 
       ) : (
         /* ── Training tab ── */
-        <div className="flex flex-col flex-1 min-h-0">
+        <div className="relative flex flex-col flex-1 min-h-0">
           {/* Week navigation header — matches athlete Plan page style */}
           <div className="flex items-center gap-2 px-3 py-3 border-b shrink-0">
             <button
@@ -1393,6 +1394,17 @@ export default function CoachMobileAthleteProfilePage() {
                 </div>
               </div>
             </DragDropContext>
+          )}
+
+          {/* Today FAB — only visible when not on the current week */}
+          {!isCurrentWeek && (
+            <button
+              onClick={() => setWeekMonday(getMondayOf(today))}
+              className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 px-3 py-2 rounded-full bg-primary text-primary-foreground text-xs font-semibold shadow-lg active:opacity-70 transition-opacity"
+            >
+              <ChevronRight className="h-3.5 w-3.5 -rotate-90" />
+              Today
+            </button>
           )}
         </div>
       )}
