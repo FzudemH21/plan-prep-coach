@@ -1013,8 +1013,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       setLastSavedAt(new Date().toISOString());
     }
 
-    toast({ title: "Day cleared" });
-  }, [exerciseDistribution, sessionSections, supersets, daySplitStates, trainingDays, dailyIntensityData, parameterValues, sessionIntensities, selectedAssignmentId, toast]);
+  }, [exerciseDistribution, sessionSections, supersets, daySplitStates, trainingDays, dailyIntensityData, parameterValues, sessionIntensities, selectedAssignmentId]);
 
   const handlePasteDay = useCallback((targetDate: string) => {
     if (!copiedDay) return;

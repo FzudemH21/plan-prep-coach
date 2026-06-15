@@ -746,6 +746,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         .eq('date', dayDate)
         .then(() => { /* ignore result — liveScheduleMap already cleared optimistically */ });
     }
+    toast({ title: 'Day cleared' });
   }, [editing.handleClearDay, selectedAssignmentId, getConnectionForAthlete, athlete.id, sessionLogs, toast]);
 
   // Wrapper: clear week in editing state AND patch assignmentDataCache.
@@ -815,6 +816,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         .eq('athlete_connection_id', connection.id)
         .in('date', clearableDates)
         .then(() => { /* ignore result — liveScheduleMap already cleared optimistically */ });
+    }
+    if (completedDates.size === 0) {
+      toast({ title: 'Week cleared' });
     }
   }, [editing.handleClearDay, selectedAssignmentId, sessionLogs, toast, getConnectionForAthlete, athlete.id]);
 
