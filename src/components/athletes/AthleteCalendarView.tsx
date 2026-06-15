@@ -217,8 +217,14 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     })),
   [parametersData]);
 
+  // Sort newest-first so the default selection is always the most recently assigned program.
+  // Without this, assignments[0] is the oldest (insertion order), so the desktop would load
+  // an old desktop-assigned program with a localStorage key and load-sync it — overwriting
+  // the athlete_schedule rows that the mobile assign-flow just wrote.
   const assignments = useMemo(() => {
-    return athleteData.getAthleteCalendarAssignments(athlete.id);
+    return athleteData.getAthleteCalendarAssignments(athlete.id)
+      .slice()
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [athleteData, athlete.id]);
 
   // Auto-open a specific session when `autoOpenSession` prop is set (e.g. coach clicked reference chip)
