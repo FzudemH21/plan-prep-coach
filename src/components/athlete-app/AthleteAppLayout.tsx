@@ -4,6 +4,8 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Home, Calendar, MessageCircle, User, Bell, Lock, UserX } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAthleteApp } from '@/hooks/useAthleteApp';
+import { useDailyCheckin } from '@/hooks/useDailyCheckin';
+import { DailyCheckinSheet } from '@/components/athlete-app/DailyCheckinSheet';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -127,6 +129,18 @@ export function AthleteAppLayout() {
   const location = useLocation();
   const { t } = useTranslation();
   const { connection, loading } = useAthleteApp();
+  const { todayCheckin, saveCheckin } = useDailyCheckin(connection?.id ?? null);
+  const [checkinOpen, setCheckinOpen] = useState(false);
+
+  // Open check-in sheet once per day if not yet completed and monitoring is enabled —
+  // lives in the shell layout (not a single tab page) so it pops up regardless of
+  // which tab the athlete lands on first.
+  useEffect(() => {
+    if (!loading && todayCheckin === null && connection?.monitoringEnabled !== false) {
+      const t = setTimeout(() => setCheckinOpen(true), 600);
+      return () => clearTimeout(t);
+    }
+  }, [loading, todayCheckin, connection?.monitoringEnabled]);
 
   // ── Access gates ────────────────────────────────────────────────────────────
   // Suspended: coach archived the athlete — show soft-block screen.
@@ -185,6 +199,14 @@ export function AthleteAppLayout() {
 
   return (
     <div className="flex flex-col h-screen w-full max-w-[480px] mx-auto bg-background relative">
+      <DailyCheckinSheet
+        open={checkinOpen}
+        onClose={() => setCheckinOpen(false)}
+        onSave={saveCheckin}
+        athleteName={connection?.athleteName}
+        monitoringConfig={connection?.profileData?.monitoringConfig ?? undefined}
+      />
+
       {/* Status bar */}
       <div className="flex items-center justify-between px-4 py-3 border-b bg-background/80 backdrop-blur-sm shrink-0">
         <span className="text-sm font-medium text-foreground">

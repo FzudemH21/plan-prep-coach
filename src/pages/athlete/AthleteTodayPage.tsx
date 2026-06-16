@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { BedDouble, Dumbbell, ChevronRight, Activity, CalendarDays, CheckCircle2, ClipboardCheck } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,8 +10,6 @@ import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog }
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { IntensityBadge, getDotColor } from '@/components/athlete-app/IntensityBadge';
-import { DailyCheckinSheet } from '@/components/athlete-app/DailyCheckinSheet';
-import { useDailyCheckin } from '@/hooks/useDailyCheckin';
 
 // ── Date / greeting helpers ───────────────────────────────────────────────────
 
@@ -335,9 +333,6 @@ function UpcomingStrip({ schedule }: { schedule: AthleteScheduleEntry[] }) {
 
 export default function AthleteTodayPage() {
   const { connection, schedule, loading, error, getTodayEntry, getSessionLog, submitTestResult } = useAthleteApp();
-  const connectionId = connection?.id ?? null;
-  const { todayCheckin, saveCheckin } = useDailyCheckin(connectionId);
-  const [checkinOpen, setCheckinOpen] = useState(false);
 
   // ── Test result sheet ───────────────────────────────────────────────────────
   const [testSheetEvent, setTestSheetEvent] = useState<AthleteCalendarEvent | null>(null);
@@ -367,14 +362,6 @@ export default function AthleteTodayPage() {
   };
   // ───────────────────────────────────────────────────────────────────────────
 
-  // Open check-in sheet once per day if not yet completed and monitoring is enabled
-  useEffect(() => {
-    if (!loading && todayCheckin === null && connection?.monitoringEnabled !== false) {
-      const t = setTimeout(() => setCheckinOpen(true), 600);
-      return () => clearTimeout(t);
-    }
-  }, [loading, todayCheckin, connection?.monitoringEnabled]);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full py-20">
@@ -397,14 +384,6 @@ export default function AthleteTodayPage() {
 
   return (
     <>
-      <DailyCheckinSheet
-        open={checkinOpen}
-        onClose={() => setCheckinOpen(false)}
-        onSave={saveCheckin}
-        athleteName={connection?.athleteName}
-        monitoringConfig={connection?.profileData?.monitoringConfig ?? undefined}
-      />
-
       {/* Test result dialog */}
       <Dialog open={!!testSheetEvent} onOpenChange={open => { if (!open) setTestSheetEvent(null); }}>
         <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl">
