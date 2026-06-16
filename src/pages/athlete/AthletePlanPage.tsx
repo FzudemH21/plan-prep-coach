@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dumbbell, ChevronRight, ChevronLeft, Activity, CalendarDays, CheckCircle2, GripVertical, ClipboardCheck, BedDouble } from 'lucide-react';
+import { Dumbbell, ChevronRight, ChevronLeft, Activity, CalendarDays, CheckCircle2, GripVertical, ClipboardCheck, BedDouble, Check } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { DragDropContext, Droppable, Draggable, DropResult, DraggableProvidedDragHandleProps } from '@hello-pangea/dnd';
 import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog } from '@/hooks/useAthleteApp';
+import { supabase } from '@/lib/supabase';
 import { IntensityBadge } from '@/components/athlete-app/IntensityBadge';
 import { cn } from '@/lib/utils';
 
@@ -119,7 +120,7 @@ function SessionCard({
           <div className="min-w-0">
             <p className="font-medium text-sm truncate">{session.name}</p>
             <p className="text-xs text-muted-foreground">
-              {session.exerciseCount} exercise{session.exerciseCount !== 1 ? 's' : ''}
+              {(session.exercises?.length ?? session.exerciseCount)} exercise{(session.exercises?.length ?? session.exerciseCount) !== 1 ? 's' : ''}
               {session.duration ? ` · ~${session.duration} min` : ''}
             </p>
             {log ? (
@@ -151,6 +152,7 @@ function DaySection({
   getSessionLog,
   canMove,
   onEnterTestResult,
+  existingTestResults,
 }: {
   dateStr: string;
   entry: AthleteScheduleEntry | null;
@@ -158,6 +160,7 @@ function DaySection({
   getSessionLog: (date: string, sessionId: string) => SessionLog | null;
   canMove?: boolean;
   onEnterTestResult: (ev: AthleteCalendarEvent, date: string) => void;
+  existingTestResults: Map<string, string>;
 }) {
   const _now = new Date();
   const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
@@ -223,16 +226,30 @@ function DaySection({
                   )}
                 </div>
               </div>
-              {/* Enter result button — only for test events that have a linked parameter */}
-              {ev.type === 'test' && ev.parameterId && !isPast && (
-                <button
-                  onClick={() => onEnterTestResult(ev, dateStr)}
-                  className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 active:bg-amber-300 rounded-md py-1.5 transition-colors"
-                >
-                  <ClipboardCheck className="h-3.5 w-3.5" />
-                  Enter result
-                </button>
-              )}
+              {/* Enter result / locked result */}
+              {ev.type === 'test' && ev.parameterId && (() => {
+                const resultValue = existingTestResults.get(`${ev.parameterId}:${dateStr}`);
+                if (resultValue !== undefined) {
+                  return (
+                    <div className="mt-2 flex items-center gap-1.5 text-xs text-green-700 font-medium">
+                      <Check className="h-3 w-3 shrink-0" />
+                      Result: {resultValue}
+                    </div>
+                  );
+                }
+                if (!isPast) {
+                  return (
+                    <button
+                      onClick={() => onEnterTestResult(ev, dateStr)}
+                      className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 active:bg-amber-300 rounded-md py-1.5 transition-colors"
+                    >
+                      <ClipboardCheck className="h-3.5 w-3.5" />
+                      Enter result
+                    </button>
+                  );
+                }
+                return null;
+              })()}
             </div>
           ))}
         </div>
@@ -316,6 +333,27 @@ export default function AthletePlanPage() {
   const [selectedWeek, setSelectedWeek] = useState<string>(currentWeekMonday);
   const canMove = connection?.allowRearrangeWorkouts ?? false;
 
+  // ── Existing test results (parameterId:date → value) ─────────────────────
+  const [existingTestResults, setExistingTestResults] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    if (!connection?.id) return;
+    supabase
+      .from('athlete_test_results')
+      .select('parameter_id, value, recorded_at')
+      .eq('athlete_connection_id', connection.id)
+      .order('recorded_at', { ascending: false })
+      .then(({ data }) => {
+        const map = new Map<string, string>();
+        for (const row of (data ?? []) as { parameter_id: string; value: string; recorded_at: string }[]) {
+          const date = row.recorded_at.slice(0, 10);
+          const key = `${row.parameter_id}:${date}`;
+          if (!map.has(key)) map.set(key, row.value);
+        }
+        setExistingTestResults(map);
+      });
+  }, [connection?.id]);
+
   // ── Test result sheet state ───────────────────────────────────────────────
   const [testSheetEvent, setTestSheetEvent] = useState<{ ev: AthleteCalendarEvent; date: string } | null>(null);
   const [testValue, setTestValue] = useState('');
@@ -336,6 +374,7 @@ export default function AthletePlanPage() {
     try {
       const recordedAt = new Date(`${testSheetEvent.date}T12:00:00`).toISOString();
       await submitTestResult(testSheetEvent.ev.parameterId, testValue.trim(), recordedAt, testNote.trim() || undefined);
+      setExistingTestResults(prev => new Map(prev).set(`${testSheetEvent.ev.parameterId!}:${testSheetEvent.date}`, testValue.trim()));
       setTestSaved(true);
       setTimeout(() => setTestSheetEvent(null), 1200);
     } finally {
@@ -436,6 +475,7 @@ export default function AthletePlanPage() {
                 getSessionLog={getSessionLog}
                 canMove={canMove}
                 onEnterTestResult={openTestSheet}
+                existingTestResults={existingTestResults}
               />
             ))}
           </div>

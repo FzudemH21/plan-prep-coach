@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronDown, Check, Dumbbell, RefreshCw,
   CheckCircle2, Timer, Info, Plus, Minus, ArrowUpDown, TrendingUp, TrendingDown,
-  MessageSquare, Send, Loader2,
+  MessageSquare, Send, Loader2, History,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { useAthleteApp, AthleteScheduleEntry, ExerciseSummary, SessionLog } from '@/hooks/useAthleteApp';
 import { useChat } from '@/hooks/useChat';
+import { ExerciseHistorySheet } from '@/components/shared/ExerciseHistorySheet';
 import { useToast } from '@/hooks/use-toast';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -740,6 +741,7 @@ export default function AthleteSessionPage() {
     connectionId: connection?.id ?? null,
     callerRole: 'athlete',
   });
+  const [historyTarget, setHistoryTarget] = useState<string | null>(null);
   const [commentTarget, setCommentTarget] = useState<{
     exerciseName?: string;
     sectionName?: string;
@@ -1259,21 +1261,18 @@ export default function AthleteSessionPage() {
                                 </span>
                                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                                   {ex.isCircuit && <RefreshCw className="h-3 w-3 text-muted-foreground shrink-0" />}
-                                  <span className="text-sm truncate">{ex.name}</span>
+                                  {ex.isCircuit ? (
+                                    <span className="text-sm truncate">{ex.name}</span>
+                                  ) : (
+                                    <button
+                                      onClick={() => setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription })}
+                                      className="text-sm truncate text-left hover:text-primary active:opacity-60 transition-colors"
+                                    >{ex.name}</button>
+                                  )}
                                   {ex.eachSide && (
                                     <span className="shrink-0 inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 leading-none">
                                       Perform on each side
                                     </span>
-                                  )}
-                                  {/* ⓘ button — available in overview for video/description */}
-                                  {(ex.exerciseVideoUrl || ex.exerciseDescription) && !ex.isCircuit && (
-                                    <button
-                                      onClick={() => setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription })}
-                                      className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60 transition-colors"
-                                      aria-label="View exercise details"
-                                    >
-                                      <Info className="h-3.5 w-3.5" />
-                                    </button>
                                   )}
                                   {/* Comment button */}
                                   <button
@@ -1306,10 +1305,20 @@ export default function AthleteSessionPage() {
                                     .sort((a, b) => a.order - b.order)
                                     .map((cex, ci) => {
                                       const paramStr = formatCircuitExerciseParams(cex);
+                                      const hasDetail = !!(cex.exerciseVideoUrl || cex.exerciseDescription);
                                       return (
                                         <div key={cex.id} className="flex items-center gap-2 pl-10 pr-4 py-2 text-xs border-t border-border/20">
                                           <span className="text-muted-foreground w-4 shrink-0 text-right">{ci + 1}.</span>
                                           <span className="flex-1 min-w-0 truncate text-muted-foreground">{cex.exerciseName}</span>
+                                          {hasDetail && (
+                                            <button
+                                              onClick={() => setDetailTarget({ name: cex.exerciseName, videoUrl: cex.exerciseVideoUrl, description: cex.exerciseDescription })}
+                                              className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60 transition-colors"
+                                              aria-label="View exercise details"
+                                            >
+                                              <Info className="h-3 w-3" />
+                                            </button>
+                                          )}
                                           {paramStr && (
                                             <span className="text-muted-foreground shrink-0">{paramStr}</span>
                                           )}
@@ -1718,28 +1727,25 @@ export default function AthleteSessionPage() {
                         {/* Exercise name row */}
                         <div className="flex items-center gap-1.5">
                           {ex.isCircuit && <RefreshCw className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
-                          {(ex.exerciseVideoUrl || ex.exerciseDescription) && !ex.isCircuit ? (
-                            <button
-                              onClick={() => setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription })}
-                              className={cn(
-                                'font-semibold text-base leading-snug text-left hover:underline active:opacity-60 transition-opacity',
-                                exComplete && 'text-muted-foreground',
-                              )}
-                            >
-                              {swappedExercises[ex.id]?.replacementName ?? ex.name}
-                            </button>
-                          ) : (
+                          {ex.isCircuit ? (
                             <h3 className={cn('font-semibold text-base leading-snug', exComplete && 'text-muted-foreground')}>
                               {swappedExercises[ex.id]?.replacementName ?? ex.name}
                             </h3>
-                          )}
-                          {(ex.exerciseVideoUrl || ex.exerciseDescription) && !ex.isCircuit && (
+                          ) : (
                             <button
                               onClick={() => setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription })}
-                              className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60 transition-colors ml-0.5"
-                              aria-label="View exercise details"
+                              className={cn('font-semibold text-base leading-snug text-left hover:text-primary active:opacity-60 transition-colors', exComplete && 'text-muted-foreground')}
                             >
-                              <Info className="h-4 w-4" />
+                              {swappedExercises[ex.id]?.replacementName ?? ex.name}
+                            </button>
+                          )}
+                          {connection?.id && !ex.isCircuit && (
+                            <button
+                              onClick={() => setHistoryTarget(ex.name)}
+                              className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60 transition-colors ml-0.5"
+                              aria-label="Exercise history"
+                            >
+                              <History className="h-4 w-4" />
                             </button>
                           )}
                           {chatEnabled && (
@@ -1902,6 +1908,16 @@ export default function AthleteSessionPage() {
             </Button>
           )}
         </div>
+
+        {/* Exercise history sheet */}
+        {connection?.id && historyTarget && (
+          <ExerciseHistorySheet
+            open={!!historyTarget}
+            onClose={() => setHistoryTarget(null)}
+            exerciseName={historyTarget}
+            athleteConnectionId={connection.id}
+          />
+        )}
 
         {/* Borg completion sheet */}
         {connection && (

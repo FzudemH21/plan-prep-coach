@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronDown, ChevronRight, Plus, Minus, Check,
   Info, RefreshCw, Dumbbell, Trash2, Link2, AlignLeft,
-  GripVertical, Settings2,
+  GripVertical, Settings2, MoreVertical, Copy, ClipboardList, CheckCircle2, History,
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult, DragStart } from '@hello-pangea/dnd';
@@ -21,6 +21,7 @@ import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import type { CustomLibrary, CustomExercise, Circuit } from '@/contexts/CustomLibrariesContext';
 import type { ToolboxEntry } from '@/types/toolbox';
+import { ExerciseHistorySheet } from '@/components/shared/ExerciseHistorySheet';
 
 // ── Section helpers ───────────────────────────────────────────────────────────
 
@@ -139,17 +140,44 @@ function getCandidateParams(ex: ExerciseSummary, toolboxEntries: ToolboxEntry[])
     }
   }
   return Array.from(params).filter(
-    p => p !== ex.restParamName && !REST_RE.test(p) && !/^sets?$/i.test(p),
+    p => p !== ex.restParamName && !REST_RE.test(p) && !/^sets?$/i.test(p) && !/_unit$/i.test(p),
   );
 }
 
 // ── Exercise detail dialog ─────────────────────────────────────────────────────
 
-interface ExerciseDetailTarget { name: string; videoUrl?: string; description?: string }
+interface ExerciseDetailTarget { name: string; videoUrl?: string; description?: string; exerciseLibraryId?: string }
 
 function ExerciseDetailDialog({ target, onClose }: { target: ExerciseDetailTarget | null; onClose: () => void }) {
+  const { libraries } = useCustomLibraries();
+
+  // Fall back to live library data when the session snapshot didn't carry video/description
+  const resolvedVideoUrl = target?.videoUrl || (() => {
+    if (!target?.exerciseLibraryId) return undefined;
+    for (const lib of libraries) {
+      const ex = lib.exercises.find(e => e.id === target.exerciseLibraryId);
+      if (!ex) continue;
+      if (ex.videoUrl) return ex.videoUrl;
+      const vidCol = lib.columns.find(c => c.role === 'video');
+      if (vidCol) { const v = ex.data[vidCol.id]; if (typeof v === 'string' && v) return v; }
+    }
+    return undefined;
+  })();
+
+  const resolvedDescription = target?.description || (() => {
+    if (!target?.exerciseLibraryId) return undefined;
+    for (const lib of libraries) {
+      const ex = lib.exercises.find(e => e.id === target.exerciseLibraryId);
+      if (!ex) continue;
+      if (ex.description) return ex.description;
+      const descCol = lib.columns.find(c => c.role === 'description');
+      if (descCol) { const d = ex.data[descCol.id]; if (typeof d === 'string' && d) return d; }
+    }
+    return undefined;
+  })();
+
   if (!target) return null;
-  const hasContent = !!(target.videoUrl || target.description);
+  const hasContent = !!(resolvedVideoUrl || resolvedDescription);
   return (
     <Dialog open={!!target} onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl max-h-[80vh] overflow-y-auto p-0">
@@ -160,14 +188,14 @@ function ExerciseDetailDialog({ target, onClose }: { target: ExerciseDetailTarge
           {!hasContent && (
             <p className="text-sm text-muted-foreground text-center py-6">No details available.</p>
           )}
-          {target.videoUrl && (
-            <a href={target.videoUrl} target="_blank" rel="noopener noreferrer"
+          {resolvedVideoUrl && (
+            <a href={resolvedVideoUrl} target="_blank" rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 w-full rounded-xl border py-2.5 text-sm font-medium text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors">
               Watch video
             </a>
           )}
-          {target.description && (
-            <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">{target.description}</p>
+          {resolvedDescription && (
+            <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">{resolvedDescription}</p>
           )}
         </div>
       </DialogContent>
@@ -698,6 +726,45 @@ export default function CoachMobileSessionEditPage() {
 
   // ── Exercise detail dialog ─────────────────────────────────────────────────
   const [detailTarget, setDetailTarget] = useState<ExerciseDetailTarget | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<string | null>(null);
+
+  // ── Change exercise (replace name/id/media, keep params) ──────────────────
+  const [changeExerciseTargetId, setChangeExerciseTargetId] = useState<string | null>(null);
+
+  // ── Per-exercise action menu (⋮) ──────────────────────────────────────────
+  const [exerciseActionsOpen, setExerciseActionsOpen] = useState<string | null>(null);
+
+  // ── Session log (to show "completed" banner + actual logged values) ─────────
+  const [sessionLog, setSessionLog] = useState<{
+    completedAt: string | null;
+    borgRating: number | null;
+    durationSeconds: number | null;
+    comment: string | null;
+    setsLogged: Record<string, Record<string, Record<string, string>>> | null;
+  } | null>(null);
+  const session_ref_id = state?.entry?.sessions[state?.sessionIdx ?? 0]?.id ?? null;
+  useEffect(() => {
+    if (!connectionId || !state?.entry?.date || !session_ref_id) return;
+    supabase
+      .from('athlete_session_logs')
+      .select('completed_at, borg_rating, duration_seconds, comment, sets_logged')
+      .eq('athlete_connection_id', connectionId)
+      .eq('date', state.entry.date)
+      .eq('session_id', session_ref_id)
+      .not('completed_at', 'is', null)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setSessionLog({
+            completedAt: data.completed_at as string | null,
+            borgRating: data.borg_rating as number | null,
+            durationSeconds: data.duration_seconds as number | null,
+            comment: data.comment as string | null,
+            setsLogged: (data.sets_logged as Record<string, Record<string, Record<string, string>>> | null) ?? null,
+          });
+        }
+      });
+  }, [connectionId, state?.entry?.date, session_ref_id]);
 
   // ── Derived sections ───────────────────────────────────────────────────────
   const sections = useMemo(
@@ -1034,6 +1101,43 @@ export default function CoachMobileSessionEditPage() {
     setParamConfigOpen(false); setParamConfigTarget(null);
   }
 
+  function handleExerciseChange(lib: CustomLibrary, ex: CustomExercise) {
+    if (!changeExerciseTargetId) return;
+    const nameCol = lib.columns.find(c => c.required) ?? lib.columns.find(c => !c.role) ?? lib.columns[0];
+    const name = nameCol ? (String(ex.data[nameCol.id] ?? '') || 'Exercise') : 'Exercise';
+    const videoCol = lib.columns.find(c => c.role === 'video');
+    const descCol = lib.columns.find(c => c.role === 'description');
+    updateExercise(changeExerciseTargetId, old => ({
+      ...old,
+      name,
+      exerciseLibraryId: ex.id,
+      exerciseVideoUrl: (videoCol ? String(ex.data[videoCol.id] ?? '') : '') || (ex.videoUrl ?? undefined) || undefined,
+      exerciseDescription: (descCol ? String(ex.data[descCol.id] ?? '') : '') || (ex.description ?? undefined) || undefined,
+      mobileEdited: true,
+    }));
+    setChangeExerciseTargetId(null);
+    setExercisePickerOpen(false);
+  }
+
+  function duplicateExercise(exId: string) {
+    const exercises = entry.sessions[sessionIdx]?.exercises ?? [];
+    const original = exercises.find(ex => ex.id === exId);
+    if (!original) return;
+    const duplicate: ExerciseSummary = {
+      ...original,
+      id: `mobile_ex_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      order: original.order + 0.5,
+      mobileEdited: true,
+      mobileAdded: true,
+    };
+    updateSession(s => {
+      const idx = s.exercises.findIndex(ex => ex.id === exId);
+      const updated = [...s.exercises];
+      updated.splice(idx + 1, 0, duplicate);
+      return { ...s, exercises: updated.map((ex, i) => ({ ...ex, order: i })) };
+    });
+  }
+
   function handleCancel() {
     setEntry(originalEntry.current);
     setExtraSections([]);
@@ -1125,6 +1229,7 @@ export default function CoachMobileSessionEditPage() {
               sectionNotes: ex.sectionId ? (sectionNotesMap[ex.sectionId] ?? ex.sectionNotes) : ex.sectionNotes,
             };
           }),
+          exerciseCount: s.exercises.filter(e => !e.isCircuit).length,
         },
       );
       // Identify the row by (athlete_connection_id, date) rather than by the row UUID.
@@ -1196,6 +1301,25 @@ export default function CoachMobileSessionEditPage() {
                   <p className="text-xs text-muted-foreground min-w-[96px]">Session Intensity</p>
                   {session.intensity ? <IntensityBadge intensity={session.intensity} /> : <span className="text-xs text-muted-foreground/50 italic">Tap to set…</span>}
                 </button>
+                {/* Session logged banner */}
+                {sessionLog && (
+                  <div className="rounded-xl bg-green-50 border border-green-200 p-3 flex items-start gap-3">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-green-800">Session Completed</p>
+                      <p className="text-xs text-green-700 mt-0.5">
+                        {sessionLog.completedAt ? new Date(sessionLog.completedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}
+                        {` · ${sessionLog.durationSeconds ? Math.round(sessionLog.durationSeconds / 60) : 0} min`}
+                        {sessionLog.borgRating !== null ? ` · RPE ${sessionLog.borgRating}` : ''}
+                        {sessionLog.borgRating !== null && ` · sRPE: ${Math.round((sessionLog.borgRating) * (sessionLog.durationSeconds ? sessionLog.durationSeconds / 60 : 0))} AU`}
+                      </p>
+                      {sessionLog.comment && (
+                        <p className="text-xs text-muted-foreground mt-1 italic">"{sessionLog.comment}"</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {session.notes && <p className="text-sm text-muted-foreground leading-relaxed pb-1">{session.notes}</p>}
 
                 {/* Section cards */}
@@ -1223,14 +1347,24 @@ export default function CoachMobileSessionEditPage() {
                                   <span className="text-xs text-muted-foreground w-4 shrink-0 text-right tabular-nums">{i + 1}</span>
                                   <div className="flex items-center gap-1.5 flex-1 min-w-0">
                                     {ex.isCircuit && <RefreshCw className="h-3 w-3 text-muted-foreground shrink-0" />}
-                                    <span className="text-sm truncate">{ex.name}</span>
-                                    {(ex.exerciseVideoUrl || ex.exerciseDescription) && !ex.isCircuit && (
-                                      <button onClick={() => setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription })}
-                                        className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60">
-                                        <Info className="h-3.5 w-3.5" />
+                                    {ex.isCircuit ? (
+                                      <span className="text-sm truncate">{ex.name}</span>
+                                    ) : (
+                                      <button onClick={() => setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription, exerciseLibraryId: ex.exerciseLibraryId })}
+                                        className="text-sm truncate text-left hover:text-primary active:opacity-60 transition-colors">
+                                        {ex.name}
                                       </button>
                                     )}
                                   </div>
+                                  {!ex.isCircuit && connectionId && (
+                                    <button
+                                      onClick={() => setHistoryTarget(ex.name)}
+                                      className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60 transition-colors"
+                                      aria-label="Exercise history"
+                                    >
+                                      <History className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
                                   {ex.isCircuit
                                     ? <span className="text-xs text-muted-foreground shrink-0">{ex.circuitRounds ?? 3} rounds</span>
                                     : <span className="text-xs text-muted-foreground shrink-0">{getSetCount(ex)} sets</span>}
@@ -1240,6 +1374,48 @@ export default function CoachMobileSessionEditPage() {
                                   <p className="text-xs text-muted-foreground mt-1 ml-7 leading-snug">{ex.notes}</p>
                                 )}
                               </div>
+                              {/* Read-only set table */}
+                              {!ex.isCircuit && (() => {
+                                const params = getParamColumns(ex);
+                                const sets = getSetCount(ex);
+                                if (params.length === 0 || sets === 0) return null;
+                                return (
+                                  <div className="overflow-x-auto border-t">
+                                    <table className="w-full text-xs">
+                                      <thead>
+                                        <tr className="border-b bg-muted/10">
+                                          <th className="text-left px-4 py-1.5 font-medium text-muted-foreground w-8">#</th>
+                                          {params.map(p => (
+                                            <th key={p} className="text-left px-2 py-1.5 font-medium text-muted-foreground">{p}</th>
+                                          ))}
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {Array.from({ length: sets }, (_, si) => {
+                                          const logged = sessionLog?.setsLogged?.[ex.id]?.[String(si)];
+                                          return (
+                                            <tr key={si} className={cn('border-b last:border-0', si % 2 === 1 && 'bg-muted/10')}>
+                                              <td className="px-4 py-1.5 font-medium text-muted-foreground">{si + 1}</td>
+                                              {params.map(p => {
+                                                const loggedVal = logged?.[p];
+                                                const plannedVal = getPlannedValue(ex, p, si);
+                                                const hasLogged = loggedVal !== undefined && loggedVal !== '';
+                                                return (
+                                                  <td key={p} className="px-2 py-1.5">
+                                                    <span className={cn('tabular-nums', hasLogged ? 'text-green-700 font-medium' : 'text-foreground')}>
+                                                      {hasLogged ? loggedVal : (plannedVal || '—')}
+                                                    </span>
+                                                  </td>
+                                                );
+                                              })}
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                );
+                              })()}
                               {/* Circuit exercise list */}
                               {ex.isCircuit && <CircuitExerciseList ex={ex} />}
                               {/* Superset connector in view mode */}
@@ -1258,8 +1434,20 @@ export default function CoachMobileSessionEditPage() {
                 })}
               </div>
             </div>
-            <div className="p-4 border-t shrink-0">
-              <Button className="w-full" onClick={() => setMode('edit')}>Edit Session</Button>
+            <div className="p-4 border-t shrink-0 flex gap-2">
+              {sessionLog ? (
+                <Button variant="outline" className="w-full" onClick={() => navigate(-1)}>Close</Button>
+              ) : (
+                <>
+                  <Button variant="outline" className="flex-1" onClick={() => setMode('edit')}>Edit Session</Button>
+                  <Button className="flex-1 gap-1.5" onClick={() => navigate(
+                    `/coach-mobile/athletes/${connectionId ?? 'unknown'}/session/log`,
+                    { state: { entry, sessionIdx, connectionId, returnPath: location.pathname, returnState: state } }
+                  )}>
+                    <ClipboardList className="h-4 w-4" /> Log Session
+                  </Button>
+                </>
+              )}
             </div>
           </>
         )}
@@ -1270,6 +1458,14 @@ export default function CoachMobileSessionEditPage() {
         <IntensityPickerSheet open={sessionIntensityOpen} title="Session Intensity" current={session.intensity}
           onSelect={v => autoSaveSessionIntensity(v)} onClose={() => setSessionIntensityOpen(false)} />
         <ExerciseDetailDialog target={detailTarget} onClose={() => setDetailTarget(null)} />
+        {connectionId && historyTarget && (
+          <ExerciseHistorySheet
+            open={!!historyTarget}
+            onClose={() => setHistoryTarget(null)}
+            exerciseName={historyTarget}
+            athleteConnectionId={connectionId}
+          />
+        )}
       </div>
     );
   }
@@ -1412,7 +1608,14 @@ export default function CoachMobileSessionEditPage() {
                                                   </div>
 
                                                   {ex.isCircuit && <RefreshCw className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
-                                                  <p className="text-sm font-semibold truncate flex-1 min-w-0">{ex.name}</p>
+                                                  {ex.isCircuit ? (
+                                                    <p className="text-sm font-semibold truncate flex-1 min-w-0">{ex.name}</p>
+                                                  ) : (
+                                                    <button onClick={() => setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription, exerciseLibraryId: ex.exerciseLibraryId })}
+                                                      className="text-sm font-semibold truncate flex-1 min-w-0 text-left hover:text-primary active:opacity-60 transition-colors">
+                                                      {ex.name}
+                                                    </button>
+                                                  )}
 
                                                   {/* Param config */}
                                                   {!ex.isCircuit && (
@@ -1448,11 +1651,45 @@ export default function CoachMobileSessionEditPage() {
                                                     </div>
                                                   )}
 
-                                                  {/* Delete */}
-                                                  <button onClick={() => deleteExercise(ex.id)}
-                                                    className="w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0">
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                  </button>
+                                                  {/* ⋮ actions menu */}
+                                                  <div className="relative shrink-0">
+                                                    <button
+                                                      onClick={() => setExerciseActionsOpen(prev => prev === ex.id ? null : ex.id)}
+                                                      className="w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                                                      <MoreVertical className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    {exerciseActionsOpen === ex.id && (
+                                                      <>
+                                                        <div className="fixed inset-0 z-40" onClick={() => setExerciseActionsOpen(null)} />
+                                                        <div className="absolute right-0 top-8 z-50 bg-popover border rounded-xl shadow-lg py-1 min-w-[160px]">
+                                                          {!ex.isCircuit && (ex.exerciseVideoUrl || ex.exerciseDescription || ex.exerciseLibraryId) && (
+                                                            <button
+                                                              onClick={() => { setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription, exerciseLibraryId: ex.exerciseLibraryId }); setExerciseActionsOpen(null); }}
+                                                              className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent active:bg-accent/80 text-left">
+                                                              <Info className="h-3.5 w-3.5" /> Details
+                                                            </button>
+                                                          )}
+                                                          {!ex.isCircuit && (
+                                                            <button
+                                                              onClick={() => { setChangeExerciseTargetId(ex.id); setExercisePickerOpen(true); setExerciseActionsOpen(null); }}
+                                                              className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent active:bg-accent/80 text-left">
+                                                              <RefreshCw className="h-3.5 w-3.5" /> Change Exercise
+                                                            </button>
+                                                          )}
+                                                          <button
+                                                            onClick={() => { duplicateExercise(ex.id); setExerciseActionsOpen(null); }}
+                                                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent active:bg-accent/80 text-left">
+                                                            <Copy className="h-3.5 w-3.5" /> Duplicate
+                                                          </button>
+                                                          <button
+                                                            onClick={() => { deleteExercise(ex.id); setExerciseActionsOpen(null); }}
+                                                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent active:bg-accent/80 text-left text-destructive">
+                                                            <Trash2 className="h-3.5 w-3.5" /> Delete
+                                                          </button>
+                                                        </div>
+                                                      </>
+                                                    )}
+                                                  </div>
                                                 </div>
 
                                                 {/* Exercise notes textarea */}
@@ -1564,8 +1801,8 @@ export default function CoachMobileSessionEditPage() {
         onSelect={v => { updateSession(s => ({ ...s, intensity: v ?? undefined })); setSessionIntensityOpen(false); }}
         onClose={() => setSessionIntensityOpen(false)} />
 
-      <ExercisePickerSheet open={exercisePickerOpen} onClose={() => setExercisePickerOpen(false)}
-        onSelectExercise={(lib, ex) => handleExerciseFromLibraryPick(lib, ex)}
+      <ExercisePickerSheet open={exercisePickerOpen} onClose={() => { setExercisePickerOpen(false); setChangeExerciseTargetId(null); }}
+        onSelectExercise={(lib, ex) => changeExerciseTargetId ? handleExerciseChange(lib, ex) : handleExerciseFromLibraryPick(lib, ex)}
         onSelectCircuit={(circuit) => addCircuitFromLibrary(circuit)} />
 
       <MethodSelectionSheet open={methodSheetOpen} onClose={() => { setMethodSheetOpen(false); setPendingExercise(null); }} onConfirm={handleMethodConfirm} />
@@ -1592,6 +1829,15 @@ export default function CoachMobileSessionEditPage() {
       </Dialog>
 
       <ExerciseDetailDialog target={detailTarget} onClose={() => setDetailTarget(null)} />
+
+      {connectionId && historyTarget && (
+        <ExerciseHistorySheet
+          open={!!historyTarget}
+          onClose={() => setHistoryTarget(null)}
+          exerciseName={historyTarget}
+          athleteConnectionId={connectionId}
+        />
+      )}
     </div>
   );
 }

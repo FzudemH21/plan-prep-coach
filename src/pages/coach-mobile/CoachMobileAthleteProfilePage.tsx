@@ -1,13 +1,16 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, BookOpen, Check, GripVertical, Trash2, MessageCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, BookOpen, Check, GripVertical, Trash2, MessageCircle, Trophy, Calendar, ClipboardCheck } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { supabase } from '@/lib/supabase';
-import type { AthleteScheduleEntry, SessionSummary, ExerciseSummary } from '@/hooks/useAthleteApp';
+import type { AthleteScheduleEntry, SessionSummary, ExerciseSummary, AthleteCalendarEvent } from '@/hooks/useAthleteApp';
+import { useCalendarEvents } from '@/hooks/useCalendarEvents';
+import type { CalendarEvent } from '@/hooks/useCalendarEvents';
+import { CalendarEventDialog } from '@/components/shared/CalendarEventDialog';
 import { format, parseISO } from 'date-fns';
 import { IntensityBadge, INTENSITY_CONFIG } from '@/components/athlete-app/IntensityBadge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -46,7 +49,7 @@ const WELLNESS_FIELD: Record<WellnessKey, keyof AthleteCheckin> = {
 
 function fmtMonitoringDate(dateStr: string, todayStr: string): string {
   if (dateStr === todayStr) return 'Today';
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const yesterday = toLocalDateStr(new Date(Date.now() - 86400000));
   if (dateStr === yesterday) return 'Yesterday';
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
@@ -150,7 +153,7 @@ function WellnessMiniChart({ checkins, days }: { checkins: AthleteCheckin[]; day
   const data = useMemo(() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const cutoffStr = toLocalDateStr(cutoff);
     return [...checkins].filter(c => c.date >= cutoffStr).reverse().map(c => ({
       label: new Date(c.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       value: wellnessComposite(c),
@@ -184,7 +187,7 @@ function CustomMetricMiniChart({
   const data = useMemo(() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const cutoffStr = toLocalDateStr(cutoff);
     return history.filter(h => h.date >= cutoffStr).map(h => ({
       label: new Date(h.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       value: h.value,
@@ -228,16 +231,20 @@ function avatarColor(name: string) {
 
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
+function toLocalDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function addDays(dateStr: string, n: number): string {
   const d = new Date(dateStr + 'T12:00:00');
-  return new Date(d.getTime() + n * 86_400_000).toISOString().slice(0, 10);
+  return toLocalDateStr(new Date(d.getTime() + n * 86_400_000));
 }
 
 function getMondayOf(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00');
   const dow = d.getDay(); // 0 = Sun
   const diff = dow === 0 ? -6 : 1 - dow;
-  return new Date(d.getTime() + diff * 86_400_000).toISOString().slice(0, 10);
+  return toLocalDateStr(new Date(d.getTime() + diff * 86_400_000));
 }
 
 function fmtShort(dateStr: string): string {
@@ -359,10 +366,11 @@ export default function CoachMobileAthleteProfilePage() {
     }
   }, [location.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toLocalDateStr(new Date());
   const [weekMonday, setWeekMonday] = useState<string>(() => getMondayOf(today));
 
-  const { athletes, updateAthlete } = useAthletes();
+  const { athletes, updateAthlete, athletePerformanceParameters, getAthleteBiometrics } = useAthletes();
+  const { getEventsForAthlete, addEvent: addCalendarEvent, deleteEvent: deleteCalendarEvent } = useCalendarEvents();
   const { connections } = useAthleteConnections();
 
   const athlete = athletes.find(a => a.id === athleteId);
@@ -408,6 +416,127 @@ export default function CoachMobileAthleteProfilePage() {
   const [mutating, setMutating] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesInput, setNotesInput] = useState('');
+
+  // Tests & events
+  const [eventDialogDate, setEventDialogDate] = useState<string | null>(null);
+  const [testResultTarget, setTestResultTarget] = useState<{ event: AthleteCalendarEvent; date: string } | null>(null);
+  const [testResultValue, setTestResultValue] = useState('');
+  const [testResultNote, setTestResultNote] = useState('');
+  const [testResultSaving, setTestResultSaving] = useState(false);
+  const [testResultSaved, setTestResultSaved] = useState(false);
+  const [existingTestResults, setExistingTestResults] = useState<Map<string, string>>(new Map());
+
+  // Fetch already-entered test results for this athlete (keyed by parameterId, most recent wins)
+  useEffect(() => {
+    if (!connection?.id) return;
+    supabase
+      .from('athlete_test_results')
+      .select('parameter_id, value, recorded_at')
+      .eq('athlete_connection_id', connection.id)
+      .order('recorded_at', { ascending: false })
+      .then(({ data }) => {
+        const map = new Map<string, string>();
+        for (const row of (data ?? []) as { parameter_id: string; value: string; recorded_at: string }[]) {
+          const date = row.recorded_at.slice(0, 10);
+          const key = `${row.parameter_id}:${date}`;
+          if (!map.has(key)) map.set(key, row.value);
+        }
+        setExistingTestResults(map);
+      });
+  }, [connection?.id]);
+
+  // ── Event handlers (tests & events) ───────────────────────────────────────────
+
+  const handleAddEvent = useCallback(async (date: string, payload: Omit<CalendarEvent, 'id'>) => {
+    if (!connection || !athleteId) return;
+    const newEvent = await addCalendarEvent(athleteId, payload);
+    const newEntry = {
+      id: newEvent.id,
+      type: newEvent.type,
+      title: newEvent.title,
+      notes: newEvent.notes ?? undefined,
+      targetValue: newEvent.targetValue ?? undefined,
+      parameterId: newEvent.parameterId ?? undefined,
+    };
+    const { data: row } = await supabase
+      .from('athlete_schedule')
+      .select('id, events')
+      .eq('athlete_connection_id', connection.id)
+      .eq('date', date)
+      .maybeSingle();
+    if (row) {
+      const existing = (row.events as unknown[]) ?? [];
+      await supabase.from('athlete_schedule').update({ events: [...existing, newEntry] }).eq('id', row.id);
+      setSchedule(prev => prev.map(e => e.date === date ? { ...e, events: [...e.events, newEntry as AthleteCalendarEvent] } : e));
+    } else {
+      const { data: inserted } = await supabase.from('athlete_schedule').insert({
+        athlete_connection_id: connection.id,
+        date,
+        sessions: [],
+        events: [newEntry],
+      }).select('id').single();
+      setSchedule(prev => [...prev, {
+        id: inserted?.id ?? `tmp-${date}`,
+        date,
+        intensity: null,
+        sessions: [],
+        events: [newEntry as AthleteCalendarEvent],
+        programName: null,
+        mesocycleName: null,
+        microcycleName: null,
+      }]);
+    }
+  }, [addCalendarEvent, athleteId, connection, setSchedule]);
+
+  const handleDeleteEvent = useCallback(async (eventId: string) => {
+    if (!connection || !athleteId) return;
+    const allEvents = getEventsForAthlete(athleteId);
+    const ev = allEvents.find(e => e.id === eventId);
+    await deleteCalendarEvent(athleteId, eventId);
+    if (!ev) return;
+    const { data: row } = await supabase
+      .from('athlete_schedule')
+      .select('id, events')
+      .eq('athlete_connection_id', connection.id)
+      .eq('date', ev.date)
+      .maybeSingle();
+    if (row) {
+      const updated = ((row.events as Array<{ id: string }>) ?? []).filter(e => e.id !== eventId);
+      await supabase.from('athlete_schedule').update({ events: updated }).eq('id', row.id);
+      setSchedule(prev => prev.map(e => e.date === ev.date ? { ...e, events: e.events.filter(ce => ce.id !== eventId) } : e));
+    }
+  }, [deleteCalendarEvent, athleteId, getEventsForAthlete, connection, setSchedule]);
+
+  const handleSubmitTestResult = useCallback(async () => {
+    if (!testResultTarget || !testResultValue.trim() || !connection) return;
+    const { event, date } = testResultTarget;
+    if (!event.parameterId) return;
+    setTestResultSaving(true);
+    try {
+      const recordedAt = new Date(`${date}T12:00:00`).toISOString();
+      const { error } = await supabase.from('athlete_test_results').insert({
+        athlete_connection_id: connection.id,
+        parameter_id: event.parameterId,
+        value: testResultValue.trim(),
+        recorded_at: recordedAt,
+        note: testResultNote.trim() || null,
+      });
+      if (error) {
+        toast({ title: 'Failed to save result', description: error.message, variant: 'destructive' });
+        return;
+      }
+      setExistingTestResults(prev => new Map(prev).set(`${event.parameterId!}:${date}`, testResultValue.trim()));
+      setTestResultSaved(true);
+      setTimeout(() => {
+        setTestResultTarget(null);
+        setTestResultSaved(false);
+        setTestResultValue('');
+        setTestResultNote('');
+      }, 1200);
+    } finally {
+      setTestResultSaving(false);
+    }
+  }, [testResultTarget, testResultValue, testResultNote, connection]);
 
   // Intensity levels for picker
   const intensityLevels = Object.entries(INTENSITY_CONFIG)
@@ -1155,7 +1284,7 @@ export default function CoachMobileAthleteProfilePage() {
 
       ) : (
         /* ── Training tab ── */
-        <div className="relative flex flex-col flex-1 min-h-0">
+        <div className="flex flex-col flex-1 min-h-0">
           {/* Week navigation header — matches athlete Plan page style */}
           <div className="flex items-center gap-2 px-3 py-3 border-b shrink-0">
             <button
@@ -1168,6 +1297,14 @@ export default function CoachMobileAthleteProfilePage() {
             <p className="flex-1 text-center text-sm font-semibold tabular-nums">
               {formatWeekRange(weekMonday)}
             </p>
+            {!isCurrentWeek && (
+              <button
+                onClick={() => setWeekMonday(getMondayOf(today))}
+                className="text-xs px-2.5 py-1 rounded-full bg-primary text-primary-foreground font-medium shrink-0 active:opacity-70 transition-opacity"
+              >
+                Today
+              </button>
+            )}
             <button
               onClick={() => setClearWeekConfirmOpen(true)}
               disabled={mutating}
@@ -1238,6 +1375,61 @@ export default function CoachMobileAthleteProfilePage() {
                             ? <IntensityBadge intensity={entry.intensity} />
                             : <span className="opacity-40"><IntensityBadge intensity="0" /></span>}
                         </button>
+
+                        {/* Tests & Events */}
+                        {(entry?.events ?? []).length > 0 && (
+                          <div className="space-y-1.5">
+                            {entry!.events.map(ev => {
+                              const resultValue = ev.parameterId ? existingTestResults.get(`${ev.parameterId}:${dateStr}`) : undefined;
+                              const hasResult = resultValue !== undefined;
+                              return (
+                                <button
+                                  key={ev.id}
+                                  onClick={() => setEventDialogDate(dateStr)}
+                                  className={cn(
+                                    'w-full text-left rounded-lg border p-2.5 active:opacity-70 transition-opacity',
+                                    ev.type === 'test' ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200',
+                                  )}
+                                >
+                                  <div className="flex items-start gap-2">
+                                    {ev.type === 'test'
+                                      ? <Trophy className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+                                      : <Calendar className="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5" />}
+                                    <div className="flex-1 min-w-0">
+                                      <p className={cn('text-xs font-medium truncate', ev.type === 'test' ? 'text-amber-800' : 'text-blue-800')}>
+                                        {ev.title}
+                                      </p>
+                                      {ev.type === 'test' && ev.targetValue && (
+                                        <p className="text-xs text-amber-700 mt-0.5">Goal: {ev.targetValue}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {ev.type === 'test' && ev.parameterId && (
+                                    hasResult ? (
+                                      <div className="mt-1.5 flex items-center gap-1 text-xs text-green-700 font-medium">
+                                        <Check className="h-3 w-3 shrink-0" />
+                                        Result: {resultValue}
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={e => {
+                                          e.stopPropagation();
+                                          setTestResultTarget({ event: ev, date: dateStr });
+                                          setTestResultValue('');
+                                          setTestResultNote('');
+                                        }}
+                                        className="mt-1.5 w-full flex items-center justify-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 active:bg-amber-300 rounded-md py-1.5 transition-colors"
+                                      >
+                                        <ClipboardCheck className="h-3.5 w-3.5" />
+                                        Enter result
+                                      </button>
+                                    )
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
 
                         {/* Sessions droppable — always mounted so cross-day drops work */}
                         <Droppable droppableId={dateStr} type="SESSION">
@@ -1377,6 +1569,13 @@ export default function CoachMobileAthleteProfilePage() {
                             <BookOpen className="h-3 w-3" />
                             Assign training program
                           </button>
+                          <button
+                            onClick={() => setEventDialogDate(dateStr)}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border bg-background hover:bg-muted active:opacity-60 transition-colors"
+                          >
+                            <Trophy className="h-3 w-3" />
+                            Test / Event
+                          </button>
                           {hasSessions && (
                             <button
                               onClick={() => handleClearDay(dateStr)}
@@ -1396,16 +1595,6 @@ export default function CoachMobileAthleteProfilePage() {
             </DragDropContext>
           )}
 
-          {/* Today FAB — only visible when not on the current week */}
-          {!isCurrentWeek && (
-            <button
-              onClick={() => setWeekMonday(getMondayOf(today))}
-              className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 px-3 py-2 rounded-full bg-primary text-primary-foreground text-xs font-semibold shadow-lg active:opacity-70 transition-opacity"
-            >
-              <ChevronRight className="h-3.5 w-3.5 -rotate-90" />
-              Today
-            </button>
-          )}
         </div>
       )}
 
@@ -1541,6 +1730,92 @@ export default function CoachMobileAthleteProfilePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Tests & Events dialog ── */}
+      {athleteId && (
+        <CalendarEventDialog
+          open={eventDialogDate !== null}
+          onOpenChange={open => { if (!open) setEventDialogDate(null); }}
+          date={eventDialogDate ?? today}
+          events={eventDialogDate ? getEventsForAthlete(athleteId).filter(e => e.date === eventDialogDate) : []}
+          onAdd={(type, title, notes, parameterId, targetValue) => {
+            if (eventDialogDate) {
+              handleAddEvent(eventDialogDate, { date: eventDialogDate, type, title, notes, parameterId, targetValue });
+            }
+          }}
+          onDelete={handleDeleteEvent}
+          athletePerformanceParameters={athletePerformanceParameters.filter(p => p.athleteId === athleteId)}
+          athleteBiometrics={getAthleteBiometrics(athleteId)}
+        />
+      )}
+
+      {/* ── Test result entry sheet ── */}
+      <Sheet
+        open={testResultTarget !== null}
+        onOpenChange={open => {
+          if (!open) { setTestResultTarget(null); setTestResultValue(''); setTestResultNote(''); }
+        }}
+      >
+        <SheetContent
+          side="bottom"
+          className="rounded-t-2xl flex flex-col sm:w-[480px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 24px)' }}
+        >
+          <SheetHeader className="mb-4 px-4 pt-4 shrink-0">
+            <SheetTitle className="flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-amber-600" />
+              {testResultTarget?.event.title ?? 'Enter Result'}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="px-4 space-y-3 pb-2">
+            {testResultTarget?.event.targetValue && (
+              <p className="text-sm text-amber-700">
+                Goal: <span className="font-medium">{testResultTarget.event.targetValue}</span>
+              </p>
+            )}
+            {testResultSaved ? (
+              <div className="flex items-center justify-center gap-2 py-6 text-green-600 font-medium">
+                <Check className="h-5 w-5" />
+                Result saved!
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Result value
+                  </label>
+                  <Input
+                    value={testResultValue}
+                    onChange={e => setTestResultValue(e.target.value)}
+                    placeholder="e.g. 8.2"
+                    autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter' && testResultValue.trim()) handleSubmitTestResult(); }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Note <span className="normal-case font-normal">(optional)</span>
+                  </label>
+                  <Textarea
+                    value={testResultNote}
+                    onChange={e => setTestResultNote(e.target.value)}
+                    placeholder="Add context or conditions…"
+                    rows={2}
+                    className="text-sm"
+                  />
+                </div>
+                <Button
+                  onClick={handleSubmitTestResult}
+                  disabled={!testResultValue.trim() || testResultSaving}
+                  className="w-full"
+                >
+                  {testResultSaving ? 'Saving…' : 'Save Result'}
+                </Button>
+              </>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* ── Session library picker ── */}
       <Sheet open={sessionLibraryPickerOpen} onOpenChange={o => { if (!o) { setSessionLibraryPickerOpen(false); setDayActionTarget(null); } }}>

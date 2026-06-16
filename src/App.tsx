@@ -14,6 +14,10 @@ import CoachMobileAthleteProfilePage from "./pages/coach-mobile/CoachMobileAthle
 import CoachMobileTrainingPage from "./pages/coach-mobile/CoachMobileTrainingPage";
 import CoachMobileProfilePage from "./pages/coach-mobile/CoachMobileProfilePage";
 import CoachMobileSessionEditPage from "./pages/coach-mobile/CoachMobileSessionEditPage";
+import CoachMobileSessionLoggingPage from "./pages/coach-mobile/CoachMobileSessionLoggingPage";
+import CoachMobileMessagesPage from "./pages/coach-mobile/CoachMobileMessagesPage";
+import CoachMobileAthleteThreadPage from "./pages/coach-mobile/CoachMobileAthleteThreadPage";
+import CoachMobileAssignProgramPage from "./pages/coach-mobile/CoachMobileAssignProgramPage";
 import HomePage from "./pages/HomePage";
 import MacrocyclePage from "./pages/MacrocyclePage";
 import MesocyclePage from "./pages/MesocyclePage";
@@ -140,6 +144,10 @@ function AppRoutes() {
           <Route path="athletes" element={<CoachMobileAthletesPage />} />
           <Route path="athletes/:athleteId" element={<CoachMobileAthleteProfilePage />} />
           <Route path="athletes/:athleteId/session" element={<CoachMobileSessionEditPage />} />
+          <Route path="athletes/:athleteId/session/log" element={<CoachMobileSessionLoggingPage />} />
+          <Route path="athletes/:athleteId/chat" element={<CoachMobileAthleteThreadPage />} />
+          <Route path="athletes/:athleteId/assign-program" element={<CoachMobileAssignProgramPage />} />
+          <Route path="messages" element={<CoachMobileMessagesPage />} />
           <Route path="training" element={<CoachMobileTrainingPage />} />
           <Route path="profile" element={<CoachMobileProfilePage />} />
         </Route>
