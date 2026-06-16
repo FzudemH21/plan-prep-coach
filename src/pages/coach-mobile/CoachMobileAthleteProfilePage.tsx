@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, BookOpen, Check, GripVertical, Trash2, MessageCircle, Trophy, Calendar, ClipboardCheck } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, BookOpen, Check, GripVertical, Trash2, MessageCircle, Trophy, Calendar, ClipboardCheck } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
@@ -22,7 +22,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useAthleteCheckins, wellnessComposite, type AthleteCheckin } from '@/hooks/useAthleteCheckins';
-import { DEFAULT_MONITORING_CONFIG } from '@/types/athlete';
+import { DEFAULT_MONITORING_CONFIG, type AthleteNote } from '@/types/athlete';
 import { FRONT_REGIONS, BACK_REGIONS, nrsSeverityColor, nrsSeverityStroke, svgRegionKey } from '@/lib/bodyMapData';
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { useSessionLibrary } from '@/hooks/useSessionLibrary';
@@ -52,6 +52,19 @@ function fmtMonitoringDate(dateStr: string, todayStr: string): string {
   const yesterday = toLocalDateStr(new Date(Date.now() - 86400000));
   if (dateStr === yesterday) return 'Yesterday';
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function NoteEntry({ note }: { note: AthleteNote }) {
+  return (
+    <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+      <p className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+        <Clock className="h-3 w-3 shrink-0" />
+        {format(new Date(note.timestamp), 'MMM d, yyyy · HH:mm')}
+        {note.id === '__migrated__' && <span className="ml-1 italic">(imported)</span>}
+      </p>
+      <p className="whitespace-pre-wrap leading-snug">{note.text}</p>
+    </div>
+  );
 }
 
 function ScoreDots({ value, max = 5 }: { value: number | null; max?: number }) {
@@ -428,6 +441,26 @@ export default function CoachMobileAthleteProfilePage() {
   const [mutating, setMutating] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesInput, setNotesInput] = useState('');
+  const [notesExpanded, setNotesExpanded] = useState(false);
+
+  // Derive all notes (newest-first), migrating legacy `notes` string if needed —
+  // same logic as desktop AthleteProfileView so both surfaces read/write the same field.
+  const allNotes = useMemo((): AthleteNote[] => {
+    const history = athlete.notesHistory ?? [];
+    if (history.length === 0 && athlete.notes) {
+      return [{ id: '__migrated__', text: athlete.notes, timestamp: athlete.createdAt }];
+    }
+    return history;
+  }, [athlete.notesHistory, athlete.notes, athlete.createdAt]);
+
+  const handleAddNote = async () => {
+    const text = notesInput.trim();
+    if (!text) return;
+    const newEntry: AthleteNote = { id: `note-${Date.now()}`, text, timestamp: new Date().toISOString() };
+    await updateAthlete(athleteId!, { notesHistory: [newEntry, ...(athlete.notesHistory ?? [])] });
+    setNotesInput('');
+    setEditingNotes(false);
+  };
 
   // Tests & events
   const [eventDialogDate, setEventDialogDate] = useState<string | null>(null);
@@ -1255,39 +1288,57 @@ export default function CoachMobileAthleteProfilePage() {
                   Notes
                 </h3>
                 <button
-                  onClick={() => { setNotesInput(athlete.notes ?? ''); setEditingNotes(true); }}
-                  className="text-xs text-primary hover:underline active:opacity-60"
+                  onClick={() => { setNotesInput(''); setEditingNotes(true); }}
+                  className="text-muted-foreground hover:text-foreground active:opacity-60 transition-colors"
+                  aria-label="Add note"
                 >
-                  {athlete.notes ? 'Edit' : 'Add'}
+                  <Plus className="h-4 w-4" />
                 </button>
               </div>
-              {athlete.notes ? (
-                <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">{athlete.notes}</p>
-              ) : (
+
+              {allNotes.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic">No notes yet.</p>
+              ) : (
+                <>
+                  <NoteEntry note={allNotes[0]} />
+
+                  {allNotes.length > 1 && (
+                    <button
+                      onClick={() => setNotesExpanded(v => !v)}
+                      className="flex items-center gap-1 text-xs text-primary active:opacity-60 transition-opacity"
+                    >
+                      {notesExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      {notesExpanded ? 'Hide past notes' : `Show ${allNotes.length - 1} more`}
+                    </button>
+                  )}
+
+                  {notesExpanded && (
+                    <div className="space-y-2 pt-1 border-t">
+                      {allNotes.slice(1).map(note => <NoteEntry key={note.id} note={note} />)}
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
-            {/* Notes edit dialog */}
+            {/* Add note dialog */}
             <Dialog open={editingNotes} onOpenChange={o => { if (!o) setEditingNotes(false); }}>
               <DialogContent className="w-[calc(100vw-32px)] max-w-[380px] rounded-2xl">
                 <DialogHeader>
-                  <DialogTitle>Notes for {fullName}</DialogTitle>
+                  <DialogTitle>Add note for {fullName}</DialogTitle>
                 </DialogHeader>
                 <div className="py-2">
                   <Textarea
                     value={notesInput}
                     onChange={e => setNotesInput(e.target.value)}
-                    placeholder="Add notes about this athlete…"
+                    placeholder="Add a note…"
                     className="min-h-[140px] resize-none"
+                    autoFocus
                   />
                 </div>
                 <DialogFooter className="gap-2">
                   <Button variant="outline" onClick={() => setEditingNotes(false)}>Cancel</Button>
-                  <Button onClick={async () => {
-                    await updateAthlete(athleteId!, { notes: notesInput.trim() || undefined });
-                    setEditingNotes(false);
-                  }}>Save</Button>
+                  <Button onClick={handleAddNote} disabled={!notesInput.trim()}>Save note</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
