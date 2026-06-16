@@ -1330,8 +1330,8 @@ export default function CoachMobileAthleteProfilePage() {
           ) : (
             <DragDropContext onDragEnd={onSessionDragEnd}>
               <div className="flex-1 overflow-y-auto">
-                <div className="px-4 space-y-2 py-3 pb-6">
-                  {weekDays.map(dateStr => {
+                <div className="px-4 py-3 pb-6">
+                  {weekDays.map((dateStr, dayIdx) => {
                     const entry    = scheduleMap.get(dateStr) ?? null;
                     const isToday  = dateStr === today;
                     const isPast   = dateStr < today;
@@ -1339,8 +1339,9 @@ export default function CoachMobileAthleteProfilePage() {
                     const hasSessions = (entry?.sessions.length ?? 0) > 0;
 
                     return (
+                      <div key={dateStr}>
+                      {dayIdx > 0 && <div className="my-3 border-t border-border" />}
                       <div
-                        key={dateStr}
                         className={cn(
                           'rounded-xl p-3 space-y-2',
                           isToday && 'bg-primary/5 ring-1 ring-primary/20',
@@ -1587,6 +1588,7 @@ export default function CoachMobileAthleteProfilePage() {
                             </button>
                           )}
                         </div>
+                      </div>
                       </div>
                     );
                   })}

@@ -8,8 +8,14 @@ import { Sheet } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog } from '@/hooks/useAthleteApp';
 import { cn } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { IntensityBadge, getDotColor } from '@/components/athlete-app/IntensityBadge';
+import type { DailyCheckin } from '@/hooks/useDailyCheckin';
+
+interface AthleteLayoutContext {
+  todayCheckin: DailyCheckin | null | undefined;
+  openCheckin: () => void;
+}
 
 // ── Date / greeting helpers ───────────────────────────────────────────────────
 
@@ -333,6 +339,7 @@ function UpcomingStrip({ schedule }: { schedule: AthleteScheduleEntry[] }) {
 
 export default function AthleteTodayPage() {
   const { connection, schedule, loading, error, getTodayEntry, getSessionLog, submitTestResult } = useAthleteApp();
+  const { todayCheckin, openCheckin } = useOutletContext<AthleteLayoutContext>();
 
   // ── Test result sheet ───────────────────────────────────────────────────────
   const [testSheetEvent, setTestSheetEvent] = useState<AthleteCalendarEvent | null>(null);
@@ -438,11 +445,22 @@ export default function AthleteTodayPage() {
 
       <div className="p-4 space-y-6">
         {/* Greeting */}
-        <div>
-          <h1 className="text-2xl font-bold">
-            {getGreeting()}{connection ? `, ${connection.athleteName.split(' ')[0]}` : ''}!
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{formatDate(new Date())}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold">
+              {getGreeting()}{connection ? `, ${connection.athleteName.split(' ')[0]}` : ''}!
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{formatDate(new Date())}</p>
+          </div>
+          {connection?.monitoringEnabled !== false && todayCheckin !== undefined && (
+            <button
+              onClick={openCheckin}
+              className="shrink-0 mt-1 flex items-center gap-1.5 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/15 active:bg-primary/20 rounded-full px-3 py-1.5 transition-colors"
+            >
+              <ClipboardCheck className="h-3.5 w-3.5" />
+              {todayCheckin ? 'Edit check-in' : 'Log check-in'}
+            </button>
+          )}
         </div>
 
         {/* Today's schedule */}

@@ -265,7 +265,7 @@ export function AthleteAppLayout() {
 
       {/* Page content */}
       <div className="flex-1 overflow-y-auto">
-        <Outlet />
+        <Outlet context={{ todayCheckin, openCheckin: () => setCheckinOpen(true) }} />
       </div>
 
       {/* Bottom navigation */}

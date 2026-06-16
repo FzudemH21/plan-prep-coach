@@ -51,6 +51,15 @@ const WELLNESS_ANCHORS: Record<string, [string, string, string, string, string]>
 const WELLNESS_KEYS = ['fatigue', 'sleep', 'soreness', 'stress', 'mood'] as const;
 type WellnessKey = typeof WELLNESS_KEYS[number];
 
+// ── Date helpers ───────────────────────────────────────────────────────────────
+
+function toLocalDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** A real checkin, or a placeholder for a day the athlete simply didn't log. */
+type DisplayCheckin = AthleteCheckin & { isMissing?: boolean };
+
 // ── Z-score helpers ───────────────────────────────────────────────────────────
 
 function zColor(z: number): string {
@@ -685,7 +694,34 @@ export function AthleteMonitoringTab({ athlete }: Props) {
   const [wellnessExpanded, setWellnessExpanded] = useState(false);
   const [rangeFrom, setRangeFrom] = useState<Date | null>(null);
   const [rangeTo,   setRangeTo]   = useState<Date | null>(null);
-  const [selectedIdx, setSelectedIdx] = useState(0); // 0 = latest, checkins is newest-first
+  const [selectedIdx, setSelectedIdx] = useState(0); // 0 = latest, displayCheckins is newest-first
+
+  // Continuous day-by-day list (newest-first), padding gaps with a placeholder so the
+  // date navigator surfaces skipped days instead of silently jumping over them.
+  const displayCheckins = useMemo((): DisplayCheckin[] => {
+    if (checkins.length === 0) return [];
+    const byDate = new Map(checkins.map(c => [c.date, c]));
+    const oldest = new Date(checkins[checkins.length - 1].date + 'T12:00:00'); // checkins is newest-first
+    const result: DisplayCheckin[] = [];
+    for (
+      let cursor = new Date(toLocalDateStr(new Date()) + 'T12:00:00');
+      cursor.getTime() >= oldest.getTime();
+      cursor = new Date(cursor.getTime() - 86_400_000)
+    ) {
+      const dateStr = toLocalDateStr(cursor);
+      result.push(byDate.get(dateStr) ?? {
+        id: `missing-${dateStr}`,
+        date: dateStr,
+        wellnessFatigue: null, wellnessSleep: null, wellnessSoreness: null,
+        wellnessStress: null, wellnessMood: null,
+        hasPain: false, painAreas: [],
+        hasIllness: false, illnessSymptoms: [], illnessSymptomOther: '', illnessNrs: null,
+        notes: null, createdAt: '',
+        isMissing: true,
+      });
+    }
+    return result;
+  }, [checkins]);
 
   // Stats over full history
   const stats = useMemo(() => computeWellnessStats(checkins), [checkins]);
@@ -699,14 +735,14 @@ export function AthleteMonitoringTab({ athlete }: Props) {
   }, [connection]);
 
   // Selected check-in (navigable)
-  const selected = checkins[selectedIdx] ?? checkins[0] ?? null;
+  const selected = displayCheckins[selectedIdx] ?? displayCheckins[0] ?? null;
   const selectedComposite = selected ? wellnessComposite(selected) : null;
 
   // Keep selectedIdx in bounds when checkins reload
-  const safeIdx = Math.min(selectedIdx, Math.max(0, checkins.length - 1));
+  const safeIdx = Math.min(selectedIdx, Math.max(0, displayCheckins.length - 1));
 
   function goNewer() { setSelectedIdx(i => Math.max(0, i - 1)); }
-  function goOlder() { setSelectedIdx(i => Math.min(checkins.length - 1, i + 1)); }
+  function goOlder() { setSelectedIdx(i => Math.min(displayCheckins.length - 1, i + 1)); }
 
   // ── Export ──
   const [exporting, setExporting] = useState(false);
@@ -769,8 +805,8 @@ export function AthleteMonitoringTab({ athlete }: Props) {
   }
 
   function formatCheckinDate(date: string): string {
-    const today     = new Date().toISOString().slice(0, 10);
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const today     = toLocalDateStr(new Date());
+    const yesterday = toLocalDateStr(new Date(Date.now() - 86400000));
     if (date === today)     return 'Today';
     if (date === yesterday) return 'Yesterday';
     return new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -779,8 +815,8 @@ export function AthleteMonitoringTab({ athlete }: Props) {
   // Chart data (filtered to selected window)
   const chartCheckins = useMemo(() => {
     if (!rangeFrom || !rangeTo) return checkins; // no filter = all data
-    const fromStr = rangeFrom.toISOString().slice(0, 10);
-    const toStr   = rangeTo.toISOString().slice(0, 10);
+    const fromStr = toLocalDateStr(rangeFrom);
+    const toStr   = toLocalDateStr(rangeTo);
     return checkins.filter(c => c.date >= fromStr && c.date <= toStr);
   }, [checkins, rangeFrom, rangeTo]);
 
@@ -860,7 +896,7 @@ export function AthleteMonitoringTab({ athlete }: Props) {
                 <div className="flex items-center gap-1">
                   <button
                     onClick={goOlder}
-                    disabled={safeIdx === checkins.length - 1}
+                    disabled={safeIdx === displayCheckins.length - 1}
                     className="p-1 rounded hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronLeft className="h-4 w-4" />
@@ -874,18 +910,21 @@ export function AthleteMonitoringTab({ athlete }: Props) {
                     </PopoverTrigger>
                     <PopoverContent className="w-48 p-1" align="end">
                       <div className="max-h-60 overflow-y-auto space-y-0.5">
-                        {checkins.map((c, i) => (
+                        {displayCheckins.map((c, i) => (
                           <button
                             key={c.id}
                             onClick={() => setSelectedIdx(i)}
                             className={cn(
-                              'w-full text-left text-xs px-2 py-1.5 rounded transition-colors',
+                              'w-full flex items-center justify-between gap-2 text-left text-xs px-2 py-1.5 rounded transition-colors',
                               i === safeIdx
                                 ? 'bg-primary text-primary-foreground'
                                 : 'hover:bg-muted text-muted-foreground'
                             )}
                           >
-                            {formatCheckinDate(c.date)}
+                            <span>{formatCheckinDate(c.date)}</span>
+                            {c.isMissing && (
+                              <span className={i === safeIdx ? 'text-primary-foreground/60' : 'text-muted-foreground/50'}>–</span>
+                            )}
                           </button>
                         ))}
                       </div>
@@ -904,7 +943,12 @@ export function AthleteMonitoringTab({ athlete }: Props) {
             <CardContent className="flex-1">
               <div className="flex gap-4">
                 <div className="flex-1 min-w-0">
-                  {selectedComposite !== null ? (
+                  {selected.isMissing ? (
+                    <div className="flex items-center gap-3">
+                      <p className="text-4xl font-bold tabular-nums leading-none text-muted-foreground/40">–</p>
+                      <p className="text-sm text-muted-foreground">No check-in logged this day.</p>
+                    </div>
+                  ) : selectedComposite !== null ? (
                     <CompositeScore
                       composite={selectedComposite}
                       stats={stats}
@@ -927,7 +971,17 @@ export function AthleteMonitoringTab({ athlete }: Props) {
           </Card>
 
           {/* [0,1] Illness */}
-          {selected.hasIllness ? (
+          {selected.isMissing ? (
+            <Card className="flex flex-col">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base text-muted-foreground">Illness</CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 flex flex-col items-center justify-center gap-1.5 py-4">
+                <p className="text-2xl font-bold text-muted-foreground/40">–</p>
+                <p className="text-xs text-muted-foreground">No check-in logged</p>
+              </CardContent>
+            </Card>
+          ) : selected.hasIllness ? (
             <Card className="flex flex-col">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -1040,41 +1094,51 @@ export function AthleteMonitoringTab({ athlete }: Props) {
           <Card className="flex flex-col">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
-                {selected.hasPain
-                  ? <AlertTriangle className="h-4 w-4 text-red-500" />
-                  : <CheckCircle className="h-4 w-4 text-green-500" />
-                }
+                {!selected.isMissing && (
+                  selected.hasPain
+                    ? <AlertTriangle className="h-4 w-4 text-red-500" />
+                    : <CheckCircle className="h-4 w-4 text-green-500" />
+                )}
                 Pain
               </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 space-y-3">
-              {/* Status banner */}
-              {!selected.hasPain && (
-                <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2">
-                  <CheckCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
-                  <p className="text-xs font-medium text-green-700">No pain reported — body is feeling great!</p>
+              {selected.isMissing ? (
+                <div className="flex flex-col items-center justify-center gap-1.5 py-6">
+                  <p className="text-2xl font-bold text-muted-foreground/40">–</p>
+                  <p className="text-xs text-muted-foreground">No check-in logged</p>
                 </div>
-              )}
-              {/* Body map — always shown; dots appear only when pain is reported */}
-              <BodyMapReadOnly painAreas={selected.hasPain ? selected.painAreas : []} />
-              {/* Pain area list */}
-              {selected.hasPain && selected.painAreas.length > 0 && (
-                <div className="space-y-1.5">
-                  {selected.painAreas.map((area, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ background: nrsSeverityStroke(area.severity) }} />
-                      <span className="text-sm flex-1 truncate">{area.areaLabel}</span>
-                      <span className="text-sm font-semibold tabular-nums shrink-0"
-                        style={{ color: nrsSeverityStroke(area.severity) }}>
-                        {area.severity}/10
-                      </span>
+              ) : (
+                <>
+                  {/* Status banner */}
+                  {!selected.hasPain && (
+                    <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2">
+                      <CheckCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                      <p className="text-xs font-medium text-green-700">No pain reported — body is feeling great!</p>
                     </div>
-                  ))}
-                </div>
-              )}
-              {selected.hasPain && selected.painAreas.length === 0 && (
-                <p className="text-sm text-muted-foreground">Pain reported, no areas specified.</p>
+                  )}
+                  {/* Body map — always shown; dots appear only when pain is reported */}
+                  <BodyMapReadOnly painAreas={selected.hasPain ? selected.painAreas : []} />
+                  {/* Pain area list */}
+                  {selected.hasPain && selected.painAreas.length > 0 && (
+                    <div className="space-y-1.5">
+                      {selected.painAreas.map((area, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{ background: nrsSeverityStroke(area.severity) }} />
+                          <span className="text-sm flex-1 truncate">{area.areaLabel}</span>
+                          <span className="text-sm font-semibold tabular-nums shrink-0"
+                            style={{ color: nrsSeverityStroke(area.severity) }}>
+                            {area.severity}/10
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {selected.hasPain && selected.painAreas.length === 0 && (
+                    <p className="text-sm text-muted-foreground">Pain reported, no areas specified.</p>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

@@ -465,18 +465,20 @@ export default function AthletePlanPage() {
       {/* Day list */}
       <DragDropContext onDragEnd={onDragEnd}>
         <ScrollArea className="flex-1 px-4">
-          <div className="space-y-2 py-3 pb-4">
-            {weekDays.map(dateStr => (
-              <DaySection
-                key={dateStr}
-                dateStr={dateStr}
-                entry={scheduleMap.get(dateStr) ?? null}
-                isToday={dateStr === today}
-                getSessionLog={getSessionLog}
-                canMove={canMove}
-                onEnterTestResult={openTestSheet}
-                existingTestResults={existingTestResults}
-              />
+          <div className="py-3 pb-4">
+            {weekDays.map((dateStr, i) => (
+              <div key={dateStr}>
+                {i > 0 && <div className="my-3 border-t border-border" />}
+                <DaySection
+                  dateStr={dateStr}
+                  entry={scheduleMap.get(dateStr) ?? null}
+                  isToday={dateStr === today}
+                  getSessionLog={getSessionLog}
+                  canMove={canMove}
+                  onEnterTestResult={openTestSheet}
+                  existingTestResults={existingTestResults}
+                />
+              </div>
             ))}
           </div>
         </ScrollArea>
