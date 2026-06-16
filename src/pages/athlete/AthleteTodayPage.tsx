@@ -452,7 +452,7 @@ export default function AthleteTodayPage() {
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">{formatDate(new Date())}</p>
           </div>
-          {connection?.monitoringEnabled !== false && todayCheckin !== undefined && (
+          {connection?.monitoringEnabled === true && todayCheckin !== undefined && (
             <button
               onClick={openCheckin}
               className="shrink-0 mt-1 flex items-center gap-1.5 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/15 active:bg-primary/20 rounded-full px-3 py-1.5 transition-colors"
