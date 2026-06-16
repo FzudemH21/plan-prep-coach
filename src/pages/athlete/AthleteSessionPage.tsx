@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronDown, Check, Dumbbell, RefreshCw,
   CheckCircle2, Timer, Plus, Minus, ArrowUpDown, TrendingUp, TrendingDown,
-  MessageSquare, Send, Loader2, History,
+  MessageSquare, Send, Loader2, History, Link2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -1376,6 +1376,17 @@ export default function AthleteSessionPage() {
                                   </div>
                                 );
                               })()}
+
+                              {/* Superset connector — read-only indicator */}
+                              {i < sec.exercises.length - 1 && ex.supersetId && ex.supersetId === sec.exercises[i + 1].supersetId && (
+                                <div className="flex items-center gap-2 py-0 px-3">
+                                  <div className="flex-1 border-t border-dashed border-muted-foreground/20" />
+                                  <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-bold text-primary border border-primary/30 bg-primary/5 rounded-full shrink-0">
+                                    <Link2 className="h-3 w-3" /> SS
+                                  </span>
+                                  <div className="flex-1 border-t border-dashed border-muted-foreground/20" />
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>

@@ -1445,48 +1445,6 @@ export default function CoachMobileSessionEditPage() {
                                   <p className="text-xs text-muted-foreground mt-1 ml-7 leading-snug">{ex.notes}</p>
                                 )}
                               </div>
-                              {/* Read-only set table */}
-                              {!ex.isCircuit && (() => {
-                                const params = getParamColumns(ex);
-                                const sets = getSetCount(ex);
-                                if (params.length === 0 || sets === 0) return null;
-                                return (
-                                  <div className="overflow-x-auto border-t">
-                                    <table className="w-full text-xs">
-                                      <thead>
-                                        <tr className="border-b bg-muted/10">
-                                          <th className="text-left px-4 py-1.5 font-medium text-muted-foreground w-8">#</th>
-                                          {params.map(p => (
-                                            <th key={p} className="text-left px-2 py-1.5 font-medium text-muted-foreground">{p}</th>
-                                          ))}
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {Array.from({ length: sets }, (_, si) => {
-                                          const logged = sessionLog?.setsLogged?.[ex.id]?.[String(si)];
-                                          return (
-                                            <tr key={si} className={cn('border-b last:border-0', si % 2 === 1 && 'bg-muted/10')}>
-                                              <td className="px-4 py-1.5 font-medium text-muted-foreground">{si + 1}</td>
-                                              {params.map(p => {
-                                                const loggedVal = logged?.[p];
-                                                const plannedVal = getPlannedValue(ex, p, si);
-                                                const hasLogged = loggedVal !== undefined && loggedVal !== '';
-                                                return (
-                                                  <td key={p} className="px-2 py-1.5">
-                                                    <span className={cn('tabular-nums', hasLogged ? 'text-green-700 font-medium' : 'text-foreground')}>
-                                                      {hasLogged ? loggedVal : (plannedVal || '—')}
-                                                    </span>
-                                                  </td>
-                                                );
-                                              })}
-                                            </tr>
-                                          );
-                                        })}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                );
-                              })()}
                               {/* Circuit exercise list */}
                               {ex.isCircuit && <CircuitExerciseList ex={ex} onShowDetail={setDetailTarget} />}
                               {/* Superset connector in view mode */}
