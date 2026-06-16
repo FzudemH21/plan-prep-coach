@@ -208,11 +208,14 @@ export function AthleteProfileView({
 
   const { data: parametersData } = useParametersDataV2();
 
-  // Derive all notes (newest-first), migrating legacy `notes` string if needed
+  // Derive all notes (newest-first), appending the legacy `notes` string as the
+  // oldest entry until it's been migrated — keeps it visible even after newer
+  // notesHistory entries exist, instead of only showing it while history is empty.
   const allNotes = useMemo<AthleteNote[]>(() => {
     const history = athlete.notesHistory ?? [];
-    if (history.length === 0 && athlete.notes) {
-      return [{ id: '__migrated__', text: athlete.notes, timestamp: athlete.createdAt }];
+    const alreadyMigrated = history.some(n => n.id === '__migrated__');
+    if (!alreadyMigrated && athlete.notes) {
+      return [...history, { id: '__migrated__', text: athlete.notes, timestamp: athlete.createdAt }];
     }
     return history;
   }, [athlete.notesHistory, athlete.notes, athlete.createdAt]);
