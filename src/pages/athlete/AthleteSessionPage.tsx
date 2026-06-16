@@ -28,7 +28,6 @@ import { useAthleteApp, AthleteScheduleEntry, ExerciseSummary, SessionLog } from
 import { useChat } from '@/hooks/useChat';
 import { ExerciseHistorySheet } from '@/components/shared/ExerciseHistorySheet';
 import { useToast } from '@/hooks/use-toast';
-import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -390,13 +389,13 @@ function CircuitCard({ exercise, completedSets, onCompleteRound, onShowDetail }:
             <div className="border-t divide-y divide-border/30 bg-muted/10">
               {circuitExercises.map((cex, i) => {
                 const paramStr = formatCircuitExerciseParams(cex);
-                const canShowDetail = !!(cex.exerciseId || cex.exerciseVideoUrl || cex.exerciseDescription);
+                const hasDetail = !!(cex.exerciseVideoUrl || cex.exerciseDescription);
                 return (
                   <div key={cex.id} className="flex items-center gap-2 px-3 py-2 text-xs">
                     <span className="text-muted-foreground w-4 shrink-0 text-right">{i + 1}.</span>
-                    {canShowDetail && onShowDetail ? (
+                    {hasDetail && onShowDetail ? (
                       <button
-                        onClick={() => onShowDetail({ name: cex.exerciseName, videoUrl: cex.exerciseVideoUrl, description: cex.exerciseDescription, exerciseLibraryId: cex.exerciseId })}
+                        onClick={() => onShowDetail({ name: cex.exerciseName, videoUrl: cex.exerciseVideoUrl, description: cex.exerciseDescription })}
                         className="flex-1 min-w-0 text-left hover:underline active:opacity-60 transition-opacity truncate"
                       >
                         {cex.exerciseName}
@@ -572,7 +571,6 @@ interface ExerciseDetailTarget {
   name: string;
   videoUrl?: string;
   description?: string;
-  exerciseLibraryId?: string;
 }
 
 interface ExerciseDetailSheetProps {
@@ -605,44 +603,20 @@ function getYouTubeVideoId(raw: string): string | null {
   return null;
 }
 
-/** Reads video URL and description from the pre-embedded schedule data, falling back to a
- *  live lookup in the exercise library by ID when the session snapshot didn't carry them
- *  (e.g. exercises added to a manually-created session before/without a snapshot). */
+/** Reads video URL and description from the pre-embedded schedule snapshot only — the
+ *  athlete's Supabase session has no read access to the coach's exercise library (by
+ *  design, same boundary the snapshot-at-sync pattern exists to work around), so there is
+ *  no live fallback to fall back to here. CoachMobileSessionEditPage now refreshes this
+ *  snapshot from the live library on every save, which is what keeps it accurate. */
 function ExerciseDetailSheet({ target, onClose }: ExerciseDetailSheetProps) {
-  const { libraries } = useCustomLibraries();
-
-  const resolvedVideoUrl = target?.videoUrl || (() => {
-    if (!target?.exerciseLibraryId) return undefined;
-    for (const lib of libraries) {
-      const ex = lib.exercises.find(e => e.id === target.exerciseLibraryId);
-      if (!ex) continue;
-      if (ex.videoUrl) return ex.videoUrl;
-      const vidCol = lib.columns.find(c => c.role === 'video');
-      if (vidCol) { const v = ex.data[vidCol.id]; if (typeof v === 'string' && v) return v; }
-    }
-    return undefined;
-  })();
-
-  const resolvedDescription = target?.description || (() => {
-    if (!target?.exerciseLibraryId) return undefined;
-    for (const lib of libraries) {
-      const ex = lib.exercises.find(e => e.id === target.exerciseLibraryId);
-      if (!ex) continue;
-      if (ex.description) return ex.description;
-      const descCol = lib.columns.find(c => c.role === 'description');
-      if (descCol) { const d = ex.data[descCol.id]; if (typeof d === 'string' && d) return d; }
-    }
-    return undefined;
-  })();
-
-  const rawUrl   = resolvedVideoUrl ?? null;
+  const rawUrl   = target?.videoUrl ?? null;
   const videoId  = rawUrl ? getYouTubeVideoId(rawUrl) : null;
   // Build a guaranteed-valid URL: YouTube canonical form or normalised arbitrary URL
   const safeUrl  = videoId
     ? `https://www.youtube.com/watch?v=${videoId}`
     : (rawUrl ? normalizeUrl(rawUrl) : null);
   const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
-  const hasContent   = !!(safeUrl || resolvedDescription);
+  const hasContent   = !!(safeUrl || target?.description);
 
   return (
     <Dialog open={target !== null} onOpenChange={o => { if (!o) onClose(); }}>
@@ -707,11 +681,11 @@ function ExerciseDetailSheet({ target, onClose }: ExerciseDetailSheetProps) {
                 </a>
               )}
 
-              {resolvedDescription && (
+              {target?.description && (
                 <div className="space-y-1">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Description</p>
                   <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">
-                    {resolvedDescription}
+                    {target.description}
                   </p>
                 </div>
               )}
@@ -1294,7 +1268,7 @@ export default function AthleteSessionPage() {
                                     <span className="text-sm truncate">{ex.name}</span>
                                   ) : (
                                     <button
-                                      onClick={() => setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription, exerciseLibraryId: ex.exerciseLibraryId })}
+                                      onClick={() => setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription })}
                                       className="text-sm truncate text-left hover:text-primary active:opacity-60 transition-colors"
                                     >{ex.name}</button>
                                   )}
@@ -1334,13 +1308,13 @@ export default function AthleteSessionPage() {
                                     .sort((a, b) => a.order - b.order)
                                     .map((cex, ci) => {
                                       const paramStr = formatCircuitExerciseParams(cex);
-                                      const canShowDetail = !!(cex.exerciseId || cex.exerciseVideoUrl || cex.exerciseDescription);
+                                      const hasDetail = !!(cex.exerciseVideoUrl || cex.exerciseDescription);
                                       return (
                                         <div key={cex.id} className="flex items-center gap-2 pl-10 pr-4 py-2 text-xs border-t border-border/20">
                                           <span className="text-muted-foreground w-4 shrink-0 text-right">{ci + 1}.</span>
-                                          {canShowDetail ? (
+                                          {hasDetail ? (
                                             <button
-                                              onClick={() => setDetailTarget({ name: cex.exerciseName, videoUrl: cex.exerciseVideoUrl, description: cex.exerciseDescription, exerciseLibraryId: cex.exerciseId })}
+                                              onClick={() => setDetailTarget({ name: cex.exerciseName, videoUrl: cex.exerciseVideoUrl, description: cex.exerciseDescription })}
                                               className="flex-1 min-w-0 text-left text-muted-foreground hover:text-foreground hover:underline active:opacity-60 transition-colors truncate"
                                             >
                                               {cex.exerciseName}
@@ -1762,7 +1736,7 @@ export default function AthleteSessionPage() {
                             </h3>
                           ) : (
                             <button
-                              onClick={() => setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription, exerciseLibraryId: ex.exerciseLibraryId })}
+                              onClick={() => setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription })}
                               className={cn('font-semibold text-base leading-snug text-left hover:text-primary active:opacity-60 transition-colors', exComplete && 'text-muted-foreground')}
                             >
                               {swappedExercises[ex.id]?.replacementName ?? ex.name}

@@ -148,36 +148,57 @@ function getCandidateParams(ex: ExerciseSummary, toolboxEntries: ToolboxEntry[])
 
 interface ExerciseDetailTarget { name: string; videoUrl?: string; description?: string; exerciseLibraryId?: string }
 
+function normalizeUrl(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
+function getYouTubeVideoId(raw: string): string | null {
+  const s = raw.trim();
+  const m = s.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
+  if (m) return m[1];
+  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
+  return null;
+}
+
+/** Looks up the current video/description for an exercise by its library ID —
+ *  shared by the detail dialog's fallback and the save-time snapshot refresh. */
+function resolveExerciseDetail(
+  libraries: CustomLibrary[],
+  exerciseLibraryId: string | undefined,
+): { videoUrl?: string; description?: string } {
+  if (!exerciseLibraryId) return {};
+  for (const lib of libraries) {
+    const ex = lib.exercises.find(e => e.id === exerciseLibraryId);
+    if (!ex) continue;
+    let videoUrl = ex.videoUrl;
+    if (!videoUrl) {
+      const vidCol = lib.columns.find(c => c.role === 'video');
+      if (vidCol) { const v = ex.data[vidCol.id]; if (typeof v === 'string' && v) videoUrl = v; }
+    }
+    let description = ex.description;
+    if (!description) {
+      const descCol = lib.columns.find(c => c.role === 'description');
+      if (descCol) { const d = ex.data[descCol.id]; if (typeof d === 'string' && d) description = d; }
+    }
+    return { videoUrl, description };
+  }
+  return {};
+}
+
 function ExerciseDetailDialog({ target, onClose }: { target: ExerciseDetailTarget | null; onClose: () => void }) {
   const { libraries } = useCustomLibraries();
 
   // Fall back to live library data when the session snapshot didn't carry video/description
-  const resolvedVideoUrl = target?.videoUrl || (() => {
-    if (!target?.exerciseLibraryId) return undefined;
-    for (const lib of libraries) {
-      const ex = lib.exercises.find(e => e.id === target.exerciseLibraryId);
-      if (!ex) continue;
-      if (ex.videoUrl) return ex.videoUrl;
-      const vidCol = lib.columns.find(c => c.role === 'video');
-      if (vidCol) { const v = ex.data[vidCol.id]; if (typeof v === 'string' && v) return v; }
-    }
-    return undefined;
-  })();
+  const fallback = resolveExerciseDetail(libraries, target?.exerciseLibraryId);
+  const resolvedVideoUrl = target?.videoUrl || fallback.videoUrl;
+  const resolvedDescription = target?.description || fallback.description;
 
-  const resolvedDescription = target?.description || (() => {
-    if (!target?.exerciseLibraryId) return undefined;
-    for (const lib of libraries) {
-      const ex = lib.exercises.find(e => e.id === target.exerciseLibraryId);
-      if (!ex) continue;
-      if (ex.description) return ex.description;
-      const descCol = lib.columns.find(c => c.role === 'description');
-      if (descCol) { const d = ex.data[descCol.id]; if (typeof d === 'string' && d) return d; }
-    }
-    return undefined;
-  })();
+  const videoId = resolvedVideoUrl ? getYouTubeVideoId(resolvedVideoUrl) : null;
+  const safeUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : (resolvedVideoUrl ? normalizeUrl(resolvedVideoUrl) : null);
+  const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
 
   if (!target) return null;
-  const hasContent = !!(resolvedVideoUrl || resolvedDescription);
+  const hasContent = !!(safeUrl || resolvedDescription);
   return (
     <Dialog open={!!target} onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl max-h-[80vh] overflow-y-auto p-0">
@@ -188,14 +209,34 @@ function ExerciseDetailDialog({ target, onClose }: { target: ExerciseDetailTarge
           {!hasContent && (
             <p className="text-sm text-muted-foreground text-center py-6">No details available.</p>
           )}
-          {resolvedVideoUrl && (
-            <a href={resolvedVideoUrl} target="_blank" rel="noopener noreferrer"
+          {thumbnailUrl && safeUrl && (
+            <a href={safeUrl} target="_blank" rel="noopener noreferrer"
+              className="block rounded-xl overflow-hidden relative group">
+              <img src={thumbnailUrl} alt={`${target.name} video`}
+                className="w-full object-cover aspect-video bg-muted"
+                onError={e => {
+                  const img = e.currentTarget;
+                  if (img.src.includes('hqdefault')) img.src = img.src.replace('hqdefault', 'mqdefault');
+                  else if (img.src.includes('mqdefault')) img.src = img.src.replace('mqdefault', 'sddefault');
+                }} />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-active:bg-black/30 transition-colors">
+                <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+                  <svg className="w-5 h-5 text-red-600 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                </div>
+              </div>
+            </a>
+          )}
+          {safeUrl && !thumbnailUrl && (
+            <a href={safeUrl} target="_blank" rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 w-full rounded-xl border py-2.5 text-sm font-medium text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors">
               Watch video
             </a>
           )}
           {resolvedDescription && (
-            <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">{resolvedDescription}</p>
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Description</p>
+              <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">{resolvedDescription}</p>
+            </div>
           )}
         </div>
       </DialogContent>
@@ -646,17 +687,28 @@ function SupersetConnector({
 
 // ── Circuit exercise list (inline) ────────────────────────────────────────────
 
-function CircuitExerciseList({ ex }: { ex: ExerciseSummary }) {
+function CircuitExerciseList({ ex, onShowDetail }: { ex: ExerciseSummary; onShowDetail?: (target: ExerciseDetailTarget) => void }) {
   if (!ex.circuitExercises || ex.circuitExercises.length === 0) return null;
   return (
     <div className="border-t divide-y divide-border/30">
-      {ex.circuitExercises.map((ce, ci) => (
-        <div key={ce.id} className="flex items-center gap-2 pl-7 pr-4 py-1.5">
-          <span className="text-xs text-muted-foreground w-4 tabular-nums shrink-0">{ci + 1}</span>
-          <span className="text-xs flex-1 truncate">{ce.exerciseName}</span>
-          {ce.reps && <span className="text-xs text-muted-foreground shrink-0">{ce.reps}</span>}
-        </div>
-      ))}
+      {ex.circuitExercises.map((ce, ci) => {
+        const canShowDetail = !!(ce.exerciseId || ce.exerciseVideoUrl || ce.exerciseDescription);
+        return (
+          <div key={ce.id} className="flex items-center gap-2 pl-7 pr-4 py-1.5">
+            <span className="text-xs text-muted-foreground w-4 tabular-nums shrink-0">{ci + 1}</span>
+            {canShowDetail && onShowDetail ? (
+              <button
+                onClick={() => onShowDetail({ name: ce.exerciseName, videoUrl: ce.exerciseVideoUrl, description: ce.exerciseDescription, exerciseLibraryId: ce.exerciseId })}
+                className="text-xs flex-1 min-w-0 text-left hover:text-primary hover:underline active:opacity-60 transition-colors truncate">
+                {ce.exerciseName}
+              </button>
+            ) : (
+              <span className="text-xs flex-1 truncate">{ce.exerciseName}</span>
+            )}
+            {ce.reps && <span className="text-xs text-muted-foreground shrink-0">{ce.reps}</span>}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1221,12 +1273,31 @@ export default function CoachMobileSessionEditPage() {
               }
             }
 
+            // Refresh the video/description snapshot from the live library on every save.
+            // The athlete app can only ever see this snapshot (it has no read access to the
+            // coach's exercise library), so this is what keeps "Exercise details" accurate
+            // there — heals exercises that were added before this field existed, or whose
+            // library entry was edited since.
+            const detail = !ex.isCircuit ? resolveExerciseDetail(libraries, ex.exerciseLibraryId) : null;
+
             return {
               ...ex,
               plannedParams: params,
               plannedSets: effectiveSets,
               mobileEdited: true,
               sectionNotes: ex.sectionId ? (sectionNotesMap[ex.sectionId] ?? ex.sectionNotes) : ex.sectionNotes,
+              exerciseVideoUrl: detail ? (detail.videoUrl ?? ex.exerciseVideoUrl) : ex.exerciseVideoUrl,
+              exerciseDescription: detail ? (detail.description ?? ex.exerciseDescription) : ex.exerciseDescription,
+              circuitExercises: ex.isCircuit
+                ? ex.circuitExercises?.map(cex => {
+                    const cexDetail = resolveExerciseDetail(libraries, cex.exerciseId);
+                    return {
+                      ...cex,
+                      exerciseVideoUrl: cexDetail.videoUrl ?? cex.exerciseVideoUrl,
+                      exerciseDescription: cexDetail.description ?? cex.exerciseDescription,
+                    };
+                  })
+                : ex.circuitExercises,
             };
           }),
           exerciseCount: s.exercises.filter(e => !e.isCircuit).length,
@@ -1417,7 +1488,7 @@ export default function CoachMobileSessionEditPage() {
                                 );
                               })()}
                               {/* Circuit exercise list */}
-                              {ex.isCircuit && <CircuitExerciseList ex={ex} />}
+                              {ex.isCircuit && <CircuitExerciseList ex={ex} onShowDetail={setDetailTarget} />}
                               {/* Superset connector in view mode */}
                               {i < sec.exercises.length - 1 && (
                                 <SupersetConnector
@@ -1737,7 +1808,7 @@ export default function CoachMobileSessionEditPage() {
                                                     <div className="px-3 py-2 text-xs text-muted-foreground border-b">
                                                       {ex.circuitRounds ?? 3} rounds · {ex.circuitExercises?.length ?? 0} exercises
                                                     </div>
-                                                    <CircuitExerciseList ex={ex} />
+                                                    <CircuitExerciseList ex={ex} onShowDetail={setDetailTarget} />
                                                   </>
                                                 )}
                                               </div>
