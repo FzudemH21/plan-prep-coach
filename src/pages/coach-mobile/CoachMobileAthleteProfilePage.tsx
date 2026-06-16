@@ -153,14 +153,26 @@ function WellnessMiniChart({ checkins, days }: { checkins: AthleteCheckin[]; day
   const data = useMemo(() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
-    const cutoffStr = toLocalDateStr(cutoff);
-    return [...checkins].filter(c => c.date >= cutoffStr).reverse().map(c => ({
-      label: new Date(c.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      value: wellnessComposite(c),
-    }));
+    const byDate = new Map(checkins.map(c => [c.date, c]));
+    const end = new Date(toLocalDateStr(new Date()) + 'T12:00:00');
+    const result: { date: string; label: string; value: number | null }[] = [];
+    for (
+      let cursor = new Date(toLocalDateStr(cutoff) + 'T12:00:00');
+      cursor.getTime() <= end.getTime();
+      cursor = new Date(cursor.getTime() + 86_400_000)
+    ) {
+      const dateStr = toLocalDateStr(cursor);
+      const c = byDate.get(dateStr);
+      result.push({
+        date: dateStr,
+        label: cursor.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        value: c ? wellnessComposite(c) : null,
+      });
+    }
+    return result;
   }, [checkins, days]);
 
-  if (data.length < 2) return (
+  if (data.filter(d => d.value !== null).length < 2) return (
     <p className="text-xs text-muted-foreground text-center py-4">Not enough data — needs 2+ check-ins.</p>
   );
 
@@ -1041,50 +1053,6 @@ export default function CoachMobileAthleteProfilePage() {
               ))}
             </div>
 
-            {/* Notes card */}
-            <div className="rounded-xl border bg-card p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Notes
-                </h3>
-                <button
-                  onClick={() => { setNotesInput(athlete.notes ?? ''); setEditingNotes(true); }}
-                  className="text-xs text-primary hover:underline active:opacity-60"
-                >
-                  {athlete.notes ? 'Edit' : 'Add'}
-                </button>
-              </div>
-              {athlete.notes ? (
-                <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">{athlete.notes}</p>
-              ) : (
-                <p className="text-sm text-muted-foreground italic">No notes yet.</p>
-              )}
-            </div>
-
-            {/* Notes edit dialog */}
-            <Dialog open={editingNotes} onOpenChange={o => { if (!o) setEditingNotes(false); }}>
-              <DialogContent className="w-[calc(100vw-32px)] max-w-[380px] rounded-2xl">
-                <DialogHeader>
-                  <DialogTitle>Notes for {fullName}</DialogTitle>
-                </DialogHeader>
-                <div className="py-2">
-                  <Textarea
-                    value={notesInput}
-                    onChange={e => setNotesInput(e.target.value)}
-                    placeholder="Add notes about this athlete…"
-                    className="min-h-[140px] resize-none"
-                  />
-                </div>
-                <DialogFooter className="gap-2">
-                  <Button variant="outline" onClick={() => setEditingNotes(false)}>Cancel</Button>
-                  <Button onClick={async () => {
-                    await updateAthlete(athleteId!, { notes: notesInput.trim() || undefined });
-                    setEditingNotes(false);
-                  }}>Save</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
             {/* ── Monitoring cards ── */}
             {connection && monitoringEnabled && (
               <div className="space-y-3">
@@ -1279,6 +1247,50 @@ export default function CoachMobileAthleteProfilePage() {
                 })}
               </div>
             )}
+
+            {/* Notes card */}
+            <div className="rounded-xl border bg-card p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Notes
+                </h3>
+                <button
+                  onClick={() => { setNotesInput(athlete.notes ?? ''); setEditingNotes(true); }}
+                  className="text-xs text-primary hover:underline active:opacity-60"
+                >
+                  {athlete.notes ? 'Edit' : 'Add'}
+                </button>
+              </div>
+              {athlete.notes ? (
+                <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">{athlete.notes}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">No notes yet.</p>
+              )}
+            </div>
+
+            {/* Notes edit dialog */}
+            <Dialog open={editingNotes} onOpenChange={o => { if (!o) setEditingNotes(false); }}>
+              <DialogContent className="w-[calc(100vw-32px)] max-w-[380px] rounded-2xl">
+                <DialogHeader>
+                  <DialogTitle>Notes for {fullName}</DialogTitle>
+                </DialogHeader>
+                <div className="py-2">
+                  <Textarea
+                    value={notesInput}
+                    onChange={e => setNotesInput(e.target.value)}
+                    placeholder="Add notes about this athlete…"
+                    className="min-h-[140px] resize-none"
+                  />
+                </div>
+                <DialogFooter className="gap-2">
+                  <Button variant="outline" onClick={() => setEditingNotes(false)}>Cancel</Button>
+                  <Button onClick={async () => {
+                    await updateAthlete(athleteId!, { notes: notesInput.trim() || undefined });
+                    setEditingNotes(false);
+                  }}>Save</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </ScrollArea>
 
