@@ -1815,21 +1815,19 @@ export default function AthleteSessionPage() {
                           onMarkAll={handleMarkAll}
                         />
                         {/* Add / remove set buttons */}
-                        <div className="flex items-center justify-between px-1 pt-1">
+                        <div className="flex justify-end gap-2 mt-2">
                           <button
                             onClick={() => handleRemoveSet(ex.id)}
                             disabled={exSetCount <= 1}
-                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors active:opacity-60"
+                            className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border transition-colors disabled:opacity-30 disabled:cursor-not-allowed active:opacity-60"
                           >
-                            <Minus className="h-3 w-3" />
-                            Remove set
+                            − Set
                           </button>
                           <button
                             onClick={() => handleAddSet(ex.id)}
-                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors active:opacity-60"
+                            className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border transition-colors active:opacity-60"
                           >
-                            <Plus className="h-3 w-3" />
-                            Add set
+                            + Set
                           </button>
                         </div>
                       </>

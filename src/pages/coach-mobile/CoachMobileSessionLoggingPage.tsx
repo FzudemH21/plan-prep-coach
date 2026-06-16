@@ -2,14 +2,15 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, Check, Dumbbell, RefreshCw,
-  CheckCircle2, Timer,
+  CheckCircle2, Timer, History, MessageSquare, ArrowUpDown,
+  TrendingUp, TrendingDown, Send, Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription,
@@ -20,6 +21,9 @@ import { supabase } from '@/lib/supabase';
 import type { AthleteScheduleEntry, ExerciseSummary } from '@/hooks/useAthleteApp';
 import { useToast } from '@/hooks/use-toast';
 import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
+import { useAuth } from '@/hooks/useAuth';
+import { useChat } from '@/hooks/useChat';
+import { ExerciseHistorySheet } from '@/components/shared/ExerciseHistorySheet';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -567,8 +571,11 @@ export default function CoachMobileSessionLoggingPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const { libraries } = useCustomLibraries();
 
   const state = location.state as LocationState | null;
+  const { sendMessage: chatSend } = useChat({ connectionId: state?.connectionId ?? null, callerRole: 'coach' });
 
   // ── State ──────────────────────────────────────────────────────────────────
 
@@ -587,6 +594,77 @@ export default function CoachMobileSessionLoggingPage() {
   const [workoutElapsed, setWorkoutElapsed] = useState(0);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set<string>());
   const expandedInitRef = useRef(false);
+  const [historyTarget, setHistoryTarget] = useState<string | null>(null);
+  const [commentTarget, setCommentTarget] = useState<{ exerciseName?: string; sectionName?: string } | null>(null);
+  const [commentText, setCommentText] = useState('');
+  const [commentSending, setCommentSending] = useState(false);
+
+  // ── Exercise swap ──────────────────────────────────────────────────────────
+  interface ChainEntry { id: string; toExerciseId: string; toExerciseName: string; direction: 'progression' | 'regression'; level: number; notes: string | null; }
+  interface SwapRecord { replacementName: string; originalName: string; direction: 'progression' | 'regression'; level: number; reason: string; }
+  const [swappedExercises, setSwappedExercises] = useState<Record<string, SwapRecord>>({});
+  const [swapSheetEx, setSwapSheetEx] = useState<ExerciseSummary | null>(null);
+  const [swapChain, setSwapChain] = useState<ChainEntry[]>([]);
+  const [swapChainLoading, setSwapChainLoading] = useState(false);
+  const [swapSelectedEntry, setSwapSelectedEntry] = useState<ChainEntry | null>(null);
+  const [swapReason, setSwapReason] = useState('');
+
+  async function openSwapSheet(ex: ExerciseSummary) {
+    if (!ex.exerciseLibraryId || !user) return;
+    setSwapSheetEx(ex);
+    setSwapChainLoading(true);
+    setSwapSelectedEntry(null);
+    setSwapReason('');
+
+    const { data: progData } = await supabase
+      .from('exercise_progressions')
+      .select('id, to_exercise_id, to_exercise_name, direction, level, notes')
+      .eq('from_exercise_id', ex.exerciseLibraryId)
+      .eq('coach_user_id', user.id)
+      .order('direction').order('level');
+
+    const entries: ChainEntry[] = (progData ?? []).map((r: Record<string, unknown>) => ({
+      id: r.id as string,
+      toExerciseId: r.to_exercise_id as string,
+      toExerciseName: (r.to_exercise_name as string) || '',
+      direction: r.direction as 'progression' | 'regression',
+      level: r.level as number,
+      notes: r.notes as string | null,
+    }));
+
+    // Back-fill missing names from the coach's own (already-loaded) library — no extra query needed.
+    for (const e of entries) {
+      if (e.toExerciseName) continue;
+      for (const lib of libraries) {
+        const found = lib.exercises.find(le => le.id === e.toExerciseId);
+        if (found) {
+          const nameColId = lib.columns?.[0]?.id ?? 'exercise';
+          e.toExerciseName = (found.data?.[nameColId] ?? found.data?.['name'] ?? '') as string;
+          break;
+        }
+      }
+    }
+
+    setSwapChain(entries);
+    setSwapChainLoading(false);
+  }
+
+  function applySwap() {
+    if (!swapSheetEx || !swapSelectedEntry) return;
+    setSwappedExercises(prev => ({
+      ...prev,
+      [swapSheetEx.id]: {
+        replacementName: swapSelectedEntry.toExerciseName,
+        originalName: swapSheetEx.name,
+        direction: swapSelectedEntry.direction,
+        level: swapSelectedEntry.level,
+        reason: swapReason.trim(),
+      },
+    }));
+    setSwapSheetEx(null);
+    setSwapSelectedEntry(null);
+    setSwapReason('');
+  }
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -788,8 +866,12 @@ export default function CoachMobileSessionLoggingPage() {
     if (ex.plannedParams) {
       for (const [k, v] of Object.entries(ex.plannedParams)) plannedParamsStr[k] = String(v);
     }
+    const swap = swappedExercises[ex.id];
     return {
-      exerciseName: ex.name, methodId: ex.methodKey,
+      exerciseName: swap ? swap.replacementName : ex.name, methodId: ex.methodKey,
+      swappedFrom: swap ? swap.originalName : undefined,
+      swapDirection: swap ? swap.direction : undefined,
+      swapReason: swap?.reason || undefined,
       plannedSets: plannedSetCount,
       plannedParams: Object.keys(plannedParamsStr).length > 0 ? plannedParamsStr : undefined,
       sectionId: ex.sectionId, sectionName: ex.sectionName,
@@ -1042,6 +1124,7 @@ export default function CoachMobileSessionLoggingPage() {
       const exSetCount = setCountOverrides[ex.id] ?? getSetCount(ex);
       const exComplete = exDone.length >= exSetCount &&
         Array.from({ length: exSetCount }, (_, i) => i).every(i => exDone.includes(i));
+      const displayName = swappedExercises[ex.id]?.replacementName ?? ex.name;
 
       return (
         <div key={ex.id} className={cn('p-4 space-y-3 transition-colors', ssLabel ? '' : 'rounded-xl border', exComplete ? 'bg-primary/5' : '')}>
@@ -1056,13 +1139,46 @@ export default function CoachMobileSessionLoggingPage() {
                 {!ex.isCircuit ? (
                   <button onClick={() => setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription, exerciseLibraryId: ex.exerciseLibraryId })}
                     className="text-left hover:underline active:opacity-60 transition-opacity">
-                    <h3 className={cn('font-semibold text-base leading-snug', exComplete && 'text-muted-foreground')}>{ex.name}</h3>
+                    <h3 className={cn('font-semibold text-base leading-snug', exComplete && 'text-muted-foreground')}>{displayName}</h3>
                   </button>
                 ) : (
-                  <h3 className={cn('font-semibold text-base leading-snug', exComplete && 'text-muted-foreground')}>{ex.name}</h3>
+                  <h3 className={cn('font-semibold text-base leading-snug', exComplete && 'text-muted-foreground')}>{displayName}</h3>
                 )}
+                {connectionId && !ex.isCircuit && (
+                  <button onClick={() => setHistoryTarget(ex.name)}
+                    className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60 transition-colors ml-0.5"
+                    aria-label="Exercise history">
+                    <History className="h-4 w-4" />
+                  </button>
+                )}
+                <button onClick={() => setCommentTarget({ exerciseName: displayName, sectionName: currentSection?.name })}
+                  className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60 transition-colors ml-0.5"
+                  aria-label="Comment on exercise">
+                  <MessageSquare className="h-4 w-4" />
+                </button>
               </div>
+              {/* Swap badge */}
+              {swappedExercises[ex.id] && (
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 leading-none">
+                    {swappedExercises[ex.id].direction === 'regression' ? '↓ Regression' : '↑ Progression'}
+                  </span>
+                  <span className="text-xs text-muted-foreground">instead of {swappedExercises[ex.id].originalName}</span>
+                  <button onClick={() => setSwappedExercises(prev => { const n = { ...prev }; delete n[ex.id]; return n; })}
+                    className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors">
+                    Undo
+                  </button>
+                </div>
+              )}
               {ex.notes && <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{ex.notes}</p>}
+              {/* Adjust button — only for exercises with a library ID and no active swap */}
+              {!ex.isCircuit && ex.exerciseLibraryId && !swappedExercises[ex.id] && (
+                <button onClick={() => openSwapSheet(ex)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1 active:opacity-60">
+                  <ArrowUpDown className="h-3 w-3" />
+                  Adjust exercise
+                </button>
+              )}
               <div className="mt-3">
                 {ex.isCircuit ? (
                   <CircuitCard exercise={ex} completedSets={completedSets}
@@ -1081,7 +1197,7 @@ export default function CoachMobileSessionLoggingPage() {
                         setLoggedValues(prev => { const copy = { ...(prev[ex.id] ?? {}) }; delete copy[removedIdx]; return { ...prev, [ex.id]: copy }; });
                         setCompletedSets(prev => ({ ...prev, [ex.id]: (prev[ex.id] ?? []).filter(i => i !== removedIdx) }));
                         setSetCountOverrides(prev => ({ ...prev, [ex.id]: next }));
-                      }} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border transition-colors">− Set</button>
+                      }} disabled={exSetCount <= 1} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border transition-colors disabled:opacity-30 disabled:cursor-not-allowed">− Set</button>
                       <button onClick={() => setSetCountOverrides(prev => ({ ...prev, [ex.id]: (prev[ex.id] ?? getSetCount(ex)) + 1 }))}
                         className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border transition-colors">+ Set</button>
                     </div>
@@ -1131,17 +1247,37 @@ export default function CoachMobileSessionLoggingPage() {
                 <p className="text-sm">No exercises in this section.</p>
               </div>
             ) : groups.map(group => {
-              if (group.kind === 'single') return renderExerciseCard(group.ex, group.n);
+              if (group.kind === 'single') {
+                return (
+                  <div key={group.ex.id} className={cn(
+                    'rounded-xl border transition-colors',
+                    (completedSets[group.ex.id] ?? []).length >= (setCountOverrides[group.ex.id] ?? getSetCount(group.ex)) ? 'border-primary/20' : 'border-border',
+                  )}>
+                    {renderExerciseCard(group.ex, group.n)}
+                  </div>
+                );
+              }
+              const allDone = group.members.every(({ ex }) => {
+                const sc = setCountOverrides[ex.id] ?? getSetCount(ex);
+                const done = completedSets[ex.id] ?? [];
+                return done.length >= sc && Array.from({ length: sc }, (_, i) => i).every(i => done.includes(i));
+              });
               return (
-                <div key={group.ssId} className="rounded-xl border overflow-hidden">
-                  <div className="px-4 py-2 bg-muted/30 border-b">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Superset {group.label}
-                    </span>
+                <div key={group.ssId} className={cn(
+                  'rounded-xl border overflow-hidden transition-colors',
+                  allDone ? 'border-primary/20' : 'border-primary/40',
+                )}>
+                  <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/5 border-b border-primary/20">
+                    <span className="text-xs font-bold text-primary tracking-wider">SUPERSET {group.label}</span>
                   </div>
-                  <div className="divide-y divide-border/30">
-                    {group.members.map(({ ex, n }) => renderExerciseCard(ex, n, group.label))}
-                  </div>
+                  {group.members.map(({ ex, n }, mi) => (
+                    <div key={ex.id}>
+                      {renderExerciseCard(ex, n, `${group.label}${mi + 1}`)}
+                      {mi < group.members.length - 1 && (
+                        <div className="mx-4 border-t border-dashed border-primary/20" />
+                      )}
+                    </div>
+                  ))}
                 </div>
               );
             })}
@@ -1149,6 +1285,153 @@ export default function CoachMobileSessionLoggingPage() {
         </ScrollArea>
 
         <ExerciseDetailSheet target={detailTarget} onClose={() => setDetailTarget(null)} />
+
+        {connectionId && historyTarget && (
+          <ExerciseHistorySheet open={!!historyTarget} onClose={() => setHistoryTarget(null)} exerciseName={historyTarget} athleteConnectionId={connectionId} />
+        )}
+
+        {/* Exercise/Section comment dialog */}
+        <Dialog open={!!commentTarget} onOpenChange={(o) => { if (!o) { setCommentTarget(null); setCommentText(''); } }}>
+          <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base">Add Comment</DialogTitle>
+              {commentTarget && (
+                <DialogDescription className="text-xs">
+                  📎 {[commentTarget.exerciseName, commentTarget.sectionName, session.name, new Date(entry.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })].filter(Boolean).join(' · ')}
+                </DialogDescription>
+              )}
+            </DialogHeader>
+            <div className="flex items-end gap-2 mt-1">
+              <Textarea
+                autoFocus
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                placeholder="Write your comment…"
+                rows={3}
+                className="flex-1 resize-none text-sm"
+              />
+              <Button
+                size="icon"
+                className="h-10 w-10 shrink-0"
+                disabled={!commentText.trim() || commentSending}
+                onClick={async () => {
+                  if (!commentText.trim() || commentSending || !commentTarget) return;
+                  setCommentSending(true);
+                  try {
+                    await chatSend(commentText, {
+                      messageType: 'exercise_comment',
+                      reference: {
+                        exerciseName: commentTarget.exerciseName,
+                        sectionName: commentTarget.sectionName,
+                        sessionName: session.name,
+                        date: entry.date,
+                      },
+                    });
+                    setCommentTarget(null);
+                    setCommentText('');
+                  } catch {
+                    // silent
+                  } finally {
+                    setCommentSending(false);
+                  }
+                }}
+              >
+                {commentSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Adjust exercise (progression/regression swap) dialog */}
+        <Dialog open={!!swapSheetEx} onOpenChange={o => { if (!o) { setSwapSheetEx(null); setSwapSelectedEntry(null); setSwapReason(''); } }}>
+          <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 rounded-2xl max-h-[85vh] flex flex-col p-0 gap-0">
+            <DialogHeader className="px-5 pt-5 pb-3 border-b shrink-0">
+              <DialogTitle className="text-base text-left">Adjust exercise</DialogTitle>
+              <p className="text-xs text-muted-foreground text-left mt-0.5">
+                Replace <span className="font-medium">{swapSheetEx?.name}</span> for this session only.
+              </p>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-1.5">
+              {swapChainLoading ? (
+                <p className="text-sm text-muted-foreground text-center py-6">Loading…</p>
+              ) : swapChain.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  No progressions or regressions defined for this exercise.
+                </p>
+              ) : (() => {
+                const chainProgs = swapChain.filter(e => e.direction === 'progression').sort((a, b) => b.level - a.level);
+                const chainRegs = swapChain.filter(e => e.direction === 'regression').sort((a, b) => a.level - b.level);
+                const renderEntry = (entryC: ChainEntry) => {
+                  const isSelected = swapSelectedEntry?.id === entryC.id;
+                  return (
+                    <button
+                      key={entryC.id}
+                      onClick={() => setSwapSelectedEntry(isSelected ? null : entryC)}
+                      className={cn(
+                        'w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-colors',
+                        isSelected
+                          ? 'bg-primary/10 border border-primary/40'
+                          : 'bg-muted/40 hover:bg-muted/70 active:bg-muted border border-transparent'
+                      )}
+                    >
+                      {entryC.direction === 'progression'
+                        ? <TrendingUp className="h-4 w-4 text-orange-500 shrink-0" />
+                        : <TrendingDown className="h-4 w-4 text-blue-500 shrink-0" />
+                      }
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate">{entryC.toExerciseName || '—'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {entryC.direction === 'progression' ? 'Progression' : 'Regression'} {entryC.level}
+                          {entryC.notes ? ` · ${entryC.notes}` : ''}
+                        </p>
+                      </div>
+                      {isSelected && <Check className="h-4 w-4 text-primary shrink-0" />}
+                    </button>
+                  );
+                };
+                return (
+                  <>
+                    {chainProgs.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Harder</p>
+                        {chainProgs.map(renderEntry)}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 bg-primary/10 border border-primary/30">
+                      <div className="h-4 w-4 rounded-full bg-primary shrink-0" />
+                      <p className="text-sm font-semibold flex-1">{swapSheetEx?.name}</p>
+                      <span className="text-xs text-muted-foreground">current</span>
+                    </div>
+                    {chainRegs.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Easier</p>
+                        {chainRegs.map(renderEntry)}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            {swapSelectedEntry && (
+              <div className="px-5 pb-6 pt-3 border-t space-y-3 shrink-0">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Why are you adapting? <span className="font-normal">(optional)</span></label>
+                  <Textarea
+                    value={swapReason}
+                    onChange={e => setSwapReason(e.target.value)}
+                    placeholder="e.g. knee pain, no equipment available…"
+                    className="resize-none text-sm min-h-[60px]"
+                  />
+                </div>
+                <Button className="w-full" onClick={applySwap}>
+                  Swap for {swapSelectedEntry.toExerciseName || '—'}
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         <CompletionSheet
           open={borgSheetOpen} onClose={() => setBorgSheetOpen(false)}
