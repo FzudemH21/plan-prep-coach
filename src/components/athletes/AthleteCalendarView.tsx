@@ -268,48 +268,52 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
   // Load live athlete_schedule from Supabase to reflect any session rearrangements.
   // Re-fetches whenever the athlete changes or connections finish loading.
+  // Re-fetches whenever the athlete changes, connections finish loading, or the visible
+  // date range changes. Scoped to calendarDateRange (typically 28 days for 4-week view)
+  // instead of a fixed 150-day window so the payload stays small. Results are merged
+  // into the existing map (not replaced) so navigating months doesn't flash empty.
   useEffect(() => {
     const connection = getConnectionForAthlete(athlete.id);
     if (!connection || connectionsLoading) return;
+    if (calendarDateRange.length === 0) return;
 
-    const todayLocal = new Date();
-    const fromLocal = new Date(todayLocal); fromLocal.setDate(todayLocal.getDate() - 30);
-    const toLocal   = new Date(todayLocal); toLocal.setDate(todayLocal.getDate() + 120);
-    const localStr  = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const from = format(calendarDateRange[0], 'yyyy-MM-dd');
+    const to   = format(calendarDateRange[calendarDateRange.length - 1], 'yyyy-MM-dd');
 
     supabase
       .from('athlete_schedule')
       .select('id, date, sessions, intensity')
       .eq('athlete_connection_id', connection.id)
-      .gte('date', localStr(fromLocal))
-      .lte('date', localStr(toLocal))
+      .gte('date', from)
+      .lte('date', to)
       .then(({ data }) => {
         if (!data) return;
-        const map = new Map<string, LiveScheduleEntry>();
-        data.forEach((row: Record<string, unknown>) => {
-          // Cast broadly — we capture all fields that mobile coach can edit.
-          type RawSession = {
-            id: string; name: string; exerciseCount: number; intensity?: string; notes?: string;
-            exercises?: LiveScheduleExercise[];
-          };
-          const rawSessions = (row.sessions as RawSession[]) ?? [];
-          map.set(row.date as string, {
-            rowId: row.id as string,
-            rowIntensity: row.intensity as string | null,
-            sessions: rawSessions.map(s => ({
-              id: s.id,
-              sessionName: s.name,
-              exerciseCount: s.exerciseCount ?? 0,
-              intensity: s.intensity ?? null,
-              notes: s.notes,
-              exercises: (s.exercises ?? []) as LiveScheduleExercise[],
-            })),
+        // Cast broadly — we capture all fields that mobile coach can edit.
+        type RawSession = {
+          id: string; name: string; exerciseCount: number; intensity?: string; notes?: string;
+          exercises?: LiveScheduleExercise[];
+        };
+        setLiveScheduleMap(prev => {
+          const next = new Map(prev);
+          data.forEach((row: Record<string, unknown>) => {
+            const rawSessions = (row.sessions as RawSession[]) ?? [];
+            next.set(row.date as string, {
+              rowId: row.id as string,
+              rowIntensity: row.intensity as string | null,
+              sessions: rawSessions.map(s => ({
+                id: s.id,
+                sessionName: s.name,
+                exerciseCount: s.exerciseCount ?? 0,
+                intensity: s.intensity ?? null,
+                notes: s.notes,
+                exercises: (s.exercises ?? []) as LiveScheduleExercise[],
+              })),
+            });
           });
+          return next;
         });
-        setLiveScheduleMap(map);
       });
-  }, [athlete.id, connectionsLoading, getConnectionForAthlete]);
+  }, [athlete.id, connectionsLoading, getConnectionForAthlete, calendarDateRange]);
 
   // Realtime subscription — update liveScheduleMap whenever athlete_schedule rows change
   // so desktop reflects mobile coach saves without needing a page reload.
