@@ -62,7 +62,7 @@ export function ExerciseHistorySheet({ open, onClose, exerciseName, athleteConne
         <SheetOverlay className="z-[120]" />
         {/* Content also at z-[120] */}
         <SheetPrimitive.Content
-          className="fixed z-[120] inset-x-0 bottom-0 border-t rounded-t-2xl p-0 flex flex-col bg-background shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom data-[state=closed]:duration-300 data-[state=open]:duration-500 sm:w-[600px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
+          className="fixed z-[120] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] sm:w-[600px] border rounded-2xl p-0 flex flex-col bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
           style={{ maxHeight: '75vh' }}
         >
           <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
