@@ -195,6 +195,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   const { getConnectionForAthlete, loading: connectionsLoading } = useAthleteConnections();
   const { addEvent: addCalendarEvent, addEvents: addCalendarEvents, deleteEvent: deleteCalendarEvent, getEventsForAthlete, getEventsForDate } = useCalendarEvents();
 
+  // Shared calendar grid date range — must be declared early so effects below can use it
+  const { dateRange: calendarDateRange } = useCalendarGrid(currentDate, viewMode);
+
   // AI assistant state
   const [aiOpenTrigger, setAiOpenTrigger] = useState(0);
   const [focusedSessionCtx, setFocusedSessionCtx] = useState<FocusedSessionContext | undefined>(undefined);
@@ -866,9 +869,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       allocatedSubGoals: meso.allocatedSubGoals,
     };
   }, [editing.selectedAssignment]);
-
-  // Shared calendar grid date range calculation
-  const { dateRange: calendarDateRange } = useCalendarGrid(currentDate, viewMode);
 
   // Query athlete_session_logs for the visible date range whenever the connection or
   // visible window changes. Keyed by session_id = "${date}-${sessionIndex}".
