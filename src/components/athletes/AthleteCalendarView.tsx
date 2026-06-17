@@ -451,6 +451,16 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     const connection = getConnectionForAthlete(athlete.id);
     if (!connection) return;
 
+    // Skip if this assignment was already synced in the last 5 minutes within this browser
+    // session. Prevents the expensive DELETE+UPSERT from running on every tab re-open when
+    // the data hasn't changed. The autoSync path (editing.lastSavedAt) is unaffected.
+    const sessionSyncKey = `schedule-synced-${connection.id}-${selectedAssignmentId}`;
+    const lastSyncTime = sessionStorage.getItem(sessionSyncKey);
+    if (lastSyncTime && (Date.now() - Number(lastSyncTime)) < 5 * 60 * 1000) {
+      loadSyncedRef.current.add(selectedAssignmentId);
+      return;
+    }
+
     // If parameterValues is empty but the assignment has periodization-sourced
     // exercises, avoid overwriting correct Supabase data (written by the
     // assign-time sync) with an empty payload. Try to recover from the wizard's
@@ -499,7 +509,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       editing.supersets,
       editing.sessionIntensities,
       enrichEvents(getEventsForAthlete(athlete.id)),
-    ).catch(e => console.error('[loadSync] ✗ sync failed:', e));
+    ).then(() => {
+      sessionStorage.setItem(sessionSyncKey, String(Date.now()));
+    }).catch(e => console.error('[loadSync] ✗ sync failed:', e));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAssignmentId, editing.isInitializing, editing.trainingDays.length, connectionsLoading]);
 
@@ -916,9 +928,64 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   const calendarDays = useMemo((): AthleteCalendarDay[] => {
     if (viewMode === 'master') return [];
 
-    const days = calendarDateRange;
+    // ── Build lookup Maps once (O(n) setup) so each day uses O(1) lookups ──────
+    // Previously each day did O(n) .filter/.find scans through all exercises/trainingDays/etc.
+    // With 90 visible days × 500+ exercises that was ~45k iterations per render.
 
-    return days.map(date => {
+    const liveExsByDate = new Map<string, typeof editing.exerciseDistribution>();
+    for (const ex of editing.exerciseDistribution) {
+      const key = (ex as any).dayDate as string;
+      if (key) {
+        if (!liveExsByDate.has(key)) liveExsByDate.set(key, []);
+        liveExsByDate.get(key)!.push(ex);
+      }
+    }
+
+    const liveTdByDate = new Map<string, any>();
+    for (const td of editing.trainingDays) {
+      if ((td as any).date) liveTdByDate.set((td as any).date, td);
+    }
+
+    const liveDiByDate = new Map<string, any>();
+    for (const d of editing.dailyIntensityData) {
+      if ((d as any).date) liveDiByDate.set((d as any).date, d);
+    }
+
+    // Maps for each cached (non-selected) assignment
+    const cachedMapsById = new Map<string, {
+      exsByDate: Map<string, any[]>;
+      tdByDate: Map<string, any>;
+      diByDate: Map<string, any>;
+    }>();
+    for (const [assignId, cachedData] of Object.entries(assignmentDataCache)) {
+      const exsByDate = new Map<string, any[]>();
+      for (const ex of ((cachedData as any)?.exerciseDistribution ?? [])) {
+        const key = ex.dayDate as string;
+        if (key) {
+          if (!exsByDate.has(key)) exsByDate.set(key, []);
+          exsByDate.get(key)!.push(ex);
+        }
+      }
+      const tdByDate = new Map<string, any>();
+      for (const td of ((cachedData as any)?.trainingDays ?? [])) {
+        if (td.date) tdByDate.set(td.date, td);
+      }
+      const diByDate = new Map<string, any>();
+      for (const d of ((cachedData as any)?.dailyIntensity ?? [])) {
+        if (d.date) diByDate.set(d.date, d);
+      }
+      cachedMapsById.set(assignId, { exsByDate, tdByDate, diByDate });
+    }
+
+    // Hoist per-assignment lookups that are constant across all days
+    const selectedAssignment = assignments.find(a => a.id === selectedAssignmentId);
+    const assignmentBounds = assignments.map(a => ({
+      assignment: a,
+      start: parseDateStr(a.startDate),
+      end: parseDateStr(a.endDate),
+    }));
+
+    return calendarDateRange.map(date => {
       const dateString = format(date, 'yyyy-MM-dd');
 
       // Extract session data for this specific day
@@ -930,11 +997,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       // CRITICAL FIX: Check live editing state FIRST for the selected assignment
       // This allows pasted content to display even on dates OUTSIDE the original assignment range
       if (selectedAssignmentId) {
-        const liveExercises = editing.exerciseDistribution.filter(
-          (ex: any) => ex.dayDate === dateString
-        );
+        const liveExercises = liveExsByDate.get(dateString) ?? [];
         const liveSplitState = editing.daySplitStates[dateString];
-        const liveTrainingDay = editing.trainingDays.find((td: any) => td.date === dateString);
+        const liveTrainingDay = liveTdByDate.get(dateString);
 
         const hasLiveExercises = liveExercises.length > 0;
         const hasLiveSessions = liveSplitState !== undefined && liveSplitState > 0;
@@ -946,15 +1011,12 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           if (hasExplicitEditingState || hasLiveExercises || hasLiveSessions) {
             usedLiveEditingState = true;
           }
-          const selectedAssignment = assignments.find(a => a.id === selectedAssignmentId);
           assignmentId = selectedAssignmentId;
           programName = selectedAssignment?.programName;
 
           // Get day intensity from live dailyIntensity data, fall back to trainingDays intensity
           let dayIntensity: IntensityLevel = liveTrainingDay?.intensity || '5';
-          const liveDayIntensity = editing.dailyIntensityData.find(
-            (d: any) => d.date === dateString
-          );
+          const liveDayIntensity = liveDiByDate.get(dateString);
           if (liveDayIntensity?.intensity) {
             dayIntensity = liveDayIntensity.intensity as IntensityLevel;
           }
@@ -996,14 +1058,12 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       // Skip selectedAssignmentId here only if live editing already handled it —
       // otherwise (usedLiveEditingState=false) it still needs to run through this path.
       {
-        const dayAssignments = assignments.filter(assignment => {
+        const dayAssignments = assignmentBounds.filter(({ assignment, start, end }) => {
           if (assignment.id === selectedAssignmentId && usedLiveEditingState) return false;
-          const assignmentStart = parseDateStr(assignment.startDate);
-          const assignmentEnd = parseDateStr(assignment.endDate);
-          return isWithinInterval(date, { start: assignmentStart, end: assignmentEnd });
+          return isWithinInterval(date, { start, end });
         });
 
-        dayAssignments.forEach(assignment => {
+        dayAssignments.forEach(({ assignment }) => {
           assignmentId = assignment.id;
           programName = assignment.programName;
 
@@ -1011,16 +1071,12 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
           if (isEditingAssignment) {
             // Use live editing state for immediate updates
-            const liveExercises = editing.exerciseDistribution.filter(
-              (ex: any) => ex.dayDate === dateString
-            );
+            const liveExercises = liveExsByDate.get(dateString) ?? [];
             const liveSplitState = editing.daySplitStates[dateString];
-            const liveTrainingDay = editing.trainingDays.find((td: any) => td.date === dateString);
+            const liveTrainingDay = liveTdByDate.get(dateString);
 
             let dayIntensity: IntensityLevel = liveTrainingDay?.intensity || '5';
-            const liveDayIntensity = editing.dailyIntensityData.find(
-              (d: any) => d.date === dateString
-            );
+            const liveDayIntensity = liveDiByDate.get(dateString);
             if (liveDayIntensity?.intensity) {
               dayIntensity = liveDayIntensity.intensity as IntensityLevel;
             }
@@ -1054,20 +1110,20 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           } else {
             // Use cache for other (non-editing) assignments
             const cachedData = assignmentDataCache[assignment.id];
-            const trainingDay = cachedData?.trainingDays?.find((td: any) => td.date === dateString);
+            const cm = cachedMapsById.get(assignment.id);
+            const trainingDay = cm?.tdByDate.get(dateString);
             const numSessions = cachedData?.daySplitStates?.[dateString] ?? trainingDay?.sessions ?? 1;
 
             let dayIntensity: IntensityLevel = 'moderate';
             if (cachedData?.dailyIntensity) {
-              const storedDayIntensity = cachedData.dailyIntensity.find(
-                (d: any) => d.date === dateString
-              );
+              const storedDayIntensity = cm?.diByDate.get(dateString);
               if (storedDayIntensity?.intensity) {
                 dayIntensity = storedDayIntensity.intensity as IntensityLevel;
               }
             }
 
-            const hasExercises = cachedData?.exerciseDistribution?.some((ex: any) => ex.dayDate === dateString);
+            const dayExercises = cm?.exsByDate.get(dateString);
+            const hasExercises = (dayExercises?.length ?? 0) > 0;
             const splitState = cachedData?.daySplitStates?.[dateString];
             const isTrainingDay = hasExercises || trainingDay?.isTrainingDay || (splitState !== undefined && splitState > 0);
 
@@ -1076,9 +1132,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 const sessionId = `${assignment.id}-${dateString}-${sessionIdx}`;
                 const sessionName = trainingDay?.sessionNames?.[sessionIdx] || `Session ${sessionIdx + 1}`;
                 let exerciseCount = 0;
-                if (cachedData?.exerciseDistribution) {
-                  exerciseCount = cachedData.exerciseDistribution.filter(
-                    (ex: any) => ex.dayDate === dateString && ex.sessionIndex === sessionIdx
+                if (dayExercises) {
+                  exerciseCount = dayExercises.filter(
+                    (ex: any) => ex.sessionIndex === sessionIdx
                   ).length;
                 }
 
@@ -1108,10 +1164,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       // Priority: live Supabase value > program planned intensity (mobile-created) > editing state > default.
       let dayIntensityForSquare: IntensityLevel = 'moderate';
       if (selectedAssignmentId) {
-        const liveDayIntensity = editing.dailyIntensityData.find(
-          (d: any) => d.date === dateString
-        );
-        const liveTrainingDay = editing.trainingDays.find((td: any) => td.date === dateString);
+        const liveDayIntensity = liveDiByDate.get(dateString);
+        const liveTrainingDay = liveTdByDate.get(dateString);
         const liveRowIntensity = liveScheduleMap.get(dateString)?.rowIntensity;
         if (liveRowIntensity) {
           // Live Supabase value wins — reflects any mobile coach intensity edit.
