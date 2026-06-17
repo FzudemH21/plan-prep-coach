@@ -2437,6 +2437,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           }}
           useExternalIntensityOnly={true}
           isAdHocSession={true}
+          athleteConnectionId={getConnectionForAthlete(athlete.id)?.id}
           liveScheduleEntry={liveScheduleMap.get(selectedSessionInfo.dayDate)}
           onOpenAIAssistant={(ctx: FocusedSessionContext) => {
             setFocusedSessionCtx(ctx);

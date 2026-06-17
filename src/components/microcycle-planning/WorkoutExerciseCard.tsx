@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
-import { GripVertical, MoreVertical, Link2, Copy, Trash2, Plus, StickyNote, Calculator, ChevronDown, ChevronRight, RefreshCw, Recycle } from 'lucide-react';
+import { GripVertical, MoreVertical, Link2, Copy, Trash2, Plus, StickyNote, Calculator, ChevronDown, ChevronRight, RefreshCw, Recycle, History } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { WorkoutExercise } from '@/types/workout';
@@ -66,6 +66,8 @@ interface WorkoutExerciseCardProps {
   onOpenChangeLibrary?: () => void;
   // Open detail dialog for a circuit sub-exercise
   onOpenCircuitExerciseDetail?: (exerciseId: string, libraryId: string, exerciseName: string) => void;
+  // Open exercise history sheet (only when an athlete connection is available)
+  onOpenHistory?: () => void;
 }
 
 export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
@@ -96,6 +98,7 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
   onChangeExercise,
   onOpenChangeLibrary,
   onOpenCircuitExerciseDetail,
+  onOpenHistory,
 }: WorkoutExerciseCardProps) {
 
   // ── Circuit rendering ───────────────────────────────────────────────────────
@@ -402,6 +405,24 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                 <Badge variant="outline" className="text-xs">
                   {supersetLabel}
                 </Badge>
+              )}
+              {/* Exercise history button — only when an athlete connection is available */}
+              {onOpenHistory && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                        onClick={(e) => { e.stopPropagation(); onOpenHistory(); }}
+                      >
+                        <History className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Exercise history</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
               {/* Parameter Visibility Popover - only show when expanded */}
               {!isCollapsed && onVisibilityChange && displayableParams.length > 0 && (

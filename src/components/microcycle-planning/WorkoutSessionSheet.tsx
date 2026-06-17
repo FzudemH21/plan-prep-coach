@@ -42,6 +42,7 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import { AthletePerformanceParameter } from '@/types/athlete';
 import { FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
 import { SaveToLibraryDialog } from '@/components/session-library/SaveToLibraryDialog';
+import { ExerciseHistorySheet } from '@/components/shared/ExerciseHistorySheet';
 
 interface SessionSectionProp {
   id: string;
@@ -126,6 +127,8 @@ interface WorkoutSessionSheetProps {
   // When true the sheet is opened from the Session Library — hide the "Save to Library"
   // button (already in the library) and show only "Save Changes"
   isLibrarySession?: boolean;
+  // Athlete connection ID — when present, the exercise history icon appears on each exercise row
+  athleteConnectionId?: string;
   // Live athlete_schedule entry — when present, param overrides from mobile coach edits
   // are applied on top of the plan-derived params so desktop sees mobile changes.
   liveScheduleEntry?: {
@@ -345,6 +348,7 @@ export function WorkoutSessionSheet({
   onOpenAIAssistant,
   forceParamRefresh,
   isLibrarySession = false,
+  athleteConnectionId,
   liveScheduleEntry,
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
@@ -374,6 +378,9 @@ export function WorkoutSessionSheet({
   
   // Exercise detail dialog state
   const [detailExercise, setDetailExercise] = useState<WorkoutExercise | null>(null);
+
+  // Exercise history sheet state — exercise name when open, null when closed
+  const [historyTarget, setHistoryTarget] = useState<string | null>(null);
 
   // Circuit card detail dialog state (clicking circuit name)
   const [circuitDetailExercise, setCircuitDetailExercise] = useState<WorkoutExercise | null>(null);
@@ -3061,6 +3068,7 @@ export function WorkoutSessionSheet({
     onOpenCircuitExerciseDetail: handleOpenCircuitExerciseDetail,
     onChangeExercise: handleChangeExercise,
     onOpenChangeLibrary: handleOpenChangeLibrary,
+    onOpenHistory: athleteConnectionId ? (exerciseName: string) => setHistoryTarget(exerciseName) : undefined,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [
     handleParameterChange,
@@ -3083,6 +3091,7 @@ export function WorkoutSessionSheet({
     handleOpenCircuitExerciseDetail,
     handleChangeExercise,
     handleOpenChangeLibrary,
+    athleteConnectionId,
   ]);
 
   // Scroll lock — replaces the behavior normally provided by modal={true}
@@ -3796,6 +3805,16 @@ export function WorkoutSessionSheet({
         />
       )}
     </Dialog>
+
+      {/* Exercise history sheet — renders outside the Dialog to avoid z-index stacking */}
+      {athleteConnectionId && historyTarget && (
+        <ExerciseHistorySheet
+          open={!!historyTarget}
+          onClose={() => setHistoryTarget(null)}
+          exerciseName={historyTarget}
+          athleteConnectionId={athleteConnectionId}
+        />
+      )}
     </WorkoutSessionProvider>
   );
 }

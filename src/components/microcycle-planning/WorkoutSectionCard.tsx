@@ -54,6 +54,7 @@ export function WorkoutSectionCard({
     onChangeExercise,
     onOpenChangeLibrary,
     onOpenCircuitExerciseDetail,
+    onOpenHistory,
   } = useWorkoutSession();
 
   // Helper to get toolbox params for an exercise based on method
@@ -296,6 +297,7 @@ export function WorkoutSectionCard({
                                             onChangeExercise={onChangeExercise ? (newEx) => onChangeExercise(exercise.id, newEx) : undefined}
                                             onOpenChangeLibrary={onOpenChangeLibrary ? () => onOpenChangeLibrary(exercise.id) : undefined}
                                             onOpenCircuitExerciseDetail={onOpenCircuitExerciseDetail}
+                                            onOpenHistory={onOpenHistory ? () => onOpenHistory(exercise.exerciseName) : undefined}
                                           />
                                         </div>
                                       )}
@@ -381,6 +383,7 @@ export function WorkoutSectionCard({
                                     onChangeExercise={onChangeExercise ? (newEx) => onChangeExercise(exercise.id, newEx) : undefined}
                                     onOpenChangeLibrary={onOpenChangeLibrary ? () => onOpenChangeLibrary(exercise.id) : undefined}
                                     onOpenCircuitExerciseDetail={onOpenCircuitExerciseDetail}
+                                    onOpenHistory={onOpenHistory ? () => onOpenHistory(exercise.exerciseName) : undefined}
                                   />
                                 </div>
                               )}

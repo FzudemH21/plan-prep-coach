@@ -45,6 +45,8 @@ export interface WorkoutSessionContextValue {
   onOpenExerciseDetail: (exercise: WorkoutExercise) => void;
   /** Open the exercise detail dialog for a sub-exercise inside a circuit */
   onOpenCircuitExerciseDetail?: (exerciseId: string, libraryId: string, exerciseName: string) => void;
+  /** Open the exercise history sheet — only present when an athlete connection is available */
+  onOpenHistory?: (exerciseName: string) => void;
   onChangeExercise: (
     exerciseId: string,
     newExercise: {

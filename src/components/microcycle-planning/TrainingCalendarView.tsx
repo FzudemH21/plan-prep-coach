@@ -25,6 +25,7 @@ import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { toggleSuperset, cleanupSupersetsOnExerciseDelete } from '@/utils/supersetUtils';
 import { AthletePerformanceParameter, BiometricDefinition, AthleteBiometric } from '@/types/athlete';
 import { FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
+import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 
 // Local interface for internal use - compatible with WeekRow, TrainingDayCell etc.
 interface ExerciseDistribution {
@@ -177,6 +178,7 @@ export function TrainingCalendarView({
   const { toast } = useToast();
   const { data: toolboxData } = useToolboxData();
   const { libraries, updateExerciseInLibrary } = useCustomLibraries();
+  const { getConnectionForAthlete } = useAthleteConnections();
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(1); // 1=Monday
   const [masterWeeksToDisplay, setMasterWeeksToDisplay] = useState(4);
@@ -1203,6 +1205,7 @@ export function TrainingCalendarView({
               .map(td => td.date);
           })()}
           selectedAthleteId={selectedAthleteId}
+          athleteConnectionId={selectedAthleteId ? getConnectionForAthlete(selectedAthleteId)?.id : undefined}
           athletePerformanceParameters={athletePerformanceParameters}
           onOpenAIAssistant={onOpenAIAssistant}
           forceParamRefresh={forceParamRefresh}
