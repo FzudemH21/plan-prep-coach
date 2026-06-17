@@ -261,6 +261,14 @@ This is always faster than guessing from static code. The computer-use + Chrome 
 - Claude Code works in a worktree (`.claude/worktrees/<branch>/`). Changes are ONLY visible in the browser if the dev server runs from that worktree directory. The user's dev server runs from `C:\Users\Hanik\plan-prep-coach` (main project dir) → **after pushing, always run `git pull` in the main dir and tell the user to restart the dev server** (`Ctrl+C` → `npm run dev`) and reload http://localhost:8080. A hard-reload alone (`Ctrl+Shift+R`) is NOT sufficient.
 - **Before every large sync commit (stash → pull → stash pop), always check the diff for accidental removals** — especially imports and component renders that were intentionally added in earlier commits. A sync commit must never silently delete features
 
+### Scrolling in Bounded Layouts (Critical — recurrent bug!)
+Pages like `AthleteDatabase` use a `h-full flex flex-col` root + `overflow-hidden` content wrapper to create a fixed-height panel layout. Inside such layouts, tabs must scroll correctly. **The reliable pattern:**
+
+- `TabsContent` must have `flex-1 min-h-0 overflow-y-auto` — the `overflow-y-auto` goes directly on the flex item that receives the bounded height from the flex algorithm. Flex-allocated sizes are always definite, so `overflow-y-auto` creates a proper scroll context.
+- **Do NOT** use `<ScrollArea className="h-full">` as a block child of `TabsContent flex-1`. CSS `height: 100%` inheritance through flex items is browser-inconsistent when an ancestor has `overflow: auto` or `overflow: hidden`. The ScrollArea gets `height: auto` in some browsers, grows to content size, and the content is then clipped by the `overflow-hidden` ancestor — making content invisible and non-scrollable.
+- Exception: tabs that manage their own internal flex-based scroll (like `AthletePerformanceTab` with `flex-1 min-h-0` root and internal `ScrollArea flex-1`) should use `TabsContent flex-1 min-h-0 flex flex-col` (add `flex flex-col`) so the child's `flex-1` resolves against the tab content height.
+- `<ScrollArea className="flex-1">` (not `h-full`) works correctly inside a `flex` parent — use it in components that need a custom scrollbar and are inside a flex container.
+
 ### UI/UX Principles
 - All UI text must be in English (labels, buttons, placeholders, hints, tab names, error messages)
 - Drag & drop wherever possible

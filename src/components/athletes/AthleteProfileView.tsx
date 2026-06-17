@@ -146,9 +146,7 @@ export function AthleteProfileView({
     const entering = activeTab === 'settings' && prevActiveTabRef.current !== 'settings';
     prevActiveTabRef.current = activeTab;
     if (entering && settingsScrollRef.current) {
-      // Find the actual scroll viewport inside the ScrollArea
-      const viewport = settingsScrollRef.current.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
-      if (viewport) viewport.scrollTop = 0;
+      settingsScrollRef.current.scrollTop = 0;
     }
   }, [activeTab]);
   // Calendar jump target — set when coach clicks a chat reference chip
@@ -337,8 +335,7 @@ export function AthleteProfileView({
           </TabsTrigger>
         </TabsList>
         
-        <TabsContent value="profile" className="flex-1 mt-0">
-          <ScrollArea className="h-full">
+        <TabsContent value="profile" className="flex-1 mt-0 min-h-0 overflow-y-auto">
             <div className="space-y-6 p-1 pr-4">
         {/* Core Profile */}
         <Card>
@@ -708,18 +705,17 @@ export function AthleteProfileView({
           </AlertDialogContent>
         </AlertDialog>
             </div>
-          </ScrollArea>
         </TabsContent>
 
         <TabsContent value="monitoring" className="flex-1 mt-0 min-h-0">
           <AthleteMonitoringTab athlete={athlete} />
         </TabsContent>
 
-        <TabsContent value="performance" className="flex-1 mt-0 min-h-0">
+        <TabsContent value="performance" className="flex-1 mt-0 min-h-0 flex flex-col">
           <AthletePerformanceTab athlete={athlete} athleteData={athleteData} />
         </TabsContent>
 
-        <TabsContent value="calendar" className="flex-1 mt-0 px-1">
+        <TabsContent value="calendar" className="flex-1 mt-0 px-1 min-h-0 overflow-y-auto">
           <AthleteCalendarView
             athlete={athlete}
             initialDate={calendarJumpDate}
@@ -728,10 +724,8 @@ export function AthleteProfileView({
           />
         </TabsContent>
 
-        <TabsContent value="documents" className="flex-1 mt-0">
-          <ScrollArea className="h-full">
+        <TabsContent value="documents" className="flex-1 mt-0 min-h-0 overflow-y-auto">
             <AthleteDocumentsTab athleteId={athlete.id} />
-          </ScrollArea>
         </TabsContent>
 
         <TabsContent value="analysis" className="flex-1 mt-0 min-h-0">
@@ -882,10 +876,8 @@ export function AthleteProfileView({
           )}
         </TabsContent>
 
-        <TabsContent value="settings" tabIndex={-1} className="flex-1 mt-0 min-h-0" ref={settingsScrollRef}>
-          <ScrollArea className="h-full">
+        <TabsContent value="settings" tabIndex={-1} className="flex-1 mt-0 min-h-0 overflow-y-auto" ref={settingsScrollRef}>
             <AthleteSettingsTab athlete={athlete} onUpdateAthlete={onUpdateAthlete} />
-          </ScrollArea>
         </TabsContent>
       </Tabs>
 
