@@ -13,7 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAthleteApp } from '@/hooks/useAthleteApp';
 import { useAuth } from '@/hooks/useAuth';
 import { useAthleteSettings } from '@/hooks/useAthleteSettings';
@@ -314,8 +313,7 @@ export default function AthleteProfilePage() {
   const totalSessions = logs.length;
 
   return (
-    <ScrollArea className="h-full">
-      <div className="pb-8">
+    <div className="pb-8">
 
         {/* Avatar + name — always visible regardless of tab */}
         <div className="flex flex-col items-center text-center pt-4 pb-2 px-4">
@@ -421,6 +419,5 @@ export default function AthleteProfilePage() {
         )}
 
       </div>
-    </ScrollArea>
   );
 }

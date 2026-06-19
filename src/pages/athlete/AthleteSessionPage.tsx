@@ -28,6 +28,7 @@ import { useAthleteApp, AthleteScheduleEntry, ExerciseSummary, SessionLog } from
 import { useChat } from '@/hooks/useChat';
 import { ExerciseHistorySheet } from '@/components/shared/ExerciseHistorySheet';
 import { useToast } from '@/hooks/use-toast';
+import { checkSessionLock, type SessionLockInfo } from '@/utils/sessionLock';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -736,6 +737,23 @@ export default function AthleteSessionPage() {
   // Exercise detail sheet — tapping a name or ⓘ opens it
   const [detailTarget, setDetailTarget] = useState<ExerciseDetailTarget | null>(null);
 
+  // Session lock — blocks starting/logging while the coach has this same
+  // session in progress on their end (and vice versa).
+  const [sessionLock, setSessionLock] = useState<SessionLockInfo | null>(null);
+  const lockCheckSession = state?.entry.sessions[state.sessionIdx];
+  useEffect(() => {
+    if (!connection?.id || !state?.entry.date || !lockCheckSession?.id) return;
+    const check = () =>
+      checkSessionLock(connection.id!, state!.entry.date, lockCheckSession!.id, 'athlete').then(setSessionLock);
+    check();
+    // Poll every 5 s while on the overview so the banner appears as soon as
+    // the coach starts logging (without needing the athlete to tap anything).
+    if (phase !== 'overview') return;
+    const interval = setInterval(check, 5000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connection?.id, state?.entry.date, lockCheckSession?.id, phase]);
+
   // Settings
   const { chatEnabled } = useAthleteSettings();
 
@@ -1398,32 +1416,50 @@ export default function AthleteSessionPage() {
             </ScrollArea>
 
             {/* Start CTA */}
-            <div className="px-4 py-4 border-t bg-background shrink-0">
-              {currentLog ? (
-                <Button className="w-full" size="lg" variant="outline" onClick={() => navigate(-1)}>
-                  Close
-                </Button>
-              ) : (
-                <Button className="w-full" size="lg" onClick={async () => {
-                  setPhase('sectionIntro');
-                  if (connection) {
-                    const { data } = await supabase
-                      .from('athlete_session_logs')
-                      .insert({
-                        athlete_connection_id: connection.id,
-                        date: entry.date,
-                        session_id: session.id,
-                        session_name: session.name,
-                        started_at: new Date().toISOString(),
-                      })
-                      .select('id')
-                      .single();
-                    if (data) setSessionLogId(data.id);
-                  }
-                }}>
-                  Start Workout
-                </Button>
+            <div className="border-t bg-background shrink-0">
+              {sessionLock && !currentLog && (
+                <div className="px-4 pt-3 pb-1">
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-center gap-2">
+                    <Timer className="h-4 w-4 text-amber-600 shrink-0" />
+                    <p className="text-xs text-amber-800 leading-snug">
+                      Your coach is currently logging this session. You cannot log it at the moment.
+                    </p>
+                  </div>
+                </div>
               )}
+              <div className="px-4 py-4">
+                {currentLog ? (
+                  <Button className="w-full" size="lg" variant="outline" onClick={() => navigate(-1)}>
+                    Close
+                  </Button>
+                ) : (
+                  <Button className="w-full" size="lg" disabled={!!sessionLock} onClick={async () => {
+                    // Hard gate: re-check at tap time to catch race conditions
+                    if (connection) {
+                      const lock = await checkSessionLock(connection.id, entry.date, session.id, 'athlete');
+                      if (lock) { setSessionLock(lock); return; }
+                    }
+                    setPhase('sectionIntro');
+                    if (connection) {
+                      const { data } = await supabase
+                        .from('athlete_session_logs')
+                        .insert({
+                          athlete_connection_id: connection.id,
+                          date: entry.date,
+                          session_id: session.id,
+                          session_name: session.name,
+                          started_at: new Date().toISOString(),
+                          started_by: 'athlete',
+                        })
+                        .select('id')
+                        .single();
+                      if (data) setSessionLogId(data.id);
+                    }
+                  }}>
+                    Start Workout
+                  </Button>
+                )}
+              </div>
             </div>
           </>
         )}

@@ -172,7 +172,7 @@ function DaySection({
     <div
       className={cn(
         'rounded-xl p-3 space-y-2',
-        isToday && 'bg-primary/5 ring-1 ring-primary/20',
+        isToday && 'bg-primary/5 ring-1 ring-primary/20 mx-px',
       )}
     >
       {/* Day header */}
@@ -426,7 +426,7 @@ export default function AthletePlanPage() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Week navigation header */}
       <div className="flex items-center gap-2 px-3 py-3 border-b shrink-0">
         <button

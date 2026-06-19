@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, Check, Dumbbell, RefreshCw,
   CheckCircle2, Timer, History, MessageSquare, ArrowUpDown,
-  TrendingUp, TrendingDown, Send, Loader2,
+  TrendingUp, TrendingDown, Send, Loader2, Link2, Lock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -24,6 +24,7 @@ import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useChat } from '@/hooks/useChat';
 import { ExerciseHistorySheet } from '@/components/shared/ExerciseHistorySheet';
+import { checkSessionLock, type SessionLockInfo } from '@/utils/sessionLock';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -598,6 +599,8 @@ export default function CoachMobileSessionLoggingPage() {
   const [commentTarget, setCommentTarget] = useState<{ exerciseName?: string; sectionName?: string } | null>(null);
   const [commentText, setCommentText] = useState('');
   const [commentSending, setCommentSending] = useState(false);
+  const [sessionLock, setSessionLock] = useState<SessionLockInfo | null>(null);
+  const [incompleteWarning, setIncompleteWarning] = useState(false);
 
   // ── Exercise swap ──────────────────────────────────────────────────────────
   interface ChainEntry { id: string; toExerciseId: string; toExerciseName: string; direction: 'progression' | 'regression'; level: number; notes: string | null; }
@@ -724,6 +727,17 @@ export default function CoachMobileSessionLoggingPage() {
     setRestSecondsLeft(0);
     next?.();
   }
+
+  // ── Session lock check ─────────────────────────────────────────────────────
+
+  const lockConnectionId = state?.connectionId;
+  const lockDate = state?.entry?.date;
+  const lockSessionId = state ? state.entry.sessions[state.sessionIdx]?.id : undefined;
+
+  useEffect(() => {
+    if (!lockConnectionId || !lockDate || !lockSessionId) return;
+    checkSessionLock(lockConnectionId, lockDate, lockSessionId, 'coach').then(setSessionLock);
+  }, [lockConnectionId, lockDate, lockSessionId]);
 
   // ── Guard ──────────────────────────────────────────────────────────────────
 
@@ -943,6 +957,15 @@ export default function CoachMobileSessionLoggingPage() {
                                   ) : (
                                     <span className="text-sm truncate">{ex.name}</span>
                                   )}
+                                  {!ex.isCircuit && (
+                                    <button
+                                      onClick={() => { setCommentTarget({ exerciseName: ex.name, sectionName: sec.name }); setCommentText(''); }}
+                                      className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60 transition-colors"
+                                      aria-label="Comment on exercise"
+                                    >
+                                      <MessageSquare className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
                                 </div>
                                 {ex.isCircuit
                                   ? <span className="text-xs text-muted-foreground shrink-0">{ex.circuitRounds ?? 3} rounds</span>
@@ -963,6 +986,16 @@ export default function CoachMobileSessionLoggingPage() {
                                   })}
                                 </div>
                               )}
+                              {/* Superset connector */}
+                              {i < sec.exercises.length - 1 && ex.supersetId && ex.supersetId === sec.exercises[i + 1].supersetId && (
+                                <div className="flex items-center gap-2 py-0 px-3">
+                                  <div className="flex-1 border-t border-dashed border-muted-foreground/20" />
+                                  <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-bold text-primary border border-primary/30 bg-primary/5 rounded-full shrink-0">
+                                    <Link2 className="h-3 w-3" /> SS
+                                  </span>
+                                  <div className="flex-1 border-t border-dashed border-muted-foreground/20" />
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -973,25 +1006,38 @@ export default function CoachMobileSessionLoggingPage() {
               </div>
             </ScrollArea>
 
-            <div className="px-4 py-4 border-t bg-background shrink-0">
-              <Button className="w-full" size="lg" onClick={async () => {
-                setPhase('sectionIntro');
-                const { data, error } = await supabase
-                  .from('athlete_session_logs')
-                  .insert({
-                    athlete_connection_id: connectionId,
-                    date: entry.date,
-                    session_id: session.id,
-                    session_name: session.name,
-                    started_at: new Date().toISOString(),
-                  })
-                  .select('id')
-                  .single();
-                if (error) toast({ title: 'Could not create log row', description: error.message, variant: 'destructive' });
-                if (data) setSessionLogId(data.id);
-              }}>
-                Start Workout
-              </Button>
+            <div className="px-4 border-t bg-background shrink-0">
+              {sessionLock && (
+                <div className="pt-3 pb-1">
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-center gap-2">
+                    <Lock className="h-4 w-4 text-amber-600 shrink-0" />
+                    <p className="text-xs text-amber-800 leading-snug">
+                      Athlete is currently logging this session. Start logging once they finish.
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className="py-4">
+                <Button className="w-full" size="lg" disabled={!!sessionLock} onClick={async () => {
+                  setPhase('sectionIntro');
+                  const { data, error } = await supabase
+                    .from('athlete_session_logs')
+                    .insert({
+                      athlete_connection_id: connectionId,
+                      date: entry.date,
+                      session_id: session.id,
+                      session_name: session.name,
+                      started_at: new Date().toISOString(),
+                      started_by: 'coach',
+                    })
+                    .select('id')
+                    .single();
+                  if (error) toast({ title: 'Could not create log row', description: error.message, variant: 'destructive' });
+                  if (data) setSessionLogId(data.id);
+                }}>
+                  Start Workout
+                </Button>
+              </div>
             </div>
           </>
         )}
@@ -1030,7 +1076,26 @@ export default function CoachMobileSessionLoggingPage() {
     return (
       <div className="flex flex-col h-full bg-background">
         <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
-          <button onClick={() => isFirst ? setPhase('overview') : (setSectionIdx(i => i - 1), setPhase('active'))}
+          <button onClick={async () => {
+              if (isFirst) {
+                // No sets done yet — silently undo "Start Workout" to release the lock.
+                // Query by connection/date/session instead of sessionLogId to avoid
+                // a stale-closure race (the state might not be set yet if insert is still in flight).
+                await supabase
+                  .from('athlete_session_logs')
+                  .delete()
+                  .eq('athlete_connection_id', connectionId)
+                  .eq('date', entry.date)
+                  .eq('session_id', session.id)
+                  .eq('started_by', 'coach')
+                  .is('completed_at', null);
+                setSessionLogId(null);
+                setPhase('overview');
+              } else {
+                setSectionIdx(i => i - 1);
+                setPhase('active');
+              }
+            }}
             className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors">
             <ChevronLeft className="h-5 w-5" />
           </button>
@@ -1088,6 +1153,8 @@ export default function CoachMobileSessionLoggingPage() {
     const sectionExercises = currentSection?.exercises ?? [];
     const totalSetsDone = sectionExercises.reduce((a, ex) => a + (completedSets[ex.id] ?? []).length, 0);
     const totalSetsPlanned = sectionExercises.reduce((a, ex) => a + (setCountOverrides[ex.id] ?? getSetCount(ex)), 0);
+    const sectionComplete = isSectionComplete(currentSection!, completedSets, setCountOverrides);
+    const isLastSection = sectionIdx === sections.length - 1;
 
     // Build superset groups
     const LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -1170,7 +1237,11 @@ export default function CoachMobileSessionLoggingPage() {
                   </button>
                 </div>
               )}
-              {ex.notes && <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{ex.notes}</p>}
+              {ex.eachSide && (
+                <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 mt-1 w-fit">
+                  Perform on each side
+                </span>
+              )}
               {/* Adjust button — only for exercises with a library ID and no active swap */}
               {!ex.isCircuit && ex.exerciseLibraryId && !swappedExercises[ex.id] && (
                 <button onClick={() => openSwapSheet(ex)}
@@ -1283,6 +1354,51 @@ export default function CoachMobileSessionLoggingPage() {
             })}
           </div>
         </ScrollArea>
+
+        {/* Finish workout / section bottom bar */}
+        <div className="px-4 py-4 border-t bg-background shrink-0">
+          {isLastSection ? (
+            <Button
+              className="w-full" size="lg"
+              variant={sectionComplete ? 'default' : 'outline'}
+              onClick={() => {
+                if (!sectionComplete) { setIncompleteWarning(true); return; }
+                setPhase('done'); setBorgSheetOpen(true);
+              }}
+            >
+              <Check className="h-4 w-4 mr-2" /> Finish Workout
+            </Button>
+          ) : (
+            <Button
+              className="w-full" size="lg"
+              variant={sectionComplete ? 'default' : 'outline'}
+              onClick={() => {
+                if (!sectionComplete) { setIncompleteWarning(true); return; }
+                setSectionIdx(i => i + 1);
+                setPhase('sectionIntro');
+              }}
+            >
+              <Check className="h-4 w-4 mr-2" /> Finish Section
+            </Button>
+          )}
+        </div>
+
+        <AlertDialog open={incompleteWarning} onOpenChange={o => { if (!o) setIncompleteWarning(false); }}>
+          <AlertDialogContent className="sm:max-w-[360px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
+            <AlertDialogHeader>
+              <AlertDialogTitle>{isLastSection ? 'Finish workout?' : 'Finish section?'}</AlertDialogTitle>
+              <AlertDialogDescription>Not all sets are completed yet. Finish anyway?</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Go back</AlertDialogCancel>
+              <AlertDialogAction onClick={() => {
+                setIncompleteWarning(false);
+                if (isLastSection) { setPhase('done'); setBorgSheetOpen(true); }
+                else { setSectionIdx(i => i + 1); setPhase('sectionIntro'); }
+              }}>Finish anyway</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <ExerciseDetailSheet target={detailTarget} onClose={() => setDetailTarget(null)} />
 

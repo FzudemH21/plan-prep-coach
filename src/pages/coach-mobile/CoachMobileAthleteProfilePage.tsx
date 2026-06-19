@@ -432,6 +432,7 @@ export default function CoachMobileAthleteProfilePage() {
 
   // ── Training-tab mutation state ────────────────────────────────────────────────
   const [dayActionTarget, setDayActionTarget] = useState<string | null>(null);
+  const [dayActionsMenuDate, setDayActionsMenuDate] = useState<string | null>(null);
   const [dayIntensityPickerOpen, setDayIntensityPickerOpen] = useState(false);
   const [newSessionDialogOpen, setNewSessionDialogOpen] = useState(false);
   const [clearWeekConfirmOpen, setClearWeekConfirmOpen] = useState(false);
@@ -979,7 +980,7 @@ export default function CoachMobileAthleteProfilePage() {
   const isCurrentWeek = weekMonday === getMondayOf(today);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Back button */}
       <div className="flex items-center px-4 pt-4 pb-2 shrink-0">
         <button
@@ -1612,46 +1613,15 @@ export default function CoachMobileAthleteProfilePage() {
                           )}
                         </Droppable>
 
-                        {/* Per-day action buttons */}
-                        <div className="flex gap-1.5 pt-0.5 flex-wrap">
+                        {/* Per-day action menu trigger */}
+                        <div className="flex pt-0.5">
                           <button
-                            onClick={() => {
-                              setDayActionTarget(dateStr);
-                              if (sessionLibraryEntries.length > 0) {
-                                setSessionSourcePickerOpen(true);
-                              } else {
-                                setNewSessionDialogOpen(true);
-                              }
-                            }}
+                            onClick={() => { setDayActionTarget(dateStr); setDayActionsMenuDate(dateStr); }}
                             className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border bg-background hover:bg-muted active:opacity-60 transition-colors"
                           >
                             <Plus className="h-3 w-3" />
-                            Session
+                            Add
                           </button>
-                          <button
-                            onClick={() => navigate(`/coach-mobile/athletes/${athleteId}/assign-program?startDate=${dateStr}`)}
-                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border bg-background hover:bg-muted active:opacity-60 transition-colors"
-                          >
-                            <BookOpen className="h-3 w-3" />
-                            Assign training program
-                          </button>
-                          <button
-                            onClick={() => setEventDialogDate(dateStr)}
-                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border bg-background hover:bg-muted active:opacity-60 transition-colors"
-                          >
-                            <Trophy className="h-3 w-3" />
-                            Test / Event
-                          </button>
-                          {hasSessions && (
-                            <button
-                              onClick={() => handleClearDay(dateStr)}
-                              disabled={mutating}
-                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-destructive/30 text-destructive hover:bg-destructive/10 active:opacity-60 transition-colors"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                              Clear day
-                            </button>
-                          )}
                         </div>
                       </div>
                       </div>
@@ -1706,6 +1676,81 @@ export default function CoachMobileAthleteProfilePage() {
                 Clear intensity
               </button>
             </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* ── Day actions menu ── */}
+      <Sheet open={dayActionsMenuDate !== null} onOpenChange={o => { if (!o) setDayActionsMenuDate(null); }}>
+        <SheetContent
+          side="bottom"
+          className="rounded-t-2xl sm:w-[480px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 24px)' }}
+        >
+          <SheetHeader className="px-4 pt-4 pb-2">
+            <SheetTitle className="text-base">
+              {dayActionsMenuDate ? format(parseISO(dayActionsMenuDate), 'EEEE, MMM d') : ''}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="flex flex-col px-2 pb-2">
+            <button
+              onClick={() => {
+                setDayActionsMenuDate(null);
+                if (sessionLibraryEntries.length > 0) {
+                  setSessionSourcePickerOpen(true);
+                } else {
+                  setNewSessionDialogOpen(true);
+                }
+              }}
+              className="flex items-center gap-3 px-3 py-3.5 rounded-xl text-sm font-medium hover:bg-muted active:bg-muted/80 transition-colors text-left"
+            >
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <Plus className="h-4 w-4 text-primary" />
+              </div>
+              Add session
+            </button>
+            <button
+              onClick={() => {
+                const date = dayActionsMenuDate;
+                setDayActionsMenuDate(null);
+                navigate(`/coach-mobile/athletes/${athleteId}/assign-program?startDate=${date ?? ''}`);
+              }}
+              className="flex items-center gap-3 px-3 py-3.5 rounded-xl text-sm font-medium hover:bg-muted active:bg-muted/80 transition-colors text-left"
+            >
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <BookOpen className="h-4 w-4 text-primary" />
+              </div>
+              Assign training program
+            </button>
+            <button
+              onClick={() => {
+                const date = dayActionsMenuDate;
+                setDayActionsMenuDate(null);
+                setEventDialogDate(date);
+              }}
+              className="flex items-center gap-3 px-3 py-3.5 rounded-xl text-sm font-medium hover:bg-muted active:bg-muted/80 transition-colors text-left"
+            >
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <Trophy className="h-4 w-4 text-primary" />
+              </div>
+              Add test / event
+            </button>
+            {dayActionsMenuDate && (scheduleMap.get(dayActionsMenuDate)?.sessions?.length ?? 0) > 0 && (
+              <button
+                disabled={mutating}
+                onClick={() => {
+                  const date = dayActionsMenuDate;
+                  setDayActionsMenuDate(null);
+                  handleClearDay(date!);
+                }}
+                className="flex items-center gap-3 px-3 py-3.5 rounded-xl text-sm font-medium hover:bg-destructive/10 active:bg-destructive/20 transition-colors text-left text-destructive"
+              >
+                <div className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </div>
+                Clear day
+              </button>
+            )}
           </div>
         </SheetContent>
       </Sheet>

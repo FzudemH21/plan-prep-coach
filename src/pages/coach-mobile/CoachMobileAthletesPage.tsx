@@ -132,7 +132,7 @@ export default function CoachMobileAthletesPage() {
   }, [active, search, selectedGroup]);
 
   return (
-    <div className="flex flex-col min-h-full">
+    <div className="flex flex-col h-full overflow-y-auto">
       {/* Header */}
       <div className="px-4 pt-5 pb-3">
         <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-1">

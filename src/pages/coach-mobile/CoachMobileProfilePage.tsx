@@ -18,7 +18,7 @@ export default function CoachMobileProfilePage() {
   };
 
   return (
-    <div className="flex flex-col min-h-full">
+    <div className="flex flex-col h-full overflow-y-auto">
       {/* Header */}
       <div className="px-4 pt-5 pb-4">
         <h1 className="text-2xl font-bold">Profile</h1>

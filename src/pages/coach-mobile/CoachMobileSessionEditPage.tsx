@@ -3,12 +3,13 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronDown, ChevronRight, Plus, Minus, Check,
   Info, RefreshCw, Dumbbell, Trash2, Link2, AlignLeft,
-  GripVertical, Settings2, MoreVertical, Copy, ClipboardList, CheckCircle2, History,
+  GripVertical, Settings2, MoreVertical, Copy, ClipboardList, CheckCircle2, History, Lock,
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult, DragStart } from '@hello-pangea/dnd';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { checkSessionLock, type SessionLockInfo } from '@/utils/sessionLock';
 import type { AthleteScheduleEntry, ExerciseSummary, SessionSummary } from '@/hooks/useAthleteApp';
 import { IntensityBadge, INTENSITY_CONFIG } from '@/components/athlete-app/IntensityBadge';
 import { Card } from '@/components/ui/card';
@@ -818,6 +819,13 @@ export default function CoachMobileSessionEditPage() {
       });
   }, [connectionId, state?.entry?.date, session_ref_id]);
 
+  // ── Session lock (athlete in progress → block edit/log) ───────────────────
+  const [sessionLock, setSessionLock] = useState<SessionLockInfo | null>(null);
+  useEffect(() => {
+    if (!connectionId || !state?.entry?.date || !session_ref_id) return;
+    checkSessionLock(connectionId, state.entry.date, session_ref_id, 'coach').then(setSessionLock);
+  }, [connectionId, state?.entry?.date, session_ref_id]);
+
   // ── Derived sections ───────────────────────────────────────────────────────
   const sections = useMemo(
     () => groupIntoSections(entry?.sessions[sessionIdx]?.exercises ?? []),
@@ -1463,13 +1471,24 @@ export default function CoachMobileSessionEditPage() {
                 })}
               </div>
             </div>
-            <div className="p-4 border-t shrink-0 flex gap-2">
+            <div className="border-t shrink-0">
+              {sessionLock && !sessionLog && (
+                <div className="px-4 pt-3 pb-1">
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-center gap-2">
+                    <Lock className="h-4 w-4 text-amber-600 shrink-0" />
+                    <p className="text-xs text-amber-800 leading-snug">
+                      Athlete is currently logging this session.
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className="p-4 flex gap-2">
               {sessionLog ? (
                 <Button variant="outline" className="w-full" onClick={() => navigate(-1)}>Close</Button>
               ) : (
                 <>
-                  <Button variant="outline" className="flex-1" onClick={() => setMode('edit')}>Edit Session</Button>
-                  <Button className="flex-1 gap-1.5" onClick={() => navigate(
+                  <Button variant="outline" className="flex-1" disabled={!!sessionLock} onClick={() => setMode('edit')}>Edit Session</Button>
+                  <Button className="flex-1 gap-1.5" disabled={!!sessionLock} onClick={() => navigate(
                     `/coach-mobile/athletes/${connectionId ?? 'unknown'}/session/log`,
                     { state: { entry, sessionIdx, connectionId, returnPath: location.pathname, returnState: state } }
                   )}>
@@ -1477,6 +1496,7 @@ export default function CoachMobileSessionEditPage() {
                   </Button>
                 </>
               )}
+              </div>
             </div>
           </>
         )}
@@ -1664,22 +1684,6 @@ export default function CoachMobileSessionEditPage() {
                                                     <AlignLeft className="h-3.5 w-3.5" />
                                                   </button>
 
-                                                  {/* Sets ± */}
-                                                  {!ex.isCircuit && (
-                                                    <div className="flex items-center gap-1 shrink-0">
-                                                      <span className="text-xs text-muted-foreground">Sets</span>
-                                                      <button onClick={() => changeSetCount(ex.id, -1)}
-                                                        className="w-6 h-6 rounded-full border bg-background flex items-center justify-center active:bg-accent">
-                                                        <Minus className="h-3 w-3" />
-                                                      </button>
-                                                      <span className="text-sm font-bold w-4 text-center tabular-nums">{sets}</span>
-                                                      <button onClick={() => changeSetCount(ex.id, +1)}
-                                                        className="w-6 h-6 rounded-full border bg-background flex items-center justify-center active:bg-accent">
-                                                        <Plus className="h-3 w-3" />
-                                                      </button>
-                                                    </div>
-                                                  )}
-
                                                   {/* ⋮ actions menu */}
                                                   <div className="relative shrink-0">
                                                     <button
@@ -1727,6 +1731,22 @@ export default function CoachMobileSessionEditPage() {
                                                     <textarea value={ex.notes ?? ''} onChange={e => updateExercise(ex.id, x => ({ ...x, notes: e.target.value, mobileEdited: true }))}
                                                       placeholder="Exercise notes…" rows={2}
                                                       className="w-full text-sm border rounded-lg px-3 py-2 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground/50" />
+                                                  </div>
+                                                )}
+
+                                                {/* Sets ± */}
+                                                {!ex.isCircuit && (
+                                                  <div className="flex items-center gap-2 px-3 py-2 border-b">
+                                                    <span className="text-xs text-muted-foreground flex-1">Sets</span>
+                                                    <button onClick={() => changeSetCount(ex.id, -1)}
+                                                      className="w-7 h-7 rounded-full border bg-background flex items-center justify-center active:bg-accent">
+                                                      <Minus className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    <span className="text-sm font-bold w-5 text-center tabular-nums">{sets}</span>
+                                                    <button onClick={() => changeSetCount(ex.id, +1)}
+                                                      className="w-7 h-7 rounded-full border bg-background flex items-center justify-center active:bg-accent">
+                                                      <Plus className="h-3.5 w-3.5" />
+                                                    </button>
                                                   </div>
                                                 )}
 
