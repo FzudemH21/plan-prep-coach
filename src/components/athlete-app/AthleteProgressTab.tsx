@@ -296,13 +296,20 @@ function SessionRow({
     return allParamNames.filter(p => seen.has(p));
   }, [session.sets, allParamNames]);
 
-  // Context chips: plannedParams that weren't entered per-set (shown as info above the grid during training)
+  // Context chips: plannedParams whose base name is not a grid-logged param.
+  // plannedParams stores per-set planned values as Reps_set1, Intensity_set2 etc.;
+  // strip the _setN suffix to get the base name and skip if the athlete logged it per-set.
   const contextChips = useMemo(() => {
     if (!session.plannedParams) return [];
     const gridSet = new Set(sessionParamNames);
-    return Object.entries(session.plannedParams)
-      .filter(([k, v]) => !gridSet.has(k) && !k.endsWith('_unit') && v !== '' && v != null)
-      .map(([k, v]) => ({ label: k, value: String(v) }));
+    const seen = new Map<string, string>();
+    for (const [k, v] of Object.entries(session.plannedParams)) {
+      if (!v || v === '' || k.endsWith('_unit')) continue;
+      const base = k.replace(/_set\d+$/i, '');
+      if (gridSet.has(base)) continue;
+      if (!seen.has(base)) seen.set(base, v);
+    }
+    return Array.from(seen.entries()).map(([label, value]) => ({ label, value }));
   }, [session.plannedParams, sessionParamNames]);
 
   const bestSetIdx = useMemo(() => {
