@@ -266,46 +266,83 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
   );
 
 
-  // Detect %1RM and %maxHR parameters for auto-calculation toggles
+  // Detect parameters that support auto-calculation (weight from e1RM, target HR from maxHR)
   const autoCalcDetection = useMemo(() => {
     let has1RMParam = false;
     let hasMaxHRParam = false;
     let intensityParamName: string | null = null;
     let hrParamName: string | null = null;
 
-    // Check stored units in exercise.parameters
-    for (const param of displayableParams) {
-      const unit = exercise.parameters[`${param.name}_unit`] as string | undefined;
-      if (unit === '%1RM') {
+    // Primary: if an isCalculated formula referencing 'e1RM' exists in the toolbox, show
+    // the weight toggle regardless of what unit string the intensity parameter uses.
+    if (toolboxParams) {
+      const e1RMEntry = toolboxParams.find(
+        tp => tp.isCalculated && tp.athleteDataRefs?.includes('e1RM')
+      );
+      if (e1RMEntry) {
         has1RMParam = true;
-        intensityParamName = param.name;
+        // Derive intensity param name from sourceParameterIds for the fallback path
+        for (const srcId of (e1RMEntry.sourceParameterIds ?? [])) {
+          const srcParam = toolboxParams.find(p => p.id === srcId && !p.isCalculated);
+          if (srcParam) {
+            const matched = displayableParams.find(p => p.name === srcParam.parameterName);
+            if (matched) { intensityParamName = matched.name; break; }
+          }
+        }
       }
-      if (unit === '%maxHR') {
+
+      const hrEntry = toolboxParams.find(
+        tp => tp.isCalculated && tp.athleteDataRefs?.some(r => r !== 'e1RM')
+      );
+      if (hrEntry) {
         hasMaxHRParam = true;
-        hrParamName = param.name;
+        for (const srcId of (hrEntry.sourceParameterIds ?? [])) {
+          const srcParam = toolboxParams.find(p => p.id === srcId && !p.isCalculated);
+          if (srcParam) {
+            const matched = displayableParams.find(p => p.name === srcParam.parameterName);
+            if (matched) { hrParamName = matched.name; break; }
+          }
+        }
       }
     }
 
-    // Also check toolbox params for default units
-    if (toolboxParams) {
-      for (const tp of toolboxParams) {
-        if (tp.parameterType === 'quantitative' && tp.options.includes('%1RM')) {
-          const matchedParam = displayableParams.find(p => p.name === tp.parameterName);
-          if (matchedParam) {
-            const storedUnit = exercise.parameters[`${matchedParam.name}_unit`];
-            if (!storedUnit || storedUnit === '%1RM') {
-              has1RMParam = true;
-              intensityParamName = matchedParam.name;
+    // Fallback: detect from stored/toolbox unit strings when no isCalculated formula exists
+    if (!has1RMParam || !hasMaxHRParam) {
+      const PCT_1RM = new Set(['%1RM', '% 1RM', '%e1RM']);
+      const PCT_HR = new Set(['%maxHR', '% maxHR', '%HR']);
+
+      for (const param of displayableParams) {
+        const unit = exercise.parameters[`${param.name}_unit`] as string | undefined;
+        if (!has1RMParam && unit && PCT_1RM.has(unit)) {
+          has1RMParam = true;
+          intensityParamName = param.name;
+        }
+        if (!hasMaxHRParam && unit && PCT_HR.has(unit)) {
+          hasMaxHRParam = true;
+          hrParamName = param.name;
+        }
+      }
+
+      if (toolboxParams) {
+        for (const tp of toolboxParams) {
+          if (!has1RMParam && tp.parameterType === 'quantitative' && tp.options.some(o => PCT_1RM.has(o))) {
+            const matched = displayableParams.find(p => p.name === tp.parameterName);
+            if (matched) {
+              const storedUnit = exercise.parameters[`${matched.name}_unit`] as string | undefined;
+              if (!storedUnit || PCT_1RM.has(storedUnit)) {
+                has1RMParam = true;
+                intensityParamName = matched.name;
+              }
             }
           }
-        }
-        if (tp.parameterType === 'quantitative' && tp.options.includes('%maxHR')) {
-          const matchedParam = displayableParams.find(p => p.name === tp.parameterName);
-          if (matchedParam) {
-            const storedUnit = exercise.parameters[`${matchedParam.name}_unit`];
-            if (!storedUnit || storedUnit === '%maxHR') {
-              hasMaxHRParam = true;
-              hrParamName = matchedParam.name;
+          if (!hasMaxHRParam && tp.parameterType === 'quantitative' && tp.options.some(o => PCT_HR.has(o))) {
+            const matched = displayableParams.find(p => p.name === tp.parameterName);
+            if (matched) {
+              const storedUnit = exercise.parameters[`${matched.name}_unit`] as string | undefined;
+              if (!storedUnit || PCT_HR.has(storedUnit)) {
+                hasMaxHRParam = true;
+                hrParamName = matched.name;
+              }
             }
           }
         }
