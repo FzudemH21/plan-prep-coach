@@ -36,6 +36,8 @@ import { AddParameterDialogV2 } from "@/components/goals/AddParameterDialogV2";
 import { useToolboxData } from "@/hooks/useToolboxData";
 import { AlertTriangle, ArrowLeft } from "lucide-react";
 import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
+import { AutoSaveIndicator } from "@/components/programs/AutoSaveIndicator";
+import { useWizardAutoSave } from "@/hooks/useWizardAutoSave";
 import { WizardAIAssistant } from "@/components/wizard/WizardAIAssistant";
 import { useRAGRetrieval } from "@/hooks/useRAGRetrieval";
 import { useGlobalAIContext } from "@/hooks/useGlobalAIContext";
@@ -59,6 +61,7 @@ export default function MacrocyclePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { saveCurrentSession, getProgram } = useTrainingPrograms();
+  const { markDirty, status: autoSaveStatus } = useWizardAutoSave();
   const { setMacrocycleData: setContextMacrocycleData } = useWizardData();
   const { getEventsForDate } = useCalendarEvents();
   const { data: parametersDataV2, addParameter: addAthleticismParameter, addInteraction: addParameterInteraction } = useParametersDataV2();
@@ -429,6 +432,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     };
     localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
     setContextMacrocycleData(macrocycleData);
+    markDirty();
   }, [planName, planNotes, selectedAthleteId, planDuration, smartGoals, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent, selectedMethods, manuallyAddedMethods, athleteExistingTestsAndEvents]);
 
   // Save step whenever it changes (step persistence)
@@ -2725,6 +2729,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Library
             </Button>
+            <AutoSaveIndicator status={autoSaveStatus} />
             <SaveProgramButton />
             <ResourcesButton />
             <Button variant="outline" size="sm">
@@ -3029,6 +3034,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Library
             </Button>
+            <AutoSaveIndicator status={autoSaveStatus} />
             <SaveProgramButton />
             <ResourcesButton />
             <Button variant="outline" size="sm">

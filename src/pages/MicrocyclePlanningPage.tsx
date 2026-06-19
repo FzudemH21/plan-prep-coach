@@ -29,6 +29,8 @@ import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu
 import { TrainingCalendarView, EnhancedExerciseDistribution, MethodSessionArchitecture } from '@/components/microcycle-planning';
 import { DropResult } from '@hello-pangea/dnd';
 import { SaveProgramButton } from '@/components/programs/SaveProgramButton';
+import { AutoSaveIndicator } from '@/components/programs/AutoSaveIndicator';
+import { useWizardAutoSave } from '@/hooks/useWizardAutoSave';
 import { useTrainingPrograms, TrainingProgram } from '@/hooks/useTrainingPrograms';
 import { ExportPDFButton } from '@/components/pdf/ExportPDFButton';
 import { useWizardData } from '@/contexts/WizardDataContext';
@@ -82,6 +84,7 @@ export default function MicrocyclePlanningPage() {
   const { data: toolboxData } = useToolboxData();
   const { athletes, athletePerformanceParameters, biometricDefinitions, athleteBiometrics } = useAthletes();
   const { saveCurrentSession } = useTrainingPrograms();
+  const { markDirty, status: autoSaveStatus } = useWizardAutoSave();
   const { retrieve: ragRetrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
   const globalAIContext = useGlobalAIContext(currentStep === 2);
@@ -517,6 +520,7 @@ export default function MicrocyclePlanningPage() {
   // Save exercise distribution to localStorage
   useEffect(() => {
     localStorage.setItem('exerciseDistribution', JSON.stringify(exerciseDistribution));
+    markDirty();
   }, [exerciseDistribution]);
 
   // Save day split states to localStorage
@@ -527,26 +531,20 @@ export default function MicrocyclePlanningPage() {
   // Save session sections to localStorage
   useEffect(() => {
     localStorage.setItem('sessionSections', JSON.stringify(sessionSections));
+    markDirty();
   }, [sessionSections]);
 
   // Save supersets to localStorage
   useEffect(() => {
     localStorage.setItem('supersets', JSON.stringify(supersets));
+    markDirty();
   }, [supersets]);
 
   // Save day→method assignments to localStorage
   useEffect(() => {
     localStorage.setItem('dayMethodAssignments', JSON.stringify(dayMethodAssignments));
+    markDirty();
   }, [dayMethodAssignments]);
-
-  // Auto-save to Supabase — debounced 3 s after any structural change so
-  // navigating away mid-session never loses work (localStorage is always
-  // up-to-date; this keeps Supabase in sync too)
-  useEffect(() => {
-    const timer = setTimeout(() => { saveCurrentSession(); }, 3000);
-    return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [exerciseDistribution, sessionSections, supersets, dayMethodAssignments]);
 
   // Sync day split states to trainingDays
   useEffect(() => {
@@ -4856,6 +4854,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Library
           </Button>
+          <AutoSaveIndicator status={autoSaveStatus} />
           <SaveProgramButton />
           <ResourcesButton />
           <PlanningNavigationMenu currentPage="microcycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />

@@ -46,6 +46,8 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle, Trophy, LayoutTemplate } from "lucide-react";
 import { ResourcesButton } from "@/components/programs/ResourcesButton";
 import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
+import { AutoSaveIndicator } from "@/components/programs/AutoSaveIndicator";
+import { useWizardAutoSave } from "@/hooks/useWizardAutoSave";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
 import { format, addWeeks, differenceInWeeks, addDays, differenceInDays } from "date-fns";
@@ -107,6 +109,7 @@ export default function MesocyclePage() {
   
   // Daily intensity planning state — lifted to shared WizardDataContext
   const { macrocycleData, setMacrocycleData, trainingDays, setTrainingDays, dailyIntensityData, setDailyIntensityData } = useWizardData();
+  const { markDirty, status: autoSaveStatus } = useWizardAutoSave();
   const [isIntensityDataLoaded, setIsIntensityDataLoaded] = useState(false);
   
   // Cross-mesocycle copy dialog state
@@ -434,6 +437,7 @@ export default function MesocyclePage() {
   useEffect(() => {
     if (Object.keys(methodAllocations).length > 0) {
       localStorage.setItem('methodAllocations', JSON.stringify(methodAllocations));
+      markDirty();
     }
   }, [methodAllocations]);
 
@@ -447,6 +451,7 @@ export default function MesocyclePage() {
   useEffect(() => {
     if (mesocycles.length > 0) {
       localStorage.setItem('mesocycleData', JSON.stringify({ mesocycles }));
+      markDirty();
     }
   }, [mesocycles]);
 
@@ -454,6 +459,7 @@ export default function MesocyclePage() {
   useEffect(() => {
     if (Object.keys(parameterValues).length > 0) {
       localStorage.setItem('parameterValues', JSON.stringify(parameterValues));
+      markDirty();
     }
   }, [parameterValues]);
 
@@ -5515,6 +5521,7 @@ export default function MesocyclePage() {
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Library
             </Button>
+            <AutoSaveIndicator status={autoSaveStatus} />
             <SaveProgramButton />
             <ResourcesButton />
             <Button variant="outline" size="sm">
