@@ -458,16 +458,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     const connection = getConnectionForAthlete(athlete.id);
     if (!connection) return;
 
-    // Skip if this assignment was already synced in the last 5 minutes within this browser
-    // session. Prevents the expensive DELETE+UPSERT from running on every tab re-open when
-    // the data hasn't changed. The autoSync path (editing.lastSavedAt) is unaffected.
-    const sessionSyncKey = `schedule-synced-${connection.id}-${selectedAssignmentId}`;
-    const lastSyncTime = sessionStorage.getItem(sessionSyncKey);
-    if (lastSyncTime && (Date.now() - Number(lastSyncTime)) < 5 * 60 * 1000) {
-      loadSyncedRef.current.add(selectedAssignmentId);
-      return;
-    }
-
     // If parameterValues is empty but the assignment has periodization-sourced
     // exercises, avoid overwriting correct Supabase data (written by the
     // assign-time sync) with an empty payload. Try to recover from the wizard's
@@ -516,9 +506,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       editing.supersets,
       editing.sessionIntensities,
       enrichEvents(getEventsForAthlete(athlete.id)),
-    ).then(() => {
-      sessionStorage.setItem(sessionSyncKey, String(Date.now()));
-    }).catch(e => console.error('[loadSync] ✗ sync failed:', e));
+    ).catch(e => console.error('[loadSync] ✗ sync failed:', e));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAssignmentId, editing.isInitializing, editing.trainingDays.length, connectionsLoading]);
 
