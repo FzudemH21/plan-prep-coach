@@ -122,6 +122,23 @@ function getParamColumns(ex: ExerciseSummary): string[] {
   return candidates.length > 0 ? candidates : ['Reps'];
 }
 
+function getContextLine(ex: ExerciseSummary): string {
+  if (!ex.plannedParams) return '';
+  const gridSet = new Set(getParamColumns(ex));
+  const seen = new Map<string, string>();
+  for (const [k, v] of Object.entries(ex.plannedParams)) {
+    if (!v || v === '' || k.endsWith('_unit')) continue;
+    const base = k.replace(/_set\d+$/i, '');
+    if (gridSet.has(base) || base.toLowerCase() === 'sets') continue;
+    if (!seen.has(base)) {
+      const unit = String(ex.plannedParams[`${base}_unit`] ?? '');
+      seen.set(base, unit ? `${v} ${unit}` : String(v));
+    }
+  }
+  if (seen.size === 0) return '';
+  return Array.from(seen.entries()).map(([k, v]) => `${k}: ${v}`).join(' · ');
+}
+
 function getPlannedValue(ex: ExerciseSummary, paramName: string, setIdx: number): string {
   if (!ex.plannedParams) return '';
   // Per-set format (ad-hoc/toolbox exercises): "Reps_set1", "Reps_set2", …
@@ -1763,6 +1780,7 @@ export default function AthleteSessionPage() {
                 const exSetCount = setCountOverrides[ex.id] ?? getSetCount(ex);
                 const exComplete = exDone.length >= exSetCount &&
                   Array.from({ length: exSetCount }, (_, i) => i).every(i => exDone.includes(i));
+                const contextLine = ex.isCircuit ? '' : getContextLine(ex);
 
                 return (
                   <div key={ex.id} className={cn('p-4 space-y-3 transition-colors', supersetLabel ? '' : 'rounded-xl border', exComplete ? 'bg-primary/5' : '')}>
@@ -1831,6 +1849,7 @@ export default function AthleteSessionPage() {
                           </span>
                         )}
                         {ex.notes && <p className="text-xs text-muted-foreground mt-0.5">{ex.notes}</p>}
+                        {contextLine && <p className="text-xs text-muted-foreground mt-0.5 truncate">{contextLine}</p>}
                         {/* Adjust button — only for exercises with a library ID and no active swap */}
                         {!ex.isCircuit && ex.exerciseLibraryId && !swappedExercises[ex.id] && (
                           <button
