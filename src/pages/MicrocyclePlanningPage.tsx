@@ -37,6 +37,8 @@ import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
 import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
 import { useCoachMemory } from '@/hooks/useCoachMemory';
 import { useAuth } from '@/hooks/useAuth';
+import { useAthleteConnections } from '@/hooks/useAthleteConnections';
+import { supabase } from '@/lib/supabase';
 import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { AccumulatedContextDialog } from '@/components/wizard/AccumulatedContextDialog';
 import { extractPlanSummary } from '@/lib/planMemory';
@@ -106,7 +108,52 @@ export default function MicrocyclePlanningPage() {
   const selectedAthleteId = macrocycleData?.selectedAthleteId;
   const selectedAthlete = athletes.find(a => a.id === selectedAthleteId);
   const athleteName = selectedAthlete ? getAthleteDisplayName(selectedAthlete) : undefined;
-  
+
+  // Athlete connection — used for exercise history in AI context
+  const { getConnectionForAthlete } = useAthleteConnections();
+  const [athleteExerciseHistoryStr, setAthleteExerciseHistoryStr] = useState('');
+  useEffect(() => {
+    if (!selectedAthleteId) { setAthleteExerciseHistoryStr(''); return; }
+    const connection = getConnectionForAthlete(selectedAthleteId);
+    if (!connection) { setAthleteExerciseHistoryStr(''); return; }
+    supabase
+      .from('athlete_session_logs')
+      .select('date, session_name, sets_logged')
+      .eq('athlete_connection_id', connection.id)
+      .not('completed_at', 'is', null)
+      .order('date', { ascending: false })
+      .limit(100)
+      .then(({ data }) => {
+        if (!data?.length) { setAthleteExerciseHistoryStr(''); return; }
+        const cache = new Map<string, Array<{ date: string; session: string; summary: string }>>();
+        for (const row of data as Array<{ date: string; session_name: string; sets_logged: unknown }>) {
+          const setsLogged = (row.sets_logged as Array<{
+            exerciseName: string;
+            sets?: Array<{ setNumber: number; values: Record<string, string> }>;
+          }>) ?? [];
+          for (const ex of setsLogged) {
+            if (!ex.exerciseName || !ex.sets?.length) continue;
+            const entries = cache.get(ex.exerciseName) ?? [];
+            if (entries.length >= 5) continue;
+            const setsSummary = ex.sets.map(s => {
+              const vals = Object.entries(s.values ?? {}).map(([k, v]) => `${k}: ${v}`).join(', ');
+              return vals || `set ${s.setNumber}`;
+            }).join(' | ');
+            entries.push({ date: row.date, session: row.session_name, summary: setsSummary });
+            cache.set(ex.exerciseName, entries);
+          }
+        }
+        if (!cache.size) { setAthleteExerciseHistoryStr(''); return; }
+        const lines = ['Athlete exercise history (last ≤5 logged sessions per exercise):'];
+        for (const [name, entries] of cache) {
+          lines.push(`${name}:`);
+          for (const e of entries) lines.push(`  ${e.date} (${e.session}): ${e.summary}`);
+        }
+        setAthleteExerciseHistoryStr(lines.join('\n'));
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAthleteId, getConnectionForAthlete]);
+
   // Filter athlete performance parameters for the selected athlete
   const selectedAthletePerformanceParameters = useMemo(() => {
     if (!selectedAthleteId) return [];
@@ -3805,11 +3852,12 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
       fullScheduleStr,
       scheduleStr,
       calendarStr,
+      athleteExerciseHistoryStr,
       stepHint,
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, currentMicrocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData, exerciseDistribution, sessionSections, libraries, parameterValues]);
+  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, currentMicrocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData, exerciseDistribution, sessionSections, libraries, parameterValues, athleteExerciseHistoryStr]);
 
   const handleMicroAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
     if (action.type === "assign_methods_to_days") {
