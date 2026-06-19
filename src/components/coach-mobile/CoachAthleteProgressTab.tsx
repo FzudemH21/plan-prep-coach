@@ -300,7 +300,9 @@ function SessionRow({
     for (const [k, v] of Object.entries(session.plannedParams)) {
       if (!v || v === '' || k.endsWith('_unit')) continue;
       const base = k.replace(/_set\d+$/i, '');
-      if (gridSet.has(base) || base.toLowerCase() === 'sets') continue;
+      const baseLower = base.toLowerCase();
+      if (gridSet.has(base) || baseLower === 'sets') continue;
+      if (baseLower.includes('rest') || baseLower.includes('pause') || baseLower.includes('recovery')) continue;
       if (!seen.has(base)) seen.set(base, v);
     }
     return Array.from(seen.entries()).map(([label, value]) => ({ label, value }));
