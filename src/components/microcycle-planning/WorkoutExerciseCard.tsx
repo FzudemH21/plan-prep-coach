@@ -641,19 +641,23 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                         ))}
                         {/* Auto-calculated Weight cell */}
                         {autoCalculateWeight && autoCalcDetection.has1RMParam && (() => {
+                          // Units that express a fraction: value stored as e.g. 80, meaning 0.80
+                          const PCT_UNITS = new Set(['%', '%1RM', '%maxHR', '% 1RM', '% maxHR']);
                           const calcEntry = toolboxParams?.find(
                             tp => tp.isCalculated && tp.formula && tp.athleteDataRefs?.includes('e1RM')
                           );
                           let computed: number | undefined;
                           if (calcEntry && calcEntry.formula) {
-                            // Build context: method params by ID, athlete data refs by exact ID
+                            // Build context: method params by ID; percentage units auto-scaled ÷100
                             const ctx: Record<string, number> = {};
                             for (const srcId of (calcEntry.sourceParameterIds ?? [])) {
                               const srcParam = toolboxParams?.find(p => p.id === srcId);
                               if (!srcParam) continue;
                               const raw = exercise.parameters[`${srcParam.parameterName}_set${setIndex + 1}`]
                                 ?? exercise.parameters[srcParam.parameterName];
-                              const n = parseFloat(String(raw ?? ''));
+                              const unit = exercise.parameters[`${srcParam.parameterName}_unit`] as string | undefined;
+                              let n = parseFloat(String(raw ?? ''));
+                              if (!isNaN(n) && unit && PCT_UNITS.has(unit)) n = n / 100;
                               if (!isNaN(n)) ctx[srcParam.parameterName] = n;
                             }
                             const athleteData = resolveAthleteDataRefs(
@@ -690,6 +694,7 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                         })()}
                         {/* Auto-calculated Target HR cell */}
                         {autoCalculateTargetHR && autoCalcDetection.hasMaxHRParam && (() => {
+                          const PCT_UNITS = new Set(['%', '%1RM', '%maxHR', '% 1RM', '% maxHR']);
                           const calcEntry = toolboxParams?.find(
                             tp => tp.isCalculated && tp.formula &&
                               tp.athleteDataRefs?.some(r => r !== 'e1RM')
@@ -702,7 +707,9 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                               if (!srcParam) continue;
                               const raw = exercise.parameters[`${srcParam.parameterName}_set${setIndex + 1}`]
                                 ?? exercise.parameters[srcParam.parameterName];
-                              const n = parseFloat(String(raw ?? ''));
+                              const unit = exercise.parameters[`${srcParam.parameterName}_unit`] as string | undefined;
+                              let n = parseFloat(String(raw ?? ''));
+                              if (!isNaN(n) && unit && PCT_UNITS.has(unit)) n = n / 100;
                               if (!isNaN(n)) ctx[srcParam.parameterName] = n;
                             }
                             const athleteData = resolveAthleteDataRefs(
