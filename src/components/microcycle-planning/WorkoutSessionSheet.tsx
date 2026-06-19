@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,7 @@ import { getMethodSessionIndex, getModuloSessionIndex } from '@/utils/sessionInd
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { AthletePerformanceParameter } from '@/types/athlete';
+import { useAthletes } from '@/hooks/useAthletes';
 import { FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
 import { SaveToLibraryDialog } from '@/components/session-library/SaveToLibraryDialog';
 import { ExerciseHistorySheet, type HistoryEntry } from '@/components/shared/ExerciseHistorySheet';
@@ -3086,6 +3087,81 @@ export function WorkoutSessionSheet({
     });
   };
 
+  // ── Athlete context for auto-calculated parameters ──────────────────────────
+  const { biometricDefinitions, athleteBiometrics } = useAthletes();
+
+  const buildAthleteContextForExercise = useCallback(
+    (exerciseName: string, categoryName: string): Record<string, number | undefined> => {
+      const result: Record<string, number | undefined> = {};
+      if (!selectedAthleteId) return result;
+
+      // Helper: get latest numeric value for an athlete's biometric definition
+      const getLatestBiometric = (defName: string): number | undefined => {
+        const def = biometricDefinitions.find(d =>
+          d.name.toLowerCase() === defName.toLowerCase() && d.type === 'quantitative'
+        );
+        if (!def) return undefined;
+        const entry = athleteBiometrics.find(
+          ab => ab.athleteId === selectedAthleteId && ab.biometricDefinitionId === def.id
+        );
+        if (!entry || entry.values.length === 0) return undefined;
+        const latest = [...entry.values].sort(
+          (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+        )[0];
+        const num = parseFloat(latest.value);
+        return isNaN(num) ? undefined : num;
+      };
+
+      // Populate all biometric values (Max HR, Body Weight, etc.)
+      for (const def of biometricDefinitions) {
+        if (def.type !== 'quantitative') continue;
+        const val = getLatestBiometric(def.name);
+        if (val !== undefined) result[def.name] = val;
+      }
+
+      // Populate performance parameters
+      const perfDefs = parametersData?.parameters ?? [];
+      const athletePerf = (athletePerformanceParameters ?? []).filter(
+        p => p.athleteId === selectedAthleteId
+      );
+      for (const pp of athletePerf) {
+        const def = perfDefs.find(d => d.id === pp.athleticismParameterId);
+        if (!def || pp.values.length === 0) continue;
+        const latest = [...pp.values].sort(
+          (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+        )[0];
+        const num = parseFloat(latest.value);
+        if (!isNaN(num)) result[def.name] = num;
+      }
+
+      // Resolve e1RM: find a performance parameter whose name matches this exercise / category
+      const normalize = (s: string) =>
+        s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+      const exWords = normalize(exerciseName).split(' ').filter(w => w.length > 2);
+      const catWords = normalize(categoryName).split(' ').filter(w => w.length > 2);
+
+      let bestE1RM: number | undefined;
+      for (const pp of athletePerf) {
+        const def = perfDefs.find(d => d.id === pp.athleticismParameterId);
+        if (!def || pp.values.length === 0) continue;
+        const defNorm = normalize(def.name);
+        const matches =
+          exWords.some(w => defNorm.includes(w)) ||
+          catWords.some(w => defNorm.includes(w));
+        if (!matches) continue;
+        const latest = [...pp.values].sort(
+          (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+        )[0];
+        const num = parseFloat(latest.value);
+        if (!isNaN(num)) { bestE1RM = num; break; }
+      }
+      result['e1RM'] = bestE1RM;
+
+      return result;
+    },
+    [selectedAthleteId, biometricDefinitions, athleteBiometrics, athletePerformanceParameters, parametersData],
+  );
+
   // Build context value for WorkoutSessionProvider (avoids deep prop drilling to WorkoutSectionCard)
   const sessionContextValue: WorkoutSessionContextValue = useMemo(() => ({
     onParameterChange: handleParameterChange,
@@ -3109,6 +3185,7 @@ export function WorkoutSessionSheet({
     onChangeExercise: handleChangeExercise,
     onOpenChangeLibrary: handleOpenChangeLibrary,
     onOpenHistory: athleteConnectionId ? (exerciseName: string) => setHistoryTarget(exerciseName) : undefined,
+    buildAthleteContextForExercise,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [
     handleParameterChange,
@@ -3132,6 +3209,7 @@ export function WorkoutSessionSheet({
     handleChangeExercise,
     handleOpenChangeLibrary,
     athleteConnectionId,
+    buildAthleteContextForExercise,
   ]);
 
   // Scroll lock — replaces the behavior normally provided by modal={true}

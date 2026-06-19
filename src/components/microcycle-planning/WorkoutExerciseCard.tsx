@@ -24,6 +24,7 @@ import { ParameterInputField } from './ParameterInputField';
 import { getParametersForMethod } from '@/data/methodParameters';
 import { ParameterVisibilityPopover, ParameterVisibilityOverrides, isParameterVisible } from './ParameterVisibilityPopover';
 import { ToolboxEntry } from '@/types/toolbox';
+import { useWorkoutSession } from './WorkoutSessionContext';
 
 interface WorkoutExerciseCardProps {
   exercise: WorkoutExercise;
@@ -312,6 +313,13 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
 
     return { has1RMParam, hasMaxHRParam, intensityParamName, hrParamName };
   }, [displayableParams, exercise.parameters, toolboxParams]);
+
+  // Athlete context: resolved values (e1RM, Max HR, Body Weight, …) for this exercise
+  const { buildAthleteContextForExercise } = useWorkoutSession();
+  const athleteCtx = useMemo(
+    () => buildAthleteContextForExercise(exercise.exerciseName, exercise.categoryName || ''),
+    [buildAthleteContextForExercise, exercise.exerciseName, exercise.categoryName],
+  );
 
   // Handle deleting a set
   const handleDeleteSet = (setNumber: number) => {
@@ -636,23 +644,51 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                           </TableCell>
                         ))}
                         {/* Auto-calculated Weight cell */}
-                        {autoCalculateWeight && autoCalcDetection.has1RMParam && (
-                          <TableCell>
-                            <Badge variant="outline" className="text-xs text-primary border-primary/50 bg-primary/5">
-                              <Calculator className="h-3 w-3 mr-1" />
-                              Auto
-                            </Badge>
-                          </TableCell>
-                        )}
+                        {autoCalculateWeight && autoCalcDetection.has1RMParam && (() => {
+                          const intensityRaw =
+                            exercise.parameters[`${autoCalcDetection.intensityParamName}_set${setIndex + 1}`] ??
+                            exercise.parameters[autoCalcDetection.intensityParamName ?? ''] ?? '';
+                          const intensity = parseFloat(String(intensityRaw));
+                          const e1RM = athleteCtx['e1RM'];
+                          const computed = (!isNaN(intensity) && intensity > 0 && e1RM !== undefined)
+                            ? Math.round(intensity / 100 * e1RM * 2) / 2
+                            : undefined;
+                          return (
+                            <TableCell>
+                              {computed !== undefined ? (
+                                <span className="text-sm font-medium text-primary">{computed} kg</span>
+                              ) : (
+                                <Badge variant="outline" className="text-xs text-muted-foreground border-muted-foreground/30">
+                                  <Calculator className="h-3 w-3 mr-1" />
+                                  Auto
+                                </Badge>
+                              )}
+                            </TableCell>
+                          );
+                        })()}
                         {/* Auto-calculated Target HR cell */}
-                        {autoCalculateTargetHR && autoCalcDetection.hasMaxHRParam && (
-                          <TableCell>
-                            <Badge variant="outline" className="text-xs text-primary border-primary/50 bg-primary/5">
-                              <Calculator className="h-3 w-3 mr-1" />
-                              Auto
-                            </Badge>
-                          </TableCell>
-                        )}
+                        {autoCalculateTargetHR && autoCalcDetection.hasMaxHRParam && (() => {
+                          const intensityRaw =
+                            exercise.parameters[`${autoCalcDetection.hrParamName}_set${setIndex + 1}`] ??
+                            exercise.parameters[autoCalcDetection.hrParamName ?? ''] ?? '';
+                          const intensity = parseFloat(String(intensityRaw));
+                          const maxHR = athleteCtx['Max HR'];
+                          const computed = (!isNaN(intensity) && intensity > 0 && maxHR !== undefined)
+                            ? Math.round(intensity / 100 * maxHR)
+                            : undefined;
+                          return (
+                            <TableCell>
+                              {computed !== undefined ? (
+                                <span className="text-sm font-medium text-primary">{computed} bpm</span>
+                              ) : (
+                                <Badge variant="outline" className="text-xs text-muted-foreground border-muted-foreground/30">
+                                  <Calculator className="h-3 w-3 mr-1" />
+                                  Auto
+                                </Badge>
+                              )}
+                            </TableCell>
+                          );
+                        })()}
                         <TableCell>
                           <Button
                             variant="ghost"

@@ -41,6 +41,10 @@ export interface WorkoutSessionContextValue {
   onAutoCalculateWeightChange: (exerciseId: string, value: boolean) => void;
   onAutoCalculateTargetHRChange: (exerciseId: string, value: boolean) => void;
 
+  // Returns athlete-specific values for auto-calculated parameters
+  // (e.g. e1RM for a given exercise, Max HR, Body Weight)
+  buildAthleteContextForExercise: (exerciseName: string, categoryName: string) => Record<string, number | undefined>;
+
   // Exercise detail / change
   onOpenExerciseDetail: (exercise: WorkoutExercise) => void;
   /** Open the exercise detail dialog for a sub-exercise inside a circuit */
