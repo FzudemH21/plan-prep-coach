@@ -315,12 +315,7 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
     return { has1RMParam, hasMaxHRParam, intensityParamName, hrParamName };
   }, [displayableParams, exercise.parameters, toolboxParams]);
 
-  // Athlete context: resolved values (e1RM, Max HR, Body Weight, …) for this exercise
-  const { buildAthleteContextForExercise } = useWorkoutSession();
-  const athleteCtx = useMemo(
-    () => buildAthleteContextForExercise(exercise.exerciseName, exercise.exerciseId),
-    [buildAthleteContextForExercise, exercise.exerciseName, exercise.exerciseId],
-  );
+  const { resolveAthleteDataRefs } = useWorkoutSession();
 
   // Handle deleting a set
   const handleDeleteSet = (setNumber: number) => {
@@ -646,14 +641,12 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                         ))}
                         {/* Auto-calculated Weight cell */}
                         {autoCalculateWeight && autoCalcDetection.has1RMParam && (() => {
-                          // Prefer the isCalculated ToolboxEntry formula if the coach defined one
                           const calcEntry = toolboxParams?.find(
                             tp => tp.isCalculated && tp.formula && tp.athleteDataRefs?.includes('e1RM')
                           );
                           let computed: number | undefined;
                           if (calcEntry && calcEntry.formula) {
-                            // Systematic formula evaluation:
-                            // 1. Resolve method params by ID → name → per-set value
+                            // Build context: method params by ID, athlete data refs by exact ID
                             const ctx: Record<string, number> = {};
                             for (const srcId of (calcEntry.sourceParameterIds ?? [])) {
                               const srcParam = toolboxParams?.find(p => p.id === srcId);
@@ -663,20 +656,22 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                               const n = parseFloat(String(raw ?? ''));
                               if (!isNaN(n)) ctx[srcParam.parameterName] = n;
                             }
-                            // 2. Merge athlete context (already keyed by definition name)
-                            for (const [k, v] of Object.entries(athleteCtx)) {
+                            const athleteData = resolveAthleteDataRefs(
+                              calcEntry.athleteDataRefs ?? [], exercise.exerciseName
+                            );
+                            for (const [k, v] of Object.entries(athleteData)) {
                               if (v !== undefined) ctx[k] = v;
                             }
-                            // 3. evaluateFormula returns null when any variable is missing
                             const result = evaluateFormula(calcEntry.formula, ctx);
                             if (result !== null) computed = Math.round(result * 2) / 2;
                           } else {
-                            // Fallback: hardcoded Intensity × e1RM / 100
+                            // Fallback when no isCalculated formula is defined
                             const intensityRaw =
                               exercise.parameters[`${autoCalcDetection.intensityParamName}_set${setIndex + 1}`] ??
                               exercise.parameters[autoCalcDetection.intensityParamName ?? ''] ?? '';
                             const intensity = parseFloat(String(intensityRaw));
-                            const e1RM = athleteCtx['e1RM'];
+                            const e1RMData = resolveAthleteDataRefs(['e1RM'], exercise.exerciseName);
+                            const e1RM = e1RMData['e1RM'];
                             if (!isNaN(intensity) && intensity > 0 && e1RM !== undefined)
                               computed = Math.round(intensity / 100 * e1RM * 2) / 2;
                           }
@@ -695,7 +690,6 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                         })()}
                         {/* Auto-calculated Target HR cell */}
                         {autoCalculateTargetHR && autoCalcDetection.hasMaxHRParam && (() => {
-                          // Prefer isCalculated formula; fall back to hardcoded Intensity × maxHR / 100
                           const calcEntry = toolboxParams?.find(
                             tp => tp.isCalculated && tp.formula &&
                               tp.athleteDataRefs?.some(r => r !== 'e1RM')
@@ -711,20 +705,16 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                               const n = parseFloat(String(raw ?? ''));
                               if (!isNaN(n)) ctx[srcParam.parameterName] = n;
                             }
-                            for (const [k, v] of Object.entries(athleteCtx)) {
+                            const athleteData = resolveAthleteDataRefs(
+                              calcEntry.athleteDataRefs ?? [], exercise.exerciseName
+                            );
+                            for (const [k, v] of Object.entries(athleteData)) {
                               if (v !== undefined) ctx[k] = v;
                             }
                             const result = evaluateFormula(calcEntry.formula, ctx);
                             if (result !== null) computed = Math.round(result);
-                          } else {
-                            const intensityRaw =
-                              exercise.parameters[`${autoCalcDetection.hrParamName}_set${setIndex + 1}`] ??
-                              exercise.parameters[autoCalcDetection.hrParamName ?? ''] ?? '';
-                            const intensity = parseFloat(String(intensityRaw));
-                            const maxHR = athleteCtx['Max HR'];
-                            if (!isNaN(intensity) && intensity > 0 && maxHR !== undefined)
-                              computed = Math.round(intensity / 100 * maxHR);
                           }
+                          // No fallback for HR without isCalculated formula — biometric def ID unknown
                           return (
                             <TableCell>
                               {computed !== undefined ? (

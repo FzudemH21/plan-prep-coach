@@ -3094,56 +3094,50 @@ export function WorkoutSessionSheet({
   // configured in the Exercise Metrics tab (weight param, reps param, optional RIR param).
   const { getExerciseHistory } = useExerciseMetrics(athleteConnectionId ?? null);
 
-  const buildAthleteContextForExercise = useCallback(
-    (exerciseName: string, _exerciseId: string): Record<string, number | undefined> => {
+  const resolveAthleteDataRefs = useCallback(
+    (refs: string[], exerciseName: string): Record<string, number | undefined> => {
       const result: Record<string, number | undefined> = {};
       if (!selectedAthleteId) return result;
 
-      // Helper: get latest numeric value for an athlete's biometric definition
-      const getLatestBiometric = (defName: string): number | undefined => {
-        const def = biometricDefinitions.find(d =>
-          d.name.toLowerCase() === defName.toLowerCase() && d.type === 'quantitative'
-        );
-        if (!def) return undefined;
-        const entry = athleteBiometrics.find(
-          ab => ab.athleteId === selectedAthleteId && ab.biometricDefinitionId === def.id
-        );
-        if (!entry || entry.values.length === 0) return undefined;
-        const latest = [...entry.values].sort(
-          (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
-        )[0];
-        const num = parseFloat(latest.value);
-        return isNaN(num) ? undefined : num;
-      };
+      for (const ref of refs) {
+        if (ref === 'e1RM') {
+          const history = getExerciseHistory(exerciseName);
+          const recent = [...history].reverse().find(s => s.e1rm !== null);
+          result['e1RM'] = recent?.e1rm ?? undefined;
+          continue;
+        }
 
-      // Populate all biometric values (Max HR, Body Weight, etc.)
-      for (const def of biometricDefinitions) {
-        if (def.type !== 'quantitative') continue;
-        const val = getLatestBiometric(def.name);
-        if (val !== undefined) result[def.name] = val;
+        // Biometric definition ID → look up athlete's latest value by exact ID
+        const bioDef = biometricDefinitions.find(d => d.id === ref && d.type === 'quantitative');
+        if (bioDef) {
+          const bioEntry = athleteBiometrics.find(
+            ab => ab.athleteId === selectedAthleteId && ab.biometricDefinitionId === ref
+          );
+          if (bioEntry && bioEntry.values.length > 0) {
+            const latest = [...bioEntry.values].sort(
+              (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+            )[0];
+            const num = parseFloat(latest.value);
+            if (!isNaN(num)) result[bioDef.name] = num;
+          }
+          continue;
+        }
+
+        // Performance parameter ID → look up athlete's latest value by exact ID
+        const perfDef = parametersData?.parameters.find(p => p.id === ref);
+        if (perfDef) {
+          const perfEntry = (athletePerformanceParameters ?? []).find(
+            p => p.athleteId === selectedAthleteId && p.athleticismParameterId === ref
+          );
+          if (perfEntry && perfEntry.values.length > 0) {
+            const latest = [...perfEntry.values].sort(
+              (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+            )[0];
+            const num = parseFloat(latest.value);
+            if (!isNaN(num)) result[perfDef.name] = num;
+          }
+        }
       }
-
-      // Populate performance parameters
-      const perfDefs = parametersData?.parameters ?? [];
-      const athletePerf = (athletePerformanceParameters ?? []).filter(
-        p => p.athleteId === selectedAthleteId
-      );
-      for (const pp of athletePerf) {
-        const def = perfDefs.find(d => d.id === pp.athleticismParameterId);
-        if (!def || pp.values.length === 0) continue;
-        const latest = [...pp.values].sort(
-          (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
-        )[0];
-        const num = parseFloat(latest.value);
-        if (!isNaN(num)) result[def.name] = num;
-      }
-
-      // e1RM: use the value already computed by useExerciseMetrics.
-      // This respects the param tags configured in the Exercise Metrics tab —
-      // undefined when no tags are set or no completed sets exist for this exercise.
-      const history = getExerciseHistory(exerciseName);
-      const recentE1RM = [...history].reverse().find(s => s.e1rm !== null)?.e1rm;
-      result['e1RM'] = recentE1RM ?? undefined;
 
       return result;
     },
@@ -3173,7 +3167,7 @@ export function WorkoutSessionSheet({
     onChangeExercise: handleChangeExercise,
     onOpenChangeLibrary: handleOpenChangeLibrary,
     onOpenHistory: athleteConnectionId ? (exerciseName: string) => setHistoryTarget(exerciseName) : undefined,
-    buildAthleteContextForExercise,
+    resolveAthleteDataRefs,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [
     handleParameterChange,
@@ -3197,7 +3191,7 @@ export function WorkoutSessionSheet({
     handleChangeExercise,
     handleOpenChangeLibrary,
     athleteConnectionId,
-    buildAthleteContextForExercise,
+    resolveAthleteDataRefs,
   ]);
 
   // Scroll lock — replaces the behavior normally provided by modal={true}
