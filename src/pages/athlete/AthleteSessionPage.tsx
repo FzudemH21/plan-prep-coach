@@ -1160,6 +1160,7 @@ export default function AthleteSessionPage() {
     const swap = swappedExercises[ex.id];
     return {
       exerciseName: swap ? swap.replacementName : ex.name,
+      exerciseLibraryId: ex.exerciseLibraryId,
       methodId: ex.methodKey,
       swappedFrom: swap ? swap.originalName : undefined,
       swapDirection: swap ? swap.direction : undefined,

@@ -25,6 +25,7 @@ import { getParametersForMethod } from '@/data/methodParameters';
 import { ParameterVisibilityPopover, ParameterVisibilityOverrides, isParameterVisible } from './ParameterVisibilityPopover';
 import { ToolboxEntry } from '@/types/toolbox';
 import { useWorkoutSession } from './WorkoutSessionContext';
+import { evaluateFormula } from '@/utils/formulaEvaluator';
 
 interface WorkoutExerciseCardProps {
   exercise: WorkoutExercise;
@@ -317,8 +318,8 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
   // Athlete context: resolved values (e1RM, Max HR, Body Weight, …) for this exercise
   const { buildAthleteContextForExercise } = useWorkoutSession();
   const athleteCtx = useMemo(
-    () => buildAthleteContextForExercise(exercise.exerciseName, exercise.categoryName || ''),
-    [buildAthleteContextForExercise, exercise.exerciseName, exercise.categoryName],
+    () => buildAthleteContextForExercise(exercise.exerciseName, exercise.exerciseId),
+    [buildAthleteContextForExercise, exercise.exerciseName, exercise.exerciseId],
   );
 
   // Handle deleting a set
@@ -645,14 +646,40 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                         ))}
                         {/* Auto-calculated Weight cell */}
                         {autoCalculateWeight && autoCalcDetection.has1RMParam && (() => {
-                          const intensityRaw =
-                            exercise.parameters[`${autoCalcDetection.intensityParamName}_set${setIndex + 1}`] ??
-                            exercise.parameters[autoCalcDetection.intensityParamName ?? ''] ?? '';
-                          const intensity = parseFloat(String(intensityRaw));
-                          const e1RM = athleteCtx['e1RM'];
-                          const computed = (!isNaN(intensity) && intensity > 0 && e1RM !== undefined)
-                            ? Math.round(intensity / 100 * e1RM * 2) / 2
-                            : undefined;
+                          // Prefer the isCalculated ToolboxEntry formula if the coach defined one
+                          const calcEntry = toolboxParams?.find(
+                            tp => tp.isCalculated && tp.formula && tp.athleteDataRefs?.includes('e1RM')
+                          );
+                          let computed: number | undefined;
+                          if (calcEntry && calcEntry.formula) {
+                            // Systematic formula evaluation:
+                            // 1. Resolve method params by ID → name → per-set value
+                            const ctx: Record<string, number> = {};
+                            for (const srcId of (calcEntry.sourceParameterIds ?? [])) {
+                              const srcParam = toolboxParams?.find(p => p.id === srcId);
+                              if (!srcParam) continue;
+                              const raw = exercise.parameters[`${srcParam.parameterName}_set${setIndex + 1}`]
+                                ?? exercise.parameters[srcParam.parameterName];
+                              const n = parseFloat(String(raw ?? ''));
+                              if (!isNaN(n)) ctx[srcParam.parameterName] = n;
+                            }
+                            // 2. Merge athlete context (already keyed by definition name)
+                            for (const [k, v] of Object.entries(athleteCtx)) {
+                              if (v !== undefined) ctx[k] = v;
+                            }
+                            // 3. evaluateFormula returns null when any variable is missing
+                            const result = evaluateFormula(calcEntry.formula, ctx);
+                            if (result !== null) computed = Math.round(result * 2) / 2;
+                          } else {
+                            // Fallback: hardcoded Intensity × e1RM / 100
+                            const intensityRaw =
+                              exercise.parameters[`${autoCalcDetection.intensityParamName}_set${setIndex + 1}`] ??
+                              exercise.parameters[autoCalcDetection.intensityParamName ?? ''] ?? '';
+                            const intensity = parseFloat(String(intensityRaw));
+                            const e1RM = athleteCtx['e1RM'];
+                            if (!isNaN(intensity) && intensity > 0 && e1RM !== undefined)
+                              computed = Math.round(intensity / 100 * e1RM * 2) / 2;
+                          }
                           return (
                             <TableCell>
                               {computed !== undefined ? (
@@ -668,14 +695,36 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                         })()}
                         {/* Auto-calculated Target HR cell */}
                         {autoCalculateTargetHR && autoCalcDetection.hasMaxHRParam && (() => {
-                          const intensityRaw =
-                            exercise.parameters[`${autoCalcDetection.hrParamName}_set${setIndex + 1}`] ??
-                            exercise.parameters[autoCalcDetection.hrParamName ?? ''] ?? '';
-                          const intensity = parseFloat(String(intensityRaw));
-                          const maxHR = athleteCtx['Max HR'];
-                          const computed = (!isNaN(intensity) && intensity > 0 && maxHR !== undefined)
-                            ? Math.round(intensity / 100 * maxHR)
-                            : undefined;
+                          // Prefer isCalculated formula; fall back to hardcoded Intensity × maxHR / 100
+                          const calcEntry = toolboxParams?.find(
+                            tp => tp.isCalculated && tp.formula &&
+                              tp.athleteDataRefs?.some(r => r !== 'e1RM')
+                          );
+                          let computed: number | undefined;
+                          if (calcEntry && calcEntry.formula) {
+                            const ctx: Record<string, number> = {};
+                            for (const srcId of (calcEntry.sourceParameterIds ?? [])) {
+                              const srcParam = toolboxParams?.find(p => p.id === srcId);
+                              if (!srcParam) continue;
+                              const raw = exercise.parameters[`${srcParam.parameterName}_set${setIndex + 1}`]
+                                ?? exercise.parameters[srcParam.parameterName];
+                              const n = parseFloat(String(raw ?? ''));
+                              if (!isNaN(n)) ctx[srcParam.parameterName] = n;
+                            }
+                            for (const [k, v] of Object.entries(athleteCtx)) {
+                              if (v !== undefined) ctx[k] = v;
+                            }
+                            const result = evaluateFormula(calcEntry.formula, ctx);
+                            if (result !== null) computed = Math.round(result);
+                          } else {
+                            const intensityRaw =
+                              exercise.parameters[`${autoCalcDetection.hrParamName}_set${setIndex + 1}`] ??
+                              exercise.parameters[autoCalcDetection.hrParamName ?? ''] ?? '';
+                            const intensity = parseFloat(String(intensityRaw));
+                            const maxHR = athleteCtx['Max HR'];
+                            if (!isNaN(intensity) && intensity > 0 && maxHR !== undefined)
+                              computed = Math.round(intensity / 100 * maxHR);
+                          }
                           return (
                             <TableCell>
                               {computed !== undefined ? (

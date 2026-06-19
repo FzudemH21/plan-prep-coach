@@ -401,19 +401,27 @@ export function WorkoutSessionSheet({
         for (const row of (data ?? []) as Record<string, unknown>[]) {
           const setsLogged = (row.sets_logged as Array<{
             exerciseName: string;
+            exerciseLibraryId?: string;
             sets?: Array<{ setNumber: number; values: Record<string, string> }>;
           }>) ?? [];
           for (const ex of setsLogged) {
             if (!ex.exerciseName || !ex.sets?.length) continue;
-            const key = ex.exerciseName.toLowerCase();
-            if (!cache.has(key)) cache.set(key, []);
-            const entries = cache.get(key)!;
-            if (entries.length < 10) {
-              entries.push({
-                date: row.date as string,
-                sessionName: row.session_name as string,
-                sets: ex.sets.map(s => ({ setNumber: s.setNumber, values: s.values ?? {} })),
-              });
+            const entry: HistoryEntry = {
+              date: row.date as string,
+              sessionName: row.session_name as string,
+              sets: ex.sets.map(s => ({ setNumber: s.setNumber, values: s.values ?? {} })),
+            };
+            // Index by name (backward compat for logs without library ID)
+            const nameKey = ex.exerciseName.toLowerCase();
+            const nameEntries = cache.get(nameKey) ?? [];
+            if (!cache.has(nameKey)) cache.set(nameKey, nameEntries);
+            if (nameEntries.length < 10) nameEntries.push(entry);
+            // Also index by library exercise ID for ID-based e1RM lookup
+            if (ex.exerciseLibraryId) {
+              const idKey = `id:${ex.exerciseLibraryId}`;
+              const idEntries = cache.get(idKey) ?? [];
+              if (!cache.has(idKey)) cache.set(idKey, idEntries);
+              if (idEntries.length < 10) idEntries.push(entry);
             }
           }
         }
@@ -3091,7 +3099,7 @@ export function WorkoutSessionSheet({
   const { biometricDefinitions, athleteBiometrics } = useAthletes();
 
   const buildAthleteContextForExercise = useCallback(
-    (exerciseName: string, categoryName: string): Record<string, number | undefined> => {
+    (exerciseName: string, exerciseId: string): Record<string, number | undefined> => {
       const result: Record<string, number | undefined> = {};
       if (!selectedAthleteId) return result;
 
@@ -3134,10 +3142,13 @@ export function WorkoutSessionSheet({
         if (!isNaN(num)) result[def.name] = num;
       }
 
-      // Resolve e1RM: Epley estimate from the most recent logged sets for this exact exercise
-      // historyCache is keyed by exercise name (lowercase) — direct lookup, no name matching
+      // Resolve e1RM: Epley estimate from logged sets, looked up by exercise library ID first.
+      // Falls back to name key (lowercase) for session logs predating the exerciseLibraryId field.
       let bestE1RM: number | undefined;
-      const historyEntries = historyCache?.get(exerciseName.toLowerCase()) ?? [];
+      const idEntries = exerciseId ? historyCache?.get(`id:${exerciseId}`) : undefined;
+      const historyEntries = (idEntries && idEntries.length > 0)
+        ? idEntries
+        : (historyCache?.get(exerciseName.toLowerCase()) ?? []);
       for (const entry of historyEntries) {
         for (const set of entry.sets) {
           let weight: number | undefined;
