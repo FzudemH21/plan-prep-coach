@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronDown, ChevronRight, Plus, Minus, Check,
   Info, RefreshCw, Dumbbell, Trash2, Link2, AlignLeft,
-  GripVertical, Settings2, MoreVertical, Copy, ClipboardList, CheckCircle2, History, Lock,
+  GripVertical, Settings2, MoreVertical, Copy, ClipboardList, CheckCircle2, History, Lock, Pencil, X,
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult, DragStart } from '@hello-pangea/dnd';
@@ -286,7 +286,7 @@ function IntensityPickerSheet({
   );
 }
 
-// ── Exercise / Circuit picker sheet ───────────────────────────────────────────
+// ── Exercise / Circuit picker (centered dialog) ───────────────────────────────
 
 function ExercisePickerSheet({
   open, onClose, onSelectExercise, onSelectCircuit,
@@ -299,8 +299,12 @@ function ExercisePickerSheet({
   const [tab, setTab] = useState<'exercises' | 'circuits'>('exercises');
   const [libIdx, setLibIdx] = useState(0);
   const [search, setSearch] = useState('');
+  const [circuitSearch, setCircuitSearch] = useState('');
+  const [circuitLibId, setCircuitLibId] = useState<string | null>(null); // null = all libraries
 
-  useEffect(() => { if (open) { setSearch(''); setLibIdx(0); setTab('exercises'); } }, [open]);
+  useEffect(() => {
+    if (open) { setSearch(''); setLibIdx(0); setTab('exercises'); setCircuitSearch(''); setCircuitLibId(null); }
+  }, [open]);
 
   function getExName(lib: CustomLibrary, ex: CustomExercise): string {
     const col = lib.columns.find(c => c.required) ?? lib.columns.find(c => !c.role) ?? lib.columns[0];
@@ -308,17 +312,25 @@ function ExercisePickerSheet({
   }
 
   const currentLib = libraries[libIdx] ?? null;
-  const allCircuits = libraries.flatMap(lib => (lib.circuits ?? []).map(c => ({ circuit: c, lib })));
   const filteredExercises = currentLib
     ? currentLib.exercises.filter(ex => !search || getExName(currentLib, ex).toLowerCase().includes(search.toLowerCase()))
     : [];
 
+  const librariesWithCircuits = libraries.filter(l => (l.circuits ?? []).length > 0);
+  const allCircuits = (circuitLibId
+    ? libraries.filter(l => l.id === circuitLibId)
+    : libraries
+  ).flatMap(lib => (lib.circuits ?? []).map(c => ({ circuit: c, lib })));
+  const filteredCircuits = circuitSearch
+    ? allCircuits.filter(({ circuit }) => circuit.name.toLowerCase().includes(circuitSearch.toLowerCase()))
+    : allCircuits;
+
   return (
-    <Sheet open={open} onOpenChange={o => { if (!o) onClose(); }}>
-      <SheetContent side="bottom" className={cn('rounded-t-2xl pb-safe flex flex-col gap-0 p-0', SHEET_CENTER)}
+    <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent className="p-0 flex flex-col gap-0 w-[92vw] sm:w-[480px] max-h-[85vh]"
         style={{ maxHeight: '85vh' }}>
         <div className="px-4 pt-4 pb-3 border-b shrink-0">
-          <SheetHeader><SheetTitle>Add to Session</SheetTitle></SheetHeader>
+          <DialogHeader><DialogTitle>Add to Session</DialogTitle></DialogHeader>
           <div className="flex gap-0 border rounded-lg overflow-hidden mt-3">
             {(['exercises', 'circuits'] as const).map(t => (
               <button key={t} onClick={() => setTab(t)}
@@ -329,6 +341,7 @@ function ExercisePickerSheet({
             ))}
           </div>
         </div>
+
         {tab === 'exercises' ? (
           <div className="flex flex-col flex-1 min-h-0 px-4 pt-3 gap-2">
             {libraries.length > 1 && (
@@ -360,25 +373,258 @@ function ExercisePickerSheet({
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto px-4 pt-3">
-            <div className="space-y-0.5 pb-6">
-              {allCircuits.length === 0
-                ? <p className="text-sm text-muted-foreground text-center py-8">No circuits in your libraries.</p>
-                : allCircuits.map(({ circuit, lib: cLib }) => (
-                  <button key={circuit.id} onClick={() => onSelectCircuit(circuit, cLib)}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 active:bg-muted text-left transition-colors">
-                    <RefreshCw className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{circuit.name}</p>
-                      <p className="text-xs text-muted-foreground">{circuit.exercises.length} ex · {circuit.rounds ?? 3} rounds · {cLib.name}</p>
-                    </div>
+          <div className="flex flex-col flex-1 min-h-0 px-4 pt-3 gap-2">
+            {librariesWithCircuits.length > 1 && (
+              <div className="flex gap-1 flex-wrap shrink-0">
+                <button onClick={() => setCircuitLibId(null)}
+                  className={cn('px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+                    circuitLibId === null ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
+                  All
+                </button>
+                {librariesWithCircuits.map(l => (
+                  <button key={l.id} onClick={() => setCircuitLibId(l.id)}
+                    className={cn('px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+                      circuitLibId === l.id ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
+                    {l.name}
                   </button>
                 ))}
+              </div>
+            )}
+            <input type="text" value={circuitSearch} onChange={e => setCircuitSearch(e.target.value)}
+              placeholder="Search circuits…"
+              className="w-full h-9 border rounded-lg px-3 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary shrink-0" />
+            <div className="flex-1 overflow-y-auto -mx-1">
+              <div className="space-y-0.5 pb-6 px-1">
+                {filteredCircuits.length === 0
+                  ? <p className="text-sm text-muted-foreground text-center py-8">{allCircuits.length === 0 ? 'No circuits in your libraries.' : 'No circuits match your search.'}</p>
+                  : filteredCircuits.map(({ circuit, lib: cLib }) => (
+                    <button key={circuit.id} onClick={() => onSelectCircuit(circuit, cLib)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 active:bg-muted text-left transition-colors">
+                      <RefreshCw className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{circuit.name}</p>
+                        <p className="text-xs text-muted-foreground">{circuit.exercises.length} ex · {circuit.rounds ?? 3} rounds · {cLib.name}</p>
+                      </div>
+                    </button>
+                  ))}
+              </div>
             </div>
           </div>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Circuit-in-session editor (centered dialog) ───────────────────────────────
+
+function CircuitInSessionEditor({
+  circuit, open, onClose, onSave,
+}: {
+  circuit: ExerciseSummary | null;
+  open: boolean;
+  onClose: () => void;
+  /** Called with the updated fields to apply to the session exercise. */
+  onSave: (exId: string, updates: Partial<ExerciseSummary>, saveToLib?: { libraryId: string; mode: 'new' | 'overwrite' }) => void;
+}) {
+  const { libraries, addCircuitToLibrary, updateCircuitInLibrary } = useCustomLibraries();
+  const [name, setName] = useState('');
+  const [rounds, setRounds] = useState('3');
+  const [restBetweenRounds, setRestBetweenRounds] = useState('60');
+  const [restBetweenExercises, setRestBetweenExercises] = useState('15');
+  const [comments, setComments] = useState('');
+  const [exercises, setExercises] = useState<NonNullable<ExerciseSummary['circuitExercises']>>([]);
+  const [saveLibDialogOpen, setSaveLibDialogOpen] = useState(false);
+  const [saveLibId, setSaveLibId] = useState<string>('');
+  const [saveMode, setSaveMode] = useState<'new' | 'overwrite'>('new');
+
+  useEffect(() => {
+    if (!open || !circuit) return;
+    setName(circuit.name);
+    setRounds(circuit.circuitRounds ?? '3');
+    setRestBetweenRounds(circuit.circuitRestBetweenRounds ?? '60');
+    setRestBetweenExercises(circuit.circuitRestBetweenExercises ?? '15');
+    setComments(circuit.circuitComments ?? '');
+    setExercises(circuit.circuitExercises ? [...circuit.circuitExercises] : []);
+    setSaveLibDialogOpen(false);
+    // Default target library to source library or first library
+    const firstLib = libraries[0];
+    setSaveLibId(circuit.circuitSourceLibraryId ?? firstLib?.id ?? '');
+    setSaveMode(circuit.circuitSourceId ? 'overwrite' : 'new');
+  }, [open, circuit, libraries]);
+
+  if (!circuit) return null;
+
+  const updates: Partial<ExerciseSummary> = {
+    name,
+    circuitRounds: rounds,
+    circuitRestBetweenRounds: restBetweenRounds,
+    circuitRestBetweenExercises: restBetweenExercises,
+    circuitComments: comments,
+    circuitExercises: exercises,
+  };
+
+  function handleSaveSession() {
+    onSave(circuit!.id, updates);
+    onClose();
+  }
+
+  function handleSaveToLib() {
+    if (!saveLibId) return;
+    const circuitData = {
+      name,
+      exercises: exercises.map((e, i) => ({
+        id: e.id,
+        exerciseId: e.exerciseId ?? e.id,
+        exerciseName: e.exerciseName,
+        libraryId: '',
+        sets: '1',
+        reps: e.reps,
+        time: e.time,
+        distance: e.distance,
+        enabledParams: e.enabledParams,
+        order: i,
+      })),
+      rounds,
+      restBetweenRounds,
+      restBetweenExercises,
+      comments,
+    };
+    if (saveMode === 'overwrite' && circuit!.circuitSourceId) {
+      updateCircuitInLibrary(saveLibId, circuit!.circuitSourceId, circuitData);
+    } else {
+      addCircuitToLibrary(saveLibId, circuitData);
+    }
+    onSave(circuit!.id, { ...updates, circuitSourceLibraryId: saveLibId });
+    setSaveLibDialogOpen(false);
+    onClose();
+  }
+
+  // Find existing circuit with same name in the selected library (for overwrite hint)
+  const targetLib = libraries.find(l => l.id === saveLibId);
+  const existingMatch = targetLib?.circuits?.find(c => c.name.toLowerCase() === name.toLowerCase() && c.id !== circuit.circuitSourceId);
+
+  return (
+    <>
+      <Dialog open={open && !saveLibDialogOpen} onOpenChange={o => { if (!o) onClose(); }}>
+        <DialogContent className="p-0 flex flex-col gap-0 w-[92vw] sm:w-[480px] max-h-[85vh]">
+          <div className="px-4 pt-4 pb-3 border-b shrink-0 flex items-center gap-3">
+            <DialogHeader className="flex-1 min-w-0">
+              <DialogTitle className="text-base">Edit Circuit</DialogTitle>
+            </DialogHeader>
+          </div>
+
+          <div className="flex-1 overflow-y-auto min-h-0 px-4 py-4 space-y-4">
+            {/* Name */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Name</label>
+              <input value={name} onChange={e => setName(e.target.value)}
+                className="w-full h-9 border rounded-lg px-3 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary" />
+            </div>
+
+            {/* Rounds */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Rounds</label>
+              <div className="flex items-center gap-3">
+                <button onClick={() => setRounds(r => String(Math.max(1, Number(r) - 1)))}
+                  className="w-9 h-9 rounded-full border bg-background flex items-center justify-center active:bg-accent">
+                  <Minus className="h-4 w-4" />
+                </button>
+                <span className="text-base font-bold w-6 text-center tabular-nums">{rounds}</span>
+                <button onClick={() => setRounds(r => String(Number(r) + 1))}
+                  className="w-9 h-9 rounded-full border bg-background flex items-center justify-center active:bg-accent">
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Rest times */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Rest between rounds (s)</label>
+                <input type="number" inputMode="numeric" value={restBetweenRounds} onChange={e => setRestBetweenRounds(e.target.value)}
+                  className="w-full h-9 border rounded-lg px-3 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Rest between exercises (s)</label>
+                <input type="number" inputMode="numeric" value={restBetweenExercises} onChange={e => setRestBetweenExercises(e.target.value)}
+                  className="w-full h-9 border rounded-lg px-3 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary" />
+              </div>
+            </div>
+
+            {/* Exercises */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Exercises ({exercises.length})</label>
+              <div className="border rounded-xl overflow-hidden divide-y">
+                {exercises.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">No exercises</p>
+                )}
+                {exercises.map((e, i) => (
+                  <div key={e.id} className="flex items-center gap-2 px-3 py-2">
+                    <span className="text-xs text-muted-foreground w-4 text-right shrink-0">{i + 1}</span>
+                    <span className="text-sm flex-1 min-w-0 truncate">{e.exerciseName}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">{e.reps ? `${e.reps} reps` : e.time ? `${e.time}s` : ''}</span>
+                    <button onClick={() => setExercises(prev => prev.filter((_, j) => j !== i))}
+                      className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-destructive active:opacity-60 transition-colors shrink-0">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Comments */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Notes</label>
+              <textarea value={comments} onChange={e => setComments(e.target.value)}
+                placeholder="Circuit notes…" rows={2}
+                className="w-full text-sm border rounded-lg px-3 py-2 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground/50" />
+            </div>
+          </div>
+
+          <div className="px-4 py-3 border-t shrink-0 flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={handleSaveSession}>Apply to session</Button>
+            <Button className="flex-1" onClick={() => setSaveLibDialogOpen(true)}>Save to library</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Library save sub-dialog */}
+      <Dialog open={saveLibDialogOpen} onOpenChange={o => { if (!o) setSaveLibDialogOpen(false); }}>
+        <DialogContent className="w-[92vw] sm:w-[400px]">
+          <DialogHeader><DialogTitle>Save to Library</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Library</label>
+              <select value={saveLibId} onChange={e => setSaveLibId(e.target.value)}
+                className="w-full h-9 border rounded-lg px-3 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary">
+                {libraries.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+
+            {circuit.circuitSourceId && circuit.circuitSourceLibraryId === saveLibId && (
+              <div className="flex rounded-lg border overflow-hidden">
+                {(['overwrite', 'new'] as const).map(m => (
+                  <button key={m} onClick={() => setSaveMode(m)}
+                    className={cn('flex-1 py-2 text-sm font-medium transition-colors',
+                      saveMode === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground bg-background hover:text-foreground')}>
+                    {m === 'overwrite' ? `Overwrite "${circuit.name}"` : 'Save as new'}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {existingMatch && saveMode === 'new' && (
+              <p className="text-xs text-amber-600">A circuit named "{name}" already exists in this library — it will be saved as a duplicate.</p>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setSaveLibDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveToLib} disabled={!saveLibId}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -780,6 +1026,7 @@ export default function CoachMobileSessionEditPage() {
   // ── Exercise detail dialog ─────────────────────────────────────────────────
   const [detailTarget, setDetailTarget] = useState<ExerciseDetailTarget | null>(null);
   const [historyTarget, setHistoryTarget] = useState<string | null>(null);
+  const [circuitEditTarget, setCircuitEditTarget] = useState<ExerciseSummary | null>(null);
 
   // ── Change exercise (replace name/id/media, keep params) ──────────────────
   const [changeExerciseTargetId, setChangeExerciseTargetId] = useState<string | null>(null);
@@ -1133,7 +1380,7 @@ export default function CoachMobileSessionEditPage() {
     if (targetSection?.id) setExpandedSections(prev => new Set([...prev, targetSection.id]));
   }
 
-  function addCircuitFromLibrary(circuit: Circuit) {
+  function addCircuitFromLibrary(circuit: Circuit, sourceLib?: CustomLibrary) {
     const targetSection = allSections.find(s => s.id === pickerTargetSectionId);
     const newEx: ExerciseSummary = {
       id: `mobile_circuit_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -1148,6 +1395,8 @@ export default function CoachMobileSessionEditPage() {
         id: e.id, exerciseId: e.exerciseId, exerciseName: e.exerciseName,
         reps: e.reps, time: e.time, distance: e.distance, enabledParams: e.enabledParams, order: e.order,
       })),
+      circuitSourceLibraryId: sourceLib?.id,
+      circuitSourceId: circuit.id,
       mobileEdited: true, mobileAdded: true,
       plannedSets: 1, plannedParams: { Sets: 1 },
     };
@@ -1709,6 +1958,13 @@ export default function CoachMobileSessionEditPage() {
                                                               <RefreshCw className="h-3.5 w-3.5" /> Change Exercise
                                                             </button>
                                                           )}
+                                                          {ex.isCircuit && (
+                                                            <button
+                                                              onClick={() => { setCircuitEditTarget(ex); setExerciseActionsOpen(null); }}
+                                                              className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent active:bg-accent/80 text-left">
+                                                              <Pencil className="h-3.5 w-3.5" /> Edit Circuit
+                                                            </button>
+                                                          )}
                                                           <button
                                                             onClick={() => { duplicateExercise(ex.id); setExerciseActionsOpen(null); }}
                                                             className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent active:bg-accent/80 text-left">
@@ -1852,7 +2108,7 @@ export default function CoachMobileSessionEditPage() {
 
       <ExercisePickerSheet open={exercisePickerOpen} onClose={() => { setExercisePickerOpen(false); setChangeExerciseTargetId(null); }}
         onSelectExercise={(lib, ex) => changeExerciseTargetId ? handleExerciseChange(lib, ex) : handleExerciseFromLibraryPick(lib, ex)}
-        onSelectCircuit={(circuit) => addCircuitFromLibrary(circuit)} />
+        onSelectCircuit={(circuit, lib) => addCircuitFromLibrary(circuit, lib)} />
 
       <MethodSelectionSheet open={methodSheetOpen} onClose={() => { setMethodSheetOpen(false); setPendingExercise(null); }} onConfirm={handleMethodConfirm} />
 
@@ -1887,6 +2143,16 @@ export default function CoachMobileSessionEditPage() {
           athleteConnectionId={connectionId}
         />
       )}
+
+      <CircuitInSessionEditor
+        circuit={circuitEditTarget}
+        open={!!circuitEditTarget}
+        onClose={() => setCircuitEditTarget(null)}
+        onSave={(exId, updates) => {
+          updateExercise(exId, ex => ({ ...ex, ...updates, mobileEdited: true }));
+          setCircuitEditTarget(null);
+        }}
+      />
     </div>
   );
 }

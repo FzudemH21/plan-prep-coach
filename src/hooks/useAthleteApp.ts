@@ -61,6 +61,9 @@ export interface ExerciseSummary {
   circuitRestBetweenExercises?: string;
   circuitComments?: string;
   circuitExercises?: CircuitExerciseSummary[];
+  /** Source library & circuit IDs — set when circuit is added from a library, used to overwrite/save-as-new */
+  circuitSourceLibraryId?: string;
+  circuitSourceId?: string;
   // Planned values synced from coach periodization table
   methodKey?: string;
   plannedSets?: number;
