@@ -1260,7 +1260,7 @@ export default function CoachMobileSessionLoggingPage() {
                   Perform on each side
                 </span>
               )}
-              {contextLine && <p className="text-xs text-muted-foreground mt-0.5 truncate">{contextLine}</p>}
+              {contextLine && <p className="text-xs text-muted-foreground mt-0.5 break-words">{contextLine}</p>}
               {/* Adjust button — only for exercises with a library ID and no active swap */}
               {!ex.isCircuit && ex.exerciseLibraryId && !swappedExercises[ex.id] && (
                 <button onClick={() => openSwapSheet(ex)}
