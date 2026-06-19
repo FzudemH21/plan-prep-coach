@@ -42,7 +42,7 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import { AthletePerformanceParameter } from '@/types/athlete';
 import { FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
 import { SaveToLibraryDialog } from '@/components/session-library/SaveToLibraryDialog';
-import { ExerciseHistorySheet } from '@/components/shared/ExerciseHistorySheet';
+import { ExerciseHistorySheet, type HistoryEntry } from '@/components/shared/ExerciseHistorySheet';
 
 interface SessionSectionProp {
   id: string;
@@ -381,6 +381,46 @@ export function WorkoutSessionSheet({
 
   // Exercise history sheet state — exercise name when open, null when closed
   const [historyTarget, setHistoryTarget] = useState<string | null>(null);
+
+  // History cache: pre-fetched when the sheet opens so the panel shows instantly.
+  // null = fetch in flight, Map = ready (keyed by lowercased exercise name).
+  const [historyCache, setHistoryCache] = useState<Map<string, HistoryEntry[]> | null>(null);
+  useEffect(() => {
+    if (!isOpen || !athleteConnectionId) { setHistoryCache(null); return; }
+    setHistoryCache(null);
+    supabase
+      .from('athlete_session_logs')
+      .select('date, session_name, sets_logged')
+      .eq('athlete_connection_id', athleteConnectionId)
+      .not('completed_at', 'is', null)
+      .order('date', { ascending: false })
+      .limit(100)
+      .then(({ data }) => {
+        const cache = new Map<string, HistoryEntry[]>();
+        for (const row of (data ?? []) as Record<string, unknown>[]) {
+          const setsLogged = (row.sets_logged as Array<{
+            exerciseName: string;
+            sets?: Array<{ setNumber: number; values: Record<string, string> }>;
+          }>) ?? [];
+          for (const ex of setsLogged) {
+            if (!ex.exerciseName || !ex.sets?.length) continue;
+            const key = ex.exerciseName.toLowerCase();
+            if (!cache.has(key)) cache.set(key, []);
+            const entries = cache.get(key)!;
+            if (entries.length < 10) {
+              entries.push({
+                date: row.date as string,
+                sessionName: row.session_name as string,
+                sets: ex.sets.map(s => ({ setNumber: s.setNumber, values: s.values ?? {} })),
+              });
+            }
+          }
+        }
+        setHistoryCache(cache);
+      })
+      .catch(() => setHistoryCache(new Map()));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, athleteConnectionId]);
 
   // Circuit card detail dialog state (clicking circuit name)
   const [circuitDetailExercise, setCircuitDetailExercise] = useState<WorkoutExercise | null>(null);
@@ -3813,6 +3853,7 @@ export function WorkoutSessionSheet({
           onClose={() => setHistoryTarget(null)}
           exerciseName={historyTarget}
           athleteConnectionId={athleteConnectionId}
+          prefetchedEntries={historyCache ? (historyCache.get(historyTarget.toLowerCase()) ?? []) : null}
         />
       )}
     </WorkoutSessionProvider>

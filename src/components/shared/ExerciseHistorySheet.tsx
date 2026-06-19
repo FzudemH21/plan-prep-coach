@@ -4,7 +4,7 @@ import * as SheetPrimitive from '@radix-ui/react-dialog';
 import { Sheet, SheetPortal, SheetOverlay } from '@/components/ui/sheet';
 import { supabase } from '@/lib/supabase';
 
-interface HistoryEntry {
+export interface HistoryEntry {
   date: string;
   sessionName: string;
   sets: Array<{ setNumber: number; values: Record<string, string> }>;
@@ -15,14 +15,26 @@ interface Props {
   onClose: () => void;
   exerciseName: string;
   athleteConnectionId: string;
+  /** Pre-fetched entries from parent. null = still loading, array = ready (use as-is). */
+  prefetchedEntries?: HistoryEntry[] | null;
 }
 
-export function ExerciseHistorySheet({ open, onClose, exerciseName, athleteConnectionId }: Props) {
+export function ExerciseHistorySheet({ open, onClose, exerciseName, athleteConnectionId, prefetchedEntries }: Props) {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!open || !exerciseName || !athleteConnectionId) return;
+    if (!open) return;
+
+    // Parent prefetched the data — use it directly, no network call needed.
+    if (prefetchedEntries !== undefined) {
+      setEntries(prefetchedEntries ?? []);
+      setLoading(prefetchedEntries === null);
+      return;
+    }
+
+    // Fallback: fetch per-exercise (used when parent doesn't prefetch, e.g. mobile).
+    if (!exerciseName || !athleteConnectionId) return;
     setLoading(true);
     setEntries([]);
     supabase
@@ -53,7 +65,7 @@ export function ExerciseHistorySheet({ open, onClose, exerciseName, athleteConne
         setEntries(result);
         setLoading(false);
       });
-  }, [open, exerciseName, athleteConnectionId]);
+  }, [open, exerciseName, athleteConnectionId, prefetchedEntries]);
 
   return (
     <Sheet open={open} onOpenChange={o => { if (!o) onClose(); }}>
