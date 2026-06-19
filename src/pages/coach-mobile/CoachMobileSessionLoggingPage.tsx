@@ -116,21 +116,21 @@ function getParamColumns(ex: ExerciseSummary): string[] {
   return candidates.length > 0 ? candidates : ['Reps'];
 }
 
-function getContextLine(ex: ExerciseSummary): string {
-  if (!ex.plannedParams) return '';
+function getContextParams(ex: ExerciseSummary): { label: string; value: string }[] {
+  if (!ex.plannedParams) return [];
   const gridSet = new Set(getParamColumns(ex));
   const seen = new Map<string, string>();
   for (const [k, v] of Object.entries(ex.plannedParams)) {
     if (!v || v === '' || k.endsWith('_unit')) continue;
     const base = k.replace(/_set\d+$/i, '');
-    if (gridSet.has(base) || base.toLowerCase() === 'sets') continue;
+    const baseLower = base.toLowerCase();
+    if (gridSet.has(base) || baseLower === 'sets' || baseLower.includes('frequency')) continue;
     if (!seen.has(base)) {
       const unit = String(ex.plannedParams[`${base}_unit`] ?? '');
       seen.set(base, unit ? `${v} ${unit}` : String(v));
     }
   }
-  if (seen.size === 0) return '';
-  return Array.from(seen.entries()).map(([k, v]) => `${k}: ${v}`).join(' · ');
+  return Array.from(seen.entries()).map(([label, value]) => ({ label, value }));
 }
 
 function getPlannedValue(ex: ExerciseSummary, paramName: string, setIdx: number): string {
@@ -1209,7 +1209,7 @@ export default function CoachMobileSessionLoggingPage() {
       const exComplete = exDone.length >= exSetCount &&
         Array.from({ length: exSetCount }, (_, i) => i).every(i => exDone.includes(i));
       const displayName = swappedExercises[ex.id]?.replacementName ?? ex.name;
-      const contextLine = ex.isCircuit ? '' : getContextLine(ex);
+      const contextParams = ex.isCircuit ? [] : getContextParams(ex);
 
       return (
         <div key={ex.id} className={cn('p-4 space-y-3 transition-colors', ssLabel ? '' : 'rounded-xl border', exComplete ? 'bg-primary/5' : '')}>
@@ -1260,7 +1260,15 @@ export default function CoachMobileSessionLoggingPage() {
                   Perform on each side
                 </span>
               )}
-              {contextLine && <p className="text-xs text-muted-foreground mt-0.5 break-words">{contextLine}</p>}
+              {contextParams.length > 0 && (
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1">
+                  {contextParams.map(({ label, value }) => (
+                    <p key={label} className="text-xs text-muted-foreground truncate">
+                      <span className="font-medium text-foreground/60">{label}:</span> {value}
+                    </p>
+                  ))}
+                </div>
+              )}
               {/* Adjust button — only for exercises with a library ID and no active swap */}
               {!ex.isCircuit && ex.exerciseLibraryId && !swappedExercises[ex.id] && (
                 <button onClick={() => openSwapSheet(ex)}
