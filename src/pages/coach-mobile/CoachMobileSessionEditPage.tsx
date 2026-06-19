@@ -2068,16 +2068,12 @@ export default function CoachMobileSessionEditPage() {
                             )}
                           </Droppable>
 
-                          {/* Add exercise / circuit buttons — shown when expanded */}
+                          {/* Add to Session button — shown when expanded */}
                           {isExpanded && (
-                            <div className="flex gap-2 p-3 border-t">
+                            <div className="p-3 border-t">
                               <button onClick={() => { setPickerTargetSectionId(section.id); setExercisePickerOpen(true); }}
-                                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed text-xs text-muted-foreground hover:text-primary hover:border-primary active:opacity-60 transition-colors">
-                                <Plus className="h-3.5 w-3.5" /> Add Exercise
-                              </button>
-                              <button onClick={() => { setPickerTargetSectionId(section.id); setExercisePickerOpen(true); }}
-                                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed text-xs text-muted-foreground hover:text-primary hover:border-primary active:opacity-60 transition-colors">
-                                <RefreshCw className="h-3.5 w-3.5" /> Circuit
+                                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed text-xs text-muted-foreground hover:text-primary hover:border-primary active:opacity-60 transition-colors">
+                                <Plus className="h-3.5 w-3.5" /> Add Exercise / Circuit
                               </button>
                             </div>
                           )}
