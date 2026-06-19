@@ -25,17 +25,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useAthletes } from '@/hooks/useAthletes';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 
-// Predefined units for quantitative parameters
+// Predefined units for quantitative parameters — no custom units allowed
 const PREDEFINED_UNITS = [
   { value: '#', label: '# (count)' },
-  { value: 'm', label: 'm (meters)' },
-  { value: 'km', label: 'km (kilometers)' },
-  { value: 'cm', label: 'cm (centimeters)' },
-  { value: 'ft', label: 'ft (feet)' },
-  { value: 'yd', label: 'yd (yards)' },
   { value: 's', label: 's (seconds)' },
   { value: 'min', label: 'min (minutes)' },
-  { value: 'h', label: 'h (hours)' },
+  { value: 'm', label: 'm (meters)' },
+  { value: 'km', label: 'km (kilometers)' },
   { value: 'kg', label: 'kg (kilograms)' },
   { value: 'lbs', label: 'lbs (pounds)' },
   { value: '%', label: '% (percentage)' },
@@ -46,7 +42,6 @@ const PREDEFINED_UNITS = [
   { value: '%maxV', label: '%maxV (% of peak velocity)' },
   { value: 'bpm', label: 'bpm (heart rate)' },
   { value: '%maxHR', label: '%maxHR (% of max heart rate)' },
-  { value: 'kcal', label: 'kcal (calories)' },
   { value: 'W', label: 'W (watts)' },
   { value: 'W/kg', label: 'W/kg (watts per kg bodyweight)' },
   { value: 'rpm', label: 'rpm (revolutions per minute)' },
@@ -566,34 +561,6 @@ export function ParameterManagementDialog({
                             ))}
                           </SelectContent>
                         </Select>
-                        
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Add custom field</Label>
-                          <div className="flex gap-2 mt-1">
-                            <Input
-                              placeholder="Custom unit..."
-                              id="edit-custom-unit-input"
-                              onKeyPress={(e) => {
-                                if (e.key === 'Enter') {
-                                  addOption(e.currentTarget.value);
-                                  e.currentTarget.value = '';
-                                }
-                              }}
-                            />
-                            <Button
-                              type="button"
-                              onClick={() => {
-                                const input = document.getElementById('edit-custom-unit-input') as HTMLInputElement;
-                                if (input?.value) {
-                                  addOption(input.value);
-                                  input.value = '';
-                                }
-                              }}
-                            >
-                              Add
-                            </Button>
-                          </div>
-                        </div>
                         
                         {(editingParameter.options || []).length > 0 && (
                           <div>
@@ -1319,34 +1286,6 @@ export function ParameterManagementDialog({
                           ))}
                         </SelectContent>
                       </Select>
-                      
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Add custom field</Label>
-                        <div className="flex gap-2 mt-1">
-                          <Input
-                            placeholder="Custom unit..."
-                            id="add-custom-unit-input"
-                            onKeyPress={(e) => {
-                              if (e.key === 'Enter') {
-                                addNewParameterOption(e.currentTarget.value);
-                                e.currentTarget.value = '';
-                              }
-                            }}
-                          />
-                          <Button
-                            type="button"
-                            onClick={() => {
-                              const input = document.getElementById('add-custom-unit-input') as HTMLInputElement;
-                              if (input?.value) {
-                                addNewParameterOption(input.value);
-                                input.value = '';
-                              }
-                            }}
-                          >
-                            Add
-                          </Button>
-                        </div>
-                      </div>
                       
                       {newParameter.options.length > 0 && (
                         <div>
