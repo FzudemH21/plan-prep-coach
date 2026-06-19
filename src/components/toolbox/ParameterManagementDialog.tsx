@@ -14,12 +14,16 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Calculator, AlertCircle } from 'lucide-react';
+import { Plus, Calculator, AlertCircle, ChevronDown } from 'lucide-react';
 import { ToolboxEntry } from '@/types/toolbox';
 import { DraggableParameterList } from './DraggableParameterList';
 import { DraggableExerciseCategoryList } from './DraggableExerciseCategoryList';
 import { QuantitativeParameterInput, QualitativeParameterInput } from '@/components/ui/parameter-input';
 import { validateFormula, extractParameterNames } from '@/utils/formulaEvaluator';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useAthletes } from '@/hooks/useAthletes';
+import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 
 // Predefined units for quantitative parameters
 const PREDEFINED_UNITS = [
@@ -48,6 +52,88 @@ const PREDEFINED_UNITS = [
   { value: 'rpm', label: 'rpm (revolutions per minute)' },
   { value: 'steps/min', label: 'steps/min (cadence)' },
 ];
+
+// ─── Formula token picker ───────────────────────────────────────────────────
+
+type TokenGroup = 'Method parameters' | 'Body metrics' | 'Performance parameters' | 'Special';
+
+interface FormulaToken {
+  name: string;
+  group: TokenGroup;
+  unit?: string;
+  sourceId?: string;   // method param ID → sourceParameterIds
+  athleteRef?: string; // biometric/perf param ID or 'e1RM' → athleteDataRefs
+}
+
+interface FormulaTokenPickerProps {
+  methodParams: Array<{ id: string; name: string }>;
+  bodyMetrics: Array<{ id: string; name: string; unit?: string | null }>;
+  perfParams: Array<{ id: string; name: string; unit?: string }>;
+  onInsert: (token: FormulaToken) => void;
+}
+
+function FormulaTokenPicker({ methodParams, bodyMetrics, perfParams, onInsert }: FormulaTokenPickerProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const allTokens: FormulaToken[] = [
+    ...methodParams.map(p => ({ name: p.name, group: 'Method parameters' as const, sourceId: p.id })),
+    ...bodyMetrics.map(b => ({ name: b.name, group: 'Body metrics' as const, unit: b.unit ?? undefined, athleteRef: b.id })),
+    ...perfParams.map(p => ({ name: p.name, group: 'Performance parameters' as const, unit: p.unit, athleteRef: p.id })),
+    { name: 'e1RM', group: 'Special' as const, unit: 'kg / lb', athleteRef: 'e1RM' },
+  ];
+
+  const lowerSearch = search.toLowerCase();
+  const filtered = search ? allTokens.filter(t => t.name.toLowerCase().includes(lowerSearch)) : allTokens;
+  const groups: TokenGroup[] = ['Method parameters', 'Body metrics', 'Performance parameters', 'Special'];
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" role="combobox" className="w-full justify-between text-muted-foreground font-normal">
+          Insert parameter…
+          <ChevronDown className="h-3.5 w-3.5 opacity-50 ml-1 flex-shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[320px] p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Search parameters…"
+            value={search}
+            onValueChange={setSearch}
+          />
+          <CommandList>
+            <CommandEmpty>No parameters found.</CommandEmpty>
+            {groups.map(group => {
+              const tokens = filtered.filter(t => t.group === group);
+              if (tokens.length === 0) return null;
+              return (
+                <CommandGroup key={group} heading={group}>
+                  {tokens.map(token => (
+                    <CommandItem
+                      key={`${group}::${token.name}`}
+                      value={`${group} ${token.name}`}
+                      onSelect={() => {
+                        onInsert(token);
+                        setSearch('');
+                        setOpen(false);
+                      }}
+                    >
+                      <span className="flex-1">{token.name}</span>
+                      {token.unit && <span className="text-xs text-muted-foreground ml-2">{token.unit}</span>}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              );
+            })}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Main dialog ─────────────────────────────────────────────────────────────
 
 interface ParameterManagementDialogProps {
   open: boolean;
@@ -80,8 +166,17 @@ export function ParameterManagementDialog({
     isCalculated: false,
     formula: '',
     sourceParameterIds: [] as string[],
+    athleteDataRefs: [] as string[],
   });
   const [newExerciseCategory, setNewExerciseCategory] = useState('');
+
+  const { biometricDefinitions } = useAthletes();
+  const { data: paramsV2Data } = useParametersDataV2();
+  const quantitativeBiometrics = useMemo(
+    () => biometricDefinitions.filter(b => b.type === 'quantitative'),
+    [biometricDefinitions],
+  );
+  const performanceParams = useMemo(() => paramsV2Data?.parameters ?? [], [paramsV2Data]);
 
   const handleReorderParameters = (reorderedParameters: ToolboxEntry[]) => {
     onUpdateParameters(reorderedParameters);
@@ -145,6 +240,7 @@ export function ParameterManagementDialog({
       isCalculated: newParameter.isCalculated,
       formula: newParameter.isCalculated ? newParameter.formula : undefined,
       sourceParameterIds: newParameter.isCalculated ? newParameter.sourceParameterIds : undefined,
+      athleteDataRefs: newParameter.isCalculated ? newParameter.athleteDataRefs : undefined,
     };
 
     let updatedParameters = [...parameters, parameter];
@@ -182,6 +278,7 @@ export function ParameterManagementDialog({
       isCalculated: false,
       formula: '',
       sourceParameterIds: [],
+      athleteDataRefs: [],
     });
     setShowAddDialog(false);
   };
@@ -292,23 +389,29 @@ export function ParameterManagementDialog({
     );
   }, [parameters, editingParameter?.id]);
 
+  // All valid token names across all sources (method params + biometrics + perf params + e1RM)
+  const allTokenNames = useMemo(() => [
+    ...availableSourceParameters.map(p => p.parameterName),
+    ...quantitativeBiometrics.map(b => b.name),
+    ...performanceParams.map(p => p.name),
+    'e1RM',
+  ], [availableSourceParameters, quantitativeBiometrics, performanceParams]);
+
   // Validate formula for editing parameter
   const editingFormulaValidation = useMemo(() => {
     if (!editingParameter?.isCalculated || !editingParameter?.formula) {
       return { valid: true };
     }
-    const availableNames = availableSourceParameters.map(p => p.parameterName);
-    return validateFormula(editingParameter.formula, availableNames);
-  }, [editingParameter?.isCalculated, editingParameter?.formula, availableSourceParameters]);
+    return validateFormula(editingParameter.formula, allTokenNames);
+  }, [editingParameter?.isCalculated, editingParameter?.formula, allTokenNames]);
 
   // Validate formula for new parameter
   const newFormulaValidation = useMemo(() => {
     if (!newParameter.isCalculated || !newParameter.formula) {
       return { valid: true };
     }
-    const availableNames = availableSourceParameters.map(p => p.parameterName);
-    return validateFormula(newParameter.formula, availableNames);
-  }, [newParameter.isCalculated, newParameter.formula, availableSourceParameters]);
+    return validateFormula(newParameter.formula, allTokenNames);
+  }, [newParameter.isCalculated, newParameter.formula, allTokenNames]);
 
   return (
     <>
@@ -763,39 +866,28 @@ export function ParameterManagementDialog({
 
                   {editingParameter.isCalculated && (
                     <div className="space-y-4 pt-2">
-                      <div>
-                        <Label className="text-sm">Available Parameters</Label>
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {availableSourceParameters.length > 0 ? (
-                            availableSourceParameters.map((p) => (
-                              <Badge 
-                                key={p.id} 
-                                variant="outline" 
-                                className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
-                                onClick={() => {
-                                  const currentFormula = editingParameter.formula || '';
-                                  const newFormula = currentFormula 
-                                    ? `${currentFormula} ${p.parameterName}` 
-                                    : p.parameterName;
-                                  setEditingParameter({
-                                    ...editingParameter,
-                                    formula: newFormula,
-                                    sourceParameterIds: [...new Set([...(editingParameter.sourceParameterIds || []), p.id])]
-                                  });
-                                }}
-                              >
-                                {p.parameterName}
-                              </Badge>
-                            ))
-                          ) : (
-                            <p className="text-xs text-muted-foreground italic">
-                              No quantitative parameters available. Add other quantitative parameters first.
-                            </p>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Click to add to formula. Use: + - * / ( )
-                        </p>
+                      <div className="space-y-2">
+                        <Label className="text-sm">Insert parameter into formula</Label>
+                        <FormulaTokenPicker
+                          methodParams={availableSourceParameters.map(p => ({ id: p.id, name: p.parameterName }))}
+                          bodyMetrics={quantitativeBiometrics}
+                          perfParams={performanceParams}
+                          onInsert={(token) => {
+                            const currentFormula = editingParameter.formula || '';
+                            const newFormula = currentFormula ? `${currentFormula} ${token.name}` : token.name;
+                            setEditingParameter({
+                              ...editingParameter,
+                              formula: newFormula,
+                              sourceParameterIds: token.sourceId
+                                ? [...new Set([...(editingParameter.sourceParameterIds || []), token.sourceId])]
+                                : (editingParameter.sourceParameterIds || []),
+                              athleteDataRefs: token.athleteRef
+                                ? [...new Set([...(editingParameter.athleteDataRefs || []), token.athleteRef])]
+                                : (editingParameter.athleteDataRefs || []),
+                            });
+                          }}
+                        />
+                        <p className="text-xs text-muted-foreground">Use: + - * / ( ) to combine tokens</p>
                       </div>
 
                       <div>
@@ -805,17 +897,23 @@ export function ParameterManagementDialog({
                           value={editingParameter.formula || ''}
                           onChange={(e) => {
                             const formula = e.target.value;
-                            const referencedNames = extractParameterNames(formula, availableSourceParameters.map(p => p.parameterName));
-                            const referencedIds = availableSourceParameters
+                            const referencedNames = extractParameterNames(formula, allTokenNames);
+                            const referencedMethodIds = availableSourceParameters
                               .filter(p => referencedNames.includes(p.parameterName))
                               .map(p => p.id);
+                            const referencedAthleteRefs = [
+                              ...quantitativeBiometrics.filter(b => referencedNames.includes(b.name)).map(b => b.id),
+                              ...performanceParams.filter(p => referencedNames.includes(p.name)).map(p => p.id),
+                              ...(referencedNames.includes('e1RM') ? ['e1RM'] : []),
+                            ];
                             setEditingParameter({
                               ...editingParameter,
                               formula,
-                              sourceParameterIds: referencedIds
+                              sourceParameterIds: referencedMethodIds,
+                              athleteDataRefs: referencedAthleteRefs,
                             });
                           }}
-                          placeholder="e.g., Sets * Reps"
+                          placeholder="e.g., Intensity * e1RM"
                           className="font-mono"
                         />
                         {!editingFormulaValidation.valid && editingParameter.formula && (
@@ -1124,39 +1222,28 @@ export function ParameterManagementDialog({
 
                 {newParameter.isCalculated && (
                   <div className="space-y-4 pt-2">
-                    <div>
-                      <Label className="text-sm">Available Parameters</Label>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {availableSourceParameters.length > 0 ? (
-                          availableSourceParameters.map((p) => (
-                            <Badge 
-                              key={p.id} 
-                              variant="outline" 
-                              className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
-                              onClick={() => {
-                                const currentFormula = newParameter.formula;
-                                const newFormula = currentFormula 
-                                  ? `${currentFormula} ${p.parameterName}` 
-                                  : p.parameterName;
-                                setNewParameter({
-                                  ...newParameter,
-                                  formula: newFormula,
-                                  sourceParameterIds: [...new Set([...newParameter.sourceParameterIds, p.id])]
-                                });
-                              }}
-                            >
-                              {p.parameterName}
-                            </Badge>
-                          ))
-                        ) : (
-                          <p className="text-xs text-muted-foreground italic">
-                            No quantitative parameters available. Add other quantitative parameters first.
-                          </p>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Click to add to formula. Use: + - * / ( )
-                      </p>
+                    <div className="space-y-2">
+                      <Label className="text-sm">Insert parameter into formula</Label>
+                      <FormulaTokenPicker
+                        methodParams={availableSourceParameters.map(p => ({ id: p.id, name: p.parameterName }))}
+                        bodyMetrics={quantitativeBiometrics}
+                        perfParams={performanceParams}
+                        onInsert={(token) => {
+                          const currentFormula = newParameter.formula;
+                          const newFormula = currentFormula ? `${currentFormula} ${token.name}` : token.name;
+                          setNewParameter({
+                            ...newParameter,
+                            formula: newFormula,
+                            sourceParameterIds: token.sourceId
+                              ? [...new Set([...newParameter.sourceParameterIds, token.sourceId])]
+                              : newParameter.sourceParameterIds,
+                            athleteDataRefs: token.athleteRef
+                              ? [...new Set([...newParameter.athleteDataRefs, token.athleteRef])]
+                              : newParameter.athleteDataRefs,
+                          });
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground">Use: + - * / ( ) to combine tokens</p>
                     </div>
 
                     <div>
@@ -1166,17 +1253,23 @@ export function ParameterManagementDialog({
                         value={newParameter.formula}
                         onChange={(e) => {
                           const formula = e.target.value;
-                          const referencedNames = extractParameterNames(formula, availableSourceParameters.map(p => p.parameterName));
-                          const referencedIds = availableSourceParameters
+                          const referencedNames = extractParameterNames(formula, allTokenNames);
+                          const referencedMethodIds = availableSourceParameters
                             .filter(p => referencedNames.includes(p.parameterName))
                             .map(p => p.id);
+                          const referencedAthleteRefs = [
+                            ...quantitativeBiometrics.filter(b => referencedNames.includes(b.name)).map(b => b.id),
+                            ...performanceParams.filter(p => referencedNames.includes(p.name)).map(p => p.id),
+                            ...(referencedNames.includes('e1RM') ? ['e1RM'] : []),
+                          ];
                           setNewParameter({
                             ...newParameter,
                             formula,
-                            sourceParameterIds: referencedIds
+                            sourceParameterIds: referencedMethodIds,
+                            athleteDataRefs: referencedAthleteRefs,
                           });
                         }}
-                        placeholder="e.g., Sets * Reps"
+                        placeholder="e.g., Intensity * e1RM"
                         className="font-mono"
                       />
                       {!newFormulaValidation.valid && newParameter.formula && (

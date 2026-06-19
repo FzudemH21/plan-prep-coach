@@ -19,7 +19,8 @@ export interface ToolboxEntry {
   // Calculated parameter support
   isCalculated?: boolean;           // Flag to mark as calculated
   formula?: string;                 // Formula expression, e.g., "Sets * Ground Contacts"
-  sourceParameterIds?: string[];    // IDs of parameters used in the formula
+  sourceParameterIds?: string[];    // IDs of method parameters used in the formula
+  athleteDataRefs?: string[];       // IDs of athlete data tokens used in the formula (biometric def IDs, perf param IDs, or 'e1RM')
 }
 
 export interface ToolboxDatabase {
