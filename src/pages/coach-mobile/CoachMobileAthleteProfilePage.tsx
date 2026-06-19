@@ -1033,7 +1033,7 @@ export default function CoachMobileAthleteProfilePage() {
           { key: 'overview',  label: 'Overview'  },
           { key: 'training',  label: 'Training'  },
           { key: 'progress',  label: 'Progress'  },
-          { key: 'settings',  label: 'Settings'  },
+          { key: 'settings',  label: 'Info'      },
         ] as { key: Tab; label: string }[]).map(({ key, label }) => (
           <button
             key={key}

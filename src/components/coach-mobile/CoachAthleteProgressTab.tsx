@@ -329,16 +329,16 @@ function SessionRow({
 
       {open && (
         sessionParamNames.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div>
+            <table className="table-fixed w-full text-xs">
               <thead>
                 <tr className="border-t bg-muted/10">
-                  <th className="text-left px-3 py-1.5 text-[10px] font-medium text-muted-foreground uppercase w-10">Set</th>
+                  <th className="text-left px-1.5 py-1.5 text-[9px] font-medium text-muted-foreground uppercase w-8">Set</th>
                   {sessionParamNames.map(p => (
-                    <th key={p} className="text-left px-3 py-1.5 text-[10px] font-medium text-muted-foreground uppercase">{p}</th>
+                    <th key={p} className="text-left px-1.5 py-1.5 text-[9px] font-medium text-muted-foreground uppercase truncate">{p}</th>
                   ))}
                   {tags && session.e1rm !== null && (
-                    <th className="text-left px-3 py-1.5 text-[10px] font-medium text-muted-foreground uppercase">e1RM</th>
+                    <th className="text-left px-1.5 py-1.5 text-[9px] font-medium text-muted-foreground uppercase">e1RM</th>
                   )}
                 </tr>
               </thead>
@@ -352,16 +352,16 @@ function SessionRow({
                     ? epley1RM(w, r, isNaN(rir) ? 0 : rir) : null;
                   return (
                     <tr key={i} className={cn(!s.completed && 'opacity-40', isBest && 'bg-primary/5')}>
-                      <td className="px-3 py-2 text-xs text-muted-foreground font-medium">
+                      <td className="px-1.5 py-1.5 text-[10px] text-muted-foreground font-medium">
                         {String(s.setNumber).padStart(2, '0')}
                       </td>
                       {sessionParamNames.map(p => (
-                        <td key={p} className="px-3 py-2 tabular-nums text-sm">
+                        <td key={p} className="px-1.5 py-1.5 tabular-nums">
                           {s.values[p] ?? <span className="text-muted-foreground/40">—</span>}
                         </td>
                       ))}
                       {tags && session.e1rm !== null && (
-                        <td className={cn('px-3 py-2 tabular-nums text-sm', isBest && 'font-bold text-primary')}>
+                        <td className={cn('px-1.5 py-1.5 tabular-nums', isBest && 'font-bold text-primary')}>
                           {setE1rm !== null
                             ? <>{setE1rm.toFixed(1)}{isBest && <Trophy className="inline h-3 w-3 ml-1 text-amber-500" />}</>
                             : <span className="text-muted-foreground/40">—</span>}
