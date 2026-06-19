@@ -36,6 +36,7 @@ const PREDEFINED_UNITS = [
   { value: 'lbs', label: 'lbs (pounds)' },
   { value: '%', label: '% (percentage)' },
   { value: '%1RM', label: '%1RM (% of 1 Rep Max)' },
+  { value: '%BW', label: '%BW (% of body weight)' },
   { value: 'RPE', label: 'RPE (Rate of Perceived Exertion)' },
   { value: 'RiR', label: 'RiR (Reps in Reserve)' },
   { value: 'm/s', label: 'm/s (velocity)' },
