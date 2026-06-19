@@ -296,6 +296,15 @@ function SessionRow({
     return allParamNames.filter(p => seen.has(p));
   }, [session.sets, allParamNames]);
 
+  // Context chips: plannedParams that weren't entered per-set (shown as info above the grid during training)
+  const contextChips = useMemo(() => {
+    if (!session.plannedParams) return [];
+    const gridSet = new Set(sessionParamNames);
+    return Object.entries(session.plannedParams)
+      .filter(([k, v]) => !gridSet.has(k) && !k.endsWith('_unit') && v !== '' && v != null)
+      .map(([k, v]) => ({ label: k, value: String(v) }));
+  }, [session.plannedParams, sessionParamNames]);
+
   const bestSetIdx = useMemo(() => {
     if (!tags || session.e1rm === null) return -1;
     let best: { idx: number; e1rm: number } | null = null;
@@ -334,7 +343,17 @@ function SessionRow({
       </button>
 
       {open && (
-        sessionParamNames.length > 0 ? (
+        <>
+          {contextChips.length > 0 && (
+            <div className="flex flex-wrap gap-1 px-3 py-2 border-t bg-muted/5">
+              {contextChips.map(({ label, value }) => (
+                <span key={label} className="inline-flex items-center gap-1 text-[10px] bg-muted rounded px-1.5 py-0.5 text-muted-foreground">
+                  <span className="font-medium text-foreground/60">{label}:</span>{value}
+                </span>
+              ))}
+            </div>
+          )}
+          {sessionParamNames.length > 0 ? (
           <div>
             <table className="table-fixed w-full text-xs">
               <thead>
@@ -379,9 +398,10 @@ function SessionRow({
               </tbody>
             </table>
           </div>
-        ) : (
-          <div className="px-3 py-2 text-xs text-muted-foreground">No set data logged</div>
-        )
+          ) : (
+            <div className="px-3 py-2 text-xs text-muted-foreground">No set data logged</div>
+          )}
+        </>
       )}
     </div>
   );
