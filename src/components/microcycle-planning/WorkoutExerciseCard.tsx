@@ -692,7 +692,10 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                               if (!srcParam) continue;
                               const raw = exercise.parameters[`${srcParam.parameterName}_set${setIndex + 1}`]
                                 ?? exercise.parameters[srcParam.parameterName];
-                              const unit = exercise.parameters[`${srcParam.parameterName}_unit`] as string | undefined;
+                              // Fall back to toolbox default unit when not explicitly stored (mirrors header rendering)
+                              const unit = (exercise.parameters[`${srcParam.parameterName}_unit`] as string | undefined)
+                                ?? (srcParam.parameterType === 'quantitative' && srcParam.options.length > 0
+                                  ? srcParam.options[0] : undefined);
                               let n = parseFloat(String(raw ?? ''));
                               if (!isNaN(n) && unit && PCT_UNITS.has(unit)) n = n / 100;
                               if (!isNaN(n)) ctx[srcParam.parameterName] = n;
@@ -744,7 +747,10 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                               if (!srcParam) continue;
                               const raw = exercise.parameters[`${srcParam.parameterName}_set${setIndex + 1}`]
                                 ?? exercise.parameters[srcParam.parameterName];
-                              const unit = exercise.parameters[`${srcParam.parameterName}_unit`] as string | undefined;
+                              // Fall back to toolbox default unit when not explicitly stored (mirrors header rendering)
+                              const unit = (exercise.parameters[`${srcParam.parameterName}_unit`] as string | undefined)
+                                ?? (srcParam.parameterType === 'quantitative' && srcParam.options.length > 0
+                                  ? srcParam.options[0] : undefined);
                               let n = parseFloat(String(raw ?? ''));
                               if (!isNaN(n) && unit && PCT_UNITS.has(unit)) n = n / 100;
                               if (!isNaN(n)) ctx[srcParam.parameterName] = n;
