@@ -3,8 +3,9 @@
 
 import { useState, useMemo } from 'react';
 import {
-  Search, Plus, ChevronRight, ChevronLeft, Tag,
+  Search, Plus, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Tag, Trophy,
 } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -16,11 +17,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
+  AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
 } from 'recharts';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
-import { useExerciseMetrics } from '@/hooks/useExerciseMetrics';
+import { useExerciseMetrics, epley1RM } from '@/hooks/useExerciseMetrics';
 import type { ExerciseEntry, ExerciseSession, ParamTags } from '@/hooks/useExerciseMetrics';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -29,6 +30,51 @@ function fmtDate(iso: string) {
   return new Date(iso.slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
   });
+}
+
+function fmtDateShort(iso: string) {
+  try { return format(parseISO(iso), 'MMM d'); } catch { return iso; }
+}
+
+// ── Date range ────────────────────────────────────────────────────────────────
+
+type DateRangeKey = '3M' | '6M' | '1Y' | 'All';
+
+const DATE_RANGE_LABELS: Record<DateRangeKey, string> = {
+  '3M': '3M', '6M': '6M', '1Y': '1Y', 'All': 'All',
+};
+const DATE_RANGE_DAYS: Record<DateRangeKey, number | null> = {
+  '3M': 90, '6M': 180, '1Y': 365, 'All': null,
+};
+
+function cutoffDate(range: DateRangeKey): Date | null {
+  const days = DATE_RANGE_DAYS[range];
+  if (days === null) return null;
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function DateRangeSelector({ value, onChange }: { value: DateRangeKey; onChange: (v: DateRangeKey) => void }) {
+  return (
+    <div className="flex gap-1.5">
+      {(Object.keys(DATE_RANGE_LABELS) as DateRangeKey[]).map(key => (
+        <button
+          key={key}
+          onClick={() => onChange(key)}
+          className={cn(
+            'flex-1 py-1 rounded-md text-xs font-medium transition-colors',
+            value === key
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground hover:bg-muted/80 active:bg-muted/60',
+          )}
+        >
+          {DATE_RANGE_LABELS[key]}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 // ── Add-value dialog ──────────────────────────────────────────────────────────
@@ -167,16 +213,22 @@ function MetricDetail({
       {chartData.length >= 2 && (
         <div className="rounded-xl border bg-card p-3">
           <ResponsiveContainer width="100%" height={120}>
-            <LineChart data={chartData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+              <defs>
+                <linearGradient id="metGradCoach" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
               <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-              <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
               <Tooltip
                 formatter={(v: number) => [`${v}${item.unit ? ' ' + item.unit : ''}`, item.name]}
                 contentStyle={{ fontSize: 10, padding: '4px 8px', borderRadius: 6 }}
               />
-              <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
-            </LineChart>
+              <Area type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#metGradCoach)" dot={{ r: 3 }} connectNulls={false} />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       )}
@@ -215,7 +267,121 @@ function MetricDetail({
   );
 }
 
-// ── Exercise detail ───────────────────────────────────────────────────────────
+// ── Session row (accordion, expanded by default) ───────────────────────────────
+
+function SessionRow({
+  session,
+  tags,
+  allParamNames,
+}: {
+  session: ExerciseSession;
+  tags: ParamTags | null;
+  allParamNames: string[];
+}) {
+  const [open, setOpen] = useState(true);
+
+  const sessionParamNames = useMemo(() => {
+    const seen = new Set<string>();
+    for (const set of session.sets) {
+      for (const [k, v] of Object.entries(set.values)) {
+        if (v !== undefined && v !== null && v !== '') seen.add(k);
+      }
+    }
+    return allParamNames.filter(p => seen.has(p));
+  }, [session.sets, allParamNames]);
+
+  const bestSetIdx = useMemo(() => {
+    if (!tags || session.e1rm === null) return -1;
+    let best: { idx: number; e1rm: number } | null = null;
+    session.sets.forEach((s, i) => {
+      if (!s.completed) return;
+      const w = parseFloat(s.values[tags.weightParam] ?? '');
+      const r = parseFloat(s.values[tags.repsParam] ?? '');
+      if (isNaN(w) || isNaN(r)) return;
+      const rir = tags.rirParam ? parseFloat(s.values[tags.rirParam] ?? '0') : 0;
+      const est = epley1RM(w, r, isNaN(rir) ? 0 : rir);
+      if (!best || est > best.e1rm) best = { idx: i, e1rm: est };
+    });
+    return best?.idx ?? -1;
+  }, [session, tags]);
+
+  return (
+    <div className="border rounded-lg overflow-hidden">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center gap-2 px-3 py-3 bg-muted/20 hover:bg-muted/40 active:bg-muted/60 transition-colors text-left"
+      >
+        <div className="flex-1 min-w-0">
+          <span className="text-sm font-medium">
+            {format(parseISO(session.date + 'T12:00:00'), 'MMM d, yyyy')}
+          </span>
+          <span className="ml-2 text-xs text-muted-foreground">{session.sessionName}</span>
+        </div>
+        {session.e1rm !== null && (
+          <span className="text-xs font-bold text-primary tabular-nums shrink-0">
+            e1RM {session.e1rm.toFixed(1)}
+          </span>
+        )}
+        {open
+          ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+      </button>
+
+      {open && (
+        sessionParamNames.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-t bg-muted/10">
+                  <th className="text-left px-3 py-1.5 text-[10px] font-medium text-muted-foreground uppercase w-10">Set</th>
+                  {sessionParamNames.map(p => (
+                    <th key={p} className="text-left px-3 py-1.5 text-[10px] font-medium text-muted-foreground uppercase">{p}</th>
+                  ))}
+                  {tags && session.e1rm !== null && (
+                    <th className="text-left px-3 py-1.5 text-[10px] font-medium text-muted-foreground uppercase">e1RM</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {session.sets.map((s, i) => {
+                  const isBest = i === bestSetIdx;
+                  const w = tags ? parseFloat(s.values[tags.weightParam] ?? '') : NaN;
+                  const r = tags ? parseFloat(s.values[tags.repsParam] ?? '') : NaN;
+                  const rir = tags?.rirParam ? parseFloat(s.values[tags.rirParam] ?? '0') : 0;
+                  const setE1rm = (!isNaN(w) && !isNaN(r) && r > 0 && s.completed && tags)
+                    ? epley1RM(w, r, isNaN(rir) ? 0 : rir) : null;
+                  return (
+                    <tr key={i} className={cn(!s.completed && 'opacity-40', isBest && 'bg-primary/5')}>
+                      <td className="px-3 py-2 text-xs text-muted-foreground font-medium">
+                        {String(s.setNumber).padStart(2, '0')}
+                      </td>
+                      {sessionParamNames.map(p => (
+                        <td key={p} className="px-3 py-2 tabular-nums text-sm">
+                          {s.values[p] ?? <span className="text-muted-foreground/40">—</span>}
+                        </td>
+                      ))}
+                      {tags && session.e1rm !== null && (
+                        <td className={cn('px-3 py-2 tabular-nums text-sm', isBest && 'font-bold text-primary')}>
+                          {setE1rm !== null
+                            ? <>{setE1rm.toFixed(1)}{isBest && <Trophy className="inline h-3 w-3 ml-1 text-amber-500" />}</>
+                            : <span className="text-muted-foreground/40">—</span>}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="px-3 py-2 text-xs text-muted-foreground">No set data logged</div>
+        )
+      )}
+    </div>
+  );
+}
+
+// ── e1RM tag dialog ───────────────────────────────────────────────────────────
 
 function TagDialog({
   open, onClose, exerciseName, paramNames, tags, onSave,
@@ -284,6 +450,8 @@ function TagDialog({
   );
 }
 
+// ── Exercise detail ───────────────────────────────────────────────────────────
+
 function ExerciseDetail({
   entry, sessions, tags, onBack, onTagSave,
 }: {
@@ -294,47 +462,102 @@ function ExerciseDetail({
   onTagSave: (tags: ParamTags | null) => void;
 }) {
   const [tagOpen, setTagOpen] = useState(false);
+  const [range, setRange] = useState<DateRangeKey>('All');
 
-  const latestE1RM = sessions.filter(s => s.e1rm !== null).slice(-1)[0]?.e1rm ?? null;
-  const chartData = sessions
-    .filter(s => s.e1rm !== null)
-    .map(s => ({
-      date: new Date(s.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      e1rm: +(s.e1rm!.toFixed(1)),
-    }));
+  const filteredSessions = useMemo(() => {
+    const cutoff = cutoffDate(range);
+    if (!cutoff) return sessions;
+    return sessions.filter(s => new Date(s.date + 'T12:00:00') >= cutoff);
+  }, [sessions, range]);
+
+  const chartData = useMemo(() => {
+    if (!tags) return [];
+    return filteredSessions
+      .filter(s => s.e1rm !== null)
+      .map(s => ({
+        date: fmtDateShort(s.date),
+        value: parseFloat((s.e1rm as number).toFixed(1)),
+      }));
+  }, [filteredSessions, tags]);
+
+  const latestE1RM = sessions.filter(s => s.e1rm !== null).pop()?.e1rm ?? null;
+  const weightUnit = tags?.weightParam ? (entry.allParamUnits[tags.weightParam] ?? '') : '';
 
   return (
     <div className="space-y-4">
+      {/* Header */}
       <div className="flex items-center gap-2">
-        <button onClick={onBack} className="p-1 rounded hover:bg-accent">
-          <ChevronLeft className="h-5 w-5" />
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground -ml-1 active:opacity-60 transition-opacity"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Back
         </button>
-        <h3 className="text-base font-semibold flex-1 truncate">{entry.name}</h3>
+        <div className="flex-1" />
         <Button size="sm" variant="outline" className="gap-1 h-8 text-xs shrink-0" onClick={() => setTagOpen(true)}>
           <Tag className="h-3.5 w-3.5" /> Tag
         </Button>
       </div>
 
-      {latestE1RM !== null && (
-        <div className="rounded-xl border bg-card p-4 flex items-baseline gap-2">
-          <span className="text-3xl font-bold tabular-nums">{latestE1RM.toFixed(1)}</span>
-          <span className="text-sm text-muted-foreground">kg e1RM · {entry.sessionCount} sessions</span>
-        </div>
-      )}
+      {/* Title + e1RM summary */}
+      <div>
+        <h3 className="text-lg font-semibold">{entry.name}</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          {sessions.length} session{sessions.length !== 1 ? 's' : ''} logged
+        </p>
+        {tags && latestE1RM !== null && (
+          <div className="flex items-baseline gap-1.5 mt-1">
+            <span className="text-3xl font-bold tabular-nums">{latestE1RM.toFixed(1)}</span>
+            <span className="text-muted-foreground">
+              {weightUnit ? `${weightUnit} ` : ''}est. 1RM
+            </span>
+          </div>
+        )}
+      </div>
 
-      {chartData.length >= 2 && (
-        <div className="rounded-xl border bg-card p-3">
-          <p className="text-xs text-muted-foreground mb-2 font-medium">Estimated 1RM trend</p>
-          <ResponsiveContainer width="100%" height={120}>
-            <LineChart data={chartData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-              <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-              <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <Tooltip formatter={(v: number) => [`${v} kg`, 'e1RM']} contentStyle={{ fontSize: 10, padding: '4px 8px', borderRadius: 6 }} />
-              <Line type="monotone" dataKey="e1rm" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+      {/* Date range selector */}
+      <DateRangeSelector value={range} onChange={setRange} />
+
+      {/* e1RM chart */}
+      {tags && (
+        chartData.length >= 2 ? (
+          <>
+            <div className="h-44">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="e1rmGradCoach" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: '6px', fontSize: '12px' }}
+                    formatter={(v: number) => [`${v.toFixed(1)}${weightUnit ? ` ${weightUnit}` : ''}`, 'est. 1RM']}
+                  />
+                  <Area type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#e1rmGradCoach)" dot={{ r: 3, fill: 'hsl(var(--primary))' }} activeDot={{ r: 5 }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-[10px] text-muted-foreground text-right -mt-2">
+              Epley: weight × (1 + (reps{tags.rirParam ? ' + RIR' : ''}) / 30)
+            </p>
+          </>
+        ) : (
+          <div className="h-16 flex items-center justify-center border rounded-lg bg-muted/20">
+            <p className="text-xs text-muted-foreground text-center px-4">
+              {chartData.length === 0
+                ? (range === 'All'
+                    ? 'Log sets with weight + reps for e1RM estimation'
+                    : `No e1RM data in the last ${DATE_RANGE_LABELS[range]}`)
+                : 'Log more sessions to see the trend'}
+            </p>
+          </div>
+        )
       )}
 
       {!tags && (
@@ -343,47 +566,24 @@ function ExerciseDetail({
         </p>
       )}
 
-      <div className="rounded-xl border bg-card divide-y">
-        {sessions.length === 0 ? (
-          <p className="text-sm text-muted-foreground px-4 py-8 text-center">No logged sessions yet.</p>
+      {/* Session history */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          Session History{filteredSessions.length !== sessions.length ? ` (${filteredSessions.length} of ${sessions.length})` : ''}
+        </p>
+        {filteredSessions.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            {range === 'All' ? 'No logged sessions yet.' : `No sessions in the last ${DATE_RANGE_LABELS[range]}`}
+          </p>
         ) : (
-          sessions
-            .slice()
-            .sort((a, b) => b.date.localeCompare(a.date))
-            .slice(0, 20)
-            .map(s => {
-              const paramNames = Array.from(new Set(s.sets.flatMap(set => Object.keys(set.values))));
-              return (
-                <div key={s.logId} className="px-4 py-2.5 space-y-1.5">
-                  <div className="flex items-baseline justify-between">
-                    <p className="text-xs font-semibold">{fmtDate(s.date)}</p>
-                    <p className="text-xs text-muted-foreground truncate ml-2">{s.sessionName}</p>
-                  </div>
-                  {paramNames.length > 0 && (
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left pb-1 font-medium text-muted-foreground w-5">#</th>
-                          {paramNames.map(k => (
-                            <th key={k} className="text-left pb-1 px-1 font-medium text-muted-foreground">{k}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {s.sets.map(set => (
-                          <tr key={set.setNumber} className="border-b last:border-0">
-                            <td className="py-0.5 text-muted-foreground">{set.setNumber}</td>
-                            {paramNames.map(k => (
-                              <td key={k} className="py-0.5 px-1 tabular-nums">{set.values[k] || '—'}</td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              );
-            })
+          [...filteredSessions].reverse().map((s, i) => (
+            <SessionRow
+              key={`${s.logId}-${i}`}
+              session={s}
+              tags={tags}
+              allParamNames={entry.allParamNames}
+            />
+          ))
         )}
       </div>
 
@@ -581,29 +781,34 @@ export function CoachAthleteProgressTab({ athleteId, connectionId }: Props) {
 
       {/* ── Exercises ── */}
       {section === 'exercises' && !inDetail && (
-        <div className="rounded-xl border bg-card divide-y px-4">
-          {exLoading
-            ? <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
-            : filteredEx.length === 0
-              ? <p className="text-sm text-muted-foreground py-8 text-center">No exercises logged yet.</p>
-              : filteredEx.map(entry => (
-                <button
-                  key={entry.name}
-                  onClick={() => setSelectedExName(entry.name)}
-                  className="w-full flex items-center gap-3 py-3 border-b last:border-0 hover:bg-accent/40 active:bg-accent/60 text-left"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{entry.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {entry.sessionCount} session{entry.sessionCount !== 1 ? 's' : ''} · last {fmtDate(entry.lastDate)}
-                    </p>
-                  </div>
-                  {paramTags[entry.name] && (
-                    <Tag className="h-3.5 w-3.5 text-muted-foreground shrink-0" title="Tagged for e1RM" />
-                  )}
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                </button>
-              ))}
+        <div className="space-y-px">
+          {exLoading ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
+          ) : filteredEx.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">No exercises logged yet.</p>
+          ) : filteredEx.map(entry => (
+            <button
+              key={entry.name}
+              onClick={() => setSelectedExName(entry.name)}
+              className="w-full flex items-center gap-3 px-1 py-3 rounded-lg hover:bg-accent active:bg-accent/80 transition-colors text-left"
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{entry.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {entry.sessionCount} session{entry.sessionCount !== 1 ? 's' : ''}
+                </p>
+              </div>
+              {!!paramTags[entry.name] && (
+                <span className="text-[10px] font-medium text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 shrink-0">
+                  e1RM
+                </span>
+              )}
+              <span className="text-xs text-muted-foreground shrink-0">
+                {format(parseISO(entry.lastDate + 'T12:00:00'), 'MMM d')}
+              </span>
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+            </button>
+          ))}
         </div>
       )}
       {section === 'exercises' && selectedEntry && (

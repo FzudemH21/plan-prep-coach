@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, BookOpen, Check, GripVertical, Trash2, MessageCircle, Trophy, Calendar, ClipboardCheck, Pencil, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, BookOpen, Check, GripVertical, Trash2, MessageCircle, Trophy, Calendar, ClipboardCheck } from 'lucide-react';
 import { CoachAthleteProgressTab } from '@/components/coach-mobile/CoachAthleteProgressTab';
 import { CoachAthleteSettingsTab } from '@/components/coach-mobile/CoachAthleteSettingsTab';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
@@ -431,36 +431,6 @@ export default function CoachMobileAthleteProfilePage() {
         setSessionLogs(m);
       });
   }, [connection?.id, weekMonday]);
-
-  // ── Info card edit state ───────────────────────────────────────────────────────
-  const [infoEditing, setInfoEditing] = useState(false);
-  const [infoForm, setInfoForm] = useState({ birthday: '', sex: '', team: '', sport: '' });
-  const [infoSaving, setInfoSaving] = useState(false);
-
-  const handleInfoEdit = () => {
-    setInfoForm({
-      birthday: athlete.birthday ?? '',
-      sex: athlete.sex ?? '',
-      team: athlete.team ?? '',
-      sport: sports[0] ?? '',
-    });
-    setInfoEditing(true);
-  };
-
-  const handleInfoSave = async () => {
-    setInfoSaving(true);
-    try {
-      await updateAthlete(athleteId!, {
-        birthday: infoForm.birthday || undefined,
-        sex: infoForm.sex || undefined,
-        team: infoForm.team || undefined,
-        sports: infoForm.sport ? [infoForm.sport] : [],
-      });
-      setInfoEditing(false);
-    } finally {
-      setInfoSaving(false);
-    }
-  };
 
   // ── Training-tab mutation state ────────────────────────────────────────────────
   const [dayActionTarget, setDayActionTarget] = useState<string | null>(null);
@@ -1108,79 +1078,6 @@ export default function CoachMobileAthleteProfilePage() {
               </div>
             )}
 
-            {/* Athlete info */}
-            <div className="rounded-xl border bg-card p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Info</h3>
-                {!infoEditing ? (
-                  <button onClick={handleInfoEdit} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                    <Pencil className="h-3 w-3" /> Edit
-                  </button>
-                ) : (
-                  <div className="flex gap-2">
-                    <button onClick={() => setInfoEditing(false)} className="text-muted-foreground hover:text-foreground">
-                      <X className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={handleInfoSave}
-                      disabled={infoSaving}
-                      className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 disabled:opacity-50"
-                    >
-                      <Check className="h-3.5 w-3.5" /> {infoSaving ? 'Saving…' : 'Save'}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {!infoEditing ? (
-                <>
-                  {[
-                    { label: 'Birthday', value: athlete.birthday ? format(parseISO(athlete.birthday + 'T12:00:00'), 'MMM d, yyyy') : '—' },
-                    { label: 'Sex',      value: athlete.sex ?? '—' },
-                    { label: 'Team',     value: athlete.team ?? '—' },
-                    { label: 'Sport(s)', value: sports.length ? sports.join(', ') : '—' },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{label}</span>
-                      <span className="font-medium capitalize">{value}</span>
-                    </div>
-                  ))}
-                </>
-              ) : (
-                <div className="space-y-2.5">
-                  {[
-                    { label: 'Birthday', key: 'birthday' as const, type: 'date',   placeholder: 'YYYY-MM-DD' },
-                    { label: 'Team',     key: 'team'     as const, type: 'text',   placeholder: 'e.g. National Team' },
-                    { label: 'Sport',    key: 'sport'    as const, type: 'text',   placeholder: 'e.g. 100m Sprint' },
-                  ].map(({ label, key, type, placeholder }) => (
-                    <div key={key} className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground w-16 shrink-0">{label}</span>
-                      <Input
-                        type={type}
-                        value={infoForm[key]}
-                        onChange={e => setInfoForm(f => ({ ...f, [key]: e.target.value }))}
-                        placeholder={placeholder}
-                        className="h-8 text-sm flex-1"
-                      />
-                    </div>
-                  ))}
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground w-16 shrink-0">Sex</span>
-                    <select
-                      value={infoForm.sex}
-                      onChange={e => setInfoForm(f => ({ ...f, sex: e.target.value }))}
-                      className="h-8 text-sm flex-1 rounded-md border bg-background px-2"
-                    >
-                      <option value="">Not set</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-            </div>
-
             {/* ── Monitoring cards ── */}
             {connection && monitoringEnabled && (
               <div className="space-y-3">
@@ -1741,7 +1638,7 @@ export default function CoachMobileAthleteProfilePage() {
       {tab === 'settings' && connection && (
         <ScrollArea className="flex-1">
           <div className="px-4 py-4 pb-6">
-            <CoachAthleteSettingsTab connection={connection} />
+            <CoachAthleteSettingsTab athleteId={athleteId!} connection={connection} />
           </div>
         </ScrollArea>
       )}

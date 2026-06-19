@@ -283,7 +283,7 @@ function SessionRow({
   tags: ParamTags | null;
   allParamNames: string[];
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
 
   // Only columns that have at least one value in this session
   const sessionParamNames = useMemo(() => {

@@ -2,14 +2,18 @@
 // Mirrors the desktop AthleteSettingsTab, simplified for mobile.
 
 import { useState } from 'react';
-import { CalendarRange, CalendarDays, MessageCircle, Activity, Copy, Check } from 'lucide-react';
+import { CalendarRange, CalendarDays, MessageCircle, Activity, Copy, Check, User, Pencil, X } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import type { AthleteConnection } from '@/hooks/useAthleteConnections';
+import { useAthletes } from '@/hooks/useAthletes';
 
 // ── Toggle row ────────────────────────────────────────────────────────────────
 
@@ -38,10 +42,12 @@ function ToggleRow({
 // ── Main component ────────────────────────────────────────────────────────────
 
 interface Props {
+  athleteId: string;
   connection: AthleteConnection;
 }
 
-export function CoachAthleteSettingsTab({ connection }: Props) {
+export function CoachAthleteSettingsTab({ athleteId, connection }: Props) {
+  const { athletes, updateAthlete } = useAthletes();
   const {
     updateWeeksAhead,
     updateMonitoringEnabled,
@@ -49,6 +55,41 @@ export function CoachAthleteSettingsTab({ connection }: Props) {
     updateAllowRearrangeWorkouts,
   } = useAthleteConnections();
 
+  const athlete = athletes.find(a => a.id === athleteId);
+  const sports = athlete?.sports?.length ? athlete.sports : athlete?.sport ? [athlete.sport] : [];
+
+  // ── Profile edit state ────────────────────────────────────────────────────
+  const [profileEditing, setProfileEditing] = useState(false);
+  const [profileForm, setProfileForm] = useState({ birthday: '', sex: '', team: '', sport: '' });
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  const handleProfileEdit = () => {
+    if (!athlete) return;
+    setProfileForm({
+      birthday: athlete.birthday ?? '',
+      sex: athlete.sex ?? '',
+      team: athlete.team ?? '',
+      sport: sports[0] ?? '',
+    });
+    setProfileEditing(true);
+  };
+
+  const handleProfileSave = async () => {
+    setProfileSaving(true);
+    try {
+      await updateAthlete(athleteId, {
+        birthday: profileForm.birthday || undefined,
+        sex: profileForm.sex || undefined,
+        team: profileForm.team || undefined,
+        sports: profileForm.sport ? [profileForm.sport] : [],
+      });
+      setProfileEditing(false);
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  // ── Connection settings ───────────────────────────────────────────────────
   const [saving, setSaving] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -67,10 +108,92 @@ export function CoachAthleteSettingsTab({ connection }: Props) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  if (!athlete) return null;
+
   return (
     <div className="space-y-4 py-2">
 
-      {/* Athlete App connection */}
+      {/* ── Profile ── */}
+      <div className="rounded-xl border bg-card p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+            <User className="h-3.5 w-3.5" /> Profile
+          </h3>
+          {!profileEditing ? (
+            <button
+              onClick={handleProfileEdit}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Pencil className="h-3 w-3" /> Edit
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button onClick={() => setProfileEditing(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleProfileSave}
+                disabled={profileSaving}
+                className="h-6 gap-1 text-xs text-primary px-2"
+              >
+                <Check className="h-3 w-3" /> {profileSaving ? 'Saving…' : 'Save'}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {!profileEditing ? (
+          <div className="space-y-0">
+            {[
+              { label: 'Birthday', value: athlete.birthday ? format(parseISO(athlete.birthday + 'T12:00:00'), 'MMM d, yyyy') : '—' },
+              { label: 'Sex',      value: athlete.sex ?? '—' },
+              { label: 'Team',     value: athlete.team ?? '—' },
+              { label: 'Sport(s)', value: sports.length ? sports.join(', ') : '—' },
+            ].map(({ label, value }) => (
+              <div key={label} className="flex justify-between items-center py-1.5 border-b last:border-0">
+                <span className="text-xs text-muted-foreground">{label}</span>
+                <span className="text-sm font-medium capitalize">{value}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {[
+              { label: 'Birthday', key: 'birthday' as const, type: 'date',   placeholder: 'YYYY-MM-DD' },
+              { label: 'Team',     key: 'team'     as const, type: 'text',   placeholder: 'e.g. National Team' },
+              { label: 'Sport',    key: 'sport'    as const, type: 'text',   placeholder: 'e.g. 100m Sprint' },
+            ].map(({ label, key, type, placeholder }) => (
+              <div key={key} className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-16 shrink-0">{label}</span>
+                <Input
+                  type={type}
+                  value={profileForm[key]}
+                  onChange={e => setProfileForm(f => ({ ...f, [key]: e.target.value }))}
+                  placeholder={placeholder}
+                  className="h-8 text-sm flex-1"
+                />
+              </div>
+            ))}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground w-16 shrink-0">Sex</span>
+              <select
+                value={profileForm.sex}
+                onChange={e => setProfileForm(f => ({ ...f, sex: e.target.value }))}
+                className="h-8 text-sm flex-1 rounded-md border bg-background px-2"
+              >
+                <option value="">Not set</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Athlete App connection ── */}
       <div className="rounded-xl border bg-card p-4 space-y-3">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Athlete App
@@ -102,7 +225,7 @@ export function CoachAthleteSettingsTab({ connection }: Props) {
         )}
       </div>
 
-      {/* Calendar access */}
+      {/* ── Calendar access ── */}
       <div className="rounded-xl border bg-card p-4 space-y-3">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
           <CalendarRange className="h-3.5 w-3.5" /> Calendar Access
@@ -129,7 +252,7 @@ export function CoachAthleteSettingsTab({ connection }: Props) {
         </div>
       </div>
 
-      {/* Access controls */}
+      {/* ── Access controls ── */}
       <div className="rounded-xl border bg-card px-4">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground pt-3 pb-1 flex items-center gap-1.5">
           <CalendarDays className="h-3.5 w-3.5" /> Access Controls
@@ -143,7 +266,7 @@ export function CoachAthleteSettingsTab({ connection }: Props) {
         />
       </div>
 
-      {/* Feature flags */}
+      {/* ── Features ── */}
       <div className="rounded-xl border bg-card px-4">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground pt-3 pb-1 flex items-center gap-1.5">
           <MessageCircle className="h-3.5 w-3.5" /> Features
@@ -157,7 +280,7 @@ export function CoachAthleteSettingsTab({ connection }: Props) {
         />
       </div>
 
-      {/* Daily monitoring */}
+      {/* ── Daily monitoring ── */}
       <div className="rounded-xl border bg-card px-4">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground pt-3 pb-1 flex items-center gap-1.5">
           <Activity className="h-3.5 w-3.5" /> Daily Monitoring
