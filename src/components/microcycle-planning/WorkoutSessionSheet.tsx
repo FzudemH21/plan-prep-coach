@@ -3134,32 +3134,36 @@ export function WorkoutSessionSheet({
         if (!isNaN(num)) result[def.name] = num;
       }
 
-      // Resolve e1RM: find a performance parameter whose name matches this exercise / category
-      const normalize = (s: string) =>
-        s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-      const exWords = normalize(exerciseName).split(' ').filter(w => w.length > 2);
-      const catWords = normalize(categoryName).split(' ').filter(w => w.length > 2);
-
+      // Resolve e1RM: Epley estimate from the most recent logged sets for this exact exercise
+      // historyCache is keyed by exercise name (lowercase) — direct lookup, no name matching
       let bestE1RM: number | undefined;
-      for (const pp of athletePerf) {
-        const def = perfDefs.find(d => d.id === pp.athleticismParameterId);
-        if (!def || pp.values.length === 0) continue;
-        const defNorm = normalize(def.name);
-        const matches =
-          exWords.some(w => defNorm.includes(w)) ||
-          catWords.some(w => defNorm.includes(w));
-        if (!matches) continue;
-        const latest = [...pp.values].sort(
-          (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
-        )[0];
-        const num = parseFloat(latest.value);
-        if (!isNaN(num)) { bestE1RM = num; break; }
+      const historyEntries = historyCache?.get(exerciseName.toLowerCase()) ?? [];
+      for (const entry of historyEntries) {
+        for (const set of entry.sets) {
+          let weight: number | undefined;
+          let reps: number | undefined;
+          for (const [key, val] of Object.entries(set.values)) {
+            const k = key.toLowerCase();
+            if (k.includes('weight') || k === 'kg' || k === 'load') {
+              const n = parseFloat(val);
+              if (!isNaN(n) && n > 0) weight = n;
+            }
+            if (k === 'reps' || k.startsWith('rep')) {
+              const n = parseFloat(val);
+              if (!isNaN(n) && n >= 1) reps = n;
+            }
+          }
+          if (weight !== undefined && reps !== undefined) {
+            const epley = weight * (1 + reps / 30);
+            if (bestE1RM === undefined || epley > bestE1RM) bestE1RM = epley;
+          }
+        }
       }
       result['e1RM'] = bestE1RM;
 
       return result;
     },
-    [selectedAthleteId, biometricDefinitions, athleteBiometrics, athletePerformanceParameters, parametersData],
+    [selectedAthleteId, biometricDefinitions, athleteBiometrics, athletePerformanceParameters, parametersData, historyCache],
   );
 
   // Build context value for WorkoutSessionProvider (avoids deep prop drilling to WorkoutSectionCard)
