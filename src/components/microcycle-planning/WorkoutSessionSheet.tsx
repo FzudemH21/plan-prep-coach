@@ -566,7 +566,7 @@ export function WorkoutSessionSheet({
                     }
                   });
                   
-                  // Detect auto-calc units
+                  // Detect auto-calc units or isCalculated formulas
                   let has1RMUnit = false;
                   let hasMaxHRUnit = false;
                   for (const entry of methodEntries) {
@@ -574,6 +574,8 @@ export function WorkoutSessionSheet({
                       if (entry.options.includes('%1RM')) has1RMUnit = true;
                       if (entry.options.includes('%maxHR') || entry.options.includes('%HRmax')) hasMaxHRUnit = true;
                     }
+                    if (entry.isCalculated && entry.athleteDataRefs?.includes('e1RM')) has1RMUnit = true;
+                    if (entry.isCalculated && entry.athleteDataRefs?.some(r => r !== 'e1RM')) hasMaxHRUnit = true;
                   }
                   
                   return {
@@ -733,6 +735,8 @@ export function WorkoutSessionSheet({
                         hasMaxHRUnit = true;
                       }
                     }
+                    if (entry.isCalculated && entry.athleteDataRefs?.includes('e1RM')) has1RMUnit = true;
+                    if (entry.isCalculated && entry.athleteDataRefs?.some(r => r !== 'e1RM')) hasMaxHRUnit = true;
                   }
                 }
                 

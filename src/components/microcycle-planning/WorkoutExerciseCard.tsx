@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -71,6 +72,9 @@ interface WorkoutExerciseCardProps {
   // Open exercise history sheet (only when an athlete connection is available)
   onOpenHistory?: () => void;
 }
+
+// Percentage units — values like 80 represent 0.80 and must be ÷100 before formula evaluation
+const PCT_UNITS = new Set(['%', '%1RM', '%BW', '%maxV', '%maxHR']);
 
 export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
   exercise,
@@ -353,6 +357,16 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
   }, [displayableParams, exercise.parameters, toolboxParams]);
 
   const { resolveAthleteDataRefs } = useWorkoutSession();
+
+  // Hoist calc entries so they're available in both the column header and each row cell
+  const weightCalcEntry = useMemo(
+    () => toolboxParams?.find(tp => tp.isCalculated && !!tp.formula && tp.athleteDataRefs?.includes('e1RM')),
+    [toolboxParams],
+  );
+  const hrCalcEntry = useMemo(
+    () => toolboxParams?.find(tp => tp.isCalculated && !!tp.formula && tp.athleteDataRefs?.some(r => r !== 'e1RM')),
+    [toolboxParams],
+  );
 
   // Handle deleting a set
   const handleDeleteSet = (setNumber: number) => {
@@ -637,7 +651,7 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                         <TableHead className="text-primary">
                           <div className="flex items-center gap-1">
                             <Calculator className="h-3 w-3" />
-                            Weight [kg]
+                            {weightCalcEntry ? `${weightCalcEntry.parameterName} [kg]` : 'Weight [kg]'}
                           </div>
                         </TableHead>
                       )}
@@ -646,7 +660,7 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                         <TableHead className="text-primary">
                           <div className="flex items-center gap-1">
                             <Calculator className="h-3 w-3" />
-                            Target HR [bpm]
+                            {hrCalcEntry ? `${hrCalcEntry.parameterName} [bpm]` : 'Target HR [bpm]'}
                           </div>
                         </TableHead>
                       )}
@@ -678,55 +692,73 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                         ))}
                         {/* Auto-calculated Weight cell */}
                         {autoCalculateWeight && autoCalcDetection.has1RMParam && (() => {
-                          // Units that express a fraction: value stored as e.g. 80, meaning 0.80
-                          const PCT_UNITS = new Set(['%', '%1RM', '%BW', '%maxV', '%maxHR']);
-                          const calcEntry = toolboxParams?.find(
-                            tp => tp.isCalculated && tp.formula && tp.athleteDataRefs?.includes('e1RM')
-                          );
                           let computed: number | undefined;
-                          if (calcEntry && calcEntry.formula) {
-                            // Build context: method params by ID; percentage units auto-scaled ÷100
+                          if (weightCalcEntry?.formula) {
                             const ctx: Record<string, number> = {};
-                            for (const srcId of (calcEntry.sourceParameterIds ?? [])) {
+                            for (const srcId of (weightCalcEntry.sourceParameterIds ?? [])) {
                               const srcParam = toolboxParams?.find(p => p.id === srcId);
                               if (!srcParam) continue;
                               const raw = exercise.parameters[`${srcParam.parameterName}_set${setIndex + 1}`]
                                 ?? exercise.parameters[srcParam.parameterName];
-                              // Fall back to toolbox default unit when not explicitly stored (mirrors header rendering)
                               const unit = (exercise.parameters[`${srcParam.parameterName}_unit`] as string | undefined)
-                                ?? (srcParam.parameterType === 'quantitative' && srcParam.options.length > 0
-                                  ? srcParam.options[0] : undefined);
+                                ?? (srcParam.parameterType === 'quantitative' && srcParam.options.length > 0 ? srcParam.options[0] : undefined);
                               let n = parseFloat(String(raw ?? ''));
                               if (!isNaN(n) && unit && PCT_UNITS.has(unit)) n = n / 100;
                               if (!isNaN(n)) ctx[srcParam.parameterName] = n;
                             }
-                            const athleteData = resolveAthleteDataRefs(
-                              calcEntry.athleteDataRefs ?? [], exercise.exerciseName
-                            );
+                            const athleteData = resolveAthleteDataRefs(weightCalcEntry.athleteDataRefs ?? [], exercise.exerciseName);
                             for (const [k, v] of Object.entries(athleteData)) {
                               if (v !== undefined) ctx[k] = v;
                             }
-                            const result = evaluateFormula(calcEntry.formula, ctx);
+                            const result = evaluateFormula(weightCalcEntry.formula, ctx);
                             if (result !== null) computed = Math.round(result * 2) / 2;
                           } else {
-                            // Fallback when no isCalculated formula is defined
+                            // Fallback: intensity × e1RM when no isCalculated formula is configured
                             const intensityRaw =
                               exercise.parameters[`${autoCalcDetection.intensityParamName}_set${setIndex + 1}`] ??
                               exercise.parameters[autoCalcDetection.intensityParamName ?? ''] ?? '';
                             const intensity = parseFloat(String(intensityRaw));
-                            const e1RMData = resolveAthleteDataRefs(['e1RM'], exercise.exerciseName);
-                            const e1RM = e1RMData['e1RM'];
+                            const e1RM = resolveAthleteDataRefs(['e1RM'], exercise.exerciseName)['e1RM'];
                             if (!isNaN(intensity) && intensity > 0 && e1RM !== undefined)
                               computed = Math.round(intensity / 100 * e1RM * 2) / 2;
                           }
+                          if (weightCalcEntry) {
+                            // Editable — computed value is the default; coach can type to override
+                            const paramKey = `${weightCalcEntry.parameterName}_set${setIndex + 1}`;
+                            const storedRaw = exercise.parameters[paramKey];
+                            const isManual = storedRaw !== undefined && storedRaw !== '';
+                            const displayValue = isManual ? String(storedRaw) : (computed !== undefined ? String(computed) : '');
+                            return (
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <Input
+                                    value={displayValue}
+                                    onChange={(e) => onParameterChange(paramKey, e.target.value)}
+                                    className={`h-7 text-sm w-20 ${!isManual && computed !== undefined ? 'text-primary' : ''}`}
+                                    placeholder="Auto"
+                                  />
+                                  {isManual && computed !== undefined && (
+                                    <button
+                                      type="button"
+                                      title={`Reset to calculated value (${computed})`}
+                                      className="text-muted-foreground hover:text-primary shrink-0"
+                                      onClick={() => onParameterChange(paramKey, '')}
+                                    >
+                                      <RefreshCw className="h-3 w-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </TableCell>
+                            );
+                          }
+                          // Fallback read-only when no parameterName available
                           return (
                             <TableCell>
                               {computed !== undefined ? (
                                 <span className="text-sm font-medium text-primary">{computed} kg</span>
                               ) : (
                                 <Badge variant="outline" className="text-xs text-muted-foreground border-muted-foreground/30">
-                                  <Calculator className="h-3 w-3 mr-1" />
-                                  Auto
+                                  <Calculator className="h-3 w-3 mr-1" />Auto
                                 </Badge>
                               )}
                             </TableCell>
@@ -734,45 +766,62 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                         })()}
                         {/* Auto-calculated Target HR cell */}
                         {autoCalculateTargetHR && autoCalcDetection.hasMaxHRParam && (() => {
-                          const PCT_UNITS = new Set(['%', '%1RM', '%BW', '%maxV', '%maxHR']);
-                          const calcEntry = toolboxParams?.find(
-                            tp => tp.isCalculated && tp.formula &&
-                              tp.athleteDataRefs?.some(r => r !== 'e1RM')
-                          );
                           let computed: number | undefined;
-                          if (calcEntry && calcEntry.formula) {
+                          if (hrCalcEntry?.formula) {
                             const ctx: Record<string, number> = {};
-                            for (const srcId of (calcEntry.sourceParameterIds ?? [])) {
+                            for (const srcId of (hrCalcEntry.sourceParameterIds ?? [])) {
                               const srcParam = toolboxParams?.find(p => p.id === srcId);
                               if (!srcParam) continue;
                               const raw = exercise.parameters[`${srcParam.parameterName}_set${setIndex + 1}`]
                                 ?? exercise.parameters[srcParam.parameterName];
-                              // Fall back to toolbox default unit when not explicitly stored (mirrors header rendering)
                               const unit = (exercise.parameters[`${srcParam.parameterName}_unit`] as string | undefined)
-                                ?? (srcParam.parameterType === 'quantitative' && srcParam.options.length > 0
-                                  ? srcParam.options[0] : undefined);
+                                ?? (srcParam.parameterType === 'quantitative' && srcParam.options.length > 0 ? srcParam.options[0] : undefined);
                               let n = parseFloat(String(raw ?? ''));
                               if (!isNaN(n) && unit && PCT_UNITS.has(unit)) n = n / 100;
                               if (!isNaN(n)) ctx[srcParam.parameterName] = n;
                             }
-                            const athleteData = resolveAthleteDataRefs(
-                              calcEntry.athleteDataRefs ?? [], exercise.exerciseName
-                            );
+                            const athleteData = resolveAthleteDataRefs(hrCalcEntry.athleteDataRefs ?? [], exercise.exerciseName);
                             for (const [k, v] of Object.entries(athleteData)) {
                               if (v !== undefined) ctx[k] = v;
                             }
-                            const result = evaluateFormula(calcEntry.formula, ctx);
+                            const result = evaluateFormula(hrCalcEntry.formula, ctx);
                             if (result !== null) computed = Math.round(result);
                           }
-                          // No fallback for HR without isCalculated formula — biometric def ID unknown
+                          if (hrCalcEntry) {
+                            const paramKey = `${hrCalcEntry.parameterName}_set${setIndex + 1}`;
+                            const storedRaw = exercise.parameters[paramKey];
+                            const isManual = storedRaw !== undefined && storedRaw !== '';
+                            const displayValue = isManual ? String(storedRaw) : (computed !== undefined ? String(computed) : '');
+                            return (
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <Input
+                                    value={displayValue}
+                                    onChange={(e) => onParameterChange(paramKey, e.target.value)}
+                                    className={`h-7 text-sm w-20 ${!isManual && computed !== undefined ? 'text-primary' : ''}`}
+                                    placeholder="Auto"
+                                  />
+                                  {isManual && computed !== undefined && (
+                                    <button
+                                      type="button"
+                                      title={`Reset to calculated value (${computed})`}
+                                      className="text-muted-foreground hover:text-primary shrink-0"
+                                      onClick={() => onParameterChange(paramKey, '')}
+                                    >
+                                      <RefreshCw className="h-3 w-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </TableCell>
+                            );
+                          }
                           return (
                             <TableCell>
                               {computed !== undefined ? (
                                 <span className="text-sm font-medium text-primary">{computed} bpm</span>
                               ) : (
                                 <Badge variant="outline" className="text-xs text-muted-foreground border-muted-foreground/30">
-                                  <Calculator className="h-3 w-3 mr-1" />
-                                  Auto
+                                  <Calculator className="h-3 w-3 mr-1" />Auto
                                 </Badge>
                               )}
                             </TableCell>
