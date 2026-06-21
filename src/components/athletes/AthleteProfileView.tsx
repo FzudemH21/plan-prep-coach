@@ -159,7 +159,9 @@ export function AthleteProfileView({
   // Chat
   const { connections, loading: connectionsLoading } = useAthleteConnections();
   const { user: authUser } = useAuth();
-  const athleteConnection = connections.find((c) => c.athleteLocalId === athlete.id);
+  const athleteConnectionName = [athlete.firstName, athlete.lastName].filter(Boolean).join(' ');
+  const athleteConnection = connections.find((c) => c.athleteLocalId === athlete.id)
+    ?? (athleteConnectionName ? connections.find((c) => c.athleteName === athleteConnectionName) : undefined);
   const { messages: chatMessages, loading: chatLoading, sendMessage: chatSend, markRead: chatMarkRead, unreadCount: chatUnread } = useChat({
     connectionId: athleteConnection?.id ?? null,
     callerRole: 'coach',

@@ -858,11 +858,14 @@ export function AthleteMonitoringTab({ athlete, connectionsLoading = false, conn
     );
   }
 
-  // ── Loading ──
+  // ── Loading checkin data (second hop after connection resolves) ──
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full py-20 text-sm text-muted-foreground">
-        Loading…
+      <div className="flex items-center justify-center h-full py-20 text-muted-foreground">
+        <div className="flex flex-col items-center gap-3">
+          <Activity className="h-8 w-8 animate-pulse opacity-40" />
+          <p className="text-sm">Loading...</p>
+        </div>
       </div>
     );
   }

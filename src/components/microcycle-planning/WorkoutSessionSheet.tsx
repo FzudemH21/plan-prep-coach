@@ -566,18 +566,6 @@ export function WorkoutSessionSheet({
                     }
                   });
                   
-                  // Detect auto-calc units or isCalculated formulas
-                  let has1RMUnit = false;
-                  let hasMaxHRUnit = false;
-                  for (const entry of methodEntries) {
-                    if (entry.parameterType === 'quantitative' && entry.options) {
-                      if (entry.options.includes('%1RM')) has1RMUnit = true;
-                      if (entry.options.includes('%maxHR') || entry.options.includes('%HRmax')) hasMaxHRUnit = true;
-                    }
-                    if (entry.isCalculated && entry.athleteDataRefs?.includes('e1RM')) has1RMUnit = true;
-                    if (entry.isCalculated && entry.athleteDataRefs?.some(r => r !== 'e1RM')) hasMaxHRUnit = true;
-                  }
-                  
                   return {
                     id: (ex as any).id || ex.exerciseId,
                     exerciseId: ex.exerciseId,
@@ -588,8 +576,6 @@ export function WorkoutSessionSheet({
                     supersetId: (ex as any).supersetId,
                     parameters: blankParameters,
                     notes: ex.notes,
-                    autoCalculateWeight: has1RMUnit ? true : undefined,
-                    autoCalculateTargetHR: hasMaxHRUnit ? true : undefined,
                     parameterSource: 'toolbox' as const,
                   };
                 }
@@ -635,19 +621,36 @@ export function WorkoutSessionSheet({
                 const sessionCount = Object.keys(methodParamsForSession).filter(k => !isNaN(Number(k))).length;
                 
                 // Apply modulo if there are more exercises than sessions
-                const chronologicalSessionIndex = sessionCount > 0 
+                const chronologicalSessionIndex = sessionCount > 0
                   ? getModuloSessionIndex(rawChronologicalIndex, sessionCount)
                   : rawChronologicalIndex;
-                
-                // Try chronological session index FIRST for split methods, then fallback to session 0
+
+                // Debug: log param lookup details to help trace offset bugs
+                if (process.env.NODE_ENV !== 'production') {
+                  console.log('[WSS param lookup]', {
+                    exerciseName: ex.exerciseName ?? ex.exerciseId,
+                    method: fullMethodKey,
+                    mesocycleId,
+                    microcycleIndex,
+                    rawChronologicalIndex,
+                    sessionCount,
+                    chronologicalSessionIndex,
+                    allSessions: currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey],
+                  });
+                }
+
+                // Try chronological session index FIRST for split methods, then fallback to session 0.
+                // Also try base method key (ex.methodId without ::Category) in case params are stored
+                // under the base name while the exercise carries the full ::Category suffix.
+                const baseMethodKeyForLookup = (ex.methodId ?? '').split('::')[0];
                 const storedParams =
                   currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[chronologicalSessionIndex] ||
                   currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] ||
                   currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[chronologicalSessionIndex] ||
                   currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
+                  currentParamValues[mesocycleId]?.[microcycleIndex]?.[baseMethodKeyForLookup]?.[chronologicalSessionIndex] ||
+                  currentParamValues[mesocycleId]?.[microcycleIndex]?.[baseMethodKeyForLookup]?.[0] ||
                   {};
-
-
 
                 // PRIMARY: Derive parameters from storedParams (method periodization grid)
                 // Filter out _unit keys and per-set keys (e.g. Reps_set1) — the latter can
@@ -663,7 +666,22 @@ export function WorkoutSessionSheet({
                     defaultValue: (storedParams as any)[name],
                     unit: undefined
                   }));
-                
+
+                // Filter out stale keys from old template loads — only show params defined in
+                // the current toolbox for this method. If toolbox isn't loaded or has no entries
+                // for this method, fall back to showing all (safe default).
+                // Strip ::Category suffix for split methods (e.g. "LBRT - Strength::Squat" → "LBRT - Strength")
+                // so the toolbox lookup matches the base method entry.
+                const _baseMethodId1 = (ex.methodId ?? '').split('::')[0];
+                const _tbEntries1 = (parametersToolboxData?.entries ?? []).filter(te => {
+                  const mid = te.subCategory ? `${te.category} - ${te.subCategory}` : te.category;
+                  return mid === _baseMethodId1;
+                });
+                if (_tbEntries1.length > 0) {
+                  const _validNames1 = new Set(_tbEntries1.map(te => te.parameterName));
+                  methodParams = methodParams.filter(p => /^sets?$/i.test(p.name) || _validNames1.has(p.name));
+                }
+
                 // FALLBACK: Only use static dictionary if storedParams is empty
                 if (methodParams.length === 0) {
                   methodParams = getParametersForMethod(ex.methodId) || [];
@@ -710,40 +728,6 @@ export function WorkoutSessionSheet({
                   }
                 });
                 
-                // Detect %1RM and %maxHR units from toolbox data for auto-calculation defaults
-                let has1RMUnit = false;
-                let hasMaxHRUnit = false;
-                
-                if (toolboxData) {
-                  // Parse methodId to match toolbox category/subCategory structure
-                  // e.g., "Lower Body Resistance Training - Strength" -> category: "Lower Body Resistance Training", subCategory: "Strength"
-                  const methodParts = (ex.methodId ?? '').split(' - ');
-                  const methodCategory = methodParts[0];
-                  const methodSubCategory = methodParts.length > 1 ? methodParts.slice(1).join(' - ') : '';
-                  
-                  const methodEntries = toolboxData.entries.filter(entry => {
-                    return entry.category === methodCategory && 
-                           (methodSubCategory === '' || entry.subCategory === methodSubCategory);
-                  });
-                  
-                  for (const entry of methodEntries) {
-                    if (entry.parameterType === 'quantitative' && entry.options) {
-                      if (entry.options.includes('%1RM')) {
-                        has1RMUnit = true;
-                      }
-                      if (entry.options.includes('%maxHR') || entry.options.includes('%HRmax')) {
-                        hasMaxHRUnit = true;
-                      }
-                    }
-                    if (entry.isCalculated && entry.athleteDataRefs?.includes('e1RM')) has1RMUnit = true;
-                    if (entry.isCalculated && entry.athleteDataRefs?.some(r => r !== 'e1RM')) hasMaxHRUnit = true;
-                  }
-                }
-                
-                // Use existing values if set, otherwise default to true when relevant unit exists
-                const existingAutoWeight = (ex as any).autoCalculateWeight;
-                const existingAutoHR = (ex as any).autoCalculateTargetHR;
-                
                 return {
                   id: (ex as any).id || ex.exerciseId,
                   exerciseId: ex.exerciseId,
@@ -754,8 +738,6 @@ export function WorkoutSessionSheet({
                   supersetId: (ex as any).supersetId,
                   parameters,
                   notes: ex.notes,
-                  autoCalculateWeight: existingAutoWeight !== undefined ? existingAutoWeight : (has1RMUnit ? true : undefined),
-                  autoCalculateTargetHR: existingAutoHR !== undefined ? existingAutoHR : (hasMaxHRUnit ? true : undefined)
                 };
               })
               .sort((a, b) => a.order - b.order);
@@ -877,16 +859,6 @@ export function WorkoutSessionSheet({
           }
         });
         
-        // Detect auto-calc units
-        let has1RMUnit = false;
-        let hasMaxHRUnit = false;
-        for (const entry of methodEntries) {
-          if (entry.parameterType === 'quantitative' && entry.options) {
-            if (entry.options.includes('%1RM')) has1RMUnit = true;
-            if (entry.options.includes('%maxHR') || entry.options.includes('%HRmax')) hasMaxHRUnit = true;
-          }
-        }
-        
         sectionsMap.get(sectionName)!.push({
           id: (ex as any).id || ex.exerciseId,
           exerciseId: ex.exerciseId,
@@ -897,8 +869,6 @@ export function WorkoutSessionSheet({
           supersetId: (ex as any).supersetId,
           parameters: blankParameters,
           notes: ex.notes,
-          autoCalculateWeight: has1RMUnit ? true : undefined,
-          autoCalculateTargetHR: hasMaxHRUnit ? true : undefined,
           parameterSource: 'toolbox' as const,
         });
         
@@ -973,7 +943,19 @@ export function WorkoutSessionSheet({
           defaultValue: (storedParams as any)[name],
           unit: undefined
         }));
-      
+
+      // Filter out stale keys from old template loads — only show params defined in
+      // the current toolbox for this method. If toolbox isn't loaded or has no entries
+      // for this method, fall back to showing all (safe default).
+      const _tbEntries2 = (parametersToolboxData?.entries ?? []).filter(te => {
+        const mid = te.subCategory ? `${te.category} - ${te.subCategory}` : te.category;
+        return mid === (ex.methodId ?? '');
+      });
+      if (_tbEntries2.length > 0) {
+        const _validNames2 = new Set(_tbEntries2.map(te => te.parameterName));
+        methodParams = methodParams.filter(p => /^sets?$/i.test(p.name) || _validNames2.has(p.name));
+      }
+
       // FALLBACK: Only use static dictionary if storedParams is empty
       if (methodParams.length === 0) {
         methodParams = getParametersForMethod(ex.methodId) || [];
@@ -1020,38 +1002,6 @@ export function WorkoutSessionSheet({
         }
       });
       
-      // Detect %1RM and %maxHR units from toolbox data for auto-calculation defaults
-      let has1RMUnit = false;
-      let hasMaxHRUnit = false;
-      
-      if (toolboxData) {
-        // Parse methodId to match toolbox category/subCategory structure
-        // e.g., "Lower Body Resistance Training - Strength" -> category: "Lower Body Resistance Training", subCategory: "Strength"
-        const methodParts = (ex.methodId ?? '').split(' - ');
-        const methodCategory = methodParts[0];
-        const methodSubCategory = methodParts.length > 1 ? methodParts.slice(1).join(' - ') : '';
-        
-        const methodEntries = toolboxData.entries.filter(entry => {
-          return entry.category === methodCategory && 
-                 (methodSubCategory === '' || entry.subCategory === methodSubCategory);
-        });
-        
-        for (const entry of methodEntries) {
-          if (entry.parameterType === 'quantitative' && entry.options) {
-            if (entry.options.includes('%1RM')) {
-              has1RMUnit = true;
-            }
-            if (entry.options.includes('%maxHR') || entry.options.includes('%HRmax')) {
-              hasMaxHRUnit = true;
-            }
-          }
-        }
-      }
-      
-      // Use existing values if set, otherwise default to true when relevant unit exists
-      const existingAutoWeight = (ex as any).autoCalculateWeight;
-      const existingAutoHR = (ex as any).autoCalculateTargetHR;
-      
       sectionsMap.get(sectionName)!.push({
         id: (ex as any).id || ex.exerciseId,
         exerciseId: ex.exerciseId,
@@ -1061,8 +1011,6 @@ export function WorkoutSessionSheet({
         order: index,
         parameters,
         notes: ex.notes,
-        autoCalculateWeight: existingAutoWeight !== undefined ? existingAutoWeight : (has1RMUnit ? true : undefined),
-        autoCalculateTargetHR: existingAutoHR !== undefined ? existingAutoHR : (hasMaxHRUnit ? true : undefined)
       });
     });
     
@@ -1159,12 +1107,10 @@ export function WorkoutSessionSheet({
         // Apply live athlete_schedule overrides (from mobile coach edits) on top of
         // plan-derived data so desktop sees ALL changes made in the mobile coach app.
         let sectionsToSet = sectionsWithComments;
-        console.log(`[WorkoutSessionSheet] fresh open ${dayDate}[${sessionIndex}] liveScheduleEntry=`, liveScheduleEntry ? 'defined' : 'undefined');
         if (liveScheduleEntry) {
           // Mark as applied so the late-override effect skips (no double-apply).
           liveOverrideAppliedRef.current = true;
           const liveSession = liveScheduleEntry.sessions[sessionIndex];
-          console.log(`[WorkoutSessionSheet] liveSession=`, liveSession ? `found (${(liveSession.exercises??[]).length} exercises)` : 'NOT FOUND', 'sessionIndex=', sessionIndex, 'total sessions=', liveScheduleEntry.sessions.length);
           if (liveSession) {
             // ── Session-level fields ────────────────────────────────────────────────
             if (liveSession.notes !== undefined && liveSession.notes !== null) {
@@ -1198,7 +1144,6 @@ export function WorkoutSessionSheet({
               }
             }
 
-            console.log(`[WorkoutSessionSheet] overrideMap.size=`, overrideMap.size, 'exNotes=', exNotesMap.size, 'secNotes=', sectionNotesMapLive.size);
             const hasAnyOverride = overrideMap.size > 0 || exNotesMap.size > 0 || sectionNotesMapLive.size > 0;
             if (hasAnyOverride) {
               sectionsToSet = sectionsWithComments.map(section => ({
@@ -1208,7 +1153,6 @@ export function WorkoutSessionSheet({
                   const overrides = overrideMap.get(ex.id) ?? overrideMap.get(ex.exerciseId ?? '');
                   const liveNotes = exNotesMap.get(ex.id) ?? exNotesMap.get(ex.exerciseId ?? '');
                   if (!overrides && liveNotes === undefined) return ex;
-                  console.log(`[WorkoutSessionSheet] ✅ APPLYING override to ex id=${ex.id.slice(-8)} libId=${ex.exerciseId?.slice(-8)} name=${ex.exerciseName}`);
                   return {
                     ...ex,
                     parameters: overrides
@@ -1232,7 +1176,6 @@ export function WorkoutSessionSheet({
                 !existingIds.has(ex.exerciseLibraryId ?? ' ')
               );
               if (mobileOnlyExsFresh.length > 0) {
-                console.log(`[WorkoutSessionSheet] ✅ appending ${mobileOnlyExsFresh.length} mobile-added exercise(s) at fresh open`);
                 const liveSecs = buildSectionsFromLiveExercises(mobileOnlyExsFresh);
                 const sectionMap = new Map(sectionsToSet.map(s => [s.id, s]));
                 liveSecs.forEach(liveSection => {
@@ -1280,8 +1223,6 @@ export function WorkoutSessionSheet({
                 parameters: existing.parameters,
                 notes: existing.notes,
                 eachSide: existing.eachSide,
-                autoCalculateWeight: existing.autoCalculateWeight,
-                autoCalculateTargetHR: existing.autoCalculateTargetHR,
                 parameterSource: (existing as any).parameterSource,
               };
             }
@@ -1321,7 +1262,6 @@ export function WorkoutSessionSheet({
             if (Object.keys(visOverrides).length > 0) {
               setParameterVisibilityOverrides(visOverrides);
             }
-            console.log(`[WorkoutSessionSheet] built ${initSections.length} section(s) from ${liveSession.exercises.length} live exercises (mobile-added)`);
           }
         }
       }
@@ -1392,7 +1332,6 @@ export function WorkoutSessionSheet({
     const hasAnyOverride = overrideMap.size > 0 || exNotesMap.size > 0 || sectionNotesMapLive.size > 0;
     if (!hasAnyOverride) return;
 
-    console.log(`[WorkoutSessionSheet] late live override — overrideMap=${overrideMap.size} exNotes=${exNotesMap.size} secNotes=${sectionNotesMapLive.size}`);
     setWorkoutSections(prev => {
       // Step 1: apply overrides to plan exercises already in workoutSections
       const withOverrides = prev.map(section => ({
@@ -1402,7 +1341,6 @@ export function WorkoutSessionSheet({
           const overrides = overrideMap.get(ex.id) ?? overrideMap.get(ex.exerciseId ?? '');
           const liveNotes = exNotesMap.get(ex.id) ?? exNotesMap.get(ex.exerciseId ?? '');
           if (!overrides && liveNotes === undefined) return ex;
-          console.log(`[WorkoutSessionSheet] ✅ late override ex id=${ex.id.slice(-8)} libId=${ex.exerciseId?.slice(-8)} name=${ex.exerciseName}`);
           return {
             ...ex,
             parameters: overrides
@@ -1428,7 +1366,6 @@ export function WorkoutSessionSheet({
 
       if (mobileOnlyExs.length === 0) return withOverrides;
 
-      console.log(`[WorkoutSessionSheet] ✅ appending ${mobileOnlyExs.length} mobile-added exercise(s) from late override`);
       const liveSections = buildSectionsFromLiveExercises(mobileOnlyExs);
 
       // Merge live sections into plan sections (add to matching section or create new)
@@ -1489,20 +1426,18 @@ export function WorkoutSessionSheet({
                   parameters: existing.parameters,
                   notes: existing.notes,
                   eachSide: existing.eachSide,
-                  autoCalculateWeight: existing.autoCalculateWeight,
-                  autoCalculateTargetHR: existing.autoCalculateTargetHR,
                   parameterSource: (existing as any).parameterSource,
                 };
               }
-              
+
               if (isFreshlyAdded) {
                 return newEx;
               }
-              
+
               return newEx;
             })
           }));
-          
+
           // Clear freshly added IDs after merge
           freshlyAddedExerciseIdsRef.current.clear();
           
@@ -2701,28 +2636,6 @@ export function WorkoutSessionSheet({
     }
   };
 
-  const handleAutoCalculateWeightChange = (exerciseId: string, autoCalculateWeight: boolean) => {
-    setWorkoutSections(sections =>
-      sections.map(section => ({
-        ...section,
-        exercises: section.exercises.map(ex => 
-          ex.id === exerciseId ? { ...ex, autoCalculateWeight } : ex
-        )
-      }))
-    );
-  };
-
-  const handleAutoCalculateTargetHRChange = (exerciseId: string, autoCalculateTargetHR: boolean) => {
-    setWorkoutSections(sections =>
-      sections.map(section => ({
-        ...section,
-        exercises: section.exercises.map(ex => 
-          ex.id === exerciseId ? { ...ex, autoCalculateTargetHR } : ex
-        )
-      }))
-    );
-  };
-
   const handleToggleSuperset = (exerciseId1: string, exerciseId2: string, sectionId?: string) => {
     // Use shared utility for consistent behavior with Master Planner
     const result = toggleSuperset(
@@ -3105,9 +3018,36 @@ export function WorkoutSessionSheet({
 
       for (const ref of refs) {
         if (ref === 'e1RM') {
+          // Primary: compute e1RM from exercise session logs (most accurate)
           const history = getExerciseHistory(exerciseName);
           const recent = [...history].reverse().find(s => s.e1rm !== null);
-          result['e1RM'] = recent?.e1rm ?? undefined;
+          if (recent?.e1rm != null) {
+            result['e1RM'] = recent.e1rm;
+            continue;
+          }
+          // Fallback: use manually-entered performance parameter named 'e1RM'
+          // This covers the common case where the coach has entered an e1RM value
+          // in the athlete's performance parameters but has not yet configured
+          // exercise_param_tags for Epley-computed e1RM from session logs.
+          const e1rmParam = parametersData?.parameters.find(
+            p => p.name.toLowerCase() === 'e1rm'
+          );
+          if (e1rmParam) {
+            const perfEntry = (athletePerformanceParameters ?? []).find(
+              pp => pp.athleteId === selectedAthleteId && pp.athleticismParameterId === e1rmParam.id
+            );
+            if (perfEntry && perfEntry.values.length > 0) {
+              const latest = [...perfEntry.values].sort(
+                (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+              )[0];
+              const num = parseFloat(latest.value);
+              if (!isNaN(num)) {
+                result['e1RM'] = num;
+                continue;
+              }
+            }
+          }
+          result['e1RM'] = undefined;
           continue;
         }
 
@@ -3164,8 +3104,6 @@ export function WorkoutSessionSheet({
     onVisibilityChange: handleVisibilityChange,
     onShowAllParams: handleShowAllParams,
     onResetParamsToDefaults: handleResetParamsToDefaults,
-    onAutoCalculateWeightChange: handleAutoCalculateWeightChange,
-    onAutoCalculateTargetHRChange: handleAutoCalculateTargetHRChange,
     onOpenExerciseDetail: handleOpenExerciseDetail,
     onOpenCircuitExerciseDetail: handleOpenCircuitExerciseDetail,
     onChangeExercise: handleChangeExercise,
@@ -3188,8 +3126,6 @@ export function WorkoutSessionSheet({
     handleVisibilityChange,
     handleShowAllParams,
     handleResetParamsToDefaults,
-    handleAutoCalculateWeightChange,
-    handleAutoCalculateTargetHRChange,
     handleOpenExerciseDetail,
     handleOpenCircuitExerciseDetail,
     handleChangeExercise,
