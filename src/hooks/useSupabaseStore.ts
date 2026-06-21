@@ -19,6 +19,14 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 
+// ─── Module-level dedup guard ─────────────────────────────────────────────────
+// Prevents multiple hook instances (e.g. per-day-cell) from each firing their
+// own Supabase fetch for the same table+user. Only the first instance fetches;
+// subsequent instances subscribe to the result and update when it lands.
+const _fetchedKeys = new Set<string>();
+// Callbacks registered by secondary instances waiting for the first fetch.
+const _pendingCallbacks = new Map<string, Array<(data: unknown) => void>>();
+
 // ─── Cache helpers ────────────────────────────────────────────────────────────
 
 function readCache<T>(cacheKey: string): T | null {
@@ -96,7 +104,31 @@ export function useSupabaseStore<T>({
     if (loadedForUser.current === user.id) return;
     loadedForUser.current = user.id;
 
+    const fetchKey = `${user.id}:${tableName}`;
+
+    // Another instance is already fetching (or has fetched) this table.
+    if (_fetchedKeys.has(fetchKey)) {
+      const cached = readCache<T>(cacheKey);
+      if (cached !== null) {
+        // Cache already populated by first instance — use it immediately.
+        setData(cached);
+        setIsLoading(false);
+      } else {
+        // First fetch still in-flight. Subscribe to be notified when data lands.
+        // Callback receives resolved data (or null when no row existed).
+        const callbacks = _pendingCallbacks.get(fetchKey) ?? [];
+        callbacks.push((loaded) => {
+          if (loaded !== null) setData(loaded as T);
+          setIsLoading(false);
+        });
+        _pendingCallbacks.set(fetchKey, callbacks);
+      }
+      return;
+    }
+    _fetchedKeys.add(fetchKey);
+
     (async () => {
+      let resolvedData: T | null = null;
       try {
         const { data: row, error } = await supabase
           .from(tableName)
@@ -106,6 +138,7 @@ export function useSupabaseStore<T>({
 
         if (error) {
           console.error(`[useSupabaseStore:${tableName}] load error:`, error);
+          _fetchedKeys.delete(fetchKey); // allow retry on next mount
           return;
         }
 
@@ -114,6 +147,7 @@ export function useSupabaseStore<T>({
           const loaded = row.data as T;
           setData(loaded);
           writeCache(cacheKey, loaded);
+          resolvedData = loaded;
         } else {
           // No Supabase row — try to migrate from legacy localStorage
           const legacyRaw = (() => {
@@ -132,6 +166,7 @@ export function useSupabaseStore<T>({
               setData(migrated);
               writeCache(cacheKey, migrated);
               localStorage.removeItem(legacyKey);
+              resolvedData = migrated;
             } catch (err) {
               console.error(`[useSupabaseStore:${tableName}] migration error:`, err);
             }
@@ -150,6 +185,13 @@ export function useSupabaseStore<T>({
         }
       } finally {
         setIsLoading(false);
+        // Notify any instances that were waiting for this fetch to complete.
+        const waiting = _pendingCallbacks.get(fetchKey);
+        if (waiting) {
+          // Pass resolvedData (may be null if no row existed); callback handles both.
+          waiting.forEach((cb) => cb(resolvedData));
+          _pendingCallbacks.delete(fetchKey);
+        }
       }
     })();
   }, [user?.id, tableName, legacyKey, cacheKey, migrate]);
