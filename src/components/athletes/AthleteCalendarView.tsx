@@ -25,7 +25,8 @@ import {
   shiftDaySplitStatesDates,
 } from '@/utils/dateShifting';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
-import { syncAthleteSchedule } from '@/utils/athleteScheduleSync';
+import { syncAthleteSchedule, AthleteFormulaData } from '@/utils/athleteScheduleSync';
+import { epley1RM } from '@/hooks/useExerciseMetrics';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -167,6 +168,17 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
   // Track which assignment IDs have already received a load-time sync so we don't repeat it
   const loadSyncedRef = useRef<Set<string>>(new Set());
+
+  // Cached athlete formula data (e1RM + biometrics + perf params) built once per athlete
+  // at load-sync time and reused by every subsequent auto-sync so we don't hit Supabase
+  // on every keystroke.  Cleared when the athlete changes (component re-mount).
+  const athleteFormulaDataRef = useRef<AthleteFormulaData | null>(null);
+
+  // Dates explicitly cleared by the coach this session.
+  // The poll effect and realtime subscription both use this to prevent re-populating
+  // liveScheduleMap with stale Supabase rows during the window between the optimistic
+  // delete and the actual Supabase DELETE completing.
+  const clearedDatesRef = useRef<Set<string>>(new Set());
   
   // Install global capture-phase click listener to swallow post-drag clicks
   useEffect(() => {
@@ -219,6 +231,93 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         : undefined,
     })),
   [parametersData]);
+
+  // ── Helper: build AthleteFormulaData for formula pre-computation ─────────────────
+  // Queries exercise_param_tags + athlete_session_logs to compute the e1RM for each
+  // exercise the athlete has logged, plus biometrics and performance parameter values.
+  // This mirrors the logic inside handleAssignProgram and is extracted here so it can
+  // be reused by both the load-sync and the auto-sync (cached via athleteFormulaDataRef).
+  const buildAthleteFormulaData = useCallback(async (): Promise<AthleteFormulaData> => {
+    // ── Biometrics ────────────────────────────────────────────────────────────
+    const biometricsById = new Map<string, { name: string; value: number }>();
+    for (const def of athleteData.biometricDefinitions) {
+      if (def.type !== 'quantitative') continue;
+      const bioEntry = athleteData.getAthleteBiometrics(athlete.id)
+        .find(b => b.biometricDefinitionId === def.id);
+      if (!bioEntry || bioEntry.values.length === 0) continue;
+      const latest = [...bioEntry.values].sort(
+        (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+      )[0];
+      const num = parseFloat(latest.value);
+      if (!isNaN(num)) biometricsById.set(def.id, { name: def.name, value: num });
+    }
+
+    // ── Performance parameters ────────────────────────────────────────────────
+    const perfParamsById = new Map<string, { name: string; value: number }>();
+    for (const pp of athleteData.getAthletePerformanceParameters(athlete.id)) {
+      if (pp.values.length === 0) continue;
+      const perfDef = parametersData?.parameters.find(p => p.id === pp.athleticismParameterId);
+      if (!perfDef) continue;
+      const latest = [...pp.values].sort(
+        (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+      )[0];
+      const num = parseFloat(latest.value);
+      if (!isNaN(num)) perfParamsById.set(pp.athleticismParameterId, { name: perfDef.name, value: num });
+    }
+
+    // ── e1RM from exercise metrics ────────────────────────────────────────────
+    const e1RMByExercise = new Map<string, number>();
+    const formulaConnectionId = getConnectionForAthlete(athlete.id)?.id;
+    if (formulaConnectionId && user) {
+      const [paramTagResult, logsResult] = await Promise.all([
+        supabase
+          .from('exercise_param_tags')
+          .select('exercise_name, weight_param, reps_param, rir_param')
+          .eq('coach_user_id', user.id),
+        supabase
+          .from('athlete_session_logs')
+          .select('date, sets_logged')
+          .eq('athlete_connection_id', formulaConnectionId)
+          .not('completed_at', 'is', null)
+          .order('date', { ascending: false }),
+      ]);
+
+      const paramTagMap = new Map<string, { weightParam: string; repsParam: string; rirParam?: string }>();
+      for (const row of paramTagResult.data ?? []) {
+        paramTagMap.set((row.exercise_name as string).toLowerCase(), {
+          weightParam: row.weight_param as string,
+          repsParam: row.reps_param as string,
+          rirParam: (row.rir_param as string | null) ?? undefined,
+        });
+      }
+
+      type RawSet = { setNumber: number; values: Record<string, string>; completed: boolean };
+      type RawExLog = { exerciseName: string; isCircuit?: boolean; sets?: RawSet[] };
+
+      for (const row of logsResult.data ?? []) {
+        for (const exLog of (row.sets_logged as RawExLog[]) ?? []) {
+          if (exLog.isCircuit) continue;
+          const exNameLower = (exLog.exerciseName ?? '').toLowerCase();
+          if (e1RMByExercise.has(exNameLower)) continue; // already have most recent
+          const tags = paramTagMap.get(exNameLower);
+          if (!tags) continue;
+          let bestE1RM: number | null = null;
+          for (const set of exLog.sets ?? []) {
+            if (!set.completed) continue;
+            const w = parseFloat(set.values?.[tags.weightParam] ?? '');
+            const r = parseFloat(set.values?.[tags.repsParam] ?? '');
+            if (isNaN(w) || isNaN(r) || w <= 0 || r <= 0) continue;
+            const rir = tags.rirParam ? parseFloat(set.values?.[tags.rirParam] ?? '0') : 0;
+            const est = epley1RM(w, r, isNaN(rir) ? 0 : rir);
+            if (bestE1RM === null || est > bestE1RM) bestE1RM = est;
+          }
+          if (bestE1RM !== null) e1RMByExercise.set(exNameLower, bestE1RM);
+        }
+      }
+    }
+
+    return { e1RMByExercise, biometricsById, perfParamsById };
+  }, [athlete.id, athleteData, parametersData, getConnectionForAthlete, user]);
 
   // Sort newest-first so the default selection is always the most recently assigned program.
   // Without this, assignments[0] is the oldest (insertion order), so the desktop would load
@@ -299,8 +398,13 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         setLiveScheduleMap(prev => {
           const next = new Map(prev);
           data.forEach((row: Record<string, unknown>) => {
+            const dateStr = row.date as string;
+            // Skip dates the coach explicitly cleared this session —
+            // prevents a stale Supabase row from re-populating the map
+            // before the DELETE has committed (race condition).
+            if (clearedDatesRef.current.has(dateStr)) return;
             const rawSessions = (row.sessions as RawSession[]) ?? [];
-            next.set(row.date as string, {
+            next.set(dateStr, {
               rowId: row.id as string,
               rowIntensity: row.intensity as string | null,
               sessions: rawSessions.map(s => ({
@@ -359,10 +463,17 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         (payload: { eventType: string; new: Record<string, unknown> }) => {
           if (payload.eventType === 'DELETE') return; // ignore deletes
           const row = payload.new;
+          const dateStr = row.date as string;
+          // Skip dates the coach explicitly cleared this session — prevents
+          // an auto-sync UPSERT event for a neighbouring date from accidentally
+          // re-adding a cleared date if Supabase batches inserts together, and
+          // prevents the cleared row's own INSERT from re-populating the map
+          // before the subsequent DELETE settles.
+          if (clearedDatesRef.current.has(dateStr)) return;
           const entry = buildLiveEntry(row);
           setLiveScheduleMap(prev => {
             const next = new Map(prev);
-            next.set(row.date as string, entry);
+            next.set(dateStr, entry);
             return next;
           });
         }
@@ -383,6 +494,12 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
   // Editing hook — must be declared before useAthleteAIContext which references editing.exerciseDistribution
   const editing = useAthleteCalendarEditing(selectedAssignmentId, assignments);
+  // Always-current snapshot of the editing hook's output. Initialized here (after editing
+  // is defined) so it's never in the temporal dead zone. Updated every render so async
+  // callbacks (e.g. buildAthleteFormulaData().then) can read fresh state instead of the
+  // stale closure captured when the effect originally ran.
+  const latestEditingRef = useRef(editing);
+  latestEditingRef.current = editing;
 
   // Auto-sync to athlete_schedule whenever the editing hook persists a change to localStorage.
   // This ensures manually-added sessions and exercises appear in the athlete app without
@@ -393,11 +510,15 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     // Guard A: mobile-created flag — set when initializeFromAssignment runs (no localStorage key).
     // While exercises are still empty, refuse to sync regardless of other conditions.
     if (editing.isMobileCreated && editing.exerciseDistribution.length === 0) return;
-    // Guard B: belt-and-suspenders — also skip if exercises are empty and no localStorage key exists.
+    // Guard B: also skip if exercises are empty and no localStorage key exists (mobile-created).
     if (
       editing.exerciseDistribution.length === 0 &&
       !localStorage.getItem(`athlete-assignment-${selectedAssignmentId}`)
     ) return;
+    // Guard C: skip if exercises are empty but training days exist — corrupted/partial snapshot.
+    // Syncing with empty exercises would delete all Supabase sessions and the assignment would
+    // visually disappear. The Supabase data from assign-time is authoritative here.
+    if (editing.exerciseDistribution.length === 0 && editing.trainingDays.length > 0) return;
     const connection = getConnectionForAthlete(athlete.id);
     if (!connection) {
       // Distinguish: connections still loading vs. athlete has no invite link
@@ -421,6 +542,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       editing.supersets,
       editing.sessionIntensities,
       enrichEvents(getEventsForAthlete(athlete.id)),
+      // Pass cached formula data so formula-computed params (e.g. Weight = Intensity * e1RM)
+      // are re-evaluated on every auto-save rather than only at assign time.
+      athleteFormulaDataRef.current ?? undefined,
     ).catch(e => {
       console.error('[autoSync] ✗ sync failed:', e);
       // Show a toast once per mount so the coach knows something is wrong
@@ -455,6 +579,14 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     // assign-flow wrote, making the training calendar appear blank on next open.
     if (!localStorage.getItem(`athlete-assignment-${selectedAssignmentId}`)) return;
 
+    // Skip if the snapshot exists but exerciseDistribution is empty while training
+    // days are present. This indicates a corrupted/partial snapshot (e.g. created by
+    // an earlier bug where the MERGE path wrote only training days but no exercises).
+    // Syncing with empty exercises would delete all Supabase sessions — the assignment
+    // would visually disappear. The Supabase data written at assign-time is authoritative
+    // in this case and should not be overwritten.
+    if (editing.exerciseDistribution.length === 0 && editing.trainingDays.length > 0) return;
+
     const connection = getConnectionForAthlete(athlete.id);
     if (!connection) return;
 
@@ -473,13 +605,14 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         if (localPvStr) {
           const localPv = JSON.parse(localPvStr);
           if (localPv && Object.keys(localPv).length > 0) {
-            // Validate: at least one key matches a mesocycle ID from the current assignment
-            const assignedMesoIds = new Set<string>(
-              (editing.selectedAssignment?.assignedMesocycles ?? []).map(m => m.id).filter(Boolean)
-            );
-            const hasMatch = assignedMesoIds.size === 0 ||
-              Object.keys(localPv).some(k => assignedMesoIds.has(k));
-            if (hasMatch) {
+            // Only apply live wizard parameterValues when the wizard is showing the SAME
+            // program that was assigned. All programs use generic "meso-1"/"meso-2" keys,
+            // so mesocycle-ID intersection alone is not a reliable guard — it would always
+            // match and contaminate the stored snapshot with values from a different program.
+            const activeProgramId = localStorage.getItem('activeProgramId');
+            const isSameProgram = activeProgramId && editing.selectedAssignment?.programId &&
+              activeProgramId === editing.selectedAssignment.programId;
+            if (isSameProgram) {
               loadSyncParamValues = localPv as typeof editing.parameterValues;
             }
           }
@@ -494,19 +627,51 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     }
 
     loadSyncedRef.current.add(selectedAssignmentId);
-    syncAthleteSchedule(
-      connection.id,
-      editing.selectedAssignment,
-      editing.trainingDays,
-      editing.exerciseDistribution,
-      editing.selectedAssignment.programName ?? 'Training Plan',
-      loadSyncParamValues,
-      editing.sessionSections,
-      toolboxData?.entries,
-      editing.supersets,
-      editing.sessionIntensities,
-      enrichEvents(getEventsForAthlete(athlete.id)),
-    ).catch(e => console.error('[loadSync] ✗ sync failed:', e));
+
+    // Build athlete formula data (e1RM, biometrics, perf params) once per load so
+    // isCalculated formula params (e.g. Weight = Intensity * e1RM) are pre-computed.
+    // Cache the result in athleteFormulaDataRef so subsequent auto-syncs can reuse it
+    // without hitting Supabase again on every keystroke.
+    buildAthleteFormulaData().then(formulaData => {
+      athleteFormulaDataRef.current = formulaData;
+      console.log(`[loadSync] formula data built: e1RM for ${formulaData.e1RMByExercise.size} exercise(s)`);
+      // Use latestEditingRef.current instead of the stale closure. The formula build
+      // takes two Supabase round-trips; during that time the user may add sessions,
+      // so the closure's editing.trainingDays would be stale and would overwrite the
+      // correct Supabase data that the autoSync already wrote.
+      const e = latestEditingRef.current;
+      syncAthleteSchedule(
+        connection.id,
+        e.selectedAssignment!,
+        e.trainingDays,
+        e.exerciseDistribution,
+        e.selectedAssignment?.programName ?? 'Training Plan',
+        loadSyncParamValues,
+        e.sessionSections,
+        toolboxData?.entries,
+        e.supersets,
+        e.sessionIntensities,
+        enrichEvents(getEventsForAthlete(athlete.id)),
+        formulaData,
+      ).catch(err => console.error('[loadSync] ✗ sync failed:', err));
+    }).catch(e => {
+      // Formula data build failed — still sync without it (formula cols stay as "Auto")
+      console.warn('[loadSync] formula data build failed, syncing without it:', e);
+      const ed = latestEditingRef.current;
+      syncAthleteSchedule(
+        connection.id,
+        ed.selectedAssignment!,
+        ed.trainingDays,
+        ed.exerciseDistribution,
+        ed.selectedAssignment?.programName ?? 'Training Plan',
+        loadSyncParamValues,
+        ed.sessionSections,
+        toolboxData?.entries,
+        ed.supersets,
+        ed.sessionIntensities,
+        enrichEvents(getEventsForAthlete(athlete.id)),
+      ).catch(e2 => console.error('[loadSync] ✗ sync failed:', e2));
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAssignmentId, editing.isInitializing, editing.trainingDays.length, connectionsLoading]);
 
@@ -680,6 +845,12 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     }
   }, [assignments]); // intentionally exclude assignmentDataCache to prevent infinite loop
 
+  // Reset selected assignment whenever the viewed athlete changes so stale plan
+  // data from the previous athlete never bleeds through.
+  useEffect(() => {
+    setSelectedAssignmentId(null);
+  }, [athlete.id]);
+
   // Initialize selected assignment when assignments change
   useEffect(() => {
     if (assignments.length > 0 && !selectedAssignmentId) {
@@ -692,16 +863,47 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   // Optimistic wrapper: remove the session from liveScheduleMap immediately so
   // the calendar reflects the deletion without waiting for autoSync → realtime.
   const handleDeleteSession = useCallback((dayDate: string, sessionIndex: number) => {
+    // Check if this will be the last session — if so, mark the day as cleared
+    // to prevent the poll/realtime from re-populating liveScheduleMap before
+    // the auto-sync DELETE reaches Supabase.
+    const currentSessions = editing.daySplitStates[dayDate] ?? 1;
+    const willClearDay = currentSessions <= 1;
+    if (willClearDay) {
+      clearedDatesRef.current.add(dayDate);
+      // Allow the cleared-date guard to expire after 10 seconds so the day
+      // can be re-populated if the coach adds a session again.
+      setTimeout(() => { clearedDatesRef.current.delete(dayDate); }, 10000);
+    }
     setLiveScheduleMap(prev => {
       const entry = prev.get(dayDate);
       if (!entry) return prev;
       const newSessions = entry.sessions.filter((_, idx) => idx !== sessionIndex);
       const next = new Map(prev);
-      next.set(dayDate, { ...entry, sessions: newSessions });
+      // Fully remove the entry when the last session is deleted so the day
+      // doesn't remain in the map with an empty sessions array (which would
+      // keep the "liveEntry !== undefined" override firing in rendering).
+      if (newSessions.length === 0) {
+        next.delete(dayDate);
+      } else {
+        next.set(dayDate, { ...entry, sessions: newSessions });
+      }
       return next;
     });
+    // For the last session, also delete the Supabase row directly so
+    // mobile-created assignments (which skip auto-sync) are cleaned up.
+    if (willClearDay) {
+      const connection = getConnectionForAthlete(athlete.id);
+      if (connection) {
+        supabase
+          .from('athlete_schedule')
+          .delete()
+          .eq('athlete_connection_id', connection.id)
+          .eq('date', dayDate)
+          .then(() => { /* ignore result — liveScheduleMap already cleared optimistically */ });
+      }
+    }
     editing.handleDeleteSession(dayDate, sessionIndex);
-  }, [editing]);
+  }, [editing, getConnectionForAthlete, athlete.id]);
 
   const handleClearDay = useCallback((dayDate: string) => {
     // Block clearing if any session on this day has been completed by the athlete
@@ -714,6 +916,11 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       });
       return;
     }
+    // Mark as cleared immediately so the poll/realtime guards kick in before
+    // any async Supabase operation completes.
+    clearedDatesRef.current.add(dayDate);
+    setTimeout(() => { clearedDatesRef.current.delete(dayDate); }, 10000);
+
     editing.handleClearDay(dayDate);
     if (!selectedAssignmentId) return;
     setAssignmentDataCache(prev => {
@@ -726,7 +933,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           daySplitStates: { ...(current.daySplitStates || {}), [dayDate]: 0 },
           trainingDays: (current.trainingDays || []).map((d: any) =>
             d.date === dayDate
-              ? { ...d, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false }
+              ? { ...d, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false, intensity: 'off', isTrainingDay: false }
               : d
           ),
           exerciseDistribution: (current.exerciseDistribution || []).filter((ex: any) => ex.dayDate !== dayDate),
@@ -784,8 +991,16 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       if (completedDates.size === weekDates.length) return;
     }
 
-    // Only clear days that have no completed sessions
-    clearableDates.forEach(date => editing.handleClearDay(date));
+    // Only clear days that have no completed sessions — use atomic bulk clear to
+    // avoid the stale-closure bug that occurs when handleClearDay is called in a loop.
+    editing.handleClearDays(clearableDates);
+
+    // Mark all clearable dates as cleared immediately so the poll/realtime guards
+    // prevent stale Supabase rows from re-populating liveScheduleMap.
+    clearableDates.forEach(date => {
+      clearedDatesRef.current.add(date);
+      setTimeout(() => { clearedDatesRef.current.delete(date); }, 10000);
+    });
 
     if (!selectedAssignmentId) return;
     setAssignmentDataCache(prev => {
@@ -800,7 +1015,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           daySplitStates: clearedSplitStates,
           trainingDays: (current.trainingDays || []).map((d: any) =>
             clearableDates.includes(d.date)
-              ? { ...d, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false }
+              ? { ...d, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false, intensity: 'off', isTrainingDay: false }
               : d
           ),
           exerciseDistribution: (current.exerciseDistribution || []).filter((ex: any) => !clearableDates.includes(ex.dayDate)),
@@ -827,7 +1042,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     if (completedDates.size === 0) {
       toast({ title: 'Week cleared' });
     }
-  }, [editing.handleClearDay, selectedAssignmentId, sessionLogs, toast, getConnectionForAthlete, athlete.id]);
+  }, [editing.handleClearDays, selectedAssignmentId, sessionLogs, toast, getConnectionForAthlete, athlete.id]);
 
   // Build mesocycle from assignment for MasterPlannerGrid
   const currentMesocycleFromAssignment = useMemo(() => {
@@ -1177,11 +1392,15 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       // the exact sessions the mobile assign-flow wrote to Supabase.
       // Guard: assignmentId must be set — prevents stale rows from old programs
       // from appearing on dates that no current assignment covers.
-      // No editingClearedDay guard needed: handleClearDay now removes the entry
-      // from liveScheduleMap optimistically, so cleared days already have
-      // liveEntry === undefined and the override cannot fire.
+      // Guard: skip if the editing state explicitly cleared this day (daySplitStates === 0).
+      // When a week is cleared, editing state is updated synchronously, but liveScheduleMap
+      // may still carry the old entry for one render cycle (e.g. if selectedAssignmentId was
+      // null when handleClearWeek tried to clear it, or if a realtime event re-populated it).
+      // Trusting the editing state prevents ghost sessions from appearing after a clear.
       const liveEntry = liveScheduleMap.get(dateString);
-      if (liveEntry !== undefined && assignmentId) {
+      const isExplicitlyCleared = selectedAssignmentId !== null &&
+        editing.daySplitStates[dateString] === 0;
+      if (liveEntry !== undefined && assignmentId && !isExplicitlyCleared) {
         sessions.length = 0;
         liveEntry.sessions.forEach((s, idx) => {
           sessions.push({
@@ -1359,11 +1578,11 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         program = getProgram(assignment.programId);
       }
 
-      // If program.parameterValues is missing (Supabase copy may be stale — saved before
-      // periodization was filled), recover from the wizard's localStorage key.
-      // Validate the recovered data belongs to this program by checking that at least
-      // one key in localStorage['parameterValues'] matches a mesocycle ID in this program.
-      if (program && (!program.parameterValues || Object.keys(program.parameterValues).length === 0)) {
+      // Always prefer the wizard's live parameterValues over the program's saved snapshot.
+      // The snapshot may contain stale template keys (e.g. Tempo, Organization) from an old
+      // template load that was later discarded. The live wizard state reflects the current plan.
+      // Validate by matching at least one mesocycle ID to prevent cross-program contamination.
+      if (program) {
         try {
           const localPvStr = localStorage.getItem('parameterValues');
           if (localPvStr) {
@@ -1777,6 +1996,13 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
             }
           };
 
+          // Reuse the formula data cached by the load-sync (built when this athlete's
+          // calendar was first loaded). Only re-fetch if the cache is empty, which happens
+          // when the user assigns a plan without having opened the calendar first.
+          const athleteFormulaData: AthleteFormulaData =
+            athleteFormulaDataRef.current ?? await buildAthleteFormulaData();
+          athleteFormulaDataRef.current = athleteFormulaData;
+
           if (mergeIntoExisting) {
             // MERGE PATH: add program sessions into the current active assignment
             editing.mergeSessionData(
@@ -1833,15 +2059,44 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 filteredSupersets,
                 undefined, // sessionIntensities not available at assign time
                 enrichEvents(getEventsForAthlete(athlete.id)),
+                athleteFormulaData,
               ).catch(e => console.error('[ASSIGN] ✗ athlete schedule sync (merge) failed:', e));
             } else {
               console.warn('[ASSIGN] merge: no connection found for athlete', athlete.id,
                 '— schedule not synced. Create an invite link for this athlete to enable app sync.');
             }
 
+            // Update ONLY parameterValues in the localStorage snapshot so WorkoutSessionSheet
+            // gets the correct periodization data after a re-assign. Do NOT overwrite
+            // exerciseDistribution, trainingDays, sessionSections, supersets, or daySplitStates
+            // here — those are partial (only the newly-merged sessions) and would destroy the
+            // full existing snapshot. They are updated correctly by the next autoSave cycle
+            // after mergeSessionData() updates React state above.
+            if (selectedAssignmentId) {
+              const mergeStorageKey = `athlete-assignment-${selectedAssignmentId}`;
+              const existingSnapshot = localStorage.getItem(mergeStorageKey);
+              if (existingSnapshot) {
+                try {
+                  const parsed = JSON.parse(existingSnapshot);
+                  localStorage.setItem(mergeStorageKey, JSON.stringify({
+                    ...parsed,
+                    parameterValues: program.parameterValues || {},
+                  }));
+                } catch {
+                  // ignore — snapshot update is best-effort
+                }
+              }
+            }
+
             await transferTestsEvents();
           } else if (newAssignment) {
-            // CREATE PATH: save to new assignment key and switch to it
+            // CREATE PATH: save to new assignment key and switch to it.
+            // Guard: newAssignment.id must be defined — if it's undefined the key becomes
+            // "athlete-assignment-undefined" which collides across all assignments and
+            // accumulates stale data from multiple programs.
+            if (!newAssignment.id) {
+              console.error('[handleAssignProgram] newAssignment.id is undefined — skipping localStorage write to prevent key collision');
+            } else {
             const storageKey = `athlete-assignment-${newAssignment.id}`;
             const dataToSave = {
               exerciseDistribution: filteredExercises,
@@ -1883,6 +2138,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 dataToSave.supersets,
                 undefined, // sessionIntensities not available at assign time
                 enrichEvents(getEventsForAthlete(athlete.id)),
+                athleteFormulaData,
               ).catch(e => console.error('[ASSIGN] ✗ athlete schedule sync failed:', e));
             } else {
               console.warn('[ASSIGN] create: no connection found for athlete', athlete.id,
@@ -1899,6 +2155,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
             // Auto-select the new assignment so its editing state loads immediately
             setSelectedAssignmentId(newAssignment.id);
+            } // end else (newAssignment.id defined)
           }
         } catch (shiftError) {
           console.error('[handleAssignProgram] Error shifting dates:', shiftError);
@@ -2166,7 +2423,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 onSectionCommentChange={editing.handleSectionCommentChange}
                 onExerciseNotesChange={editing.handleExerciseNotesChange}
                 onExerciseEachSideChange={editing.handleExerciseEachSideChange}
-                onExerciseAutoCalcChange={editing.handleExerciseAutoCalcChange}
                 onDayIntensityChange={editing.handleDayIntensityChange}
                 onSessionIntensityChange={editing.handleSessionIntensityChange}
                 onSectionReorder={editing.handleSectionReorder}
@@ -2426,6 +2682,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           useExternalIntensityOnly={true}
           isAdHocSession={true}
           athleteConnectionId={getConnectionForAthlete(athlete.id)?.id}
+          selectedAthleteId={athlete.id}
+          athletePerformanceParameters={athleteData.getAthletePerformanceParameters(athlete.id)}
           liveScheduleEntry={liveScheduleMap.get(selectedSessionInfo.dayDate)}
           onOpenAIAssistant={(ctx: FocusedSessionContext) => {
             setFocusedSessionCtx(ctx);

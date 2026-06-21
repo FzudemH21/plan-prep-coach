@@ -257,11 +257,67 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         const storedExercises = parsed.exerciseDistribution || [];
         const storedSections = Array.isArray(parsed.sessionSections) ? parsed.sessionSections : [];
         const storedSupersets = parsed.supersets || {};
-        const storedParams = parsed.parameterValues || {};
+        let storedParams = parsed.parameterValues || {};
         const storedDailyIntensity = parsed.dailyIntensity || [];
         const storedDaySplitStates = parsed.daySplitStates || {};
         const storedSessionIntensities = parsed.sessionIntensities || {};
         const storedTestEventDays = parsed.testEventDays || {};
+
+        // Deep-merge the wizard's live parameterValues into the stored snapshot.
+        // For each method key present in livePv, livePv wins (removes phantom params from
+        // stale template loads). For method keys or microcycles only in the stored snapshot
+        // (e.g. microcycle 2 that the wizard hasn't re-configured), the stored data is kept.
+        // Validated by matching activeProgramId to the assignment's programId to prevent
+        // cross-program contamination (all programs share generic "meso-1"/"meso-2" keys,
+        // so mesocycle-ID intersection alone is not a reliable guard).
+        try {
+          const livePvStr = localStorage.getItem('parameterValues');
+          if (livePvStr) {
+            const livePv = JSON.parse(livePvStr) as Record<string, unknown>;
+            if (livePv && typeof livePv === 'object' && !Array.isArray(livePv)) {
+              // Only apply live wizard data when the wizard is showing the SAME program
+              // that was assigned. If a different program is active, skip to prevent
+              // overwriting the stored snapshot with unrelated param values.
+              const activeProgramId = localStorage.getItem('activeProgramId');
+              const isSameProgram = activeProgramId && assignment.programId &&
+                activeProgramId === assignment.programId;
+              if (isSameProgram) {
+                const assignmentMesoIds = new Set(
+                  (assignment.assignedMesocycles ?? []).map(m => m.id).filter(Boolean)
+                );
+                const liveKeys = Object.keys(livePv);
+                const merged: Record<string, unknown> = { ...(storedParams as Record<string, unknown>) };
+                for (const mesoId of liveKeys) {
+                  // Skip live meso keys not present in the assignment's mesocycle list
+                  if (assignmentMesoIds.size > 0 && !assignmentMesoIds.has(mesoId)) continue;
+                  const liveMeso = livePv[mesoId] as Record<string, unknown> | undefined;
+                  if (!liveMeso || typeof liveMeso !== 'object') continue;
+                  const storedMeso = (merged[mesoId] as Record<string, unknown>) || {};
+                  const mergedMeso: Record<string, unknown> = {};
+                  const allMcKeys = new Set([
+                    ...Object.keys(storedMeso),
+                    ...Object.keys(liveMeso),
+                  ]);
+                  for (const mcKey of allMcKeys) {
+                    const liveMc = liveMeso[mcKey] as Record<string, unknown> | undefined;
+                    const storedMc = storedMeso[mcKey] as Record<string, unknown> | undefined;
+                    if (!liveMc) {
+                      // Microcycle not in livePv — keep stored data as-is
+                      mergedMeso[mcKey] = storedMc;
+                    } else {
+                      // livePv wins per-method-key, but stored data fills in missing methods
+                      mergedMeso[mcKey] = { ...(storedMc || {}), ...liveMc };
+                    }
+                  }
+                  merged[mesoId] = mergedMeso;
+                }
+                storedParams = merged;
+              }
+            }
+          }
+        } catch {
+          // ignore — fall back to stored snapshot
+        }
 
         setExerciseDistribution(storedExercises);
         setSessionSections(storedSections);
@@ -311,10 +367,24 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     });
   }, [buildTrainingDaysFromAssignment, initializeFromAssignment]);
 
-  // Load when assignment changes
+  // Load when assignment changes; clear state when no assignment (e.g. new athlete with no plan)
   useEffect(() => {
     if (selectedAssignmentId) {
       loadAssignmentForEditing(selectedAssignmentId);
+    } else {
+      // Athlete has no assignment — clear stale plan data so the previous athlete's
+      // sessions don't bleed through when viewing a new or unassigned athlete.
+      setExerciseDistribution([]);
+      setSessionSections([]);
+      setSupersets({});
+      setParameterValues({});
+      setDailyIntensityData([]);
+      setTrainingDays([]);
+      setDaySplitStates({});
+      setSessionIntensities({});
+      setTestEventDays({});
+      lastLoadedAssignmentIdRef.current = null;
+      loadedAssignmentIdRef.current = null;
     }
   }, [selectedAssignmentId, loadAssignmentForEditing]);
 
@@ -974,9 +1044,21 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     const newSupersets = { ...supersets };
     delete newSupersets[dayDate];
     const newDaySplitStates = { ...daySplitStates, [dayDate]: 0 };
-    const newTrainingDays = trainingDays.map(day => 
-      day.date === dayDate ? { ...day, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false } : day
+    // Also set intensity to 'off' so syncAthleteSchedule and calendarDays
+    // both treat the day as a rest day — prevents ghost sessions from re-appearing.
+    const newTrainingDays = trainingDays.map(day =>
+      day.date === dayDate
+        ? { ...day, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false, intensity: 'off' as IntensityLevel, isTrainingDay: false }
+        : day
     );
+    // Clear daily intensity entry for the day so it renders as rest.
+    const newDailyIntensityData = dailyIntensityData.map(di =>
+      di.date === dayDate ? { ...di, intensity: 'off' as IntensityLevel } : di
+    );
+    // Clear per-session intensities for the day.
+    const newSessionIntensities = Object.fromEntries(
+      Object.entries(sessionIntensities).filter(([k]) => !k.startsWith(`${dayDate}-`))
+    ) as typeof sessionIntensities;
 
     // Update React state
     setExerciseDistribution(newExercises);
@@ -984,6 +1066,8 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     setSupersets(newSupersets);
     setDaySplitStates(newDaySplitStates);
     setTrainingDays(newTrainingDays);
+    setDailyIntensityData(newDailyIntensityData);
+    setSessionIntensities(newSessionIntensities);
 
     // IMMEDIATE localStorage write (bypass debounce)
     if (selectedAssignmentId) {
@@ -993,10 +1077,11 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         sessionSections: newSections,
         supersets: newSupersets,
         parameterValues,
-        dailyIntensity: dailyIntensityData,
+        dailyIntensity: newDailyIntensityData,
         trainingDays: newTrainingDays,
         daySplitStates: newDaySplitStates,
-        sessionIntensities,
+        sessionIntensities: newSessionIntensities,
+        testEventDays,
         lastModified: new Date().toISOString(),
       };
       localStorage.setItem(storageKey, JSON.stringify(savePayload));
@@ -1005,15 +1090,79 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         sessionSections: newSections,
         supersets: newSupersets,
         parameterValues,
-        dailyIntensity: dailyIntensityData,
+        dailyIntensity: newDailyIntensityData,
         trainingDays: newTrainingDays,
         daySplitStates: newDaySplitStates,
-        sessionIntensities,
+        sessionIntensities: newSessionIntensities,
+        testEventDays,
       });
       setLastSavedAt(new Date().toISOString());
     }
 
-  }, [exerciseDistribution, sessionSections, supersets, daySplitStates, trainingDays, dailyIntensityData, parameterValues, sessionIntensities, selectedAssignmentId]);
+  }, [exerciseDistribution, sessionSections, supersets, daySplitStates, trainingDays, dailyIntensityData, parameterValues, sessionIntensities, testEventDays, selectedAssignmentId]);
+
+  // Atomic multi-day clear — avoids the stale-closure bug that happens when
+  // handleClearDay is called in a loop (each call reads the same snapshot).
+  const handleClearDays = useCallback((dates: string[]) => {
+    if (dates.length === 0) return;
+    const dateSet = new Set(dates);
+    const newExercises = exerciseDistribution.filter(ex => !dateSet.has(ex.dayDate));
+    const newSections = sessionSections.filter(s => !dateSet.has(s.dayDate));
+    const newSupersets = { ...supersets };
+    dates.forEach(d => delete newSupersets[d]);
+    const newDaySplitStates = { ...daySplitStates };
+    dates.forEach(d => { newDaySplitStates[d] = 0; });
+    // Set intensity to 'off' and isTrainingDay to false for all cleared dates
+    // so syncAthleteSchedule and calendarDays treat them as rest days.
+    const newTrainingDays = trainingDays.map(day =>
+      dateSet.has(day.date)
+        ? { ...day, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false, intensity: 'off' as IntensityLevel, isTrainingDay: false }
+        : day
+    );
+    // Clear daily intensity entries for cleared dates.
+    const newDailyIntensityData = dailyIntensityData.map(di =>
+      dateSet.has(di.date) ? { ...di, intensity: 'off' as IntensityLevel } : di
+    );
+    // Clear per-session intensities for cleared dates.
+    const newSessionIntensities = Object.fromEntries(
+      Object.entries(sessionIntensities).filter(([k]) => !dates.some(d => k.startsWith(`${d}-`)))
+    ) as typeof sessionIntensities;
+    setExerciseDistribution(newExercises);
+    setSessionSections(newSections);
+    setSupersets(newSupersets);
+    setDaySplitStates(newDaySplitStates);
+    setTrainingDays(newTrainingDays);
+    setDailyIntensityData(newDailyIntensityData);
+    setSessionIntensities(newSessionIntensities);
+    if (selectedAssignmentId) {
+      const storageKey = `athlete-assignment-${selectedAssignmentId}`;
+      const savePayload = {
+        exerciseDistribution: newExercises,
+        sessionSections: newSections,
+        supersets: newSupersets,
+        parameterValues,
+        dailyIntensity: newDailyIntensityData,
+        trainingDays: newTrainingDays,
+        daySplitStates: newDaySplitStates,
+        sessionIntensities: newSessionIntensities,
+        testEventDays,
+        lastModified: new Date().toISOString(),
+      };
+      localStorage.setItem(storageKey, JSON.stringify(savePayload));
+      lastSavedStateRef.current = JSON.stringify({
+        exerciseDistribution: newExercises,
+        sessionSections: newSections,
+        supersets: newSupersets,
+        parameterValues,
+        dailyIntensity: newDailyIntensityData,
+        trainingDays: newTrainingDays,
+        daySplitStates: newDaySplitStates,
+        sessionIntensities: newSessionIntensities,
+        testEventDays,
+      });
+      setLastSavedAt(new Date().toISOString());
+    }
+  }, [exerciseDistribution, sessionSections, supersets, daySplitStates, trainingDays, dailyIntensityData, parameterValues, sessionIntensities, testEventDays, selectedAssignmentId]);
 
   const handlePasteDay = useCallback((targetDate: string) => {
     if (!copiedDay) return;
@@ -1185,19 +1334,29 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     for (let i = 0; i < 7; i++) {
       weekDates.push(format(addDays(startDateVal, i), 'yyyy-MM-dd'));
     }
+    const weekDateSet = new Set(weekDates);
 
     // Compute new state values for immediate save
-    const newExercises = exerciseDistribution.filter(ex => !weekDates.includes(ex.dayDate));
-    const newSections = sessionSections.filter(s => !weekDates.includes(s.dayDate));
+    const newExercises = exerciseDistribution.filter(ex => !weekDateSet.has(ex.dayDate));
+    const newSections = sessionSections.filter(s => !weekDateSet.has(s.dayDate));
     const newSupersets = { ...supersets };
     weekDates.forEach(d => delete newSupersets[d]);
     const newDaySplitStates = { ...daySplitStates };
     weekDates.forEach(d => { newDaySplitStates[d] = 0; });
+    // Set intensity to 'off' and isTrainingDay to false for all cleared dates.
     const newTrainingDays = trainingDays.map(day =>
-      weekDates.includes(day.date)
-        ? { ...day, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false }
+      weekDateSet.has(day.date)
+        ? { ...day, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false, intensity: 'off' as IntensityLevel, isTrainingDay: false }
         : day
     );
+    // Clear daily intensity for cleared dates.
+    const newDailyIntensityData = dailyIntensityData.map(di =>
+      weekDateSet.has(di.date) ? { ...di, intensity: 'off' as IntensityLevel } : di
+    );
+    // Clear per-session intensities for cleared dates.
+    const newSessionIntensities = Object.fromEntries(
+      Object.entries(sessionIntensities).filter(([k]) => !weekDates.some(d => k.startsWith(`${d}-`)))
+    ) as typeof sessionIntensities;
 
     // Update React state
     setExerciseDistribution(newExercises);
@@ -1205,6 +1364,8 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     setSupersets(newSupersets);
     setDaySplitStates(newDaySplitStates);
     setTrainingDays(newTrainingDays);
+    setDailyIntensityData(newDailyIntensityData);
+    setSessionIntensities(newSessionIntensities);
 
     // IMMEDIATE localStorage write (bypass debounce)
     if (selectedAssignmentId) {
@@ -1214,10 +1375,11 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         sessionSections: newSections,
         supersets: newSupersets,
         parameterValues,
-        dailyIntensity: dailyIntensityData,
+        dailyIntensity: newDailyIntensityData,
         trainingDays: newTrainingDays,
         daySplitStates: newDaySplitStates,
-        sessionIntensities,
+        sessionIntensities: newSessionIntensities,
+        testEventDays,
         lastModified: new Date().toISOString(),
       };
       localStorage.setItem(storageKey, JSON.stringify(savePayload));
@@ -1226,16 +1388,17 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         sessionSections: newSections,
         supersets: newSupersets,
         parameterValues,
-        dailyIntensity: dailyIntensityData,
+        dailyIntensity: newDailyIntensityData,
         trainingDays: newTrainingDays,
         daySplitStates: newDaySplitStates,
-        sessionIntensities,
+        sessionIntensities: newSessionIntensities,
+        testEventDays,
       });
       setLastSavedAt(new Date().toISOString());
     }
 
     toast({ title: "Week cleared" });
-  }, [exerciseDistribution, sessionSections, supersets, daySplitStates, trainingDays, dailyIntensityData, parameterValues, sessionIntensities, selectedAssignmentId, toast]);
+  }, [exerciseDistribution, sessionSections, supersets, daySplitStates, trainingDays, dailyIntensityData, parameterValues, sessionIntensities, testEventDays, selectedAssignmentId, toast]);
 
   const handlePasteWeek = useCallback((targetWeekStartDate: string) => {
     if (!copiedWeek) return;
@@ -1639,12 +1802,6 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     );
   }, []);
 
-  const handleExerciseAutoCalcChange = useCallback((exerciseId: string, field: 'autoCalculateWeight' | 'autoCalculateTargetHR', value: boolean) => {
-    setExerciseDistribution(prev =>
-      prev.map(ex => ex.id === exerciseId ? { ...ex, [field]: value } : ex)
-    );
-  }, []);
-
   const handleExerciseChange = useCallback((
     dayDate: string,
     sessionIndex: number,
@@ -1713,32 +1870,40 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
 
   // === Ensure sessionIntensities exist for multi-session days ===
   // When a day has 2+ sessions, each session should have its own intensity entry
-  // so that changing day intensity doesn't affect them
+  // so that changing day intensity doesn't affect them.
+  // NOTE: sessionIntensities is intentionally excluded from the dependency array.
+  // It is only used as a guard (to skip already-set keys) — including it would
+  // cause the effect to re-run on every intensity update, creating an O(n) loop
+  // that was the root cause of the "Maximum update depth exceeded" error and
+  // the slow calendar loading. The setSessionIntensities updater form is used
+  // to read the latest value at update time without it being a dep.
   useEffect(() => {
-    const updates: Record<string, IntensityLevel> = {};
-    
-    Object.entries(daySplitStates).forEach(([dayDate, sessionCount]) => {
-      if (sessionCount > 1) {
-        // Find the day's current intensity
-        const dayIntensity = dailyIntensityData.find(d => d.date === dayDate)?.intensity 
-          || trainingDays.find(d => d.date === dayDate)?.intensity 
-          || ('moderate' as IntensityLevel);
-        
-        // Ensure each session has an intensity entry (if missing)
-        for (let sessionIdx = 0; sessionIdx < sessionCount; sessionIdx++) {
-          const key = `${dayDate}-${sessionIdx}`;
-          if (sessionIntensities[key] === undefined) {
-            updates[key] = dayIntensity as IntensityLevel;
+    setSessionIntensities(prev => {
+      const updates: Record<string, IntensityLevel> = {};
+
+      Object.entries(daySplitStates).forEach(([dayDate, sessionCount]) => {
+        if (sessionCount > 1) {
+          // Find the day's current intensity
+          const dayIntensity = dailyIntensityData.find(d => d.date === dayDate)?.intensity
+            || trainingDays.find(d => d.date === dayDate)?.intensity
+            || ('moderate' as IntensityLevel);
+
+          // Ensure each session has an intensity entry (if missing)
+          for (let sessionIdx = 0; sessionIdx < sessionCount; sessionIdx++) {
+            const key = `${dayDate}-${sessionIdx}`;
+            if (prev[key] === undefined) {
+              updates[key] = dayIntensity as IntensityLevel;
+            }
           }
         }
-      }
+      });
+
+      // Return same reference if nothing changed — prevents a spurious re-render
+      if (Object.keys(updates).length === 0) return prev;
+      return { ...prev, ...updates };
     });
-    
-    // Only update if there are missing entries
-    if (Object.keys(updates).length > 0) {
-      setSessionIntensities(prev => ({ ...prev, ...updates }));
-    }
-  }, [daySplitStates, dailyIntensityData, trainingDays, sessionIntensities]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [daySplitStates, dailyIntensityData, trainingDays]);
 
   // === Session Naming Handlers ===
   
@@ -2041,6 +2206,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     // Day handlers
     handleCopyDay,
     handleClearDay,
+    handleClearDays,
     handlePasteDay,
     
     // Week handlers
@@ -2066,7 +2232,6 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     handleExerciseDelete,
     handleExerciseNotesChange,
     handleExerciseEachSideChange,
-    handleExerciseAutoCalcChange,
     handleExerciseChange,
     
     // Intensity handlers
