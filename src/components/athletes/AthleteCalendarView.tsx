@@ -6,7 +6,7 @@ import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Trash2, Calendar, LayoutGrid, Columns, ClipboardList, Bot } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2, Calendar, LayoutGrid, Columns, ClipboardList, Bot, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Athlete, AthleteCalendarAssignment } from '@/types/athlete';
 import { AssignProgramDialog } from './AssignProgramDialog';
@@ -500,6 +500,14 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   // stale closure captured when the effect originally ran.
   const latestEditingRef = useRef(editing);
   latestEditingRef.current = editing;
+
+  // Show a loading overlay while athlete data or plan data is still being fetched.
+  // Also covers the brief window between athlete switch (selectedAssignmentId reset to null)
+  // and the initialization effect picking the first assignment.
+  const isCalendarLoading =
+    athleteData.isLoading ||
+    editing.isInitializing ||
+    (assignments.length > 0 && selectedAssignmentId === null);
 
   // Auto-sync to athlete_schedule whenever the editing hook persists a change to localStorage.
   // This ensures manually-added sessions and exercises appear in the athlete app without
@@ -2381,7 +2389,15 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           </div>
         </CardHeader>
 
-        <CardContent className="overflow-x-auto">
+        <CardContent className="overflow-x-auto relative">
+          {isCalendarLoading && (
+            <div className="absolute inset-0 bg-background/70 backdrop-blur-sm flex items-center justify-center z-10 rounded-b-lg min-h-[200px]">
+              <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                <Loader2 className="h-8 w-8 animate-spin" />
+                <span className="text-sm">Loading calendar...</span>
+              </div>
+            </div>
+          )}
           {isMasterMode ? (
             // Master Planner Grid
             assignments.length === 0 ? (
