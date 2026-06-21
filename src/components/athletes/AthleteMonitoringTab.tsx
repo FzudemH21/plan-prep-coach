@@ -683,9 +683,9 @@ function CustomMetricCard({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-interface Props { athlete: Athlete }
+interface Props { athlete: Athlete; connectionsLoading?: boolean }
 
-export function AthleteMonitoringTab({ athlete }: Props) {
+export function AthleteMonitoringTab({ athlete, connectionsLoading = false }: Props) {
   const { getConnectionForAthlete } = useAthleteConnections();
   const connection = getConnectionForAthlete(athlete.id);
   const athleteId  = connection?.id ?? null;
@@ -824,7 +824,17 @@ export function AthleteMonitoringTab({ athlete }: Props) {
     ? Math.round((rangeTo.getTime() - rangeFrom.getTime()) / 86400000) + 1
     : null;
 
-  // ── No app account ──
+  // ── Loading / no app account ──
+  if (connectionsLoading) {
+    return (
+      <div className="flex items-center justify-center h-full py-20 text-muted-foreground">
+        <div className="flex flex-col items-center gap-3">
+          <Activity className="h-8 w-8 animate-pulse opacity-40" />
+          <p className="text-sm">Loading...</p>
+        </div>
+      </div>
+    );
+  }
   if (!connection) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground py-20">

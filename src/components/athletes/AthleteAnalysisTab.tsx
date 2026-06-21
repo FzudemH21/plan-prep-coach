@@ -479,6 +479,7 @@ interface AthleteAnalysisTabProps {
   athleteName?: string;
   performanceParameters?: AthletePerformanceParameter[];
   parametersV2?: ParameterV2[];
+  connectionsLoading?: boolean;
 }
 
 export function AthleteAnalysisTab({
@@ -487,6 +488,7 @@ export function AthleteAnalysisTab({
   athleteName = 'Athlete',
   performanceParameters = [],
   parametersV2 = [],
+  connectionsLoading = false,
 }: AthleteAnalysisTabProps) {
   const { getConnectionForAthlete } = useAthleteConnections();
   const resolvedConnectionId = connectionIdProp || getConnectionForAthlete(athleteId)?.id || null;
@@ -873,7 +875,13 @@ export function AthleteAnalysisTab({
     <ScrollArea className="h-full">
       <div className="space-y-6 p-1 pr-4">
 
-        {!resolvedConnectionId && (
+        {connectionsLoading && !resolvedConnectionId && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading...
+          </div>
+        )}
+        {!connectionsLoading && !resolvedConnectionId && (
           <p className="text-sm text-muted-foreground">
             No athlete app connection found. Analysis data is only available once an app account is created.
           </p>

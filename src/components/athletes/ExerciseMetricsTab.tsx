@@ -16,7 +16,7 @@ import {
   SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { Dumbbell, Search, Settings2, Trophy, ChevronDown, ChevronUp, Download } from 'lucide-react';
+import { Dumbbell, Search, Settings2, Trophy, ChevronDown, ChevronUp, Download, Loader2 } from 'lucide-react';
 import { exportExerciseXLSX } from '@/utils/xlsxExport';
 import {
   useExerciseMetrics,
@@ -563,9 +563,9 @@ function ExerciseDetail({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-interface Props { athlete: Athlete }
+interface Props { athlete: Athlete; connectionsLoading?: boolean }
 
-export function ExerciseMetricsTab({ athlete }: Props) {
+export function ExerciseMetricsTab({ athlete, connectionsLoading = false }: Props) {
   const { getConnectionForAthlete } = useAthleteConnections();
   const connectionId = getConnectionForAthlete(athlete.id)?.id ?? null;
 
@@ -586,6 +586,14 @@ export function ExerciseMetricsTab({ athlete }: Props) {
   const tags = selectedName ? (paramTags[selectedName] ?? null) : null;
 
   // ── Empty / loading states ─────────────────────────────────────────────────
+
+  if (connectionsLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
 
   if (!connectionId) {
     return (

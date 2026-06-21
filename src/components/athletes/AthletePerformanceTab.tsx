@@ -189,9 +189,10 @@ function ColumnHeaders() {
 interface AthletePerformanceTabProps {
   athlete: Athlete;
   athleteData: ReturnType<typeof useAthletes>;
+  connectionsLoading?: boolean;
 }
 
-export function AthletePerformanceTab({ athlete, athleteData }: AthletePerformanceTabProps) {
+export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading = false }: AthletePerformanceTabProps) {
   const [topTab, setTopTab] = useState<TopTab>('bio');
   const [search, setSearch] = useState('');
 
@@ -679,7 +680,7 @@ export function AthletePerformanceTab({ athlete, athleteData }: AthletePerforman
       {tabStrip}
 
       {/* ── Exercise tab: full-width ──────────────────────────────────── */}
-      {topTab === 'exercise' && <ExerciseMetricsTab athlete={athlete} />}
+      {topTab === 'exercise' && <ExerciseMetricsTab athlete={athlete} connectionsLoading={connectionsLoading} />}
 
       {/* ── Bio + Performance tabs: left list + right detail ─────────── */}
       {topTab !== 'exercise' && (

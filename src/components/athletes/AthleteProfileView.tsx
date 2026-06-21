@@ -157,7 +157,7 @@ export function AthleteProfileView({
   );
 
   // Chat
-  const { connections } = useAthleteConnections();
+  const { connections, loading: connectionsLoading } = useAthleteConnections();
   const { user: authUser } = useAuth();
   const athleteConnection = connections.find((c) => c.athleteLocalId === athlete.id);
   const { messages: chatMessages, loading: chatLoading, sendMessage: chatSend, markRead: chatMarkRead, unreadCount: chatUnread } = useChat({
@@ -707,15 +707,15 @@ export function AthleteProfileView({
             </div>
         </TabsContent>
 
-        <TabsContent value="monitoring" className="flex-1 mt-0 min-h-0">
-          <AthleteMonitoringTab athlete={athlete} />
+        <TabsContent value="monitoring" forceMount className="flex-1 mt-0 min-h-0 data-[state=inactive]:hidden">
+          <AthleteMonitoringTab athlete={athlete} connectionsLoading={connectionsLoading} />
         </TabsContent>
 
-        <TabsContent value="performance" className="flex-1 mt-0 min-h-0 flex flex-col">
-          <AthletePerformanceTab athlete={athlete} athleteData={athleteData} />
+        <TabsContent value="performance" forceMount className="flex-1 mt-0 min-h-0 flex flex-col data-[state=inactive]:hidden">
+          <AthletePerformanceTab athlete={athlete} athleteData={athleteData} connectionsLoading={connectionsLoading} />
         </TabsContent>
 
-        <TabsContent value="calendar" className="flex-1 mt-0 px-1 min-h-0 overflow-y-auto">
+        <TabsContent value="calendar" forceMount className="flex-1 mt-0 px-1 min-h-0 overflow-y-auto data-[state=inactive]:hidden">
           <AthleteCalendarView
             athlete={athlete}
             initialDate={calendarJumpDate}
@@ -728,13 +728,14 @@ export function AthleteProfileView({
             <AthleteDocumentsTab athleteId={athlete.id} />
         </TabsContent>
 
-        <TabsContent value="analysis" className="flex-1 mt-0 min-h-0">
+        <TabsContent value="analysis" forceMount className="flex-1 mt-0 min-h-0 data-[state=inactive]:hidden">
           <AthleteAnalysisTab
             athleteId={athlete.id}
             connectionId=""
             athleteName={[athlete.firstName, athlete.lastName].filter(Boolean).join(' ') || 'Athlete'}
             performanceParameters={athleteData.athletePerformanceParameters.filter(p => p.athleteId === athlete.id)}
             parametersV2={parametersData.parameters}
+            connectionsLoading={connectionsLoading}
           />
         </TabsContent>
 
