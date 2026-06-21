@@ -26,7 +26,7 @@ import {
   type AthleteCheckin,
   type WellnessStats,
 } from '@/hooks/useAthleteCheckins';
-import { useAthleteConnections } from '@/hooks/useAthleteConnections';
+import { useAthleteConnections, type AthleteConnection } from '@/hooks/useAthleteConnections';
 import { Athlete, MonitoringBlock, DEFAULT_MONITORING_CONFIG } from '@/types/athlete';
 import { supabase } from '@/lib/supabase';
 
@@ -683,11 +683,9 @@ function CustomMetricCard({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-interface Props { athlete: Athlete; connectionsLoading?: boolean }
+interface Props { athlete: Athlete; connectionsLoading?: boolean; connection?: AthleteConnection }
 
-export function AthleteMonitoringTab({ athlete, connectionsLoading = false }: Props) {
-  const { getConnectionForAthlete } = useAthleteConnections();
-  const connection = getConnectionForAthlete(athlete.id);
+export function AthleteMonitoringTab({ athlete, connectionsLoading = false, connection }: Props) {
   const athleteId  = connection?.id ?? null;
 
   const { checkins, loading } = useAthleteCheckins(athleteId);

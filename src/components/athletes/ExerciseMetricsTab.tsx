@@ -24,7 +24,7 @@ import {
   type ExerciseSession,
   type ParamTags,
 } from '@/hooks/useExerciseMetrics';
-import { useAthleteConnections } from '@/hooks/useAthleteConnections';
+import { type AthleteConnection } from '@/hooks/useAthleteConnections';
 import { Athlete } from '@/types/athlete';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -563,11 +563,10 @@ function ExerciseDetail({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-interface Props { athlete: Athlete; connectionsLoading?: boolean }
+interface Props { athlete: Athlete; connectionsLoading?: boolean; connection?: AthleteConnection }
 
-export function ExerciseMetricsTab({ athlete, connectionsLoading = false }: Props) {
-  const { getConnectionForAthlete } = useAthleteConnections();
-  const connectionId = getConnectionForAthlete(athlete.id)?.id ?? null;
+export function ExerciseMetricsTab({ athlete, connectionsLoading = false, connection }: Props) {
+  const connectionId = connection?.id ?? null;
 
   const { exercises, loading, paramTags, setParamTags, getExerciseHistory } = useExerciseMetrics(connectionId);
 

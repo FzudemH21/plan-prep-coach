@@ -41,7 +41,7 @@ import { CalendarIcon, X, Plus, Download } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { exportAnalysisXLSX, type RawSessionLogForExport } from '@/utils/xlsxExport';
 import { supabase } from '@/lib/supabase';
-import { useAthleteConnections } from '@/hooks/useAthleteConnections';
+import { type AthleteConnection } from '@/hooks/useAthleteConnections';
 import {
   ComposedChart,
   Bar,
@@ -480,6 +480,7 @@ interface AthleteAnalysisTabProps {
   performanceParameters?: AthletePerformanceParameter[];
   parametersV2?: ParameterV2[];
   connectionsLoading?: boolean;
+  connection?: AthleteConnection;
 }
 
 export function AthleteAnalysisTab({
@@ -489,9 +490,9 @@ export function AthleteAnalysisTab({
   performanceParameters = [],
   parametersV2 = [],
   connectionsLoading = false,
+  connection,
 }: AthleteAnalysisTabProps) {
-  const { getConnectionForAthlete } = useAthleteConnections();
-  const resolvedConnectionId = connectionIdProp || getConnectionForAthlete(athleteId)?.id || null;
+  const resolvedConnectionId = connectionIdProp || connection?.id || null;
 
   // ── Self-reported test results (from athlete app → Supabase) ──────────────
   // Keyed by athleticismParameterId → ParameterValue[], mirroring AthletePerformanceTab.

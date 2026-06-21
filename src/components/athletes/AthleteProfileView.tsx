@@ -708,11 +708,11 @@ export function AthleteProfileView({
         </TabsContent>
 
         <TabsContent value="monitoring" forceMount className="flex-1 mt-0 min-h-0 data-[state=inactive]:hidden">
-          <AthleteMonitoringTab athlete={athlete} connectionsLoading={connectionsLoading} />
+          <AthleteMonitoringTab athlete={athlete} connectionsLoading={connectionsLoading} connection={athleteConnection} />
         </TabsContent>
 
         <TabsContent value="performance" forceMount className="flex-1 mt-0 min-h-0 flex flex-col data-[state=inactive]:hidden">
-          <AthletePerformanceTab athlete={athlete} athleteData={athleteData} connectionsLoading={connectionsLoading} />
+          <AthletePerformanceTab athlete={athlete} athleteData={athleteData} connectionsLoading={connectionsLoading} connection={athleteConnection} />
         </TabsContent>
 
         <TabsContent value="calendar" forceMount className="flex-1 mt-0 px-1 min-h-0 overflow-y-auto data-[state=inactive]:hidden">
@@ -736,6 +736,7 @@ export function AthleteProfileView({
             performanceParameters={athleteData.athletePerformanceParameters.filter(p => p.athleteId === athlete.id)}
             parametersV2={parametersData.parameters}
             connectionsLoading={connectionsLoading}
+            connection={athleteConnection}
           />
         </TabsContent>
 

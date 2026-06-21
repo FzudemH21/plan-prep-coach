@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import type { MetricsSnapshot, MetricsSnapshotItem } from '@/hooks/useAthleteConnections';
+import type { MetricsSnapshot, MetricsSnapshotItem, AthleteConnection } from '@/hooks/useAthleteConnections';
 import { ExerciseMetricsTab } from '@/components/athletes/ExerciseMetricsTab';
 import { format, subDays, parseISO } from 'date-fns';
 import { supabase } from '@/lib/supabase';
@@ -190,9 +190,10 @@ interface AthletePerformanceTabProps {
   athlete: Athlete;
   athleteData: ReturnType<typeof useAthletes>;
   connectionsLoading?: boolean;
+  connection?: AthleteConnection;
 }
 
-export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading = false }: AthletePerformanceTabProps) {
+export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading = false, connection: connectionProp }: AthletePerformanceTabProps) {
   const [topTab, setTopTab] = useState<TopTab>('bio');
   const [search, setSearch] = useState('');
 
@@ -259,8 +260,8 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
   }, [athletePerformanceParams, search, athleticismParameters]);
 
   // ── Self-reported test results (entered by athlete in athlete app) ───────────
-  const { getConnectionForAthlete, updateMetricsSnapshot } = useAthleteConnections();
-  const connection = useMemo(() => getConnectionForAthlete(athlete.id), [getConnectionForAthlete, athlete.id]);
+  const { updateMetricsSnapshot } = useAthleteConnections();
+  const connection = connectionProp;
   // Map of athleticismParameterId → self-reported ParameterValue[]
   const [selfReportedMap, setSelfReportedMap] = useState<Map<string, ParameterValue[]>>(new Map());
 
@@ -680,7 +681,7 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
       {tabStrip}
 
       {/* ── Exercise tab: full-width ──────────────────────────────────── */}
-      {topTab === 'exercise' && <ExerciseMetricsTab athlete={athlete} connectionsLoading={connectionsLoading} />}
+      {topTab === 'exercise' && <ExerciseMetricsTab athlete={athlete} connectionsLoading={connectionsLoading} connection={connectionProp} />}
 
       {/* ── Bio + Performance tabs: left list + right detail ─────────── */}
       {topTab !== 'exercise' && (

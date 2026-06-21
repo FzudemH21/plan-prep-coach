@@ -1406,7 +1406,12 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       // null when handleClearWeek tried to clear it, or if a realtime event re-populated it).
       // Trusting the editing state prevents ghost sessions from appearing after a clear.
       const liveEntry = liveScheduleMap.get(dateString);
+      // Only treat a day as "explicitly cleared" when the editing hook has a real
+      // localStorage snapshot (isMobileCreated=false). When isMobileCreated=true,
+      // initializeFromAssignment set all daySplitStates to 0 as a default — those
+      // zeros don't mean the coach cleared the day; liveScheduleMap must still show.
       const isExplicitlyCleared = selectedAssignmentId !== null &&
+        !editing.isMobileCreated &&
         editing.daySplitStates[dateString] === 0;
       if (liveEntry !== undefined && assignmentId && !isExplicitlyCleared) {
         sessions.length = 0;
