@@ -26,7 +26,7 @@ import {
   type AthleteCheckin,
   type WellnessStats,
 } from '@/hooks/useAthleteCheckins';
-import { useAthleteConnections, type AthleteConnection } from '@/hooks/useAthleteConnections';
+import type { AthleteConnection } from '@/hooks/useAthleteConnections';
 import { Athlete, MonitoringBlock, DEFAULT_MONITORING_CONFIG } from '@/types/athlete';
 import { supabase } from '@/lib/supabase';
 

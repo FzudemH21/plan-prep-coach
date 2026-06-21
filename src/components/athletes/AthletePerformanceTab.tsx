@@ -266,7 +266,6 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
   const [selfReportedMap, setSelfReportedMap] = useState<Map<string, ParameterValue[]>>(new Map());
 
   useEffect(() => {
-    const connection = getConnectionForAthlete(athlete.id);
     if (!connection) return;
     supabase
       .from('athlete_test_results')
@@ -288,7 +287,7 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
         }
         setSelfReportedMap(map);
       });
-  }, [athlete.id, getConnectionForAthlete]);
+  }, [athlete.id, connection]);
 
   // ── Metrics snapshot — push to athlete_connections.profile_data on mount and on every change ──
   // Uses connection?.id (stable string) instead of connection (object) to avoid re-triggering
