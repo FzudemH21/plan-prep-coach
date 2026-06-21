@@ -67,8 +67,6 @@ interface MasterPlannerGridProps {
   // New props for Phase 2 - editable notes and eachSide
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
   onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
-  // New props for Phase 3 - auto-calculate toggles
-  onExerciseAutoCalcChange?: (exerciseId: string, field: 'autoCalculateWeight' | 'autoCalculateTargetHR', value: boolean) => void;
   // New props for Phase 4 - intensity editing
   onDayIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
   onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
@@ -145,7 +143,6 @@ export function MasterPlannerGrid({
   onSectionCommentChange,
   onExerciseNotesChange,
   onExerciseEachSideChange,
-  onExerciseAutoCalcChange,
   onDayIntensityChange,
   onSessionIntensityChange,
   onSectionReorder,
@@ -281,7 +278,6 @@ export function MasterPlannerGrid({
               totalWeeks={filteredDays.length}
               onExerciseNotesChange={onExerciseNotesChange}
               onExerciseEachSideChange={onExerciseEachSideChange}
-              onExerciseAutoCalcChange={onExerciseAutoCalcChange}
               onDayIntensityChange={onDayIntensityChange}
               onSessionIntensityChange={onSessionIntensityChange}
               onSectionReorder={onSectionReorder}

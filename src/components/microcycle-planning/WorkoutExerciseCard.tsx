@@ -6,7 +6,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
 import { GripVertical, MoreVertical, Link2, Copy, Trash2, Plus, StickyNote, Calculator, ChevronDown, ChevronRight, RefreshCw, Recycle, History } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -26,7 +25,7 @@ import { getParametersForMethod } from '@/data/methodParameters';
 import { ParameterVisibilityPopover, ParameterVisibilityOverrides, isParameterVisible } from './ParameterVisibilityPopover';
 import { ToolboxEntry } from '@/types/toolbox';
 import { useWorkoutSession } from './WorkoutSessionContext';
-import { evaluateFormula } from '@/utils/formulaEvaluator';
+import { evaluateFormula, parseNumeric } from '@/utils/formulaEvaluator';
 
 interface WorkoutExerciseCardProps {
   exercise: WorkoutExercise;
@@ -47,11 +46,6 @@ interface WorkoutExerciseCardProps {
   onVisibilityChange?: (paramName: string, visible: boolean) => void;
   onShowAllParams?: () => void;
   onResetParamsToDefaults?: () => void;
-  // Auto-calculation props
-  autoCalculateWeight?: boolean;
-  onAutoCalculateWeightChange?: (value: boolean) => void;
-  autoCalculateTargetHR?: boolean;
-  onAutoCalculateTargetHRChange?: (value: boolean) => void;
   // Collapse state
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -94,10 +88,6 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
   onVisibilityChange,
   onShowAllParams,
   onResetParamsToDefaults,
-  autoCalculateWeight,
-  onAutoCalculateWeightChange,
-  autoCalculateTargetHR,
-  onAutoCalculateTargetHRChange,
   isCollapsed = false,
   onToggleCollapse,
   onOpenDetail,
@@ -211,42 +201,76 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
     );
   }
   // Get parameters: FIRST derive from exercise.parameters (from method periodization), THEN fallback to static dictionary
+  // isCalculated toolbox entries are appended even when not stored in exercise.parameters
   const methodParams = (() => {
     // PRIMARY: Derive parameters from exercise.parameters (populated from method periodization grid)
     const keys = Object.keys(exercise.parameters || {});
     const baseKeys = keys.filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k));
 
+    type ParamEntry = {
+      name: string;
+      type: string;
+      unit?: string;
+      isSetParameter: boolean;
+      isRestParameter: boolean;
+      isFrequencyParameter: boolean;
+      defaultValue?: unknown;
+      showInGridByDefault: boolean;
+      isCalculated: boolean;
+    };
+
+    let params: ParamEntry[];
 
     if (baseKeys.length > 0) {
-      return baseKeys.map(name => {
+      params = baseKeys.map(name => {
         const raw = exercise.parameters[name];
         const isNumeric = typeof raw === 'number' || (!isNaN(Number(raw)) && raw !== '');
-        // Find toolbox entry for this param to get flags
-        const toolboxEntry = toolboxParams?.find(tp => 
-          tp.parameterName === name
-        );
+        const toolboxEntry = toolboxParams?.find(tp => tp.parameterName === name);
         return {
           name,
           type: isNumeric ? 'number' : 'text',
-          unit: typeof exercise.parameters[`${name}_unit`] === 'string' 
-            ? String(exercise.parameters[`${name}_unit`]) 
+          unit: typeof exercise.parameters[`${name}_unit`] === 'string'
+            ? String(exercise.parameters[`${name}_unit`])
             : undefined,
           isSetParameter: toolboxEntry?.isSetParameter || /^sets?$/i.test(name) || /ground contacts/i.test(name),
           isRestParameter: toolboxEntry?.isRestParameter || /rest|pause|recovery/i.test(name),
           isFrequencyParameter: toolboxEntry?.isFrequencyParameter || false,
           defaultValue: undefined,
           showInGridByDefault: toolboxEntry?.showInGridByDefault ?? true,
-        } as const;
+          isCalculated: toolboxEntry?.isCalculated ?? false,
+        };
       });
+    } else {
+      // FALLBACK: Only use static dictionary if no parameters in exercise.parameters
+      const defs = getParametersForMethod(exercise.methodId);
+      params = (defs || []).map(d => ({
+        ...d,
+        isFrequencyParameter: false,
+        showInGridByDefault: true,
+        isCalculated: false,
+      }));
     }
-    
-    // FALLBACK: Only use static dictionary if no parameters in exercise.parameters
-    const defs = getParametersForMethod(exercise.methodId);
-    return (defs || []).map(d => ({
-      ...d,
-      isFrequencyParameter: false,
-      showInGridByDefault: true,
-    }));
+
+    // Append isCalculated params from toolbox that aren't already in the list
+    if (toolboxParams) {
+      for (const tp of toolboxParams) {
+        if (tp.isCalculated && !!tp.formula && !params.some(p => p.name === tp.parameterName)) {
+          params.push({
+            name: tp.parameterName,
+            type: 'number',
+            unit: tp.parameterType === 'quantitative' && tp.options.length > 0 ? tp.options[0] : undefined,
+            isSetParameter: false,
+            isRestParameter: false,
+            isFrequencyParameter: false,
+            defaultValue: undefined,
+            showInGridByDefault: tp.showInGridByDefault ?? true,
+            isCalculated: true,
+          });
+        }
+      }
+    }
+
+    return params;
   })();
 
   // Find the set parameter (exclude rest params — rest is not a set-count driver)
@@ -270,101 +294,11 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
   );
 
 
-  // Detect parameters that support auto-calculation (weight from e1RM, target HR from maxHR)
-  const autoCalcDetection = useMemo(() => {
-    let has1RMParam = false;
-    let hasMaxHRParam = false;
-    let intensityParamName: string | null = null;
-    let hrParamName: string | null = null;
-
-    // Primary: if an isCalculated formula referencing 'e1RM' exists in the toolbox, show
-    // the weight toggle regardless of what unit string the intensity parameter uses.
-    if (toolboxParams) {
-      const e1RMEntry = toolboxParams.find(
-        tp => tp.isCalculated && tp.athleteDataRefs?.includes('e1RM')
-      );
-      if (e1RMEntry) {
-        has1RMParam = true;
-        // Derive intensity param name from sourceParameterIds for the fallback path
-        for (const srcId of (e1RMEntry.sourceParameterIds ?? [])) {
-          const srcParam = toolboxParams.find(p => p.id === srcId && !p.isCalculated);
-          if (srcParam) {
-            const matched = displayableParams.find(p => p.name === srcParam.parameterName);
-            if (matched) { intensityParamName = matched.name; break; }
-          }
-        }
-      }
-
-      const hrEntry = toolboxParams.find(
-        tp => tp.isCalculated && tp.athleteDataRefs?.some(r => r !== 'e1RM')
-      );
-      if (hrEntry) {
-        hasMaxHRParam = true;
-        for (const srcId of (hrEntry.sourceParameterIds ?? [])) {
-          const srcParam = toolboxParams.find(p => p.id === srcId && !p.isCalculated);
-          if (srcParam) {
-            const matched = displayableParams.find(p => p.name === srcParam.parameterName);
-            if (matched) { hrParamName = matched.name; break; }
-          }
-        }
-      }
-    }
-
-    // Fallback: detect from stored/toolbox unit strings when no isCalculated formula exists
-    if (!has1RMParam || !hasMaxHRParam) {
-      const PCT_1RM = new Set(['%1RM', '% 1RM', '%e1RM']);
-      const PCT_HR = new Set(['%maxHR', '% maxHR', '%HR']);
-
-      for (const param of displayableParams) {
-        const unit = exercise.parameters[`${param.name}_unit`] as string | undefined;
-        if (!has1RMParam && unit && PCT_1RM.has(unit)) {
-          has1RMParam = true;
-          intensityParamName = param.name;
-        }
-        if (!hasMaxHRParam && unit && PCT_HR.has(unit)) {
-          hasMaxHRParam = true;
-          hrParamName = param.name;
-        }
-      }
-
-      if (toolboxParams) {
-        for (const tp of toolboxParams) {
-          if (!has1RMParam && tp.parameterType === 'quantitative' && tp.options.some(o => PCT_1RM.has(o))) {
-            const matched = displayableParams.find(p => p.name === tp.parameterName);
-            if (matched) {
-              const storedUnit = exercise.parameters[`${matched.name}_unit`] as string | undefined;
-              if (!storedUnit || PCT_1RM.has(storedUnit)) {
-                has1RMParam = true;
-                intensityParamName = matched.name;
-              }
-            }
-          }
-          if (!hasMaxHRParam && tp.parameterType === 'quantitative' && tp.options.some(o => PCT_HR.has(o))) {
-            const matched = displayableParams.find(p => p.name === tp.parameterName);
-            if (matched) {
-              const storedUnit = exercise.parameters[`${matched.name}_unit`] as string | undefined;
-              if (!storedUnit || PCT_HR.has(storedUnit)) {
-                hasMaxHRParam = true;
-                hrParamName = matched.name;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    return { has1RMParam, hasMaxHRParam, intensityParamName, hrParamName };
-  }, [displayableParams, exercise.parameters, toolboxParams]);
-
   const { resolveAthleteDataRefs } = useWorkoutSession();
 
-  // Hoist calc entries so they're available in both the column header and each row cell
-  const weightCalcEntry = useMemo(
-    () => toolboxParams?.find(tp => tp.isCalculated && !!tp.formula && tp.athleteDataRefs?.includes('e1RM')),
-    [toolboxParams],
-  );
-  const hrCalcEntry = useMemo(
-    () => toolboxParams?.find(tp => tp.isCalculated && !!tp.formula && tp.athleteDataRefs?.some(r => r !== 'e1RM')),
+  // All isCalculated toolbox entries for this method — used for formula evaluation in each set cell
+  const calcEntries = useMemo(
+    () => (toolboxParams ?? []).filter(tp => tp.isCalculated && !!tp.formula),
     [toolboxParams],
   );
 
@@ -549,68 +483,6 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
           {!isCollapsed && (
             <>
 
-          {/* Auto-Calculation Toggles */}
-          {(autoCalcDetection.has1RMParam || autoCalcDetection.hasMaxHRParam) && (
-            <div className="flex flex-wrap items-center gap-4 p-2 bg-transparent rounded-md">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Calculator className="h-3.5 w-3.5" />
-                <span className="font-medium">Auto-calculate:</span>
-              </div>
-              
-              {autoCalcDetection.has1RMParam && onAutoCalculateWeightChange && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex items-center gap-4">
-                        <Switch
-                          id={`calc-weight-${exercise.id}`}
-                          checked={autoCalculateWeight || false}
-                          onCheckedChange={onAutoCalculateWeightChange}
-                          className="h-4 w-7"
-                        />
-                        <label
-                          htmlFor={`calc-weight-${exercise.id}`}
-                          className="text-xs cursor-pointer ml-1"
-                        >
-                          Weight [kg]
-                        </label>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="text-xs">Calculate weight from {autoCalcDetection.intensityParamName} × Athlete's 1RM</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-              
-              {autoCalcDetection.hasMaxHRParam && onAutoCalculateTargetHRChange && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex items-center gap-4">
-                        <Switch
-                          id={`calc-hr-${exercise.id}`}
-                          checked={autoCalculateTargetHR || false}
-                          onCheckedChange={onAutoCalculateTargetHRChange}
-                          className="h-4 w-7"
-                        />
-                        <label
-                          htmlFor={`calc-hr-${exercise.id}`}
-                          className="text-xs cursor-pointer ml-1"
-                        >
-                          Target HR [bpm]
-                        </label>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="text-xs">Calculate target HR from %maxHR × Athlete's Max HR</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-            </div>
-          )}
-
           {/* Parameters Display - only render if there are visible params */}
           {visibleParams.length > 0 && (
             setParam && setCount > 0 ? (
@@ -621,49 +493,34 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                     <TableRow>
                       <TableHead className="w-16">{setParam?.name || 'Set'}</TableHead>
                       {visibleParams.map(param => {
+                        if (param.isCalculated) {
+                          // Calculated params show a Calculator icon in the header
+                          const unit = param.unit;
+                          const headerText = unit ? `${param.name} [${unit}]` : param.name;
+                          return (
+                            <TableHead key={param.name} className="text-primary">
+                              <div className="flex items-center gap-1">
+                                <Calculator className="h-3 w-3" />
+                                {headerText}
+                              </div>
+                            </TableHead>
+                          );
+                        }
                         // First try stored unit in exercise parameters
                         let unit = exercise.parameters[`${param.name}_unit`] as string | undefined;
-                        
                         // If no unit stored, look up from toolbox (for quantitative params)
                         if (!unit && toolboxParams) {
                           const toolboxEntry = toolboxParams.find(tp => tp.parameterName === param.name);
                           if (toolboxEntry && toolboxEntry.parameterType === 'quantitative' && toolboxEntry.options.length > 0) {
-                            // For quantitative params, first option is the default unit
                             unit = toolboxEntry.options[0];
                           }
                         }
-                        
-                        // Format the header with unit if it exists
-                        const headerText = unit 
-                          ? `${param.name} [${unit}]`
-                          : param.name;
-                        
-                        // Rest parameters are always in seconds — lock the unit label
-                        const displayHeader = param.isRestParameter
-                          ? `${param.name} [s]`
-                          : headerText;
+                        const headerText = unit ? `${param.name} [${unit}]` : param.name;
+                        const displayHeader = param.isRestParameter ? `${param.name} [s]` : headerText;
                         return (
                           <TableHead key={param.name}>{displayHeader}</TableHead>
                         );
                       })}
-                      {/* Auto-calculated Weight column */}
-                      {autoCalculateWeight && autoCalcDetection.has1RMParam && (
-                        <TableHead className="text-primary">
-                          <div className="flex items-center gap-1">
-                            <Calculator className="h-3 w-3" />
-                            {weightCalcEntry ? `${weightCalcEntry.parameterName} [kg]` : 'Weight [kg]'}
-                          </div>
-                        </TableHead>
-                      )}
-                      {/* Auto-calculated Target HR column */}
-                      {autoCalculateTargetHR && autoCalcDetection.hasMaxHRParam && (
-                        <TableHead className="text-primary">
-                          <div className="flex items-center gap-1">
-                            <Calculator className="h-3 w-3" />
-                            {hrCalcEntry ? `${hrCalcEntry.parameterName} [bpm]` : 'Target HR [bpm]'}
-                          </div>
-                        </TableHead>
-                      )}
                       <TableHead className="w-12"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -671,129 +528,53 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                     {Array.from({ length: setCount }, (_, setIndex) => (
                       <TableRow key={setIndex}>
                         <TableCell className="font-medium">{setIndex + 1}</TableCell>
-                        {visibleParams.map(param => (
-                          <TableCell key={param.name}>
-                            <ParameterInputField
-                              parameter={param}
-                              value={
-                                // Per-set key (ad-hoc) takes priority; fall back to plain key
-                                // for periodization exercises (values stored as flat "Rest: 90").
-                                (exercise.parameters[`${param.name}_set${setIndex + 1}`] as string | number | undefined)
-                                  ?? exercise.parameters[param.name]
-                                  ?? param.defaultValue
-                                  ?? ''
+                        {visibleParams.map(param => {
+                          if (param.isCalculated) {
+                            // Generic calculated param: evaluate formula and show as editable input
+                            const entry = calcEntries.find(ce => ce.parameterName === param.name);
+                            const paramKey = `${param.name}_set${setIndex + 1}`;
+                            const storedRaw = exercise.parameters[paramKey];
+                            const isManual = storedRaw !== undefined && storedRaw !== '';
+
+                            let computed: number | undefined;
+                            if (entry?.formula) {
+                              const ctx: Record<string, number> = {};
+                              // Primary: resolve source params via stored IDs
+                              for (const srcId of (entry.sourceParameterIds ?? [])) {
+                                const srcParam = toolboxParams?.find(p => p.id === srcId);
+                                if (!srcParam) continue;
+                                const raw = exercise.parameters[`${srcParam.parameterName}_set${setIndex + 1}`]
+                                  ?? exercise.parameters[srcParam.parameterName];
+                                const unit = (exercise.parameters[`${srcParam.parameterName}_unit`] as string | undefined)
+                                  ?? (srcParam.parameterType === 'quantitative' && srcParam.options.length > 0 ? srcParam.options[0] : undefined);
+                                let n = parseNumeric(raw ?? '');
+                                if (!isNaN(n) && unit && PCT_UNITS.has(unit)) n = n / 100;
+                                if (!isNaN(n)) ctx[srcParam.parameterName] = n;
                               }
-                              unit={exercise.parameters[`${param.name}_unit`] as string}
-                              onValueChange={(value) => onParameterChange(`${param.name}_set${setIndex + 1}`, value)}
-                              onUnitChange={(unit) => onUnitChange(param.name, unit)}
-                              showLabel={false}
-                            />
-                          </TableCell>
-                        ))}
-                        {/* Auto-calculated Weight cell */}
-                        {autoCalculateWeight && autoCalcDetection.has1RMParam && (() => {
-                          let computed: number | undefined;
-                          if (weightCalcEntry?.formula) {
-                            const ctx: Record<string, number> = {};
-                            for (const srcId of (weightCalcEntry.sourceParameterIds ?? [])) {
-                              const srcParam = toolboxParams?.find(p => p.id === srcId);
-                              if (!srcParam) continue;
-                              const raw = exercise.parameters[`${srcParam.parameterName}_set${setIndex + 1}`]
-                                ?? exercise.parameters[srcParam.parameterName];
-                              const unit = (exercise.parameters[`${srcParam.parameterName}_unit`] as string | undefined)
-                                ?? (srcParam.parameterType === 'quantitative' && srcParam.options.length > 0 ? srcParam.options[0] : undefined);
-                              let n = parseFloat(String(raw ?? ''));
-                              if (!isNaN(n) && unit && PCT_UNITS.has(unit)) n = n / 100;
-                              if (!isNaN(n)) ctx[srcParam.parameterName] = n;
+                              // Fallback: resolve any still-missing variables by parameter name.
+                              // Handles stale sourceParameterIds (e.g. after toolbox migration).
+                              for (const sibling of (toolboxParams ?? []).filter(p => !p.isCalculated)) {
+                                if (ctx[sibling.parameterName] !== undefined) continue;
+                                const raw = exercise.parameters[`${sibling.parameterName}_set${setIndex + 1}`]
+                                  ?? exercise.parameters[sibling.parameterName];
+                                if (raw === undefined || raw === '') continue;
+                                const unit = (exercise.parameters[`${sibling.parameterName}_unit`] as string | undefined)
+                                  ?? (sibling.parameterType === 'quantitative' && sibling.options.length > 0 ? sibling.options[0] : undefined);
+                                let n = parseNumeric(raw);
+                                if (!isNaN(n) && unit && PCT_UNITS.has(unit)) n = n / 100;
+                                if (!isNaN(n)) ctx[sibling.parameterName] = n;
+                              }
+                              const athleteData = resolveAthleteDataRefs(entry.athleteDataRefs ?? [], exercise.exerciseName);
+                              for (const [k, v] of Object.entries(athleteData)) {
+                                if (v !== undefined) ctx[k] = v;
+                              }
+                              const result = evaluateFormula(entry.formula, ctx);
+                              if (result !== null) computed = Math.round(result * 2) / 2;
                             }
-                            const athleteData = resolveAthleteDataRefs(weightCalcEntry.athleteDataRefs ?? [], exercise.exerciseName);
-                            for (const [k, v] of Object.entries(athleteData)) {
-                              if (v !== undefined) ctx[k] = v;
-                            }
-                            const result = evaluateFormula(weightCalcEntry.formula, ctx);
-                            if (result !== null) computed = Math.round(result * 2) / 2;
-                          } else {
-                            // Fallback: intensity × e1RM when no isCalculated formula is configured
-                            const intensityRaw =
-                              exercise.parameters[`${autoCalcDetection.intensityParamName}_set${setIndex + 1}`] ??
-                              exercise.parameters[autoCalcDetection.intensityParamName ?? ''] ?? '';
-                            const intensity = parseFloat(String(intensityRaw));
-                            const e1RM = resolveAthleteDataRefs(['e1RM'], exercise.exerciseName)['e1RM'];
-                            if (!isNaN(intensity) && intensity > 0 && e1RM !== undefined)
-                              computed = Math.round(intensity / 100 * e1RM * 2) / 2;
-                          }
-                          if (weightCalcEntry) {
-                            // Editable — computed value is the default; coach can type to override
-                            const paramKey = `${weightCalcEntry.parameterName}_set${setIndex + 1}`;
-                            const storedRaw = exercise.parameters[paramKey];
-                            const isManual = storedRaw !== undefined && storedRaw !== '';
+
                             const displayValue = isManual ? String(storedRaw) : (computed !== undefined ? String(computed) : '');
                             return (
-                              <TableCell>
-                                <div className="flex items-center gap-1">
-                                  <Input
-                                    value={displayValue}
-                                    onChange={(e) => onParameterChange(paramKey, e.target.value)}
-                                    className={`h-7 text-sm w-20 ${!isManual && computed !== undefined ? 'text-primary' : ''}`}
-                                    placeholder="Auto"
-                                  />
-                                  {isManual && computed !== undefined && (
-                                    <button
-                                      type="button"
-                                      title={`Reset to calculated value (${computed})`}
-                                      className="text-muted-foreground hover:text-primary shrink-0"
-                                      onClick={() => onParameterChange(paramKey, '')}
-                                    >
-                                      <RefreshCw className="h-3 w-3" />
-                                    </button>
-                                  )}
-                                </div>
-                              </TableCell>
-                            );
-                          }
-                          // Fallback read-only when no parameterName available
-                          return (
-                            <TableCell>
-                              {computed !== undefined ? (
-                                <span className="text-sm font-medium text-primary">{computed} kg</span>
-                              ) : (
-                                <Badge variant="outline" className="text-xs text-muted-foreground border-muted-foreground/30">
-                                  <Calculator className="h-3 w-3 mr-1" />Auto
-                                </Badge>
-                              )}
-                            </TableCell>
-                          );
-                        })()}
-                        {/* Auto-calculated Target HR cell */}
-                        {autoCalculateTargetHR && autoCalcDetection.hasMaxHRParam && (() => {
-                          let computed: number | undefined;
-                          if (hrCalcEntry?.formula) {
-                            const ctx: Record<string, number> = {};
-                            for (const srcId of (hrCalcEntry.sourceParameterIds ?? [])) {
-                              const srcParam = toolboxParams?.find(p => p.id === srcId);
-                              if (!srcParam) continue;
-                              const raw = exercise.parameters[`${srcParam.parameterName}_set${setIndex + 1}`]
-                                ?? exercise.parameters[srcParam.parameterName];
-                              const unit = (exercise.parameters[`${srcParam.parameterName}_unit`] as string | undefined)
-                                ?? (srcParam.parameterType === 'quantitative' && srcParam.options.length > 0 ? srcParam.options[0] : undefined);
-                              let n = parseFloat(String(raw ?? ''));
-                              if (!isNaN(n) && unit && PCT_UNITS.has(unit)) n = n / 100;
-                              if (!isNaN(n)) ctx[srcParam.parameterName] = n;
-                            }
-                            const athleteData = resolveAthleteDataRefs(hrCalcEntry.athleteDataRefs ?? [], exercise.exerciseName);
-                            for (const [k, v] of Object.entries(athleteData)) {
-                              if (v !== undefined) ctx[k] = v;
-                            }
-                            const result = evaluateFormula(hrCalcEntry.formula, ctx);
-                            if (result !== null) computed = Math.round(result);
-                          }
-                          if (hrCalcEntry) {
-                            const paramKey = `${hrCalcEntry.parameterName}_set${setIndex + 1}`;
-                            const storedRaw = exercise.parameters[paramKey];
-                            const isManual = storedRaw !== undefined && storedRaw !== '';
-                            const displayValue = isManual ? String(storedRaw) : (computed !== undefined ? String(computed) : '');
-                            return (
-                              <TableCell>
+                              <TableCell key={param.name}>
                                 <div className="flex items-center gap-1">
                                   <Input
                                     value={displayValue}
@@ -816,17 +597,23 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                             );
                           }
                           return (
-                            <TableCell>
-                              {computed !== undefined ? (
-                                <span className="text-sm font-medium text-primary">{computed} bpm</span>
-                              ) : (
-                                <Badge variant="outline" className="text-xs text-muted-foreground border-muted-foreground/30">
-                                  <Calculator className="h-3 w-3 mr-1" />Auto
-                                </Badge>
-                              )}
+                            <TableCell key={param.name}>
+                              <ParameterInputField
+                                parameter={param}
+                                value={
+                                  (exercise.parameters[`${param.name}_set${setIndex + 1}`] as string | number | undefined)
+                                    ?? exercise.parameters[param.name]
+                                    ?? param.defaultValue
+                                    ?? ''
+                                }
+                                unit={exercise.parameters[`${param.name}_unit`] as string}
+                                onValueChange={(value) => onParameterChange(`${param.name}_set${setIndex + 1}`, value)}
+                                onUnitChange={(unit) => onUnitChange(param.name, unit)}
+                                showLabel={false}
+                              />
                             </TableCell>
                           );
-                        })()}
+                        })}
                         <TableCell>
                           <Button
                             variant="ghost"
@@ -854,10 +641,9 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                 </Button>
               </div>
             ) : (
-              // FALLBACK: Grid layout for non-set-based exercises - use visibleParams
+              // FALLBACK: Grid layout for non-set-based exercises — skip isCalculated params (they need a set context)
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {visibleParams.map((param) => {
-                  // Look up unit from toolbox if not in exercise parameters
+                {visibleParams.filter(p => !p.isCalculated).map((param) => {
                   let unit = exercise.parameters[`${param.name}_unit`] as string | undefined;
                   if (!unit && toolboxParams) {
                     const toolboxEntry = toolboxParams.find(tp => tp.parameterName === param.name);
@@ -865,7 +651,6 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                       unit = toolboxEntry.options[0];
                     }
                   }
-                  
                   return (
                     <ParameterInputField
                       key={param.name}
@@ -878,25 +663,6 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                     />
                   );
                 })}
-                {/* Auto-calculated badges for grid layout */}
-                {autoCalculateWeight && autoCalcDetection.has1RMParam && (
-                  <div className="flex items-center gap-2 p-2 border rounded-md bg-primary/5 border-primary/20">
-                    <Calculator className="h-4 w-4 text-primary" />
-                    <div className="text-xs">
-                      <div className="font-medium text-primary">Weight [kg]</div>
-                      <div className="text-muted-foreground">Auto-calculated</div>
-                    </div>
-                  </div>
-                )}
-                {autoCalculateTargetHR && autoCalcDetection.hasMaxHRParam && (
-                  <div className="flex items-center gap-2 p-2 border rounded-md bg-primary/5 border-primary/20">
-                    <Calculator className="h-4 w-4 text-primary" />
-                    <div className="text-xs">
-                      <div className="font-medium text-primary">Target HR [bpm]</div>
-                      <div className="text-muted-foreground">Auto-calculated</div>
-                    </div>
-                  </div>
-                )}
               </div>
             )
           )}

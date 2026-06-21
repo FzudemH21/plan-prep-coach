@@ -37,10 +37,6 @@ export interface WorkoutSessionContextValue {
   onShowAllParams: () => void;
   onResetParamsToDefaults: () => void;
 
-  // Auto-calculate toggles
-  onAutoCalculateWeightChange: (exerciseId: string, value: boolean) => void;
-  onAutoCalculateTargetHRChange: (exerciseId: string, value: boolean) => void;
-
   // Resolves exactly the IDs listed in a formula's athleteDataRefs to a token-name → value map.
   // 'e1RM'         → most recent e1RM from Exercise Metrics (param-tags based Epley)
   // biometric ID   → athlete's latest value for that BiometricDefinition, keyed by def.name

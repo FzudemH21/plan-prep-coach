@@ -147,6 +147,20 @@ export function evaluateFormula(
 
 
 /**
+ * Parse a numeric value from a stored parameter string.
+ * For range strings like "82-87" or "82-87%" uses the midpoint (84.5)
+ * so formula results reflect the centre of the prescribed intensity zone.
+ * Falls back to parseFloat for all other inputs.
+ */
+export function parseNumeric(raw: unknown): number {
+  const str = String(raw).trim();
+  // Match "lo-hi" where both parts start with a digit (excludes negative numbers like "-5")
+  const rangeMatch = /^(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)/.exec(str);
+  if (rangeMatch) return (parseFloat(rangeMatch[1]) + parseFloat(rangeMatch[2])) / 2;
+  return parseFloat(str);
+}
+
+/**
  * Format a formula for display, showing the calculation with actual values
  */
 export function formatFormulaPreview(

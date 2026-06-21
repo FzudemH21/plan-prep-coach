@@ -8,7 +8,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil, StickyNote, Calculator, ArrowUp, ArrowDown, Copy, Trash2, MoreVertical, Link2, ClipboardPaste, RefreshCw } from 'lucide-react';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
-import { Switch } from '@/components/ui/switch';
 import { SubGoal, Event } from '@/types/training';
 import { CombinedTestEventDialog } from './CombinedTestEventDialog';
 import { IntensityLevel } from '@/types/training';
@@ -128,8 +127,6 @@ interface MasterPlannerColumnProps {
   // New props for Phase 2 - editable notes and eachSide
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
   onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
-  // New props for Phase 3 - auto-calculate toggles
-  onExerciseAutoCalcChange?: (exerciseId: string, field: 'autoCalculateWeight' | 'autoCalculateTargetHR', value: boolean) => void;
   // New props for Phase 4 - intensity editing
   onDayIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
   onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
@@ -478,7 +475,6 @@ export function MasterPlannerColumn({
   totalWeeks = 6,
   onExerciseNotesChange,
   onExerciseEachSideChange,
-  onExerciseAutoCalcChange,
   onDayIntensityChange,
   onSessionIntensityChange,
   onSectionReorder,
@@ -779,45 +775,18 @@ export function MasterPlannerColumn({
 
     const rowCount = Math.max(setCount, 1);
 
-    // Detect %1RM and %maxHR parameters for auto-calculation toggles
-    const autoCalcDetection = (() => {
-      let has1RMParam = false;
-      let hasMaxHRParam = false;
-
-      // Check stored unit values
-      for (const param of methodParams) {
-        const unit = storedParams[`${param.name}_unit`] || param.unit;
-        if (unit === '%1RM') has1RMParam = true;
-        if (unit === '%maxHR') hasMaxHRParam = true;
-      }
-
-      // Also check toolbox entries for quantitative params with %1RM or %maxHR options
-      if (toolboxData) {
-        const methodParts = (exercise.methodId || '').split(' - ');
-        const methodMain = methodParts[0] || '';
-        const methodSubCategory = methodParts[1] || '';
-
-        const toolboxEntries = toolboxData.entries.filter(entry => {
-          if (methodSubCategory) {
-            return entry.category === methodMain && entry.subCategory === methodSubCategory;
-          }
-          return entry.category === methodMain && (!entry.subCategory || entry.subCategory === '');
-        });
-
-        for (const tp of toolboxEntries) {
-          if (tp.parameterType === 'quantitative' && tp.options) {
-            if (tp.options.includes('%1RM')) has1RMParam = true;
-            if (tp.options.includes('%maxHR')) hasMaxHRParam = true;
-          }
-        }
-      }
-
-      return { has1RMParam, hasMaxHRParam };
-    })();
-
-    // Determine if auto-calculate columns should show
-    const showWeightColumn = autoCalcDetection.has1RMParam && (exercise.autoCalculateWeight ?? true);
-    const showHRColumn = autoCalcDetection.hasMaxHRParam && (exercise.autoCalculateTargetHR ?? true);
+    // Generic isCalculated entries from toolbox for this method
+    const methodParts2 = (exercise.methodId || '').split(' - ');
+    const methodMain2 = methodParts2[0] || '';
+    const methodSub2 = methodParts2[1] || '';
+    const calcEntries = toolboxData
+      ? toolboxData.entries.filter(tp => {
+          const catMatch = methodSub2
+            ? tp.category === methodMain2 && tp.subCategory === methodSub2
+            : tp.category === methodMain2 && (!tp.subCategory || tp.subCategory === '');
+          return catMatch && tp.isCalculated && !!tp.formula;
+        })
+      : [];
 
     return (
       <>
@@ -836,36 +805,6 @@ export function MasterPlannerColumn({
           </div>
         )}
 
-        {/* Auto-Calculation Toggles - matching WorkoutExerciseCard format */}
-        {(autoCalcDetection.has1RMParam || autoCalcDetection.hasMaxHRParam) && (
-          <div className="flex flex-wrap items-center gap-3 mt-1.5 p-1.5 bg-muted/50 rounded text-[10px]" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-1 text-muted-foreground">
-              <Calculator className="h-3 w-3" />
-              <span className="font-medium">Auto-calculate:</span>
-            </div>
-            {autoCalcDetection.has1RMParam && (
-              <div className="flex items-center gap-4">
-                <Switch
-                  checked={exercise.autoCalculateWeight ?? true}
-                  onCheckedChange={(checked) => onExerciseAutoCalcChange?.(exercise.exerciseId, 'autoCalculateWeight', checked)}
-                  className="h-3 w-6 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted"
-                />
-                <span className="ml-1">Weight [kg]</span>
-              </div>
-            )}
-            {autoCalcDetection.hasMaxHRParam && (
-              <div className="flex items-center gap-4">
-                <Switch
-                  checked={exercise.autoCalculateTargetHR ?? true}
-                  onCheckedChange={(checked) => onExerciseAutoCalcChange?.(exercise.exerciseId, 'autoCalculateTargetHR', checked)}
-                  className="h-3 w-6 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted"
-                />
-                <span className="ml-1">HR [bpm]</span>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Visible parameter grid with set numbers - horizontal scroll for overflow */}
         {visibleParams.length > 0 && (
           <div className="mt-1 overflow-x-auto">
@@ -881,24 +820,14 @@ export function MasterPlannerColumn({
                       )}
                     </TableHead>
                   ))}
-                  {/* Auto-calculate Weight column header */}
-                  {showWeightColumn && (
-                    <TableHead className="py-0.5 px-1 font-medium h-6 min-w-[70px] whitespace-nowrap text-primary">
+                  {calcEntries.map(ce => (
+                    <TableHead key={ce.parameterName} className="py-0.5 px-1 font-medium h-6 min-w-[70px] whitespace-nowrap text-primary">
                       <div className="flex items-center gap-0.5">
                         <Calculator className="h-3 w-3" />
-                        <span>Weight [kg]</span>
+                        <span>{ce.parameterName}{ce.parameterType === 'quantitative' && ce.options?.[0] ? ` [${ce.options[0]}]` : ''}</span>
                       </div>
                     </TableHead>
-                  )}
-                  {/* Auto-calculate Target HR column header */}
-                  {showHRColumn && (
-                    <TableHead className="py-0.5 px-1 font-medium h-6 min-w-[70px] whitespace-nowrap text-primary">
-                      <div className="flex items-center gap-0.5">
-                        <Calculator className="h-3 w-3" />
-                        <span>HR [bpm]</span>
-                      </div>
-                    </TableHead>
-                  )}
+                  ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -908,10 +837,8 @@ export function MasterPlannerColumn({
                     <TableRow key={idx} className="h-7 border-0">
                       <TableCell className="py-0 px-1 text-center text-muted-foreground min-w-[40px] w-[40px]">{setNumber}</TableCell>
                       {visibleParams.slice(0, 4).map(p => {
-                        // Read per-set value first, fallback to base param value
                         const perSetKey = `${p.name}_set${setNumber}`;
                         const currentValue = storedParams[perSetKey] ?? storedParams[p.name];
-                        
                         return (
                           <TableCell key={p.name} className="py-0 px-1 min-w-[80px]">
                             <EditableParamInput
@@ -928,22 +855,13 @@ export function MasterPlannerColumn({
                           </TableCell>
                         );
                       })}
-                      {/* Auto-calculate Weight cell */}
-                      {showWeightColumn && (
-                        <TableCell className="py-0 px-1 min-w-[70px]">
+                      {calcEntries.map(ce => (
+                        <TableCell key={ce.parameterName} className="py-0 px-1 min-w-[70px]">
                           <Badge variant="outline" className="text-[10px] text-primary border-primary/50 bg-primary/5 px-1">
                             Auto
                           </Badge>
                         </TableCell>
-                      )}
-                      {/* Auto-calculate Target HR cell */}
-                      {showHRColumn && (
-                        <TableCell className="py-0 px-1 min-w-[70px]">
-                          <Badge variant="outline" className="text-[10px] text-primary border-primary/50 bg-primary/5 px-1">
-                            Auto
-                          </Badge>
-                        </TableCell>
-                      )}
+                      ))}
                     </TableRow>
                   );
                 })}

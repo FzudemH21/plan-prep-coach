@@ -100,8 +100,6 @@ export interface ExerciseDistribution {
   supersetId?: string;
   notes?: string;
   eachSide?: boolean; // Mark exercise as unilateral (perform reps on each side)
-  autoCalculateWeight?: boolean; // Auto-calculate weight from %1RM
-  autoCalculateTargetHR?: boolean; // Auto-calculate target HR from %maxHR
   // Source of parameter values: 'toolbox' = use blank grid, 'periodization' = use program method periodization
   parameterSource?: 'toolbox' | 'periodization';
   // Circuit block fields — present when this entry represents a circuit

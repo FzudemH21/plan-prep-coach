@@ -9,6 +9,28 @@ import { supabase } from '@/lib/supabase';
 import { AthleteCalendarAssignment } from '@/types/athlete';
 import type { ToolboxEntry } from '@/types/toolbox';
 import type { CalendarEvent } from '@/hooks/useCalendarEvents';
+import { evaluateFormula, parseNumeric } from '@/utils/formulaEvaluator';
+
+/** Percentage units — values like 80 represent 0.80 and must be ÷100 before formula evaluation */
+const PCT_UNITS = new Set(['%', '%1RM', '%BW', '%maxV', '%maxHR']);
+
+/**
+ * Athlete-specific data used for pre-computing formula results at plan assignment time.
+ * All values reflect the athlete's most recent recorded data at the moment of plan assignment.
+ *
+ * - e1RMByExercise: exercise name (lowercase) → e1RM computed from the athlete's exercise metrics
+ *   (only present when the coach has configured 1RM param tags AND the athlete has logged sessions)
+ * - biometricsById / perfParamsById: keyed by definition ID (matching toolbox `athleteDataRefs`),
+ *   value provides the formula token name and the resolved numeric value
+ */
+export interface AthleteFormulaData {
+  /** exercise name (lowercase) → most recent Epley e1RM from exercise metrics */
+  e1RMByExercise: Map<string, number>;
+  /** biometric definition ID → { name used in formula, most recent value } */
+  biometricsById: Map<string, { name: string; value: number }>;
+  /** performance parameter ID → { name used in formula, most recent value } */
+  perfParamsById: Map<string, { name: string; value: number }>;
+}
 
 interface TrainingDay {
   date: string;
@@ -195,17 +217,53 @@ export async function syncAthleteSchedule(
   supersets?: SupersetMapping,
   sessionIntensities?: Record<string, string>,
   calendarEvents?: SyncCalendarEvent[],
+  athleteFormulaData?: AthleteFormulaData,
 ): Promise<void> {
   if (!connectionId || trainingDays.length === 0) return;
 
   console.log(`[syncAthleteSchedule] ▶ start | connectionId=${connectionId} | trainingDays=${trainingDays.length} | exercises=${exercises.length} | paramKeys=${Object.keys(paramValues ?? {}).length}`);
 
-  // Fetch exercise video/description from the coach's library (coach is the authenticated user here)
-  const { data: { user: coachUser } } = await supabase.auth.getUser();
-  const exerciseDetails = coachUser
-    ? await buildExerciseDetailMap(coachUser.id)
-    : new Map<string, { videoUrl?: string; description?: string }>();
+  // Fetch exercise video/description from the coach's library (coach is the authenticated user here).
+  // Wrap in try/catch: Supabase's GoTrue auth layer uses a Navigator Lock internally and can
+  // throw a "Lock was released because another request stole it" error during rapid re-mounts
+  // (e.g. React Strict Mode) when two auth calls race for the same lock. This is non-fatal —
+  // exercise detail enrichment is cosmetic, so we fall back to an empty map instead of
+  // aborting the entire sync and showing an error toast to the coach.
+  let coachUser: { id: string } | null = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    coachUser = data.user;
+  } catch (authErr) {
+    console.warn('[syncAthleteSchedule] auth.getUser() failed (lock contention?), continuing without exercise details:', authErr);
+  }
+  // Compute preliminary date range so we can prefetch existing athlete_schedule data
+  // in parallel with the exercise detail map — saves one sequential Supabase round-trip.
+  const prelimDates = [
+    ...trainingDays.map(td => td.date),
+    ...(calendarEvents ?? []).map(e => e.date),
+  ];
+  const pMin = prelimDates.length > 0 ? prelimDates.reduce((a, b) => (a < b ? a : b)) : null;
+  const pMax = prelimDates.length > 0 ? prelimDates.reduce((a, b) => (a > b ? a : b)) : null;
+
+  const [exerciseDetails, prefetchResult] = await Promise.all([
+    coachUser
+      ? buildExerciseDetailMap(coachUser.id)
+      : Promise.resolve(new Map<string, { videoUrl?: string; description?: string }>()),
+    pMin && pMax
+      ? supabase
+          .from('athlete_schedule')
+          .select('date, intensity, sessions')
+          .eq('athlete_connection_id', connectionId)
+          .gte('date', pMin)
+          .lte('date', pMax)
+      : Promise.resolve(null),
+  ]);
   console.log(`[syncAthleteSchedule] exercise detail map: ${exerciseDetails.size} entries`);
+
+  // Calc toolbox entries — used in getPlannedParams to inject formula results per set.
+  // e1RM values come from AthleteFormulaData (built by the caller from the athlete profile).
+  const calcToolboxEntries = (toolboxEntries ?? []).filter(te => te.isCalculated && !!te.formula);
+  const e1RMByExercise: Map<string, number> = athleteFormulaData?.e1RMByExercise ?? new Map();
 
   // Build a lookup: date → mesocycle/microcycle name + ids
   const mesoByDate = new Map<string, {
@@ -432,6 +490,105 @@ export async function syncAthleteSchedule(
     // Get rest param name from toolbox
     const restParamName = toolboxRestMap.get(baseMethodKey);
 
+    // ── Formula pre-computation ───────────────────────────────────────────────
+    // For any isCalculated toolbox params belonging to this method, evaluate the
+    // formula per set and inject the result — unless the coach manually overrode
+    // the value (non-empty stored entry). This mirrors WorkoutExerciseCard.tsx.
+    if (calcToolboxEntries.length > 0 && plannedSets) {
+      // Match calc entries to this method using the same composite-string comparison
+      // as WorkoutSectionCard.getToolboxParamsForExercise:
+      //   toolboxMethodId = subCategory ? `${category} - ${subCategory}` : category
+      //   match when toolboxMethodId === exercise.methodId (baseMethodKey)
+      // This avoids the fragile split-on-' - ' approach that breaks when category or
+      // subCategory names themselves contain ' - '.
+      const methodCalcEntries = calcToolboxEntries.filter(te => {
+        const toolboxMethodId = te.subCategory
+          ? `${te.category} - ${te.subCategory}`
+          : te.category;
+        return toolboxMethodId === baseMethodKey;
+      });
+
+      if (methodCalcEntries.length > 0) {
+        // Work on a mutable copy to avoid mutating the original paramValues object
+        const params: Record<string, string | number> = { ...storedParams };
+
+        for (let setIdx = 0; setIdx < plannedSets; setIdx++) {
+          for (const entry of methodCalcEntries) {
+            if (!entry.formula) continue;
+            const paramKey = `${entry.parameterName}_set${setIdx + 1}`;
+            // Skip if the coach has manually entered a value for this set
+            if (params[paramKey] !== undefined && params[paramKey] !== '') continue;
+
+            // Build formula evaluation context
+            const ctx: Record<string, number> = {};
+
+            // Source params — look up per-set value from the same params copy.
+            // Primary: resolve via stored ID (exact match).
+            for (const srcId of entry.sourceParameterIds ?? []) {
+              const srcEntry = toolboxEntries?.find(te => te.id === srcId);
+              if (!srcEntry) continue;
+              const raw = params[`${srcEntry.parameterName}_set${setIdx + 1}`] ?? params[srcEntry.parameterName];
+              if (raw === undefined || raw === '') continue;
+              // Unit stored as `{paramName}_unit` in the params map; fallback to first toolbox option
+              const unit = (params[`${srcEntry.parameterName}_unit`] as string | undefined)
+                ?? (srcEntry.parameterType === 'quantitative' && srcEntry.options.length > 0 ? srcEntry.options[0] : undefined);
+              let n = parseNumeric(raw);
+              if (!isNaN(n)) {
+                if (unit && PCT_UNITS.has(unit)) n = n / 100;
+                ctx[srcEntry.parameterName] = n;
+              }
+            }
+            // Fallback: resolve by parameter name for any variables still missing from ctx.
+            // This handles stale sourceParameterIds (e.g. after toolbox migration to Supabase).
+            // All toolbox entries for this method are candidates; we look each one up in params.
+            const methodSiblingEntries = (toolboxEntries ?? []).filter(te => {
+              const mid = te.subCategory ? `${te.category} - ${te.subCategory}` : te.category;
+              return mid === baseMethodKey && !te.isCalculated;
+            });
+            for (const sibling of methodSiblingEntries) {
+              if (ctx[sibling.parameterName] !== undefined) continue; // already resolved via ID
+              const raw = params[`${sibling.parameterName}_set${setIdx + 1}`] ?? params[sibling.parameterName];
+              if (raw === undefined || raw === '') continue;
+              const unit = (params[`${sibling.parameterName}_unit`] as string | undefined)
+                ?? (sibling.parameterType === 'quantitative' && sibling.options.length > 0 ? sibling.options[0] : undefined);
+              let n = parseNumeric(raw);
+              if (!isNaN(n)) {
+                if (unit && PCT_UNITS.has(unit)) n = n / 100;
+                ctx[sibling.parameterName] = n;
+              }
+            }
+
+            // Athlete data refs (e1RM, biometrics, performance params)
+            for (const ref of entry.athleteDataRefs ?? []) {
+              if (ref === 'e1RM') {
+                const exNameLower = (ex.exerciseName ?? '').toLowerCase();
+                const e1rm = e1RMByExercise.get(exNameLower);
+                if (e1rm !== undefined) ctx['e1RM'] = e1rm;
+              } else if (athleteFormulaData) {
+                const bio = athleteFormulaData.biometricsById.get(ref);
+                if (bio) { ctx[bio.name] = bio.value; continue; }
+                const perf = athleteFormulaData.perfParamsById.get(ref);
+                if (perf) ctx[perf.name] = perf.value;
+              }
+            }
+
+            const result = evaluateFormula(entry.formula, ctx);
+            if (result !== null) {
+              // Round to nearest 0.5 to match WorkoutExerciseCard display
+              params[paramKey] = Math.round(result * 2) / 2;
+            }
+          }
+        }
+
+        return {
+          plannedSets,
+          plannedParams: params,
+          visibleParams,
+          restParamName,
+        };
+      }
+    }
+
     return {
       plannedSets,
       plannedParams: storedParams,
@@ -600,6 +757,8 @@ export async function syncAthleteSchedule(
   //   3. day-level intensity                   → preserved per date
   //   4. session-level intensity               → preserved per date+sessionIdx
   //   5. session-level notes                   → preserved per date+sessionIdx
+  //   6. formula-computed plannedParams        → preserved when re-sync can't recompute
+  //      (athleteFormulaData absent = auto/load-sync; existing formula values survive)
   const mobileParamsMap = new Map<string, Map<string, ExerciseSummary>>();
   // mobileAddedMap: date → sessionOrder → exercises[]
   const mobileAddedMap = new Map<string, Map<number, ExerciseSummary[]>>();
@@ -611,6 +770,10 @@ export async function syncAthleteSchedule(
   const rearrangedSessions: Array<{ targetDate: string; session: SessionSummary }> = [];
   // Full existing sessions per date — ground truth for rearranged dates
   const existingSessionsMap = new Map<string, SessionSummary[]>();
+  // Formula-computed planned params from the previous sync (preserve when re-sync can't recompute).
+  // Key: "date-sessionIdx-exerciseId" (both stored id and library id), value: plannedParams object.
+  // Only populated when athleteFormulaData is absent (auto/load-sync); assign-sync always recomputes.
+  const existingFormulaParamsMap = new Map<string, Record<string, string | number>>();
   try {
     if (allDates.length > 0) {
       // Fetch ALL rows within the plan's date range — not just plan dates.
@@ -618,14 +781,10 @@ export async function syncAthleteSchedule(
       // those dates are not in allDates (no plan sessions or events), so an
       // allDates-scoped .in() query would miss them, leaving rearrangedSessions
       // empty and causing the locked-dates logic to skip the rearrangement.
-      const minDate = allDates.reduce((a, b) => a < b ? a : b);
-      const maxDate = allDates.reduce((a, b) => a > b ? a : b);
-      const { data: existingData } = await supabase
-        .from('athlete_schedule')
-        .select('date, intensity, sessions')
-        .eq('athlete_connection_id', connectionId)
-        .gte('date', minDate)
-        .lte('date', maxDate);
+      // Reuse the prefetched result that ran in parallel with buildExerciseDetailMap above.
+      const { data: existingData } = prefetchResult && typeof prefetchResult === 'object' && 'data' in prefetchResult
+        ? (prefetchResult as { data: Array<{ date: string; intensity?: string | null; sessions: SessionSummary[] }> | null })
+        : { data: null };
       if (existingData) {
         for (const row of existingData as Array<{ date: string; intensity?: string | null; sessions: SessionSummary[] }>) {
           // Preserve day-level intensity if set
@@ -664,6 +823,19 @@ export async function syncAthleteSchedule(
               // Collect mobileAdded exercises for re-appending
               if (exTyped.mobileAdded) {
                 addedExs.push(exTyped);
+              }
+              // When this sync doesn't have athleteFormulaData (auto-sync / load-sync),
+              // capture any existing plannedParams so formula-computed values are not lost.
+              // Assign-syncs always pass athleteFormulaData and recompute from scratch,
+              // so we skip this collection when athleteFormulaData is present.
+              if (!athleteFormulaData && exTyped.plannedParams && Object.keys(exTyped.plannedParams).length > 0) {
+                const fpKey1 = `${row.date}-${sIdx}-${exTyped.id}`;
+                existingFormulaParamsMap.set(fpKey1, exTyped.plannedParams);
+                const libId = exTyped.exerciseLibraryId;
+                if (libId) {
+                  const fpKey2 = `${row.date}-${sIdx}-${libId}`;
+                  existingFormulaParamsMap.set(fpKey2, exTyped.plannedParams);
+                }
               }
             }
             if (addedExs.length > 0) {
@@ -707,6 +879,36 @@ export async function syncAthleteSchedule(
       }));
     }
     console.log(`[syncAthleteSchedule] preserved mobile edits for ${mobileParamsMap.size} dates`);
+  }
+
+  // ── Preserve formula-computed planned params from the previous sync ──────────
+  // When this sync doesn't have athleteFormulaData (auto-sync / load-sync), any
+  // isCalculated formula params that were pre-computed at assign-time would be lost
+  // because getPlannedParams() can't evaluate formulas without athlete data refs (e1RM etc.).
+  // For each exercise, merge any existing formula-computed params into the fresh plannedParams,
+  // but only for keys that are missing in the new result (don't overwrite freshly computed values).
+  if (existingFormulaParamsMap.size > 0) {
+    for (const row of rows) {
+      row.sessions = row.sessions.map((session, sIdx) => ({
+        ...session,
+        exercises: session.exercises.map(ex => {
+          const exId = ex.id;
+          const libId = (ex as ExerciseSummary).exerciseLibraryId;
+          const existingParams =
+            existingFormulaParamsMap.get(`${row.date}-${sIdx}-${exId}`) ??
+            (libId ? existingFormulaParamsMap.get(`${row.date}-${sIdx}-${libId}`) : undefined);
+          if (!existingParams) return ex;
+          // Only merge keys that are absent from the current plannedParams.
+          // This preserves formula-computed values while still allowing freshly
+          // computed/edited values to take precedence.
+          const currentParams = (ex as ExerciseSummary).plannedParams ?? {};
+          const merged: Record<string, string | number> = { ...existingParams, ...currentParams };
+          if (Object.keys(merged).length === Object.keys(currentParams).length) return ex;
+          return { ...ex, plannedParams: merged };
+        }),
+      }));
+    }
+    console.log(`[syncAthleteSchedule] preserved formula-computed params for ${existingFormulaParamsMap.size} exercise slots`);
   }
 
   // Re-append mobile-added exercises (coach added them via mobile — not in the plan).

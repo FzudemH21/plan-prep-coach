@@ -48,8 +48,6 @@ export function WorkoutSectionCard({
     onVisibilityChange,
     onShowAllParams,
     onResetParamsToDefaults,
-    onAutoCalculateWeightChange,
-    onAutoCalculateTargetHRChange,
     onOpenExerciseDetail,
     onChangeExercise,
     onOpenChangeLibrary,
@@ -287,10 +285,6 @@ export function WorkoutSectionCard({
                                             onVisibilityChange={onVisibilityChange}
                                             onShowAllParams={onShowAllParams}
                                             onResetParamsToDefaults={onResetParamsToDefaults}
-                                            autoCalculateWeight={exercise.autoCalculateWeight}
-                                            onAutoCalculateWeightChange={(value) => onAutoCalculateWeightChange?.(exercise.id, value)}
-                                            autoCalculateTargetHR={exercise.autoCalculateTargetHR}
-                                            onAutoCalculateTargetHRChange={(value) => onAutoCalculateTargetHRChange?.(exercise.id, value)}
                                             isCollapsed={collapsedExercises[exercise.id] || false}
                                             onToggleCollapse={() => toggleExerciseCollapse(exercise.id)}
                                             onOpenDetail={() => onOpenExerciseDetail?.(exercise)}
@@ -373,10 +367,6 @@ export function WorkoutSectionCard({
                                     onVisibilityChange={onVisibilityChange}
                                     onShowAllParams={onShowAllParams}
                                     onResetParamsToDefaults={onResetParamsToDefaults}
-                                    autoCalculateWeight={exercise.autoCalculateWeight}
-                                    onAutoCalculateWeightChange={(value) => onAutoCalculateWeightChange?.(exercise.id, value)}
-                                    autoCalculateTargetHR={exercise.autoCalculateTargetHR}
-                                    onAutoCalculateTargetHRChange={(value) => onAutoCalculateTargetHRChange?.(exercise.id, value)}
                                     isCollapsed={collapsedExercises[exercise.id] || false}
                                     onToggleCollapse={() => toggleExerciseCollapse(exercise.id)}
                                     onOpenDetail={() => onOpenExerciseDetail?.(exercise)}
