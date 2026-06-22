@@ -15,6 +15,7 @@ import type { ChatAttachment } from '@/hooks/useChat';
 import { useAuth } from '@/hooks/useAuth';
 import { uploadChatFile } from '@/lib/storage';
 import { ChatAttachmentDisplay } from '@/components/chat/ChatAttachmentDisplay';
+import { useTranslation } from 'react-i18next';
 
 function formatMessageDate(iso: string): string {
   const d = parseISO(iso);
@@ -37,6 +38,7 @@ function fileIcon(file: File) {
 }
 
 export default function CoachMobileAthleteThreadPage() {
+  const { t } = useTranslation();
   const { athleteId } = useParams<{ athleteId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -132,9 +134,9 @@ export default function CoachMobileAthleteThreadPage() {
           <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
             <MessageCircle className="h-7 w-7 text-primary" />
           </div>
-          <h2 className="text-base font-semibold mb-1">Athlete not connected</h2>
+          <h2 className="text-base font-semibold mb-1">{t('coachMobile.messages.notConnected')}</h2>
           <p className="text-sm text-muted-foreground">
-            The athlete needs to log in to the athlete app before you can message them.
+            {t('coachMobile.messages.notConnectedDesc')}
           </p>
         </div>
       </div>
@@ -150,7 +152,7 @@ export default function CoachMobileAthleteThreadPage() {
         </Button>
         <div>
           <p className="text-sm font-semibold leading-tight">{athleteName}</p>
-          <p className="text-xs text-muted-foreground">Athlete</p>
+          <p className="text-xs text-muted-foreground">{t('coachMobile.messages.athleteLabel')}</p>
         </div>
       </div>
 
@@ -164,7 +166,7 @@ export default function CoachMobileAthleteThreadPage() {
         {!loading && messages.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center px-4">
             <MessageCircle className="h-8 w-8 text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground">No messages yet. Start the conversation!</p>
+            <p className="text-sm text-muted-foreground">{t('coachMobile.messages.noMessages')}</p>
           </div>
         )}
         {grouped.map(({ day, msgs }) => (
@@ -276,7 +278,7 @@ export default function CoachMobileAthleteThreadPage() {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={`Message ${athleteName}...`}
+              placeholder={t('coachMobile.messages.messagePlaceholder', { name: athleteName })}
               rows={1}
               className="flex-1 resize-none min-h-[40px] max-h-[120px] text-sm py-2"
             />
@@ -296,10 +298,10 @@ export default function CoachMobileAthleteThreadPage() {
             <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
-                Messaging is disabled for {athleteName}
+                {t('coachMobile.messages.messagingDisabled', { name: athleteName })}
               </p>
               <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-                Enable it in the athlete's Settings tab so messages reach them.
+                {t('coachMobile.messages.messagingDisabledDesc')}
               </p>
             </div>
           </div>

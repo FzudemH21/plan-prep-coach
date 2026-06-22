@@ -293,5 +293,64 @@
       "desc": "Your athlete account is no longer linked to a coach. Please contact your coach to receive a new invite."
     },
     "signOut": "Sign out"
+  },
+  "coachMobile": {
+    "nav": {
+      "athletes": "Athletes",
+      "messages": "Messages",
+      "profile": "Profile",
+      "activity": "Activity"
+    },
+    "athletes": {
+      "heading": "Athletes",
+      "todayDate": "Today, {{date}}",
+      "connected": "Connected",
+      "pending": "Pending",
+      "total": "Total",
+      "all": "All",
+      "searchPlaceholder": "Search athletes…",
+      "allAthletes": "All athletes ({{count}})",
+      "groupLabel": "{{name}} ({{count}})",
+      "noAthletes": "No athletes yet",
+      "restDay": "Rest day",
+      "invitePending": "Invite pending",
+      "notInvited": "Not invited yet",
+      "ill": "Ill",
+      "pain": "Pain"
+    },
+    "profile": {
+      "heading": "Profile",
+      "switchToDesktop": "Switch to Desktop App",
+      "switchToDesktopDesc": "Open the full planning wizard",
+      "signOut": "Sign out"
+    },
+    "messages": {
+      "heading": "Messages",
+      "noConnectedAthletes": "No connected athletes",
+      "noConnectedDesc": "Once an athlete connects via the athlete app, you can message them here.",
+      "athleteLabel": "Athlete",
+      "noMessages": "No messages yet. Start the conversation!",
+      "messagePlaceholder": "Message {{name}}...",
+      "notConnected": "Athlete not connected",
+      "notConnectedDesc": "The athlete needs to log in to the athlete app before you can message them.",
+      "messagingDisabled": "Messaging is disabled for {{name}}",
+      "messagingDisabledDesc": "Enable it in the athlete's Settings tab so messages reach them."
+    },
+    "notifications": {
+      "heading": "Activity",
+      "markAllRead": "Mark all read",
+      "noActivity": "No activity in the last 7 days."
+    },
+    "training": {
+      "heading": "Today's Training",
+      "noAthletes": "No connected athletes yet. Invite athletes from the Athlete Database on desktop.",
+      "trainingSection": "Training ({{count}})",
+      "restDaySection": "Rest day ({{count}})",
+      "sessions_one": "{{count}} session",
+      "sessions_other": "{{count}} sessions",
+      "exercises_one": "{{count}} exercise",
+      "exercises_other": "{{count}} exercises",
+      "restDay": "Rest day"
+    }
   }
 }

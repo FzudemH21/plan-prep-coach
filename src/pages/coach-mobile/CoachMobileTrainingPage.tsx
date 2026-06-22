@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { useAthletes } from '@/hooks/useAthletes';
 import type { AthleteScheduleEntry } from '@/hooks/useAthleteApp';
+import { useTranslation } from 'react-i18next';
 
 const PALETTE = [
   'bg-blue-500','bg-emerald-500','bg-violet-500',
@@ -25,6 +26,7 @@ interface DayEntry {
 }
 
 export default function CoachMobileTrainingPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { connections } = useAthleteConnections();
   const { athletes } = useAthletes();
@@ -86,20 +88,20 @@ export default function CoachMobileTrainingPage() {
       {/* Header */}
       <div className="px-4 pt-5 pb-4">
         <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-1">
-          Today's Training
+          {t('coachMobile.training.heading')}
         </p>
         <h1 className="text-2xl font-bold">{todayLabel}</h1>
       </div>
 
       {loading ? (
         <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-          Loading…
+          {t('common.loading')}
         </div>
       ) : dayEntries.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 px-8 text-center">
           <Dumbbell className="h-10 w-10 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            No connected athletes yet. Invite athletes from the Athlete Database on desktop.
+            {t('coachMobile.training.noAthletes')}
           </p>
         </div>
       ) : (
@@ -109,7 +111,7 @@ export default function CoachMobileTrainingPage() {
           {training.length > 0 && (
             <section className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Training ({training.length})
+                {t('coachMobile.training.trainingSection', { count: training.length })}
               </p>
               {training.map(({ athleteLocalId, athleteName, entry }) => {
                 const bg = avatarColor(athleteName);
@@ -126,8 +128,8 @@ export default function CoachMobileTrainingPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate">{athleteName}</p>
                       <p className="text-xs text-muted-foreground">
-                        {entry!.sessions.length} session{entry!.sessions.length !== 1 ? 's' : ''} · {' '}
-                        {entry!.sessions.reduce((n, s) => n + s.exerciseCount, 0)} exercises
+                        {t('coachMobile.training.sessions', { count: entry!.sessions.length })} · {' '}
+                        {t('coachMobile.training.exercises', { count: entry!.sessions.reduce((n, s) => n + s.exerciseCount, 0) })}
                       </p>
                     </div>
                     <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -141,7 +143,7 @@ export default function CoachMobileTrainingPage() {
           {rest.length > 0 && (
             <section className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Rest day ({rest.length})
+                {t('coachMobile.training.restDaySection', { count: rest.length })}
               </p>
               {rest.map(({ athleteLocalId, athleteName }) => {
                 const bg = avatarColor(athleteName);
@@ -157,7 +159,7 @@ export default function CoachMobileTrainingPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-muted-foreground truncate">{athleteName}</p>
-                      <p className="text-xs text-muted-foreground">Rest day</p>
+                      <p className="text-xs text-muted-foreground">{t('coachMobile.training.restDay')}</p>
                     </div>
                     <ChevronRight className="h-4 w-4 text-muted-foreground/50 shrink-0" />
                   </button>

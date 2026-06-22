@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import type { FeedItem } from '@/hooks/useCoachActivityFeed';
 import type { AthleteScheduleEntry } from '@/hooks/useAthleteApp';
+import { useTranslation } from 'react-i18next';
 
 function FeedIcon({ item }: { item: FeedItem }) {
   if (item.flag === 'illness' || item.flag === 'low_wellness') {
@@ -47,6 +48,7 @@ interface Props {
 }
 
 export function CoachNotificationSheet({ open, onClose, onMarkAllRead, onMarkItemRead, items, loading, readIds }: Props) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const handleItemClick = async (item: FeedItem) => {
@@ -112,7 +114,7 @@ export function CoachNotificationSheet({ open, onClose, onMarkAllRead, onMarkIte
         <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b">
           <div className="flex items-center gap-2 text-base font-semibold">
             <Bell className="h-4 w-4" />
-            Activity
+            {t('coachMobile.notifications.heading')}
           </div>
           <div className="flex items-center gap-1">
             {hasUnread && (
@@ -122,7 +124,7 @@ export function CoachNotificationSheet({ open, onClose, onMarkAllRead, onMarkIte
                 className="text-xs text-muted-foreground h-7 px-2"
                 onClick={onMarkAllRead}
               >
-                Mark all read
+                {t('coachMobile.notifications.markAllRead')}
               </Button>
             )}
             <button
@@ -145,7 +147,7 @@ export function CoachNotificationSheet({ open, onClose, onMarkAllRead, onMarkIte
           {!loading && items.length === 0 && (
             <div className="flex flex-col items-center justify-center py-14 text-center px-4">
               <Bell className="h-8 w-8 text-muted-foreground mb-3" />
-              <p className="text-sm text-muted-foreground">No activity in the last 7 days.</p>
+              <p className="text-sm text-muted-foreground">{t('coachMobile.notifications.noActivity')}</p>
             </div>
           )}
 

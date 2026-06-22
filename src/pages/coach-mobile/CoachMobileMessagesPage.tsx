@@ -5,8 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { useUnreadCounts } from '@/hooks/useChat';
+import { useTranslation } from 'react-i18next';
 
 export default function CoachMobileMessagesPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { connections, loading: connLoading } = useAthleteConnections();
 
@@ -29,16 +31,16 @@ export default function CoachMobileMessagesPage() {
 
   return (
     <div className="px-4 py-4">
-      <h1 className="text-lg font-semibold mb-4">Messages</h1>
+      <h1 className="text-lg font-semibold mb-4">{t('coachMobile.messages.heading')}</h1>
 
       {connected.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
             <MessageCircle className="h-7 w-7 text-primary" />
           </div>
-          <p className="text-base font-semibold mb-1">No connected athletes</p>
+          <p className="text-base font-semibold mb-1">{t('coachMobile.messages.noConnectedAthletes')}</p>
           <p className="text-sm text-muted-foreground">
-            Once an athlete connects via the athlete app, you can message them here.
+            {t('coachMobile.messages.noConnectedDesc')}
           </p>
         </div>
       )}

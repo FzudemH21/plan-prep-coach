@@ -3,8 +3,10 @@ import { Monitor, LogOut, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCoachProfile } from '@/hooks/useCoachProfile';
 import { supabase } from '@/lib/supabase';
+import { useTranslation } from 'react-i18next';
 
 export default function CoachMobileProfilePage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { profile } = useCoachProfile();
@@ -21,7 +23,7 @@ export default function CoachMobileProfilePage() {
     <div className="flex flex-col h-full overflow-y-auto">
       {/* Header */}
       <div className="px-4 pt-5 pb-4">
-        <h1 className="text-2xl font-bold">Profile</h1>
+        <h1 className="text-2xl font-bold">{t('coachMobile.profile.heading')}</h1>
       </div>
 
       {/* Avatar + name */}
@@ -53,8 +55,8 @@ export default function CoachMobileProfilePage() {
             <Monitor className="h-4 w-4 text-blue-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium">Switch to Desktop App</p>
-            <p className="text-xs text-muted-foreground">Open the full planning wizard</p>
+            <p className="text-sm font-medium">{t('coachMobile.profile.switchToDesktop')}</p>
+            <p className="text-xs text-muted-foreground">{t('coachMobile.profile.switchToDesktopDesc')}</p>
           </div>
           <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
         </button>
@@ -68,7 +70,7 @@ export default function CoachMobileProfilePage() {
             <LogOut className="h-4 w-4 text-red-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-destructive">Sign out</p>
+            <p className="text-sm font-medium text-destructive">{t('coachMobile.profile.signOut')}</p>
           </div>
         </button>
       </div>

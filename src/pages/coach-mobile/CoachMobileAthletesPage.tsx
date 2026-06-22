@@ -8,6 +8,7 @@ import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { supabase } from '@/lib/supabase';
 import { wellnessComposite, type AthleteCheckin } from '@/hooks/useAthleteCheckins';
 import { DEFAULT_MONITORING_CONFIG } from '@/types/athlete';
+import { useTranslation } from 'react-i18next';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ function fromCheckinRow(r: Record<string, unknown>): AthleteCheckin {
 // ── component ─────────────────────────────────────────────────────────────────
 
 export default function CoachMobileAthletesPage() {
+  const { t } = useTranslation();
   const navigate  = useNavigate();
   const { athletes, groups, isLoading } = useAthletes();
   const { connections } = useAthleteConnections();
@@ -136,17 +138,17 @@ export default function CoachMobileAthletesPage() {
       {/* Header */}
       <div className="px-4 pt-5 pb-3">
         <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-1">
-          Today, {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          {t('coachMobile.athletes.todayDate', { date: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) })}
         </p>
-        <h1 className="text-2xl font-bold">Athletes</h1>
+        <h1 className="text-2xl font-bold">{t('coachMobile.athletes.heading')}</h1>
       </div>
 
       {/* Stats */}
       <div className="px-4 pb-3 flex gap-2">
         {[
-          { label: 'Connected', value: connected, emoji: '💪' },
-          { label: 'Pending',   value: pending,   emoji: '⏳' },
-          { label: 'Total',     value: active.length, emoji: '👥' },
+          { label: t('coachMobile.athletes.connected'), value: connected, emoji: '💪' },
+          { label: t('coachMobile.athletes.pending'),   value: pending,   emoji: '⏳' },
+          { label: t('coachMobile.athletes.total'),     value: active.length, emoji: '👥' },
         ].map(({ label, value, emoji }) => (
           <div
             key={label}
@@ -170,7 +172,7 @@ export default function CoachMobileAthletesPage() {
                 : 'bg-background text-muted-foreground hover:text-foreground',
             )}
           >
-            All
+            {t('coachMobile.athletes.all')}
           </button>
           {groups.map(g => (
             <button
@@ -195,7 +197,7 @@ export default function CoachMobileAthletesPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             className="pl-9 rounded-xl bg-muted border-0 h-10"
-            placeholder="Search athletes…"
+            placeholder={t('coachMobile.athletes.searchPlaceholder')}
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -214,19 +216,19 @@ export default function CoachMobileAthletesPage() {
       <div className="px-4 pb-1">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
           {selectedGroup
-            ? `${groups.find(g => g.id === selectedGroup)?.name ?? 'Group'} (${displayed.length})`
-            : `All athletes (${displayed.length})`}
+            ? t('coachMobile.athletes.groupLabel', { name: groups.find(g => g.id === selectedGroup)?.name ?? 'Group', count: displayed.length })
+            : t('coachMobile.athletes.allAthletes', { count: displayed.length })}
         </p>
       </div>
 
       {/* List */}
       <div className="flex-1 px-4 divide-y divide-border">
         {isLoading ? (
-          <div className="py-12 text-center text-sm text-muted-foreground">Loading…</div>
+          <div className="py-12 text-center text-sm text-muted-foreground">{t('common.loading')}</div>
         ) : displayed.length === 0 ? (
           <div className="py-12 text-center space-y-2">
             <UserPlus className="h-8 w-8 text-muted-foreground mx-auto" />
-            <p className="text-sm text-muted-foreground">No athletes yet</p>
+            <p className="text-sm text-muted-foreground">{t('coachMobile.athletes.noAthletes')}</p>
           </div>
         ) : (
           displayed.map(athlete => {
@@ -274,12 +276,12 @@ export default function CoachMobileAthletesPage() {
                     <p className="text-sm font-semibold truncate">{fullName}</p>
                     {showIllness && (
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 shrink-0">
-                        Ill
+                        {t('coachMobile.athletes.ill')}
                       </span>
                     )}
                     {showPain && !showIllness && (
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">
-                        Pain
+                        {t('coachMobile.athletes.pain')}
                       </span>
                     )}
                   </div>
@@ -293,11 +295,11 @@ export default function CoachMobileAthletesPage() {
                     ) : isConnected ? (
                       <>
                         <BedDouble className="h-3 w-3 text-muted-foreground/50 shrink-0" />
-                        <span className="text-xs text-muted-foreground/50">Rest day</span>
+                        <span className="text-xs text-muted-foreground/50">{t('coachMobile.athletes.restDay')}</span>
                       </>
                     ) : (
                       <span className="text-xs text-muted-foreground">
-                        {isPending ? 'Invite pending' : 'Not invited yet'}
+                        {isPending ? t('coachMobile.athletes.invitePending') : t('coachMobile.athletes.notInvited')}
                       </span>
                     )}
                   </div>

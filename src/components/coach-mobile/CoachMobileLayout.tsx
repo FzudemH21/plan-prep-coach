@@ -7,17 +7,19 @@ import { useUnreadCounts } from '@/hooks/useChat';
 import { useCoachActivityFeed } from '@/hooks/useCoachActivityFeed';
 import { CoachNotificationSheet } from '@/components/coach-mobile/CoachNotificationSheet';
 import { useMemo, useState } from 'react';
-
-const NAV = [
-  { label: 'Athletes', icon: Users, path: '/coach-mobile/athletes' },
-  { label: 'Messages', icon: MessageCircle, path: '/coach-mobile/messages' },
-  { label: 'Profile', icon: User, path: '/coach-mobile/profile' },
-];
+import { useTranslation } from 'react-i18next';
 
 export function CoachMobileLayout() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { profile } = useCoachProfile();
+
+  const NAV = [
+    { label: t('coachMobile.nav.athletes'), icon: Users, path: '/coach-mobile/athletes' },
+    { label: t('coachMobile.nav.messages'), icon: MessageCircle, path: '/coach-mobile/messages' },
+    { label: t('coachMobile.nav.profile'), icon: User, path: '/coach-mobile/profile' },
+  ];
   const { connections } = useAthleteConnections();
 
   const connectionIds = useMemo(
@@ -53,7 +55,7 @@ export function CoachMobileLayout() {
         <button
           onClick={handleBellClick}
           className="relative w-8 h-8 flex items-center justify-center rounded-full hover:bg-accent text-muted-foreground hover:text-foreground shrink-0"
-          aria-label="Activity"
+          aria-label={t('coachMobile.nav.activity')}
         >
           <Bell className="h-5 w-5" />
           {unseenCount > 0 && (

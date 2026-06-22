@@ -293,5 +293,64 @@
       "desc": "Dein Athleten-Konto ist keinem Coach mehr zugeordnet. Bitte kontaktiere deinen Coach für eine neue Einladung."
     },
     "signOut": "Abmelden"
+  },
+  "coachMobile": {
+    "nav": {
+      "athletes": "Athleten",
+      "messages": "Nachrichten",
+      "profile": "Profil",
+      "activity": "Aktivität"
+    },
+    "athletes": {
+      "heading": "Athleten",
+      "todayDate": "Heute, {{date}}",
+      "connected": "Verbunden",
+      "pending": "Ausstehend",
+      "total": "Gesamt",
+      "all": "Alle",
+      "searchPlaceholder": "Athleten suchen…",
+      "allAthletes": "Alle Athleten ({{count}})",
+      "groupLabel": "{{name}} ({{count}})",
+      "noAthletes": "Noch keine Athleten",
+      "restDay": "Ruhetag",
+      "invitePending": "Einladung ausstehend",
+      "notInvited": "Noch nicht eingeladen",
+      "ill": "Krank",
+      "pain": "Schmerz"
+    },
+    "profile": {
+      "heading": "Profil",
+      "switchToDesktop": "Zur Desktop-App wechseln",
+      "switchToDesktopDesc": "Den vollständigen Planungsassistenten öffnen",
+      "signOut": "Abmelden"
+    },
+    "messages": {
+      "heading": "Nachrichten",
+      "noConnectedAthletes": "Keine verbundenen Athleten",
+      "noConnectedDesc": "Sobald sich ein Athlet über die Athleten-App verbindet, kannst du hier mit ihm schreiben.",
+      "athleteLabel": "Athlet",
+      "noMessages": "Noch keine Nachrichten. Starte das Gespräch!",
+      "messagePlaceholder": "Nachricht an {{name}}...",
+      "notConnected": "Athlet nicht verbunden",
+      "notConnectedDesc": "Der Athlet muss sich in der Athleten-App anmelden, bevor du ihm schreiben kannst.",
+      "messagingDisabled": "Nachrichtenfunktion für {{name}} deaktiviert",
+      "messagingDisabledDesc": "Aktiviere sie im Einstellungen-Tab des Athleten, damit Nachrichten ankommen."
+    },
+    "notifications": {
+      "heading": "Aktivität",
+      "markAllRead": "Alle als gelesen markieren",
+      "noActivity": "Keine Aktivität in den letzten 7 Tagen."
+    },
+    "training": {
+      "heading": "Heutiges Training",
+      "noAthletes": "Noch keine verbundenen Athleten. Lade Athleten über die Athleten-Datenbank auf dem Desktop ein.",
+      "trainingSection": "Training ({{count}})",
+      "restDaySection": "Ruhetag ({{count}})",
+      "sessions_one": "{{count}} Einheit",
+      "sessions_other": "{{count}} Einheiten",
+      "exercises_one": "{{count}} Übung",
+      "exercises_other": "{{count}} Übungen",
+      "restDay": "Ruhetag"
+    }
   }
 }
