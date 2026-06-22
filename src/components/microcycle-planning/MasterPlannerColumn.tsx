@@ -1257,6 +1257,7 @@ export function MasterPlannerColumn({
                                     <Button
                                       variant="ghost"
                                       size="sm"
+                                      tabIndex={-1}
                                       className="h-4 w-4 p-0 shrink-0 mt-0.5"
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -1278,6 +1279,7 @@ export function MasterPlannerColumn({
                                           </Badge>
                                         )}
                                         <button
+                                          tabIndex={-1}
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             onOpenExerciseDetail?.(exercise);
@@ -1293,6 +1295,7 @@ export function MasterPlannerColumn({
                                               <Button
                                                 variant="ghost"
                                                 size="sm"
+                                                tabIndex={-1}
                                                 className="h-4 w-4 p-0"
                                                 onClick={(e) => {
                                                   e.stopPropagation();
@@ -1307,6 +1310,7 @@ export function MasterPlannerColumn({
                                               <Button
                                                 variant="ghost"
                                                 size="sm"
+                                                tabIndex={-1}
                                                 className="h-4 w-4 p-0"
                                                 onClick={(e) => {
                                                   e.stopPropagation();
@@ -1322,7 +1326,7 @@ export function MasterPlannerColumn({
                                         {/* Dropdown menu for duplicate/delete */}
                                         <DropdownMenu>
                                           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                            <Button variant="ghost" size="sm" className="h-4 w-4 p-0 shrink-0">
+                                            <Button variant="ghost" size="sm" tabIndex={-1} className="h-4 w-4 p-0 shrink-0">
                                               <MoreVertical className="h-3 w-3" />
                                             </Button>
                                           </DropdownMenuTrigger>
