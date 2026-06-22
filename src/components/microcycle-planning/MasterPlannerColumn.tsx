@@ -251,9 +251,14 @@ const EditableParamInput = memo(({
   const actualParamName = setIndex ? `${paramName}_set${setIndex}` : paramName;
   
   const handleBlur = useCallback(() => {
-    const finalValue = paramType === 'number' && localValue !== '' 
-      ? Number(localValue) 
+    const finalValue = paramType === 'number' && localValue !== ''
+      ? Number(localValue)
       : localValue;
+    // Skip if value hasn't changed — prevents spurious writes that corrupt storedParams
+    const propComparable = paramType === 'number' && currentValue !== undefined && currentValue !== ''
+      ? Number(currentValue)
+      : (currentValue ?? '');
+    if (String(finalValue) === String(propComparable)) return;
     onParameterChange?.(
       dayDateString,
       exercise.sessionIndex,
@@ -262,7 +267,7 @@ const EditableParamInput = memo(({
       actualParamName,
       finalValue
     );
-  }, [dayDateString, exercise.sessionIndex, exercise.methodId, exercise.categoryName, actualParamName, paramType, localValue, onParameterChange]);
+  }, [dayDateString, exercise.sessionIndex, exercise.methodId, exercise.categoryName, actualParamName, paramType, localValue, currentValue, onParameterChange]);
 
   const handleSelectChange = useCallback((value: string) => {
     setLocalValue(value);
@@ -677,19 +682,21 @@ export function MasterPlannerColumn({
       ? getModuloSessionIndex(rawChronologicalIndex, sessionCount)
       : rawChronologicalIndex;
     
-    // UPDATED: Try chronological session index FIRST for split methods,
-    // then fall back to session 0 for non-split methods
-    const storedParams = 
-      microcycleParams?.[fullMethodKey]?.[chronologicalSessionIndex] ||
-      microcycleParams?.[normalizedFullMethodKey]?.[chronologicalSessionIndex] ||
-      microcycleParams?.[exercise.methodId]?.[chronologicalSessionIndex] ||
-      microcycleParams?.[normalizedMethodId]?.[chronologicalSessionIndex] ||
-      // Fallback to session 0 for non-split methods
-      microcycleParams?.[fullMethodKey]?.[0] ||
-      microcycleParams?.[normalizedFullMethodKey]?.[0] ||
-      microcycleParams?.[exercise.methodId]?.[0] ||
-      microcycleParams?.[normalizedMethodId]?.[0] ||
-      {};
+    // Merge ALL matching key-format paths so base params (from Periodization Table,
+    // stored under exercise.methodId) are always visible even after per-set edits
+    // are stored under fullMethodKey. More specific entries spread last and win.
+    const storedParams = {
+      // Base session 0 – all key formats (less specific first)
+      ...(microcycleParams?.[exercise.methodId]?.[0] || {}),
+      ...(microcycleParams?.[normalizedMethodId]?.[0] || {}),
+      ...(microcycleParams?.[fullMethodKey]?.[0] || {}),
+      ...(microcycleParams?.[normalizedFullMethodKey]?.[0] || {}),
+      // Chronological session overrides – all key formats (wins over session 0)
+      ...(microcycleParams?.[exercise.methodId]?.[chronologicalSessionIndex] || {}),
+      ...(microcycleParams?.[normalizedMethodId]?.[chronologicalSessionIndex] || {}),
+      ...(microcycleParams?.[fullMethodKey]?.[chronologicalSessionIndex] || {}),
+      ...(microcycleParams?.[normalizedFullMethodKey]?.[chronologicalSessionIndex] || {}),
+    } as Record<string, string | number>;
 
     const methodParts = (exercise.methodId || '').split(' - ');
     const methodMain = methodParts[0] || '';
