@@ -924,11 +924,7 @@ export function MasterPlannerColumn({
                           <TableCell key={ce.parameterName} className="py-0 px-1 min-w-[70px]">
                             {computed !== null ? (
                               <span className="text-[11px] font-medium tabular-nums px-1">{computed}</span>
-                            ) : (
-                              <Badge variant="outline" className="text-[10px] text-muted-foreground border-border/50 px-1">
-                                Auto
-                              </Badge>
-                            )}
+                            ) : null}
                           </TableCell>
                         );
                       })}
