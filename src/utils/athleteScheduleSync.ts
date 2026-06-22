@@ -86,6 +86,9 @@ export interface ExerciseSummary {
   methodKey?: string;
   plannedSets?: number;
   plannedParams?: Record<string, string | number>;  // flat planned params (Reps_set1, etc.)
+  /** Formula-auto-computed values snapshotted at assign time (same key format as plannedParams).
+   *  Serves as the restore target when the coach overrides a param on mobile. */
+  formulaComputedParams?: Record<string, string | number>;
   visibleParams?: string[];  // param names the coach marked showInAthleteApp
   restParamName?: string;    // name of the rest/pause parameter for this exercise's method
   /** True when the coach ticked "Each side" — athlete performs the exercise on each side separately */
@@ -377,6 +380,7 @@ export async function syncAthleteSchedule(
   function getPlannedParams(ex: ExerciseEntry): {
     plannedSets: number | undefined;
     plannedParams: Record<string, string | number> | undefined;
+    formulaComputedParams: Record<string, string | number> | undefined;
     visibleParams: string[] | undefined;
     restParamName: string | undefined;
   } {
@@ -396,6 +400,7 @@ export async function syncAthleteSchedule(
         return {
           plannedSets: plannedSets && !isNaN(plannedSets) ? plannedSets : undefined,
           plannedParams: adhocParams,
+          formulaComputedParams: undefined,
           visibleParams: visibleParams && visibleParams.length > 0 ? visibleParams : undefined,
           restParamName,
         };
@@ -408,15 +413,16 @@ export async function syncAthleteSchedule(
       return {
         plannedSets: undefined,
         plannedParams: undefined,
+        formulaComputedParams: undefined,
         visibleParams: vp && vp.length > 0 ? vp : undefined,
         restParamName,
       };
     }
 
-    if (!paramValues) return { plannedSets: undefined, plannedParams: undefined, visibleParams: undefined, restParamName: undefined };
+    if (!paramValues) return { plannedSets: undefined, plannedParams: undefined, formulaComputedParams: undefined, visibleParams: undefined, restParamName: undefined };
 
     const meta = mesoByDate.get(ex.dayDate);
-    if (!meta) return { plannedSets: undefined, plannedParams: undefined, visibleParams: undefined, restParamName: undefined };
+    if (!meta) return { plannedSets: undefined, plannedParams: undefined, formulaComputedParams: undefined, visibleParams: undefined, restParamName: undefined };
 
     const { mesocycleId, microcycleIndex } = meta;
     const methodKeyBase = ex.methodId ?? '';
@@ -441,7 +447,7 @@ export async function syncAthleteSchedule(
       {};
 
     if (Object.keys(storedParams).length === 0) {
-      return { plannedSets: undefined, plannedParams: undefined, visibleParams: undefined, restParamName: undefined };
+      return { plannedSets: undefined, plannedParams: undefined, formulaComputedParams: undefined, visibleParams: undefined, restParamName: undefined };
     }
 
     // Extract set count
@@ -511,6 +517,7 @@ export async function syncAthleteSchedule(
       if (methodCalcEntries.length > 0) {
         // Work on a mutable copy to avoid mutating the original paramValues object
         const params: Record<string, string | number> = { ...storedParams };
+        const formulaComputedParams: Record<string, string | number> = {};
 
         for (let setIdx = 0; setIdx < plannedSets; setIdx++) {
           for (const entry of methodCalcEntries) {
@@ -575,7 +582,9 @@ export async function syncAthleteSchedule(
             const result = evaluateFormula(entry.formula, ctx);
             if (result !== null) {
               // Round to nearest 0.5 to match WorkoutExerciseCard display
-              params[paramKey] = Math.round(result * 2) / 2;
+              const rounded = Math.round(result * 2) / 2;
+              params[paramKey] = rounded;
+              formulaComputedParams[paramKey] = rounded;
             }
           }
         }
@@ -583,6 +592,7 @@ export async function syncAthleteSchedule(
         return {
           plannedSets,
           plannedParams: params,
+          formulaComputedParams: Object.keys(formulaComputedParams).length > 0 ? formulaComputedParams : undefined,
           visibleParams,
           restParamName,
         };
@@ -592,6 +602,7 @@ export async function syncAthleteSchedule(
     return {
       plannedSets,
       plannedParams: storedParams,
+      formulaComputedParams: undefined,
       visibleParams,
       restParamName,
     };
@@ -623,7 +634,7 @@ export async function syncAthleteSchedule(
           .filter(ex => ex.dayDate === td.date && ex.sessionIndex === i)
           .sort((a, b) => a.order - b.order)
           .map(ex => {
-            const { plannedSets, plannedParams, visibleParams, restParamName } = getPlannedParams(ex);
+            const { plannedSets, plannedParams, formulaComputedParams, visibleParams, restParamName } = getPlannedParams(ex);
 
             // Section info
             let sectionName: string | undefined;
@@ -675,6 +686,7 @@ export async function syncAthleteSchedule(
               methodKey: ex.methodId,
               plannedSets,
               plannedParams,
+              formulaComputedParams,
               visibleParams,
               restParamName,
               eachSide: ex.eachSide ?? false,

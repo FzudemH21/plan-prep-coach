@@ -73,12 +73,36 @@ function getSetCount(ex: ExerciseSummary): number {
  * "has a value yet", because that causes all other columns to vanish the moment
  * the user fills in the first set of one param.
  */
-function getParamColumns(ex: ExerciseSummary): string[] {
+function hasAnyValue(ex: ExerciseSummary, paramName: string): boolean {
+  if (!ex.plannedParams) return false;
+  return Object.entries(ex.plannedParams).some(([k, v]) => {
+    if (v === undefined || v === null || v === '') return false;
+    return k === paramName || k.startsWith(`${paramName}_set`);
+  });
+}
+
+function getParamColumns(ex: ExerciseSummary, toolboxEntries?: ToolboxEntry[]): string[] {
   const REST_RE = /rest|pause|recovery/i;
 
-  // visibleParams is the explicit source of truth — respect it fully
+  // Build a set of calculated param names for this exercise's method so they're always
+  // shown even when the formula couldn't produce a value (e.g. missing e1RM).
+  const calculatedParams = new Set<string>();
+  if (toolboxEntries && ex.methodKey) {
+    const strippedMethod = ex.methodKey.includes('::') ? ex.methodKey.split('::')[0] : ex.methodKey;
+    for (const entry of toolboxEntries) {
+      if (!entry.isCalculated) continue;
+      const mid = entry.subCategory ? `${entry.category} - ${entry.subCategory}` : entry.category;
+      if (mid === strippedMethod) calculatedParams.add(entry.parameterName);
+    }
+  }
+
+  // visibleParams lists which params the coach configured — but only show columns
+  // that have at least one actual planned value OR are a formula-calculated param.
+  // Toolbox-default params the coach never set values for (e.g. Organization) stay hidden.
   if (ex.visibleParams && ex.visibleParams.length > 0) {
-    return ex.visibleParams.filter(p => p !== ex.restParamName && !REST_RE.test(p));
+    const candidates = ex.visibleParams.filter(p => p !== ex.restParamName && !REST_RE.test(p));
+    const withValues = candidates.filter(p => hasAnyValue(ex, p) || calculatedParams.has(p));
+    if (withValues.length > 0) return withValues;
   }
 
   // Fall back: derive from plannedParams keys (strip _setN suffix)
@@ -1073,6 +1097,7 @@ export default function CoachMobileSessionEditPage() {
     checkSessionLock(connectionId, state.entry.date, session_ref_id, 'coach').then(setSessionLock);
   }, [connectionId, state?.entry?.date, session_ref_id]);
 
+
   // ── Derived sections ───────────────────────────────────────────────────────
   const sections = useMemo(
     () => groupIntoSections(entry?.sessions[sessionIdx]?.exercises ?? []),
@@ -1141,6 +1166,18 @@ export default function CoachMobileSessionEditPage() {
       // Keep the plain key in sync with set 1 so existing code that reads it works
       if (setIdx === 0) params[paramName] = value;
       return { ...ex, plannedParams: params, mobileEdited: true };
+    });
+  }
+
+  function restoreFormulaValue(exId: string, paramName: string, setIdx: number, computed: string | number) {
+    updateExercise(exId, ex => {
+      const params = { ...(ex.plannedParams ?? {}) };
+      const v = String(computed);
+      params[`${paramName}_set${setIdx + 1}`] = v;
+      if (setIdx === 0) params[paramName] = v;
+      // Keep mobileEdited so other manually changed params are still preserved on re-sync.
+      // The restored param now matches formulaComputedParams, so it will be idempotent.
+      return { ...ex, plannedParams: params };
     });
   }
 
@@ -1887,7 +1924,7 @@ export default function CoachMobileSessionEditPage() {
                                         No exercises yet — add one below
                                       </p>
                                     ) : section.exercises.map((ex, exIdx) => {
-                                      const params = getParamColumns(ex);
+                                      const params = getParamColumns(ex, toolboxData?.entries);
                                       const sets = getSetCount(ex);
                                       const hasNotes = exerciseNotesOpen.has(ex.id);
                                       return (
@@ -2022,13 +2059,31 @@ export default function CoachMobileSessionEditPage() {
                                                         {Array.from({ length: sets }, (_, i) => (
                                                           <tr key={i} className={cn('border-b last:border-0', i % 2 === 1 && 'bg-muted/10')}>
                                                             <td className="px-3 py-2 text-xs font-medium text-muted-foreground">{i + 1}</td>
-                                                            {params.map(p => (
-                                                              <td key={p} className="px-2 py-1.5">
-                                                                <input type="text" inputMode="decimal" value={getPlannedValue(ex, p, i)}
-                                                                  onChange={e => setParamValue(ex.id, p, i, e.target.value)}
-                                                                  className="w-16 h-7 text-xs border rounded-md px-2 bg-background focus:outline-none focus:ring-1 focus:ring-primary" />
-                                                              </td>
-                                                            ))}
+                                                            {params.map(p => {
+                                                              const computedKey = `${p}_set${i + 1}`;
+                                                              const computed = ex.formulaComputedParams?.[computedKey];
+                                                              const current = getPlannedValue(ex, p, i);
+                                                              const canRestore = computed !== undefined && computed !== '' && String(computed) !== current;
+                                                              return (
+                                                                <td key={p} className="px-2 py-1.5">
+                                                                  <div className="flex items-center gap-1">
+                                                                    <input type="text" inputMode="decimal" value={current}
+                                                                      onChange={e => setParamValue(ex.id, p, i, e.target.value)}
+                                                                      className="w-16 h-7 text-xs border rounded-md px-2 bg-background focus:outline-none focus:ring-1 focus:ring-primary" />
+                                                                    {canRestore && (
+                                                                      <button
+                                                                        type="button"
+                                                                        title={`Restore to ${computed}`}
+                                                                        onClick={() => restoreFormulaValue(ex.id, p, i, computed)}
+                                                                        className="text-muted-foreground hover:text-primary active:text-primary shrink-0 p-0.5"
+                                                                      >
+                                                                        <RefreshCw className="h-3 w-3" />
+                                                                      </button>
+                                                                    )}
+                                                                  </div>
+                                                                </td>
+                                                              );
+                                                            })}
                                                           </tr>
                                                         ))}
                                                       </tbody>

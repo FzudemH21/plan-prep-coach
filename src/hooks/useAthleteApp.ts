@@ -68,6 +68,9 @@ export interface ExerciseSummary {
   methodKey?: string;
   plannedSets?: number;
   plannedParams?: Record<string, string | number>;
+  /** Formula-auto-computed values snapshotted at assign time (same key format as plannedParams).
+   *  Used as the restore target when the coach hits the RefreshCw icon on mobile. */
+  formulaComputedParams?: Record<string, string | number>;
   visibleParams?: string[];
   restParamName?: string;
   /** True when the coach ticked "Each side" — athlete performs on each side separately */

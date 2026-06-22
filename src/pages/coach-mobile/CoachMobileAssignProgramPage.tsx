@@ -17,7 +17,11 @@ import { useAthletes } from '@/hooks/useAthletes';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { useTrainingPrograms, TrainingProgram } from '@/hooks/useTrainingPrograms';
 import { useToolboxData } from '@/hooks/useToolboxData';
-import { syncAthleteSchedule } from '@/utils/athleteScheduleSync';
+import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
+import { useAuth } from '@/hooks/useAuth';
+import { syncAthleteSchedule, type AthleteFormulaData } from '@/utils/athleteScheduleSync';
+import { epley1RM } from '@/hooks/useExerciseMetrics';
+import { supabase } from '@/lib/supabase';
 import {
   shiftExerciseDates,
   shiftDailyIntensityDates,
@@ -293,10 +297,12 @@ export default function CoachMobileAssignProgramPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const { athletes, createCalendarAssignment, getAthletePerformanceParameters } = useAthletes();
+  const { athletes, createCalendarAssignment, getAthletePerformanceParameters, getAthleteBiometrics, biometricDefinitions } = useAthletes();
   const { connections } = useAthleteConnections();
   const { programs } = useTrainingPrograms();
   const { data: toolboxData } = useToolboxData();
+  const { data: parametersData } = useParametersDataV2();
+  const { user } = useAuth();
 
   const athlete = athletes.find(a => a.id === athleteId);
   const connection = connections.find(c => c.athleteLocalId === athleteId);
@@ -587,6 +593,85 @@ export default function CoachMobileAssignProgramPage() {
       });
 
       if (connection.connectedAt) {
+        // Build athlete formula data so calculated params (e.g. Weight = Intensity × e1RM)
+        // are pre-computed at assign time, matching the desktop assign flow.
+        let athleteFormulaData: AthleteFormulaData | undefined;
+        try {
+          const biometricsById = new Map<string, { name: string; value: number }>();
+          for (const def of biometricDefinitions) {
+            if (def.type !== 'quantitative') continue;
+            const bioEntry = getAthleteBiometrics(athlete.id)
+              .find(b => b.biometricDefinitionId === def.id);
+            if (!bioEntry || bioEntry.values.length === 0) continue;
+            const latest = [...bioEntry.values].sort(
+              (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+            )[0];
+            const num = parseFloat(latest.value);
+            if (!isNaN(num)) biometricsById.set(def.id, { name: def.name, value: num });
+          }
+
+          const perfParamsById = new Map<string, { name: string; value: number }>();
+          for (const pp of getAthletePerformanceParameters(athlete.id)) {
+            if (pp.values.length === 0) continue;
+            const perfDef = parametersData?.parameters.find(p => p.id === pp.athleticismParameterId);
+            if (!perfDef) continue;
+            const latest = [...pp.values].sort(
+              (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+            )[0];
+            const num = parseFloat(latest.value);
+            if (!isNaN(num)) perfParamsById.set(pp.athleticismParameterId, { name: perfDef.name, value: num });
+          }
+
+          const e1RMByExercise = new Map<string, number>();
+          if (user) {
+            type RawSet = { setNumber: number; values: Record<string, string>; completed: boolean };
+            type RawExLog = { exerciseName: string; isCircuit?: boolean; sets?: RawSet[] };
+            const [paramTagResult, logsResult] = await Promise.all([
+              supabase
+                .from('exercise_param_tags')
+                .select('exercise_name, weight_param, reps_param, rir_param')
+                .eq('coach_user_id', user.id),
+              supabase
+                .from('athlete_session_logs')
+                .select('date, sets_logged')
+                .eq('athlete_connection_id', connection.id)
+                .not('completed_at', 'is', null)
+                .order('date', { ascending: false }),
+            ]);
+            const paramTagMap = new Map<string, { weightParam: string; repsParam: string; rirParam?: string }>();
+            for (const row of paramTagResult.data ?? []) {
+              paramTagMap.set((row.exercise_name as string).toLowerCase(), {
+                weightParam: row.weight_param as string,
+                repsParam: row.reps_param as string,
+                rirParam: (row.rir_param as string | null) ?? undefined,
+              });
+            }
+            for (const row of logsResult.data ?? []) {
+              for (const exLog of (row.sets_logged as RawExLog[]) ?? []) {
+                if (exLog.isCircuit) continue;
+                const exNameLower = (exLog.exerciseName ?? '').toLowerCase();
+                if (e1RMByExercise.has(exNameLower)) continue;
+                const tags = paramTagMap.get(exNameLower);
+                if (!tags) continue;
+                let bestE1RM: number | null = null;
+                for (const set of exLog.sets ?? []) {
+                  if (!set.completed) continue;
+                  const w = parseFloat(set.values?.[tags.weightParam] ?? '');
+                  const r = parseFloat(set.values?.[tags.repsParam] ?? '');
+                  if (isNaN(w) || isNaN(r) || w <= 0 || r <= 0) continue;
+                  const rir = tags.rirParam ? parseFloat(set.values?.[tags.rirParam] ?? '0') : 0;
+                  const est = epley1RM(w, r, isNaN(rir) ? 0 : rir);
+                  if (bestE1RM === null || est > bestE1RM) bestE1RM = est;
+                }
+                if (bestE1RM !== null) e1RMByExercise.set(exNameLower, bestE1RM);
+              }
+            }
+          }
+          athleteFormulaData = { e1RMByExercise, biometricsById, perfParamsById };
+        } catch (formulaErr) {
+          console.warn('[assign] formula data build failed, skipping formula pre-computation', formulaErr);
+        }
+
         await syncAthleteSchedule(
           connection.id,
           assignment,
@@ -599,6 +684,7 @@ export default function CoachMobileAssignProgramPage() {
           filteredSupersets,
           undefined,
           undefined,
+          athleteFormulaData,
         );
       }
 

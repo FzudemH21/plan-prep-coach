@@ -422,6 +422,55 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       });
   }, [athlete.id, connectionsLoading, getConnectionForAthlete, calendarDateRange]);
 
+  // When the master planner is active, load the FULL assignment date range into
+  // liveScheduleMap so mobile-created plans (whose editing state has no exercises)
+  // can show session names and counts across all weeks, not just the current window.
+  useEffect(() => {
+    if (viewMode !== 'master') return;
+    if (!editing.selectedAssignment) return;
+    const connection = getConnectionForAthlete(athlete.id);
+    if (!connection || connectionsLoading) return;
+
+    const from = editing.selectedAssignment.startDate.substring(0, 10);
+    const to   = editing.selectedAssignment.endDate.substring(0, 10);
+
+    supabase
+      .from('athlete_schedule')
+      .select('id, date, sessions, intensity')
+      .eq('athlete_connection_id', connection.id)
+      .gte('date', from)
+      .lte('date', to)
+      .then(({ data }) => {
+        if (!data) return;
+        type RawSession = {
+          id: string; name: string; exerciseCount: number; intensity?: string; notes?: string;
+          exercises?: LiveScheduleExercise[];
+        };
+        setLiveScheduleMap(prev => {
+          const next = new Map(prev);
+          (data as Record<string, unknown>[]).forEach(row => {
+            const dateStr = row.date as string;
+            if (clearedDatesRef.current.has(dateStr)) return;
+            const rawSessions = (row.sessions as RawSession[]) ?? [];
+            next.set(dateStr, {
+              rowId: row.id as string,
+              rowIntensity: row.intensity as string | null,
+              sessions: rawSessions.map(s => ({
+                id: s.id,
+                sessionName: s.name,
+                exerciseCount: s.exerciseCount ?? 0,
+                intensity: s.intensity ?? null,
+                notes: s.notes,
+                exercises: (s.exercises ?? []) as LiveScheduleExercise[],
+              })),
+            });
+          });
+          return next;
+        });
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, editing.selectedAssignment?.id, athlete.id, connectionsLoading, getConnectionForAthlete]);
+
   // Realtime subscription — update liveScheduleMap whenever athlete_schedule rows change
   // so desktop reflects mobile coach saves without needing a page reload.
   useEffect(() => {
@@ -1080,6 +1129,41 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       allocatedSubGoals: meso.allocatedSubGoals,
     };
   }, [editing.selectedAssignment]);
+
+  // Calendar days for the master planner — overlay liveScheduleMap session data on top of
+  // allAssignmentDays so mobile-created plans (empty editing state) show the right sessions.
+  const masterPlannerCalendarDays = useMemo(() => {
+    if (viewMode !== 'master') return editing.allAssignmentDays;
+
+    return editing.allAssignmentDays.map(day => {
+      const liveEntry = liveScheduleMap.get(day.dateString);
+      // A day is "explicitly cleared" only when the coach cleared it in this session
+      // AND the assignment is a desktop plan (isMobileCreated=false). For mobile plans
+      // all daySplitStates are 0 by default — those zeros don't mean the day is cleared.
+      const isExplicitlyCleared =
+        selectedAssignmentId !== null &&
+        !editing.isMobileCreated &&
+        editing.daySplitStates[day.dateString] === 0;
+
+      if (liveEntry !== undefined && !isExplicitlyCleared) {
+        return {
+          ...day,
+          sessions: liveEntry.sessions.map((s, idx) => {
+            const editingSession = day.sessions.find(ds => ds.sessionIndex === idx);
+            return {
+              id: s.id,
+              sessionIndex: idx,
+              sessionName: s.sessionName,
+              exercises: editingSession?.exercises ?? [],
+              methods: [...new Set((editingSession?.exercises ?? []).map(e => e.methodId))],
+              sessionIntensity: (s.intensity ?? editingSession?.sessionIntensity) as IntensityLevel | undefined,
+            };
+          }),
+        };
+      }
+      return day;
+    });
+  }, [viewMode, editing.allAssignmentDays, liveScheduleMap, selectedAssignmentId, editing.isMobileCreated, editing.daySplitStates]);
 
   // Query athlete_session_logs for the visible date range whenever the connection or
   // visible window changes. Keyed by session_id = "${date}-${sessionIndex}".
@@ -2335,7 +2419,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                     <SelectTrigger className="w-32 h-8">
                       <SelectValue placeholder="Select Day" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-[200] bg-background border">
                       {DAY_NAMES.map((day, idx) => (
                         <SelectItem key={idx} value={(idx + 1).toString()}>{day}</SelectItem>
                       ))}
@@ -2417,7 +2501,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
               </div>
             ) : (
               <MasterPlannerGrid
-                calendarDays={editing.allAssignmentDays}
+                calendarDays={masterPlannerCalendarDays}
                 selectedDayOfWeek={selectedDayOfWeek}
                 onSessionClick={(dayDate, sessionIndex) => {
                   if (selectedAssignmentId) {
