@@ -951,21 +951,47 @@ export function MasterPlannerColumn({
                       })}
                       {calcEntries.map(ce => {
                         const computed = computeCalcValue(ce, setNumber);
+                        const overrideKey = `${ce.parameterName}_set${setNumber}`;
+                        const storedOverride = storedParams[overrideKey] ?? storedParams[ce.parameterName];
+                        const hasOverride = computed !== null &&
+                          storedOverride !== undefined &&
+                          storedOverride !== '' &&
+                          String(storedOverride) !== String(computed);
+                        const displayValue = (storedOverride !== undefined && storedOverride !== '')
+                          ? storedOverride
+                          : (computed !== null ? computed : undefined);
                         return (
                           <TableCell key={ce.parameterName} className="py-0 px-1 min-w-[70px]">
-                            {computed !== null ? (
-                              <span className="text-[11px] font-medium tabular-nums px-1">{computed}</span>
-                            ) : (
+                            <div className="flex items-center gap-0.5">
                               <EditableParamInput
                                 dayDateString={day.dateString}
                                 exercise={exercise}
                                 paramName={ce.parameterName}
                                 paramType="number"
-                                currentValue={storedParams[`${ce.parameterName}_set${setNumber}`] ?? storedParams[ce.parameterName]}
+                                currentValue={displayValue}
                                 setIndex={setNumber}
                                 onParameterChange={onParameterChange}
                               />
-                            )}
+                              {hasOverride && (
+                                <button
+                                  className="shrink-0 text-primary hover:text-primary/70 p-0.5 rounded"
+                                  title={`Restore calculated value (${computed})`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onParameterChange?.(
+                                      day.dateString,
+                                      exercise.sessionIndex,
+                                      exercise.methodId,
+                                      exercise.categoryName,
+                                      overrideKey,
+                                      computed!
+                                    );
+                                  }}
+                                >
+                                  <RefreshCw className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
                           </TableCell>
                         );
                       })}
