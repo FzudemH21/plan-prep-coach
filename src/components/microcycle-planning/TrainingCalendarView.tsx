@@ -1144,7 +1144,15 @@ export function TrainingCalendarView({
       </Card>
 
       {/* Workout Session Sheet */}
-      {selectedSession && (
+      {selectedSession && (() => {
+        const sessionTd = trainingDays.find(td => td.date === selectedSession.dayDate);
+        const sessionMeso = sessionTd
+          ? (mesocycles.find(m => m.microcycles.some(mc => mc.id === sessionTd.microcycleId)) ?? currentMesocycle)
+          : currentMesocycle;
+        const sessionMcIdx = sessionTd
+          ? Math.max(0, sessionMeso.microcycles.findIndex(mc => mc.id === sessionTd.microcycleId))
+          : 0;
+        return (
         <WorkoutSessionSheet
           isOpen={!!selectedSession}
           onClose={() => {
@@ -1154,8 +1162,8 @@ export function TrainingCalendarView({
           dayDate={selectedSession.dayDate}
           sessionIndex={selectedSession.sessionIndex}
           exercises={selectedSession.exercises}
-          mesocycleId={currentMesocycle.id}
-          microcycleIndex={getMicrocycleIndex(selectedSession.dayDate)}
+          mesocycleId={sessionMeso.id}
+          microcycleIndex={sessionMcIdx}
           parameterValues={parameterValues}
           onSaveParameters={onSaveParameters || (() => {})}
           dailyIntensityData={dailyIntensityData}
@@ -1201,7 +1209,8 @@ export function TrainingCalendarView({
           onOpenAIAssistant={onOpenAIAssistant}
           forceParamRefresh={forceParamRefresh}
         />
-      )}
+        );
+      })()}
 
       {/* Exercise Library Popup for Master Planner "Add Exercise" */}
       <ExerciseLibraryPopup

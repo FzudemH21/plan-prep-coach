@@ -19,6 +19,7 @@ import { getMethodSessionIndex, getModuloSessionIndex } from '@/utils/sessionInd
 import { BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
+import { evaluateFormula, parseNumeric } from '@/utils/formulaEvaluator';
 import { AthletePerformanceParameter } from '@/types/athlete';
 import {
   Table,
@@ -788,6 +789,68 @@ export function MasterPlannerColumn({
         })
       : [];
 
+    const PCT_UNITS_LOCAL = new Set(['%', '%1RM', '%BW', '%maxV', '%maxHR']);
+    const computeCalcValue = (ce: (typeof calcEntries)[0], setNumber: number): number | null => {
+      if (!ce.formula) return null;
+      const ctx: Record<string, number> = {};
+      const methodSiblings = toolboxData
+        ? toolboxData.entries.filter(tp => {
+            const catMatch = methodSub2
+              ? tp.category === methodMain2 && tp.subCategory === methodSub2
+              : tp.category === methodMain2 && (!tp.subCategory || tp.subCategory === '');
+            return catMatch && !tp.isCalculated;
+          })
+        : [];
+      // Primary: resolve by source parameter ID
+      for (const srcId of ce.sourceParameterIds ?? []) {
+        const srcEntry = toolboxData?.entries.find(te => te.id === srcId);
+        if (!srcEntry) continue;
+        const raw = storedParams[`${srcEntry.parameterName}_set${setNumber}`] ?? storedParams[srcEntry.parameterName];
+        if (raw === undefined || raw === '') continue;
+        const unit = (storedParams[`${srcEntry.parameterName}_unit`] as string | undefined)
+          ?? (srcEntry.parameterType === 'quantitative' && srcEntry.options.length > 0 ? srcEntry.options[0] : undefined);
+        let n = parseNumeric(raw);
+        if (!isNaN(n)) {
+          if (unit && PCT_UNITS_LOCAL.has(unit)) n /= 100;
+          ctx[srcEntry.parameterName] = n;
+        }
+      }
+      // Fallback: resolve by parameter name for anything still missing
+      for (const sibling of methodSiblings) {
+        if (ctx[sibling.parameterName] !== undefined) continue;
+        const raw = storedParams[`${sibling.parameterName}_set${setNumber}`] ?? storedParams[sibling.parameterName];
+        if (raw === undefined || raw === '') continue;
+        const unit = (storedParams[`${sibling.parameterName}_unit`] as string | undefined)
+          ?? (sibling.parameterType === 'quantitative' && sibling.options.length > 0 ? sibling.options[0] : undefined);
+        let n = parseNumeric(raw);
+        if (!isNaN(n)) {
+          if (unit && PCT_UNITS_LOCAL.has(unit)) n /= 100;
+          ctx[sibling.parameterName] = n;
+        }
+      }
+      // Athlete data refs (e1RM)
+      for (const ref of ce.athleteDataRefs ?? []) {
+        if (ref === 'e1RM') {
+          const e1rmParam = parametersData?.parameters.find(p => p.name.toLowerCase() === 'e1rm');
+          if (e1rmParam && selectedAthleteId) {
+            const perfEntry = (athletePerformanceParameters ?? []).find(
+              p => p.athleteId === selectedAthleteId && p.athleticismParameterId === e1rmParam.id
+            );
+            if (perfEntry?.values.length) {
+              const sorted = [...perfEntry.values].sort(
+                (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+              );
+              const n = parseFloat(sorted[0].value);
+              if (!isNaN(n)) ctx['e1RM'] = n;
+            }
+          }
+        }
+      }
+      const result = evaluateFormula(ce.formula, ctx);
+      if (result === null) return null;
+      return Math.round(result * 2) / 2;
+    };
+
     return (
       <>
         {/* Hidden parameter badges */}
@@ -855,13 +918,20 @@ export function MasterPlannerColumn({
                           </TableCell>
                         );
                       })}
-                      {calcEntries.map(ce => (
-                        <TableCell key={ce.parameterName} className="py-0 px-1 min-w-[70px]">
-                          <Badge variant="outline" className="text-[10px] text-primary border-primary/50 bg-primary/5 px-1">
-                            Auto
-                          </Badge>
-                        </TableCell>
-                      ))}
+                      {calcEntries.map(ce => {
+                        const computed = computeCalcValue(ce, setNumber);
+                        return (
+                          <TableCell key={ce.parameterName} className="py-0 px-1 min-w-[70px]">
+                            {computed !== null ? (
+                              <span className="text-[11px] font-medium tabular-nums px-1">{computed}</span>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] text-muted-foreground border-border/50 px-1">
+                                Auto
+                              </Badge>
+                            )}
+                          </TableCell>
+                        );
+                      })}
                     </TableRow>
                   );
                 })}
