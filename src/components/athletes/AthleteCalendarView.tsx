@@ -422,6 +422,10 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       });
   }, [athlete.id, connectionsLoading, getConnectionForAthlete, calendarDateRange]);
 
+  // Editing hook — must be declared before any useEffect that references editing in
+  // its dependency array, AND before useAthleteAIContext which references editing.exerciseDistribution.
+  const editing = useAthleteCalendarEditing(selectedAssignmentId, assignments);
+
   // When the master planner is active, load the FULL assignment date range into
   // liveScheduleMap so mobile-created plans (whose editing state has no exercises)
   // can show session names and counts across all weeks, not just the current window.
@@ -541,10 +545,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     ragRetrieve(query).then(setRagContext);
   }, [ragRetrieve, athlete.id]);
 
-  // Editing hook — must be declared before useAthleteAIContext which references editing.exerciseDistribution
-  const editing = useAthleteCalendarEditing(selectedAssignmentId, assignments);
-  // Always-current snapshot of the editing hook's output. Initialized here (after editing
-  // is defined) so it's never in the temporal dead zone. Updated every render so async
+  // Always-current snapshot of the editing hook's output. Updated every render so async
   // callbacks (e.g. buildAthleteFormulaData().then) can read fresh state instead of the
   // stale closure captured when the effect originally ran.
   const latestEditingRef = useRef(editing);
