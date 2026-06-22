@@ -828,9 +828,10 @@ export function MasterPlannerColumn({
           ctx[sibling.parameterName] = n;
         }
       }
-      // Athlete data refs (e1RM)
+      // Athlete data refs: 'e1RM' token, biometric def IDs, or performance param IDs
       for (const ref of ce.athleteDataRefs ?? []) {
         if (ref === 'e1RM') {
+          // Find any performance parameter named 'e1rm' (case-insensitive) as fallback
           const e1rmParam = parametersData?.parameters.find(p => p.name.toLowerCase() === 'e1rm');
           if (e1rmParam && selectedAthleteId) {
             const perfEntry = (athletePerformanceParameters ?? []).find(
@@ -842,6 +843,36 @@ export function MasterPlannerColumn({
               );
               const n = parseFloat(sorted[0].value);
               if (!isNaN(n)) ctx['e1RM'] = n;
+            }
+          }
+        } else {
+          // Try biometric definition ID first
+          const bioDef = biometricDefinitions?.find(d => d.id === ref);
+          if (bioDef) {
+            const bioEntry = athleteBiometrics?.find(
+              ab => ab.athleteId === selectedAthleteId && ab.biometricDefinitionId === ref
+            );
+            if (bioEntry?.values.length) {
+              const sorted = [...bioEntry.values].sort(
+                (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+              );
+              const n = parseFloat(sorted[0].value);
+              if (!isNaN(n)) ctx[bioDef.name] = n;
+            }
+            continue;
+          }
+          // Try performance parameter ID
+          const perfDef = parametersData?.parameters.find(p => p.id === ref);
+          if (perfDef) {
+            const perfEntry = (athletePerformanceParameters ?? []).find(
+              p => p.athleteId === selectedAthleteId && p.athleticismParameterId === ref
+            );
+            if (perfEntry?.values.length) {
+              const sorted = [...perfEntry.values].sort(
+                (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+              );
+              const n = parseFloat(sorted[0].value);
+              if (!isNaN(n)) ctx[perfDef.name] = n;
             }
           }
         }
@@ -924,7 +955,17 @@ export function MasterPlannerColumn({
                           <TableCell key={ce.parameterName} className="py-0 px-1 min-w-[70px]">
                             {computed !== null ? (
                               <span className="text-[11px] font-medium tabular-nums px-1">{computed}</span>
-                            ) : null}
+                            ) : (
+                              <EditableParamInput
+                                dayDateString={day.dateString}
+                                exercise={exercise}
+                                paramName={ce.parameterName}
+                                paramType="number"
+                                currentValue={storedParams[`${ce.parameterName}_set${setNumber}`] ?? storedParams[ce.parameterName]}
+                                setIndex={setNumber}
+                                onParameterChange={onParameterChange}
+                              />
+                            )}
                           </TableCell>
                         );
                       })}
