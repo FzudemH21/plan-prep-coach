@@ -30,6 +30,7 @@ import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianG
 import { useSessionLibrary } from '@/hooks/useSessionLibrary';
 import type { SessionLibraryEntry } from '@/types/sessionLibrary';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 
 // ── Monitoring helpers ─────────────────────────────────────────────────────────
 
@@ -49,20 +50,21 @@ const WELLNESS_FIELD: Record<WellnessKey, keyof AthleteCheckin> = {
   stress: 'wellnessStress', mood: 'wellnessMood',
 };
 
-function fmtMonitoringDate(dateStr: string, todayStr: string): string {
-  if (dateStr === todayStr) return 'Today';
+function fmtMonitoringDate(dateStr: string, todayStr: string, t?: (key: string) => string): string {
+  if (dateStr === todayStr) return t ? t('coachMobile.athleteProfile.today') : 'Today';
   const yesterday = toLocalDateStr(new Date(Date.now() - 86400000));
-  if (dateStr === yesterday) return 'Yesterday';
-  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  if (dateStr === yesterday) return t ? t('coachMobile.athleteProfile.yesterday') : 'Yesterday';
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 function NoteEntry({ note }: { note: AthleteNote }) {
+  const { t } = useTranslation();
   return (
     <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
       <p className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
         <Clock className="h-3 w-3 shrink-0" />
         {format(new Date(note.timestamp), 'MMM d, yyyy · HH:mm')}
-        {note.id === '__migrated__' && <span className="ml-1 italic">(imported)</span>}
+        {note.id === '__migrated__' && <span className="ml-1 italic">{t('coachMobile.athleteProfile.imported')}</span>}
       </p>
       <p className="whitespace-pre-wrap leading-snug">{note.text}</p>
     </div>
@@ -108,6 +110,7 @@ function buildMobilePainDots(painAreas: AthleteCheckin['painAreas']): PainDotInf
 }
 
 function MobileBodyMap({ painAreas }: { painAreas: AthleteCheckin['painAreas'] }) {
+  const { t: tMap } = useTranslation();
   const dots      = buildMobilePainDots(painAreas);
   const frontDots = dots.filter(d => d.view === 'front');
   const backDots  = dots.filter(d => d.view === 'back');
@@ -133,8 +136,8 @@ function MobileBodyMap({ painAreas }: { painAreas: AthleteCheckin['painAreas'] }
 
   return (
     <div className="flex gap-2 pt-1">
-      <HalfMap imgSrc="/bodymap-front.png" viewBox="0 0 193 306" viewDots={frontDots} label="Front" />
-      <HalfMap imgSrc="/bodymap-back.png"  viewBox="0 0 211 317" viewDots={backDots}  label="Back"  />
+      <HalfMap imgSrc="/bodymap-front.png" viewBox="0 0 193 306" viewDots={frontDots} label={tMap('coachMobile.athleteProfile.front')} />
+      <HalfMap imgSrc="/bodymap-back.png"  viewBox="0 0 211 317" viewDots={backDots}  label={tMap('coachMobile.athleteProfile.back')}  />
     </div>
   );
 }
@@ -187,8 +190,9 @@ function WellnessMiniChart({ checkins, days }: { checkins: AthleteCheckin[]; day
     return result;
   }, [checkins, days]);
 
+  const { t: tChart } = useTranslation();
   if (data.filter(d => d.value !== null).length < 2) return (
-    <p className="text-xs text-muted-foreground text-center py-4">Not enough data — needs 2+ check-ins.</p>
+    <p className="text-xs text-muted-foreground text-center py-4">{tChart('coachMobile.athleteProfile.notEnoughData')}</p>
   );
 
   return (
@@ -198,7 +202,7 @@ function WellnessMiniChart({ checkins, days }: { checkins: AthleteCheckin[]; day
         <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
         <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
         <Tooltip
-          formatter={(v: number) => [v != null ? v.toFixed(1) : '—', 'Wellness']}
+          formatter={(v: number) => [v != null ? v.toFixed(1) : '—', tChart('coachMobile.athleteProfile.wellness')]}
           contentStyle={{ fontSize: 10, padding: '4px 8px', borderRadius: 6 }}
           labelStyle={{ fontSize: 10 }}
         />
@@ -221,8 +225,9 @@ function CustomMetricMiniChart({
     }));
   }, [history, days]);
 
+  const { t: tMetric } = useTranslation();
   if (data.length < 2) return (
-    <p className="text-xs text-muted-foreground text-center py-4">Not enough data — needs 2+ entries.</p>
+    <p className="text-xs text-muted-foreground text-center py-4">{tMetric('coachMobile.athleteProfile.notEnoughDataMetric')}</p>
   );
 
   const domainMax = scaleMax ?? undefined;
@@ -376,6 +381,7 @@ function sessionLibraryToSummary(entry: SessionLibraryEntry, order: number): Ses
 type Tab = 'overview' | 'training' | 'progress' | 'settings';
 
 export default function CoachMobileAthleteProfilePage() {
+  const { t } = useTranslation();
   const { athleteId } = useParams<{ athleteId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -962,7 +968,7 @@ export default function CoachMobileAthleteProfilePage() {
   if (!athlete) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-muted-foreground text-sm">
-        Athlete not found.
+        {t('coachMobile.athleteProfile.notFound')}
       </div>
     );
   }
@@ -1021,19 +1027,19 @@ export default function CoachMobileAthleteProfilePage() {
             : 'bg-muted text-muted-foreground'
           )}
         >
-          {isConnected ? <><CheckCircle2 className="h-3 w-3" /> Connected</>
-          : isPending   ? <><Clock className="h-3 w-3" /> Invite pending</>
-          : 'No athlete app'}
+          {isConnected ? <><CheckCircle2 className="h-3 w-3" /> {t('coachMobile.athleteProfile.connection.connected')}</>
+          : isPending   ? <><Clock className="h-3 w-3" /> {t('coachMobile.athleteProfile.connection.invitePending')}</>
+          : t('coachMobile.athleteProfile.connection.noApp')}
         </span>
       </div>
 
       {/* Tabs */}
       <div className="flex border-b px-2 shrink-0">
         {([
-          { key: 'overview',  label: 'Overview'  },
-          { key: 'training',  label: 'Training'  },
-          { key: 'progress',  label: 'Progress'  },
-          { key: 'settings',  label: 'Info'      },
+          { key: 'overview',  label: t('coachMobile.athleteProfile.tabs.overview')  },
+          { key: 'training',  label: t('coachMobile.athleteProfile.tabs.training')  },
+          { key: 'progress',  label: t('coachMobile.athleteProfile.tabs.progress')  },
+          { key: 'settings',  label: t('coachMobile.athleteProfile.tabs.info')      },
         ] as { key: Tab; label: string }[]).map(({ key, label }) => (
           <button
             key={key}
@@ -1059,10 +1065,10 @@ export default function CoachMobileAthleteProfilePage() {
             {connection && !isConnected && (
               <div className="rounded-xl border bg-card p-4 space-y-2">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Athlete App
+                  {t('coachMobile.athleteProfile.athleteApp')}
                 </h3>
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Invite code:</p>
+                  <p className="text-sm text-muted-foreground">{t('coachMobile.athleteProfile.inviteCode')}</p>
                   <div className="flex items-center gap-2">
                     <code className="text-base font-mono font-bold tracking-widest">
                       {connection.inviteCode}
@@ -1085,7 +1091,7 @@ export default function CoachMobileAthleteProfilePage() {
                 <div className="flex items-center justify-between px-0.5">
                   <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
                     <Activity className="h-3.5 w-3.5" />
-                    Monitoring
+                    {t('coachMobile.athleteProfile.monitoring')}
                   </h3>
                   <span className="text-xs text-muted-foreground">
                     {new Date(today + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
@@ -1100,15 +1106,15 @@ export default function CoachMobileAthleteProfilePage() {
                   >
                     {/* Header row — always visible */}
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold">Wellness</span>
+                      <span className="text-sm font-semibold">{t('coachMobile.athleteProfile.wellness')}</span>
                       {checkinsLoading ? (
-                        <span className="text-xs text-muted-foreground">Loading…</span>
+                        <span className="text-xs text-muted-foreground">{t('common.loading')}</span>
                       ) : todayComposite !== null ? (
                         <span className={cn('text-sm font-bold', WELLNESS_TEXT_COLORS[Math.round(todayComposite)])}>
                           {todayComposite.toFixed(1)} / 5
                         </span>
                       ) : !todayCheckin ? (
-                        <span className="text-xs text-muted-foreground">No check-in today</span>
+                        <span className="text-xs text-muted-foreground">{t('coachMobile.athleteProfile.noCheckinToday')}</span>
                       ) : null}
                     </div>
 
@@ -1144,7 +1150,7 @@ export default function CoachMobileAthleteProfilePage() {
                         )}
                         <div className="border-t pt-3 space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs text-muted-foreground font-medium">Trend</span>
+                            <span className="text-xs text-muted-foreground font-medium">{t('coachMobile.athleteProfile.trend')}</span>
                             <DaysSelector selected={wellnessDays} onChange={setWellnessDays} />
                           </div>
                           <WellnessMiniChart checkins={checkins} days={wellnessDays} />
@@ -1153,7 +1159,7 @@ export default function CoachMobileAthleteProfilePage() {
                     )}
 
                     {!checkinsLoading && !todayCheckin && latestCheckin && (
-                      <p className="text-xs text-muted-foreground/60">Last check-in: {fmtMonitoringDate(latestCheckin.date, today)}</p>
+                      <p className="text-xs text-muted-foreground/60">{t('coachMobile.athleteProfile.lastCheckin', { date: fmtMonitoringDate(latestCheckin.date, today) })}</p>
                     )}
                   </div>
                 )}
@@ -1162,16 +1168,16 @@ export default function CoachMobileAthleteProfilePage() {
                 {hasOstrc && (
                   <div className="rounded-xl border bg-card p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold">Pain & Injury</span>
+                      <span className="text-sm font-semibold">{t('coachMobile.athleteProfile.painInjury')}</span>
                       {todayCheckin?.hasPain ? (
                         <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
                           <AlertTriangle className="h-3 w-3" />
-                          {todayCheckin.painAreas.length} area{todayCheckin.painAreas.length !== 1 ? 's' : ''}
+                          {t('coachMobile.athleteProfile.painAreas', { count: todayCheckin.painAreas.length })}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">
                           <CheckCircle2 className="h-3 w-3" />
-                          No pain
+                          {t('coachMobile.athleteProfile.noPain')}
                         </span>
                       )}
                     </div>
@@ -1187,7 +1193,7 @@ export default function CoachMobileAthleteProfilePage() {
                         <div className="flex items-center gap-2">
                           <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
                           <span className="text-sm font-semibold text-red-700">
-                            Illness{todayCheckin.illnessNrs !== null ? ` · ${todayCheckin.illnessNrs}/10` : ''}
+                            {t('coachMobile.athleteProfile.illness')}{todayCheckin.illnessNrs !== null ? ` · ${todayCheckin.illnessNrs}/10` : ''}
                           </span>
                         </div>
                         {(todayCheckin.illnessSymptoms.length > 0 || todayCheckin.illnessSymptomOther) && (
@@ -1202,7 +1208,7 @@ export default function CoachMobileAthleteProfilePage() {
                     ) : (
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                        <span className="text-sm text-muted-foreground">No illness reported</span>
+                        <span className="text-sm text-muted-foreground">{t('coachMobile.athleteProfile.noIllness')}</span>
                       </div>
                     )}
                   </div>
@@ -1233,7 +1239,7 @@ export default function CoachMobileAthleteProfilePage() {
                           </p>
                           {isScale && (
                             <p className="text-[10px] text-muted-foreground/60">
-                              Scale · {block.config.scaleMin}–{block.config.scaleMax}
+                              {t('coachMobile.athleteProfile.scale')} · {block.config.scaleMin}–{block.config.scaleMax}
                             </p>
                           )}
                           {!isScale && block.config.parameterUnit && (
@@ -1256,7 +1262,7 @@ export default function CoachMobileAthleteProfilePage() {
                       {isExpanded && (
                         <div className="border-t pt-3 space-y-2" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center justify-between">
-                            <span className="text-xs text-muted-foreground font-medium">History</span>
+                            <span className="text-xs text-muted-foreground font-medium">{t('coachMobile.athleteProfile.history')}</span>
                             <DaysSelector selected={metricDays} onChange={setMetricDays} />
                           </div>
                           <CustomMetricMiniChart
@@ -1277,7 +1283,7 @@ export default function CoachMobileAthleteProfilePage() {
             <div className="rounded-xl border bg-card p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Notes
+                  {t('coachMobile.athleteProfile.notes')}
                 </h3>
                 <button
                   onClick={() => { setNotesInput(''); setEditingNotes(true); }}
@@ -1289,7 +1295,7 @@ export default function CoachMobileAthleteProfilePage() {
               </div>
 
               {allNotes.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">No notes yet.</p>
+                <p className="text-sm text-muted-foreground italic">{t('coachMobile.athleteProfile.noNotes')}</p>
               ) : (
                 <>
                   <NoteEntry note={allNotes[0]} />
@@ -1300,7 +1306,7 @@ export default function CoachMobileAthleteProfilePage() {
                       className="flex items-center gap-1 text-xs text-primary active:opacity-60 transition-opacity"
                     >
                       {notesExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                      {notesExpanded ? 'Hide past notes' : `Show ${allNotes.length - 1} more`}
+                      {notesExpanded ? t('coachMobile.athleteProfile.hidePastNotes') : t('coachMobile.athleteProfile.showMore', { count: allNotes.length - 1 })}
                     </button>
                   )}
 
@@ -1317,20 +1323,20 @@ export default function CoachMobileAthleteProfilePage() {
             <Dialog open={editingNotes} onOpenChange={o => { if (!o) setEditingNotes(false); }}>
               <DialogContent className="w-[calc(100vw-32px)] max-w-[380px] rounded-2xl">
                 <DialogHeader>
-                  <DialogTitle>Add note for {fullName}</DialogTitle>
+                  <DialogTitle>{t('coachMobile.athleteProfile.addNoteFor', { name: fullName })}</DialogTitle>
                 </DialogHeader>
                 <div className="py-2">
                   <Textarea
                     value={notesInput}
                     onChange={e => setNotesInput(e.target.value)}
-                    placeholder="Add a note…"
+                    placeholder={t('coachMobile.athleteProfile.notePlaceholder')}
                     className="min-h-[140px] resize-none"
                     autoFocus
                   />
                 </div>
                 <DialogFooter className="gap-2">
-                  <Button variant="outline" onClick={() => setEditingNotes(false)}>Cancel</Button>
-                  <Button onClick={handleAddNote} disabled={!notesInput.trim()}>Save note</Button>
+                  <Button variant="outline" onClick={() => setEditingNotes(false)}>{t('common.cancel')}</Button>
+                  <Button onClick={handleAddNote} disabled={!notesInput.trim()}>{t('coachMobile.athleteProfile.saveNote')}</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -1358,7 +1364,7 @@ export default function CoachMobileAthleteProfilePage() {
                 onClick={() => setWeekMonday(getMondayOf(today))}
                 className="text-xs px-2.5 py-1 rounded-full bg-primary text-primary-foreground font-medium shrink-0 active:opacity-70 transition-opacity"
               >
-                Today
+                {t('coachMobile.athleteProfile.today')}
               </button>
             )}
             <button
@@ -1381,7 +1387,7 @@ export default function CoachMobileAthleteProfilePage() {
 
           {schedLoading ? (
             <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-              Loading schedule…
+              {t('common.loading')}
             </div>
           ) : (
             <DragDropContext onDragEnd={onSessionDragEnd}>
@@ -1415,7 +1421,7 @@ export default function CoachMobileAthleteProfilePage() {
                           <span className="text-xs text-muted-foreground">{dateLabel}</span>
                           {isToday && (
                             <span className="text-xs font-medium text-primary bg-primary/10 rounded-full px-2 py-0.5">
-                              Today
+                              {t('coachMobile.athleteProfile.today')}
                             </span>
                           )}
                         </div>
@@ -1457,7 +1463,7 @@ export default function CoachMobileAthleteProfilePage() {
                                         {ev.title}
                                       </p>
                                       {ev.type === 'test' && ev.targetValue && (
-                                        <p className="text-xs text-amber-700 mt-0.5">Goal: {ev.targetValue}</p>
+                                        <p className="text-xs text-amber-700 mt-0.5">{t('coachMobile.athleteProfile.goal', { value: ev.targetValue })}</p>
                                       )}
                                     </div>
                                   </div>
@@ -1465,7 +1471,7 @@ export default function CoachMobileAthleteProfilePage() {
                                     hasResult ? (
                                       <div className="mt-1.5 flex items-center gap-1 text-xs text-green-700 font-medium">
                                         <Check className="h-3 w-3 shrink-0" />
-                                        Result: {resultValue}
+                                        {resultValue}
                                       </div>
                                     ) : (
                                       <button
@@ -1478,7 +1484,7 @@ export default function CoachMobileAthleteProfilePage() {
                                         className="mt-1.5 w-full flex items-center justify-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 active:bg-amber-300 rounded-md py-1.5 transition-colors"
                                       >
                                         <ClipboardCheck className="h-3.5 w-3.5" />
-                                        Enter result
+                                        {t('coachMobile.athleteProfile.enterResult')}
                                       </button>
                                     )
                                   )}
@@ -1550,7 +1556,7 @@ export default function CoachMobileAthleteProfilePage() {
                                                   const srpe = rpe !== null && mins !== null ? rpe * mins : null;
                                                   return (
                                                     <p className="text-xs text-green-700 mt-0.5">
-                                                      Completed
+                                                      {t('coachMobile.athleteProfile.completed')}
                                                       {mins !== null && ` · ${mins} min`}
                                                       {rpe !== null && ` · RPE ${rpe}`}
                                                       {srpe !== null && ` · sRPE: ${srpe} AU`}
@@ -1559,7 +1565,7 @@ export default function CoachMobileAthleteProfilePage() {
                                                 }
                                                 return (
                                                   <p className="text-xs text-muted-foreground">
-                                                    {s.exerciseCount} exercise{s.exerciseCount !== 1 ? 's' : ''}
+                                                    {t('coachMobile.athleteProfile.exercises', { count: s.exerciseCount })}
                                                   </p>
                                                 );
                                               })()}
@@ -1594,7 +1600,7 @@ export default function CoachMobileAthleteProfilePage() {
                                     isPast ? 'text-muted-foreground/30' : 'text-slate-400'
                                   )}>
                                     <BedDouble className="h-3.5 w-3.5 shrink-0" />
-                                    <span>Rest day</span>
+                                    <span>{t('coachMobile.athleteProfile.restDay')}</span>
                                   </div>
                                 )
                               )}
@@ -1610,7 +1616,7 @@ export default function CoachMobileAthleteProfilePage() {
                             className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border bg-background hover:bg-muted active:opacity-60 transition-colors"
                           >
                             <Plus className="h-3 w-3" />
-                            Add
+                            {t('coachMobile.athleteProfile.add')}
                           </button>
                         </div>
                       </div>
@@ -1651,7 +1657,7 @@ export default function CoachMobileAthleteProfilePage() {
           style={{ maxHeight: '75vh', paddingBottom: 'max(env(safe-area-inset-bottom), 24px)' }}
         >
           <SheetHeader className="mb-4 px-4 pt-4 shrink-0">
-            <SheetTitle>Day Intensity</SheetTitle>
+            <SheetTitle>{t('coachMobile.athleteProfile.dayIntensity')}</SheetTitle>
           </SheetHeader>
           <div className="overflow-y-auto flex-1 px-4">
             <div className="grid grid-cols-1 gap-2 pb-4">
@@ -1681,7 +1687,7 @@ export default function CoachMobileAthleteProfilePage() {
                 onClick={() => handleSetDayIntensity(null)}
                 className="text-xs text-muted-foreground py-3 text-center active:opacity-70"
               >
-                Clear intensity
+                {t('coachMobile.athleteProfile.clearIntensity')}
               </button>
             </div>
           </div>
@@ -1715,7 +1721,7 @@ export default function CoachMobileAthleteProfilePage() {
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                 <Plus className="h-4 w-4 text-primary" />
               </div>
-              Add session
+              {t('coachMobile.athleteProfile.addSession')}
             </button>
             <button
               onClick={() => {
@@ -1728,7 +1734,7 @@ export default function CoachMobileAthleteProfilePage() {
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                 <BookOpen className="h-4 w-4 text-primary" />
               </div>
-              Assign training program
+              {t('coachMobile.athleteProfile.assignProgram')}
             </button>
             <button
               onClick={() => {
@@ -1741,7 +1747,7 @@ export default function CoachMobileAthleteProfilePage() {
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                 <Trophy className="h-4 w-4 text-primary" />
               </div>
-              Add test / event
+              {t('coachMobile.athleteProfile.addTestEvent')}
             </button>
             {dayActionsMenuDate && (scheduleMap.get(dayActionsMenuDate)?.sessions?.length ?? 0) > 0 && (
               <button
@@ -1756,7 +1762,7 @@ export default function CoachMobileAthleteProfilePage() {
                 <div className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </div>
-                Clear day
+                {t('coachMobile.athleteProfile.clearDay')}
               </button>
             )}
           </div>
@@ -1771,7 +1777,7 @@ export default function CoachMobileAthleteProfilePage() {
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 24px)' }}
         >
           <SheetHeader className="mb-4 px-4 pt-4 shrink-0">
-            <SheetTitle>Add Session</SheetTitle>
+            <SheetTitle>{t('coachMobile.athleteProfile.addSessionTitle')}</SheetTitle>
           </SheetHeader>
           <div className="px-4 pb-2 space-y-3">
             <button
@@ -1782,8 +1788,8 @@ export default function CoachMobileAthleteProfilePage() {
                 <Plus className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-sm font-semibold">Create from scratch</p>
-                <p className="text-xs text-muted-foreground">Name a new empty session</p>
+                <p className="text-sm font-semibold">{t('coachMobile.athleteProfile.createFromScratch')}</p>
+                <p className="text-xs text-muted-foreground">{t('coachMobile.athleteProfile.createFromScratchDesc')}</p>
               </div>
             </button>
             <button
@@ -1794,9 +1800,9 @@ export default function CoachMobileAthleteProfilePage() {
                 <BookOpen className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm font-semibold">Choose from library</p>
+                <p className="text-sm font-semibold">{t('coachMobile.athleteProfile.chooseFromLibrary')}</p>
                 <p className="text-xs text-muted-foreground">
-                  {sessionLibraryEntries.length} session{sessionLibraryEntries.length !== 1 ? 's' : ''} available
+                  {t('coachMobile.athleteProfile.sessionsAvailable', { count: sessionLibraryEntries.length })}
                 </p>
               </div>
             </button>
@@ -1808,23 +1814,23 @@ export default function CoachMobileAthleteProfilePage() {
       <Dialog open={newSessionDialogOpen} onOpenChange={o => { if (!o) { setNewSessionDialogOpen(false); setNewSessionName(''); setDayActionTarget(null); } }}>
         <DialogContent className="w-[calc(100vw-32px)] max-w-[380px] rounded-2xl">
           <DialogHeader>
-            <DialogTitle>New Session</DialogTitle>
+            <DialogTitle>{t('coachMobile.athleteProfile.newSessionTitle')}</DialogTitle>
           </DialogHeader>
           <div className="py-2">
             <Input
               value={newSessionName}
               onChange={e => setNewSessionName(e.target.value)}
-              placeholder="Session name (e.g. Morning Training)"
+              placeholder={t('coachMobile.athleteProfile.sessionNamePlaceholder')}
               onKeyDown={e => { if (e.key === 'Enter') handleCreateSession(); }}
               autoFocus
             />
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => { setNewSessionDialogOpen(false); setNewSessionName(''); setDayActionTarget(null); }}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleCreateSession} disabled={mutating}>
-              {mutating ? 'Creating…' : 'Create'}
+              {mutating ? t('coachMobile.athleteProfile.creating') : t('coachMobile.athleteProfile.create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1834,18 +1840,18 @@ export default function CoachMobileAthleteProfilePage() {
       <AlertDialog open={clearWeekConfirmOpen} onOpenChange={setClearWeekConfirmOpen}>
         <AlertDialogContent className="w-[calc(100vw-32px)] max-w-[380px] rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>Clear entire week?</AlertDialogTitle>
+            <AlertDialogTitle>{t('coachMobile.athleteProfile.clearWeekTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will delete all sessions for the week of {formatWeekRange(weekMonday)}. This cannot be undone.
+              {t('coachMobile.athleteProfile.clearWeekDesc', { range: formatWeekRange(weekMonday) })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => { handleClearWeek(); setClearWeekConfirmOpen(false); }}
             >
-              Clear week
+              {t('coachMobile.athleteProfile.clearWeekConfirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1884,42 +1890,42 @@ export default function CoachMobileAthleteProfilePage() {
           <SheetHeader className="mb-4 px-4 pt-4 shrink-0">
             <SheetTitle className="flex items-center gap-2">
               <Trophy className="h-4 w-4 text-amber-600" />
-              {testResultTarget?.event.title ?? 'Enter Result'}
+              {testResultTarget?.event.title ?? t('coachMobile.athleteProfile.enterResult')}
             </SheetTitle>
           </SheetHeader>
           <div className="px-4 space-y-3 pb-2">
             {testResultTarget?.event.targetValue && (
               <p className="text-sm text-amber-700">
-                Goal: <span className="font-medium">{testResultTarget.event.targetValue}</span>
+                {t('coachMobile.athleteProfile.goal', { value: testResultTarget.event.targetValue })}
               </p>
             )}
             {testResultSaved ? (
               <div className="flex items-center justify-center gap-2 py-6 text-green-600 font-medium">
                 <Check className="h-5 w-5" />
-                Result saved!
+                {t('coachMobile.athleteProfile.resultSaved')}
               </div>
             ) : (
               <>
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Result value
+                    {t('coachMobile.athleteProfile.resultValue')}
                   </label>
                   <Input
                     value={testResultValue}
                     onChange={e => setTestResultValue(e.target.value)}
-                    placeholder="e.g. 8.2"
+                    placeholder={t('coachMobile.athleteProfile.resultPlaceholder')}
                     autoFocus
                     onKeyDown={e => { if (e.key === 'Enter' && testResultValue.trim()) handleSubmitTestResult(); }}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Note <span className="normal-case font-normal">(optional)</span>
+                    {t('coachMobile.athleteProfile.noteOptional')}
                   </label>
                   <Textarea
                     value={testResultNote}
                     onChange={e => setTestResultNote(e.target.value)}
-                    placeholder="Add context or conditions…"
+                    placeholder={t('coachMobile.athleteProfile.noteContextPlaceholder')}
                     rows={2}
                     className="text-sm"
                   />
@@ -1929,7 +1935,7 @@ export default function CoachMobileAthleteProfilePage() {
                   disabled={!testResultValue.trim() || testResultSaving}
                   className="w-full"
                 >
-                  {testResultSaving ? 'Saving…' : 'Save Result'}
+                  {testResultSaving ? t('coachMobile.athleteProfile.saving') : t('coachMobile.athleteProfile.saveResult')}
                 </Button>
               </>
             )}
@@ -1945,13 +1951,13 @@ export default function CoachMobileAthleteProfilePage() {
           style={{ maxHeight: '80vh', paddingBottom: 'max(env(safe-area-inset-bottom), 24px)' }}
         >
           <SheetHeader className="mb-3 shrink-0 px-4 pt-4">
-            <SheetTitle>Add Session from Library</SheetTitle>
+            <SheetTitle>{t('coachMobile.athleteProfile.addFromLibraryTitle')}</SheetTitle>
           </SheetHeader>
           <div className="overflow-y-auto flex-1 px-4">
             <div className="space-y-2 pb-4">
               {sessionLibraryEntries.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
-                  No sessions in your library yet.
+                  {t('coachMobile.athleteProfile.noLibrarySessions')}
                 </p>
               ) : sessionLibraryEntries.map(entry => (
                 <button
@@ -1964,8 +1970,8 @@ export default function CoachMobileAthleteProfilePage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{entry.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {entry.exercises.length} exercise{entry.exercises.length !== 1 ? 's' : ''}
-                      {entry.sections.length > 0 ? ` · ${entry.sections.length} section${entry.sections.length !== 1 ? 's' : ''}` : ''}
+                      {t('coachMobile.athleteProfile.exercises', { count: entry.exercises.length })}
+                      {entry.sections.length > 0 ? ` · ${t('coachMobile.athleteProfile.sections', { count: entry.sections.length })}` : ''}
                     </p>
                   </div>
                 </button>
