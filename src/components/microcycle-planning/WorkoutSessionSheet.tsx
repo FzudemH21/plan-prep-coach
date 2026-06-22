@@ -639,18 +639,20 @@ export function WorkoutSessionSheet({
                   });
                 }
 
-                // Try chronological session index FIRST for split methods, then fallback to session 0.
-                // Also try base method key (ex.methodId without ::Category) in case params are stored
-                // under the base name while the exercise carries the full ::Category suffix.
+                // Merge ALL matching key-format paths so base params (Periodization Table, stored
+                // under ex.methodId) survive even when per-set edits created a sparse fullMethodKey
+                // entry. More-specific entries spread last and override less-specific ones.
                 const baseMethodKeyForLookup = (ex.methodId ?? '').split('::')[0];
-                const storedParams =
-                  currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[chronologicalSessionIndex] ||
-                  currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] ||
-                  currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[chronologicalSessionIndex] ||
-                  currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
-                  currentParamValues[mesocycleId]?.[microcycleIndex]?.[baseMethodKeyForLookup]?.[chronologicalSessionIndex] ||
-                  currentParamValues[mesocycleId]?.[microcycleIndex]?.[baseMethodKeyForLookup]?.[0] ||
-                  {};
+                const storedParams: Record<string, string | number> = {
+                  // Base session 0 – least specific first
+                  ...(currentParamValues[mesocycleId]?.[microcycleIndex]?.[baseMethodKeyForLookup]?.[0] || {}),
+                  ...(currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] || {}),
+                  ...(currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] || {}),
+                  // Chronological session overrides
+                  ...(currentParamValues[mesocycleId]?.[microcycleIndex]?.[baseMethodKeyForLookup]?.[chronologicalSessionIndex] || {}),
+                  ...(currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[chronologicalSessionIndex] || {}),
+                  ...(currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[chronologicalSessionIndex] || {}),
+                };
 
                 // PRIMARY: Derive parameters from storedParams (method periodization grid)
                 // Filter out _unit keys and per-set keys (e.g. Reps_set1) — the latter can
@@ -919,13 +921,17 @@ export function WorkoutSessionSheet({
         ? getModuloSessionIndex(rawChronologicalIndex, sessionCount)
         : rawChronologicalIndex;
       
-      // Try chronological session index FIRST for split methods, then fallback to session 0
-      const storedParams =
-        currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[chronologicalSessionIndex] ||
-        currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] ||
-        currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[chronologicalSessionIndex] ||
-        currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] ||
-        {};
+      // Merge ALL matching key-format paths so base params always survive even when
+      // per-set edits created a sparse fullMethodKey entry.
+      const baseMethodKeyB = (ex.methodId ?? '').split('::')[0];
+      const storedParams: Record<string, string | number> = {
+        ...(currentParamValues[mesocycleId]?.[microcycleIndex]?.[baseMethodKeyB]?.[0] || {}),
+        ...(currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[0] || {}),
+        ...(currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] || {}),
+        ...(currentParamValues[mesocycleId]?.[microcycleIndex]?.[baseMethodKeyB]?.[chronologicalSessionIndex] || {}),
+        ...(currentParamValues[mesocycleId]?.[microcycleIndex]?.[ex.methodId]?.[chronologicalSessionIndex] || {}),
+        ...(currentParamValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[chronologicalSessionIndex] || {}),
+      };
 
 
 
@@ -2114,13 +2120,16 @@ export function WorkoutSessionSheet({
     const fullMethodKey = hasValidCategory 
       ? `${methodId}::${categoryName}` 
       : methodId;
-    // Try sessionIndex=0 first (for non-split methods), then actual sessionIndex
-    const storedParams = 
-      parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] ||
-      parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex] ||
-      parameterValues[mesocycleId]?.[microcycleIndex]?.[methodId]?.[0] ||
-      parameterValues[mesocycleId]?.[microcycleIndex]?.[methodId]?.[sessionIndex] ||
-      {};
+    // Merge ALL matching key-format paths so base params survive sparse fullMethodKey entries
+    const baseMethodKeyC = methodId.split('::')[0];
+    const storedParams: Record<string, string | number> = {
+      ...(parameterValues[mesocycleId]?.[microcycleIndex]?.[baseMethodKeyC]?.[0] || {}),
+      ...(parameterValues[mesocycleId]?.[microcycleIndex]?.[methodId]?.[0] || {}),
+      ...(parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[0] || {}),
+      ...(parameterValues[mesocycleId]?.[microcycleIndex]?.[baseMethodKeyC]?.[sessionIndex] || {}),
+      ...(parameterValues[mesocycleId]?.[microcycleIndex]?.[methodId]?.[sessionIndex] || {}),
+      ...(parameterValues[mesocycleId]?.[microcycleIndex]?.[fullMethodKey]?.[sessionIndex] || {}),
+    };
 
     // Get parameter definitions
     let methodParams = getParametersForMethod(methodId);
