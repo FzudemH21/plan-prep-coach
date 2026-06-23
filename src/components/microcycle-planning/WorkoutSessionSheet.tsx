@@ -3885,6 +3885,7 @@ export function WorkoutSessionSheet({
         toolboxData={toolboxData}
         getSupersetLabel={getSupersetLabel}
         visibilityOverrides={parameterVisibilityOverrides}
+        resolveAthleteDataRefs={resolveAthleteDataRefs}
       />
     </WorkoutSessionProvider>
   );

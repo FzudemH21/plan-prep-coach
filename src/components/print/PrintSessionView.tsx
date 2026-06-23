@@ -16,6 +16,8 @@ export interface PrintSessionViewProps {
   toolboxData?: ToolboxDatabase;
   getSupersetLabel: (exerciseId: string) => string | undefined;
   visibilityOverrides?: ParameterVisibilityOverrides;
+  /** Mirror of WorkoutSessionSheet's resolveAthleteDataRefs — needed for e1RM / biometric formulas */
+  resolveAthleteDataRefs?: (refs: string[], exerciseName: string) => Record<string, number | undefined>;
 }
 
 interface ParamMeta {
@@ -80,7 +82,7 @@ function buildParamMeta(
     }));
   }
 
-  // Append isCalculated toolbox entries not already in the list (same logic as WorkoutExerciseCard)
+  // Append isCalculated toolbox entries not already in the list (mirrors WorkoutExerciseCard)
   for (const tp of toolboxParams) {
     if (tp.isCalculated && !!tp.formula && !params.some(p => p.name === tp.parameterName)) {
       params.push({
@@ -113,12 +115,13 @@ function resolveCalcValue(
   setIndex: number,
   exercise: WorkoutExercise,
   toolboxParams: ToolboxEntry[],
+  resolveAthleteDataRefs?: (refs: string[], exerciseName: string) => Record<string, number | undefined>,
 ): string {
   if (!entry.formula) return '—';
 
   const ctx: Record<string, number> = {};
 
-  // Pass 1: resolve by sourceParameterIds
+  // Pass 1: resolve by sourceParameterIds (toolbox-mediated, handles renamed params)
   for (const srcId of (entry.sourceParameterIds ?? [])) {
     const srcParam = toolboxParams.find(p => p.id === srcId);
     if (!srcParam) continue;
@@ -135,7 +138,7 @@ function resolveCalcValue(
     if (!isNaN(n)) ctx[srcParam.parameterName] = n;
   }
 
-  // Pass 2: resolve remaining variables by name (fallback for stale IDs)
+  // Pass 2: resolve remaining by parameter name from toolbox entries (handles stale IDs)
   for (const sibling of toolboxParams.filter(p => !p.isCalculated)) {
     if (ctx[sibling.parameterName] !== undefined) continue;
     const raw =
@@ -150,6 +153,30 @@ function resolveCalcValue(
     let n = parseNumeric(raw);
     if (!isNaN(n) && unit && PCT_UNITS.has(unit)) n = n / 100;
     if (!isNaN(n)) ctx[sibling.parameterName] = n;
+  }
+
+  // Pass 3: sweep exercise.parameters directly (handles empty toolboxParams / method-ID mismatch)
+  for (const key of Object.keys(exercise.parameters || {})) {
+    if (key.endsWith('_unit') || /_set\d+$/i.test(key)) continue;
+    if (ctx[key] !== undefined) continue;
+    const perSetVal = exercise.parameters[`${key}_set${setIndex + 1}`];
+    const raw =
+      perSetVal !== undefined && perSetVal !== ''
+        ? perSetVal
+        : exercise.parameters[key];
+    if (raw === undefined || raw === '') continue;
+    const unit = exercise.parameters[`${key}_unit`] as string | undefined;
+    let n = parseNumeric(raw);
+    if (!isNaN(n) && unit && PCT_UNITS.has(unit)) n = n / 100;
+    if (!isNaN(n)) ctx[key] = n;
+  }
+
+  // Pass 4: athlete data refs (e1RM, biometrics, performance params)
+  if (resolveAthleteDataRefs && entry.athleteDataRefs?.length) {
+    const athleteData = resolveAthleteDataRefs(entry.athleteDataRefs, exercise.exerciseName);
+    for (const [k, v] of Object.entries(athleteData)) {
+      if (v !== undefined) ctx[k] = v;
+    }
   }
 
   const result = evaluateFormula(entry.formula, ctx);
@@ -195,11 +222,13 @@ function ExerciseBlock({
   toolboxData,
   getSupersetLabel,
   visibilityOverrides = {},
+  resolveAthleteDataRefs,
 }: {
   exercise: WorkoutExercise;
   toolboxData?: ToolboxDatabase;
   getSupersetLabel: (id: string) => string | undefined;
   visibilityOverrides?: ParameterVisibilityOverrides;
+  resolveAthleteDataRefs?: (refs: string[], exerciseName: string) => Record<string, number | undefined>;
 }) {
   if (exercise.isCircuit) return <CircuitBlock exercise={exercise} />;
 
@@ -240,13 +269,12 @@ function ExerciseBlock({
                 {gridParams.map(p => {
                   if (p.isCalculated) {
                     const entry = toolboxParams.find(tp => tp.parameterName === p.name);
-                    // Prefer manually-stored value, fall back to formula result
                     const stored = exercise.parameters[`${p.name}_set${i + 1}`];
                     const val =
                       stored !== undefined && stored !== ''
                         ? String(stored)
                         : entry
-                        ? resolveCalcValue(entry, i, exercise, toolboxParams)
+                        ? resolveCalcValue(entry, i, exercise, toolboxParams, resolveAthleteDataRefs)
                         : '—';
                     return <td key={p.name} style={{ fontStyle: 'italic' }}>{val}</td>;
                   }
@@ -291,6 +319,7 @@ export function PrintSessionView({
   toolboxData,
   getSupersetLabel,
   visibilityOverrides = {},
+  resolveAthleteDataRefs,
 }: PrintSessionViewProps) {
   return (
     <div className="print-session-view">
@@ -326,6 +355,7 @@ export function PrintSessionView({
               toolboxData={toolboxData}
               getSupersetLabel={getSupersetLabel}
               visibilityOverrides={visibilityOverrides}
+              resolveAthleteDataRefs={resolveAthleteDataRefs}
             />
           ))}
         </div>
