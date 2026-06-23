@@ -66,7 +66,7 @@ function buildParamMeta(
           toolboxEntry?.isRestParameter || /rest|pause|recovery/i.test(name),
         isFrequencyParameter: toolboxEntry?.isFrequencyParameter || false,
         showInGridByDefault: toolboxEntry?.showInGridByDefault ?? true,
-        isCalculated: false,
+        isCalculated: toolboxEntry?.isCalculated ?? false, // mirrors WorkoutExerciseCard
       };
     });
   } else {
