@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, Check, Dumbbell, RefreshCw,
@@ -201,6 +202,7 @@ function CompletionSheet({
   open, onClose, connectionId, date, sessionId, sessionName,
   durationSeconds, setsLogged, onSaved, sessionLogId,
 }: CompletionSheetProps) {
+  const { t } = useTranslation();
   const [borgRating, setBorgRating] = useState<number | null>(null);
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
@@ -231,10 +233,10 @@ function CompletionSheet({
 
     setSaving(false);
     if (error) {
-      toast({ title: 'Error saving session', description: error.message, variant: 'destructive' });
+      toast({ title: t('coachMobile.sessionLogging.completionSheet.toastError'), description: error.message, variant: 'destructive' });
       return;
     }
-    toast({ title: 'Session logged!' });
+    toast({ title: t('coachMobile.sessionLogging.completionSheet.toastLogged') });
     onSaved();
   }
 
@@ -245,12 +247,12 @@ function CompletionSheet({
           <SheetHeader className="mb-5">
             <div className="flex flex-col items-center gap-2 pt-2">
               <CheckCircle2 className="h-10 w-10 text-green-500" />
-              <SheetTitle>Workout Complete!</SheetTitle>
+              <SheetTitle>{t('coachMobile.sessionLogging.completionSheet.title')}</SheetTitle>
               <p className="text-sm text-muted-foreground">{sessionName}</p>
             </div>
           </SheetHeader>
 
-          <p className="text-sm font-semibold mb-3">Athlete's effort (Borg CR10)</p>
+          <p className="text-sm font-semibold mb-3">{t('coachMobile.sessionLogging.completionSheet.borgLabel')}</p>
           <div className="flex flex-col gap-1 mb-5">
             {Array.from({ length: 11 }, (_, v) => (
               <button key={v} onClick={() => setBorgRating(borgRating === v ? null : v)}
@@ -267,12 +269,12 @@ function CompletionSheet({
             ))}
           </div>
 
-          <p className="text-sm font-semibold mb-2">Notes (optional)</p>
+          <p className="text-sm font-semibold mb-2">{t('coachMobile.sessionLogging.completionSheet.notesLabel')}</p>
           <Textarea value={comment} onChange={e => setComment(e.target.value)}
-            placeholder="Any notes about this session…" className="resize-none h-20 mb-5" />
+            placeholder={t('coachMobile.sessionLogging.completionSheet.notesPlaceholder')} className="resize-none h-20 mb-5" />
 
           <Button className="w-full" disabled={saving} onClick={handleSave}>
-            {saving ? 'Saving…' : 'Save & Finish'}
+            {saving ? t('coachMobile.sessionLogging.completionSheet.saving') : t('coachMobile.sessionLogging.completionSheet.save')}
           </Button>
         </div>
       </SheetContent>
@@ -299,6 +301,7 @@ interface CircuitCardProps {
 }
 
 function CircuitCard({ exercise, completedSets, onCompleteRound, onShowDetail }: CircuitCardProps) {
+  const { t } = useTranslation();
   const rounds = Math.max(1, Number(exercise.circuitRounds ?? 3));
   const completedRoundsList = completedSets[exercise.id] ?? [];
   const nextRoundIdx = Array.from({ length: rounds }, (_, i) => i).find(i => !completedRoundsList.includes(i));
@@ -311,9 +314,9 @@ function CircuitCard({ exercise, completedSets, onCompleteRound, onShowDetail }:
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        {restBetweenRounds > 0 && `${restBetweenRounds}s rest between rounds`}
+        {restBetweenRounds > 0 && t('coachMobile.sessionLogging.circuitCard.restBetweenRounds', { seconds: restBetweenRounds })}
         {restBetweenRounds > 0 && restBetweenExercises > 0 && ' · '}
-        {restBetweenExercises > 0 && `${restBetweenExercises}s between exercises`}
+        {restBetweenExercises > 0 && t('coachMobile.sessionLogging.circuitCard.restBetweenExercises', { seconds: restBetweenExercises })}
       </p>
       {exercise.circuitComments && (
         <p className="text-xs text-muted-foreground/80 italic leading-relaxed">{exercise.circuitComments}</p>
@@ -322,7 +325,7 @@ function CircuitCard({ exercise, completedSets, onCompleteRound, onShowDetail }:
         <div className="rounded-lg border overflow-hidden">
           <button className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium hover:bg-muted/40 active:bg-muted/60 transition-colors"
             onClick={() => setExListOpen(o => !o)}>
-            <span className="text-muted-foreground">{circuitExercises.length} exercise{circuitExercises.length !== 1 ? 's' : ''}</span>
+            <span className="text-muted-foreground">{t('coachMobile.sessionLogging.exercises', { count: circuitExercises.length })}</span>
             <ChevronLeft className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 -rotate-90', exListOpen && 'rotate-90')} />
           </button>
           {exListOpen && (
@@ -351,7 +354,7 @@ function CircuitCard({ exercise, completedSets, onCompleteRound, onShowDetail }:
       )}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">Rounds</span>
+          <span className="text-muted-foreground">{t('coachMobile.sessionLogging.circuitCard.rounds')}</span>
           <span className="font-semibold tabular-nums">{completedRoundsList.length} / {rounds}</span>
         </div>
         <div className="h-2 rounded-full bg-muted overflow-hidden">
@@ -361,18 +364,18 @@ function CircuitCard({ exercise, completedSets, onCompleteRound, onShowDetail }:
       </div>
       {allDone ? (
         <div className="flex items-center justify-center gap-2 py-1.5 text-sm text-primary font-medium">
-          <Check className="h-4 w-4" /> All rounds complete
+          <Check className="h-4 w-4" /> {t('coachMobile.sessionLogging.circuitCard.allDone')}
         </div>
       ) : nextRoundIdx !== undefined && (
         <button onClick={() => onCompleteRound(exercise.id, nextRoundIdx)}
           className="w-full rounded-xl border-2 border-primary bg-primary/5 hover:bg-primary/10 active:scale-[0.98] text-primary font-semibold text-sm py-3 transition-all">
-          Complete Round {nextRoundIdx + 1}
+          {t('coachMobile.sessionLogging.circuitCard.completeRound', { number: nextRoundIdx + 1 })}
         </button>
       )}
       {completedRoundsList.length > 0 && (
         <button onClick={() => onCompleteRound(exercise.id, Math.max(...completedRoundsList))}
           className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors text-center py-0.5">
-          Undo last round
+          {t('coachMobile.sessionLogging.circuitCard.undoLastRound')}
         </button>
       )}
     </div>
@@ -392,6 +395,7 @@ interface SetTableProps {
 }
 
 function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue, onCompleteSet, onMarkAll }: SetTableProps) {
+  const { t } = useTranslation();
   const columns = getParamColumns(exercise);
   const doneArr = completedSets[exercise.id] ?? [];
   const allDone = doneArr.length >= setCount &&
@@ -413,7 +417,7 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
             })}
             <th className="w-10 py-2 text-center">
               <button onClick={() => onMarkAll(exercise.id)}
-                title={allDone ? 'Unmark all sets' : 'Mark all sets done'}
+                title={allDone ? t('coachMobile.sessionLogging.setTable.unmarkAll') : t('coachMobile.sessionLogging.setTable.markAllDone')}
                 className={cn(
                   'w-8 h-8 rounded-full flex items-center justify-center mx-auto transition-all text-xs font-bold active:scale-95',
                   allDone
@@ -483,6 +487,7 @@ function getYouTubeVideoId(raw: string): string | null {
 }
 
 function ExerciseDetailSheet({ target, onClose }: { target: ExerciseDetailTarget | null; onClose: () => void }) {
+  const { t } = useTranslation();
   const { libraries } = useCustomLibraries();
 
   // Fall back to live library data when the session snapshot didn't carry video/description
@@ -522,10 +527,10 @@ function ExerciseDetailSheet({ target, onClose }: { target: ExerciseDetailTarget
       <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl max-h-[85vh] overflow-y-auto p-0 gap-0">
         <div className="px-5 pt-5 pb-7 space-y-4">
           <DialogHeader>
-            <DialogTitle className="text-left">{target?.name ?? 'Exercise'}</DialogTitle>
+            <DialogTitle className="text-left">{target?.name ?? t('coachMobile.sessionLogging.exerciseDetail.exerciseFallback')}</DialogTitle>
           </DialogHeader>
           {!hasContent && (
-            <p className="text-sm text-muted-foreground text-center py-6">No details available for this exercise.</p>
+            <p className="text-sm text-muted-foreground text-center py-6">{t('coachMobile.sessionLogging.exerciseDetail.noDetails')}</p>
           )}
           {hasContent && (
             <>
@@ -550,12 +555,12 @@ function ExerciseDetailSheet({ target, onClose }: { target: ExerciseDetailTarget
                 <a href={safeUrl} target="_blank" rel="noopener noreferrer"
                   className="flex items-center justify-center gap-2 w-full rounded-xl border py-2.5 text-sm font-medium text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors">
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-                  Watch video
+                  {t('coachMobile.sessionLogging.exerciseDetail.watchVideo')}
                 </a>
               )}
               {resolvedDescription && (
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Description</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('coachMobile.sessionLogging.exerciseDetail.description')}</p>
                   <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">{resolvedDescription}</p>
                 </div>
               )}
@@ -570,6 +575,7 @@ function ExerciseDetailSheet({ target, onClose }: { target: ExerciseDetailTarget
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function CoachMobileSessionLoggingPage() {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -743,14 +749,14 @@ export default function CoachMobileSessionLoggingPage() {
   // ── Guard ──────────────────────────────────────────────────────────────────
 
   if (!state) {
-    return <div className="flex items-center justify-center h-full py-20 text-sm text-muted-foreground">Session not found.</div>;
+    return <div className="flex items-center justify-center h-full py-20 text-sm text-muted-foreground">{t('coachMobile.sessionLogging.sessionNotFound')}</div>;
   }
 
   const { entry, sessionIdx: sessionIdxProp, connectionId, returnPath } = state;
   const session = entry.sessions[sessionIdxProp];
 
   if (!session) {
-    return <div className="flex items-center justify-center h-full py-20 text-sm text-muted-foreground">Session not found.</div>;
+    return <div className="flex items-center justify-center h-full py-20 text-sm text-muted-foreground">{t('coachMobile.sessionLogging.sessionNotFound')}</div>;
   }
 
   function goBack() {
@@ -915,7 +921,7 @@ export default function CoachMobileSessionLoggingPage() {
         {sections.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
             <Dumbbell className="h-8 w-8 opacity-30" />
-            <p className="text-sm">No exercises assigned yet.</p>
+            <p className="text-sm">{t('coachMobile.sessionLogging.noExercises')}</p>
           </div>
         ) : (
           <>
@@ -937,7 +943,7 @@ export default function CoachMobileSessionLoggingPage() {
                         <div className="text-left">
                           <p className="font-semibold text-sm">{sec.name}</p>
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            {sec.exercises.length} exercise{sec.exercises.length !== 1 ? 's' : ''}
+                            {t('coachMobile.sessionLogging.exercises', { count: sec.exercises.length })}
                           </p>
                         </div>
                         <ChevronLeft className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200 shrink-0 -rotate-90', isOpen && 'rotate-90')} />
@@ -969,8 +975,8 @@ export default function CoachMobileSessionLoggingPage() {
                                   )}
                                 </div>
                                 {ex.isCircuit
-                                  ? <span className="text-xs text-muted-foreground shrink-0">{ex.circuitRounds ?? 3} rounds</span>
-                                  : ex.plannedSets ? <span className="text-xs text-muted-foreground shrink-0">{ex.plannedSets} sets</span>
+                                  ? <span className="text-xs text-muted-foreground shrink-0">{t('coachMobile.sessionLogging.rounds', { count: Number(ex.circuitRounds ?? 3) })}</span>
+                                  : ex.plannedSets ? <span className="text-xs text-muted-foreground shrink-0">{t('coachMobile.sessionLogging.sets', { count: ex.plannedSets })}</span>
                                   : null}
                               </div>
                               {ex.isCircuit && (ex.circuitExercises ?? []).length > 0 && (
@@ -1013,7 +1019,7 @@ export default function CoachMobileSessionLoggingPage() {
                   <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-center gap-2">
                     <Lock className="h-4 w-4 text-amber-600 shrink-0" />
                     <p className="text-xs text-amber-800 leading-snug">
-                      Athlete is currently logging this session. Start logging once they finish.
+                      {t('coachMobile.sessionLogging.athleteLocking')}
                     </p>
                   </div>
                 </div>
@@ -1033,10 +1039,10 @@ export default function CoachMobileSessionLoggingPage() {
                     })
                     .select('id')
                     .single();
-                  if (error) toast({ title: 'Could not create log row', description: error.message, variant: 'destructive' });
+                  if (error) toast({ title: t('coachMobile.sessionLogging.toastLogError'), description: error.message, variant: 'destructive' });
                   if (data) setSessionLogId(data.id);
                 }}>
-                  Start Workout
+                  {t('coachMobile.sessionLogging.startWorkout')}
                 </Button>
               </div>
             </div>
@@ -1046,18 +1052,18 @@ export default function CoachMobileSessionLoggingPage() {
         <AlertDialog open={abandonWarning} onOpenChange={o => { if (!o) setAbandonWarning(false); }}>
           <AlertDialogContent className="sm:max-w-[360px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
             <AlertDialogHeader>
-              <AlertDialogTitle>Abandon workout?</AlertDialogTitle>
-              <AlertDialogDescription>Progress and the in-progress log will be deleted.</AlertDialogDescription>
+              <AlertDialogTitle>{t('coachMobile.sessionLogging.abandonTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>{t('coachMobile.sessionLogging.abandonDesc')}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Keep going</AlertDialogCancel>
+              <AlertDialogCancel>{t('coachMobile.sessionLogging.keepGoing')}</AlertDialogCancel>
               <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={async () => {
                   setAbandonWarning(false);
                   if (sessionLogId) await supabase.from('athlete_session_logs').delete().eq('id', sessionLogId);
                   goBack();
                 }}>
-                Abandon
+                {t('coachMobile.sessionLogging.abandon')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -1105,13 +1111,13 @@ export default function CoachMobileSessionLoggingPage() {
         <div className="flex-1 flex flex-col items-center justify-center px-6 gap-4">
           {sections.length > 1 && (
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Section {sectionIdx + 1} of {sections.length}
+              {t('coachMobile.sessionLogging.sectionXofY', { current: sectionIdx + 1, total: sections.length })}
             </p>
           )}
           <h2 className="text-3xl font-bold text-center">{introSection?.name}</h2>
           {introSection && (
             <p className="text-sm text-muted-foreground">
-              {introSection.exercises.length} exercise{introSection.exercises.length !== 1 ? 's' : ''}
+              {t('coachMobile.sessionLogging.exercises', { count: introSection.exercises.length })}
             </p>
           )}
           {introSection?.notes && (
@@ -1120,7 +1126,7 @@ export default function CoachMobileSessionLoggingPage() {
         </div>
         <div className="px-6 py-6 shrink-0">
           <Button className="w-full" size="lg" onClick={() => { startWorkoutTimer(); setPhase('active'); }}>
-            Start Section
+            {t('coachMobile.sessionLogging.startSection')}
           </Button>
         </div>
       </div>
@@ -1134,7 +1140,7 @@ export default function CoachMobileSessionLoggingPage() {
       <div className="flex flex-col h-full bg-background items-center justify-center gap-8 px-6">
         <div className="flex flex-col items-center gap-2">
           <Timer className="h-8 w-8 text-primary opacity-70" />
-          <p className="text-lg font-semibold text-muted-foreground">Rest</p>
+          <p className="text-lg font-semibold text-muted-foreground">{t('coachMobile.sessionLogging.rest')}</p>
         </div>
         <p className="text-[80px] font-bold tabular-nums leading-none">{formatTime(restSecondsLeft)}</p>
         <div className="flex gap-4">
@@ -1142,7 +1148,7 @@ export default function CoachMobileSessionLoggingPage() {
           <Button variant="outline" size="lg" className="w-24" onClick={() => setRestSecondsLeft(s => s + 30)}>+30s</Button>
         </div>
         <button onClick={skipRest} className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors">
-          Skip rest
+          {t('coachMobile.sessionLogging.skipRest')}
         </button>
       </div>
     );
@@ -1229,18 +1235,18 @@ export default function CoachMobileSessionLoggingPage() {
               {swappedExercises[ex.id] && (
                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                   <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 leading-none">
-                    {swappedExercises[ex.id].direction === 'regression' ? '↓ Regression' : '↑ Progression'}
+                    {swappedExercises[ex.id].direction === 'regression' ? t('coachMobile.sessionLogging.regression') : t('coachMobile.sessionLogging.progression')}
                   </span>
-                  <span className="text-xs text-muted-foreground">instead of {swappedExercises[ex.id].originalName}</span>
+                  <span className="text-xs text-muted-foreground">{t('coachMobile.sessionLogging.insteadOf', { name: swappedExercises[ex.id].originalName })}</span>
                   <button onClick={() => setSwappedExercises(prev => { const n = { ...prev }; delete n[ex.id]; return n; })}
                     className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors">
-                    Undo
+                    {t('coachMobile.sessionLogging.undo')}
                   </button>
                 </div>
               )}
               {ex.eachSide && (
                 <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 mt-1 w-fit">
-                  Perform on each side
+                  {t('coachMobile.sessionLogging.eachSide')}
                 </span>
               )}
               {/* Adjust button — only for exercises with a library ID and no active swap */}
@@ -1248,7 +1254,7 @@ export default function CoachMobileSessionLoggingPage() {
                 <button onClick={() => openSwapSheet(ex)}
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1 active:opacity-60">
                   <ArrowUpDown className="h-3 w-3" />
-                  Adjust exercise
+                  {t('coachMobile.sessionLogging.adjustExercise')}
                 </button>
               )}
               <div className="mt-3">
@@ -1269,9 +1275,9 @@ export default function CoachMobileSessionLoggingPage() {
                         setLoggedValues(prev => { const copy = { ...(prev[ex.id] ?? {}) }; delete copy[removedIdx]; return { ...prev, [ex.id]: copy }; });
                         setCompletedSets(prev => ({ ...prev, [ex.id]: (prev[ex.id] ?? []).filter(i => i !== removedIdx) }));
                         setSetCountOverrides(prev => ({ ...prev, [ex.id]: next }));
-                      }} disabled={exSetCount <= 1} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border transition-colors disabled:opacity-30 disabled:cursor-not-allowed">− Set</button>
+                      }} disabled={exSetCount <= 1} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border transition-colors disabled:opacity-30 disabled:cursor-not-allowed">{t('coachMobile.sessionLogging.minusSet')}</button>
                       <button onClick={() => setSetCountOverrides(prev => ({ ...prev, [ex.id]: (prev[ex.id] ?? getSetCount(ex)) + 1 }))}
-                        className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border transition-colors">+ Set</button>
+                        className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border transition-colors">{t('coachMobile.sessionLogging.plusSet')}</button>
                     </div>
                   </>
                 )}
@@ -1308,7 +1314,7 @@ export default function CoachMobileSessionLoggingPage() {
               ))}
             </div>
           )}
-          <p className="text-xs text-center text-muted-foreground">{totalSetsDone} / {totalSetsPlanned} sets done</p>
+          <p className="text-xs text-center text-muted-foreground">{t('coachMobile.sessionLogging.setsDoneProgress', { done: totalSetsDone, total: totalSetsPlanned })}</p>
         </div>
 
         <ScrollArea className="flex-1">
@@ -1316,7 +1322,7 @@ export default function CoachMobileSessionLoggingPage() {
             {sectionExercises.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
                 <Dumbbell className="h-8 w-8 opacity-30" />
-                <p className="text-sm">No exercises in this section.</p>
+                <p className="text-sm">{t('coachMobile.sessionLogging.noExercisesInSection')}</p>
               </div>
             ) : groups.map(group => {
               if (group.kind === 'single') {
@@ -1340,7 +1346,7 @@ export default function CoachMobileSessionLoggingPage() {
                   allDone ? 'border-primary/20' : 'border-primary/40',
                 )}>
                   <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/5 border-b border-primary/20">
-                    <span className="text-xs font-bold text-primary tracking-wider">SUPERSET {group.label}</span>
+                    <span className="text-xs font-bold text-primary tracking-wider">{t('coachMobile.sessionLogging.superset', { label: group.label })}</span>
                   </div>
                   {group.members.map(({ ex, n }, mi) => (
                     <div key={ex.id}>
@@ -1367,7 +1373,7 @@ export default function CoachMobileSessionLoggingPage() {
                 setPhase('done'); setBorgSheetOpen(true);
               }}
             >
-              <Check className="h-4 w-4 mr-2" /> Finish Workout
+              <Check className="h-4 w-4 mr-2" /> {t('coachMobile.sessionLogging.finishWorkout')}
             </Button>
           ) : (
             <Button
@@ -1379,7 +1385,7 @@ export default function CoachMobileSessionLoggingPage() {
                 setPhase('sectionIntro');
               }}
             >
-              <Check className="h-4 w-4 mr-2" /> Finish Section
+              <Check className="h-4 w-4 mr-2" /> {t('coachMobile.sessionLogging.finishSection')}
             </Button>
           )}
         </div>
@@ -1387,16 +1393,16 @@ export default function CoachMobileSessionLoggingPage() {
         <AlertDialog open={incompleteWarning} onOpenChange={o => { if (!o) setIncompleteWarning(false); }}>
           <AlertDialogContent className="sm:max-w-[360px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
             <AlertDialogHeader>
-              <AlertDialogTitle>{isLastSection ? 'Finish workout?' : 'Finish section?'}</AlertDialogTitle>
-              <AlertDialogDescription>Not all sets are completed yet. Finish anyway?</AlertDialogDescription>
+              <AlertDialogTitle>{isLastSection ? t('coachMobile.sessionLogging.finishWorkoutWarningTitle') : t('coachMobile.sessionLogging.finishSectionWarningTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>{t('coachMobile.sessionLogging.incompleteWarningDesc')}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Go back</AlertDialogCancel>
+              <AlertDialogCancel>{t('coachMobile.sessionLogging.goBack')}</AlertDialogCancel>
               <AlertDialogAction onClick={() => {
                 setIncompleteWarning(false);
                 if (isLastSection) { setPhase('done'); setBorgSheetOpen(true); }
                 else { setSectionIdx(i => i + 1); setPhase('sectionIntro'); }
-              }}>Finish anyway</AlertDialogAction>
+              }}>{t('coachMobile.sessionLogging.finishAnyway')}</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -1411,7 +1417,7 @@ export default function CoachMobileSessionLoggingPage() {
         <Dialog open={!!commentTarget} onOpenChange={(o) => { if (!o) { setCommentTarget(null); setCommentText(''); } }}>
           <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl">
             <DialogHeader>
-              <DialogTitle className="text-base">Add Comment</DialogTitle>
+              <DialogTitle className="text-base">{t('coachMobile.sessionLogging.addComment')}</DialogTitle>
               {commentTarget && (
                 <DialogDescription className="text-xs">
                   📎 {[commentTarget.exerciseName, commentTarget.sectionName, session.name, new Date(entry.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })].filter(Boolean).join(' · ')}
@@ -1423,7 +1429,7 @@ export default function CoachMobileSessionLoggingPage() {
                 autoFocus
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
-                placeholder="Write your comment…"
+                placeholder={t('coachMobile.sessionLogging.commentPlaceholder')}
                 rows={3}
                 className="flex-1 resize-none text-sm"
               />
@@ -1463,18 +1469,18 @@ export default function CoachMobileSessionLoggingPage() {
         <Dialog open={!!swapSheetEx} onOpenChange={o => { if (!o) { setSwapSheetEx(null); setSwapSelectedEntry(null); setSwapReason(''); } }}>
           <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 rounded-2xl max-h-[85vh] flex flex-col p-0 gap-0">
             <DialogHeader className="px-5 pt-5 pb-3 border-b shrink-0">
-              <DialogTitle className="text-base text-left">Adjust exercise</DialogTitle>
+              <DialogTitle className="text-base text-left">{t('coachMobile.sessionLogging.adjustExercise')}</DialogTitle>
               <p className="text-xs text-muted-foreground text-left mt-0.5">
-                Replace <span className="font-medium">{swapSheetEx?.name}</span> for this session only.
+                {t('coachMobile.sessionLogging.adjustExerciseDesc', { name: swapSheetEx?.name ?? '' })}
               </p>
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-1.5">
               {swapChainLoading ? (
-                <p className="text-sm text-muted-foreground text-center py-6">Loading…</p>
+                <p className="text-sm text-muted-foreground text-center py-6">{t('coachMobile.sessionLogging.loading')}</p>
               ) : swapChain.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-6">
-                  No progressions or regressions defined for this exercise.
+                  {t('coachMobile.sessionLogging.noProgressions')}
                 </p>
               ) : (() => {
                 const chainProgs = swapChain.filter(e => e.direction === 'progression').sort((a, b) => b.level - a.level);
@@ -1511,18 +1517,18 @@ export default function CoachMobileSessionLoggingPage() {
                   <>
                     {chainProgs.length > 0 && (
                       <div className="space-y-1.5">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Harder</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">{t('coachMobile.sessionLogging.harder')}</p>
                         {chainProgs.map(renderEntry)}
                       </div>
                     )}
                     <div className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 bg-primary/10 border border-primary/30">
                       <div className="h-4 w-4 rounded-full bg-primary shrink-0" />
                       <p className="text-sm font-semibold flex-1">{swapSheetEx?.name}</p>
-                      <span className="text-xs text-muted-foreground">current</span>
+                      <span className="text-xs text-muted-foreground">{t('coachMobile.sessionLogging.current')}</span>
                     </div>
                     {chainRegs.length > 0 && (
                       <div className="space-y-1.5">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">Easier</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1">{t('coachMobile.sessionLogging.easier')}</p>
                         {chainRegs.map(renderEntry)}
                       </div>
                     )}
@@ -1534,16 +1540,16 @@ export default function CoachMobileSessionLoggingPage() {
             {swapSelectedEntry && (
               <div className="px-5 pb-6 pt-3 border-t space-y-3 shrink-0">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">Why are you adapting? <span className="font-normal">(optional)</span></label>
+                  <label className="text-xs font-medium text-muted-foreground">{t('coachMobile.sessionLogging.whyAdaptLabel')} <span className="font-normal">{t('coachMobile.sessionLogging.whyAdaptOptional')}</span></label>
                   <Textarea
                     value={swapReason}
                     onChange={e => setSwapReason(e.target.value)}
-                    placeholder="e.g. knee pain, no equipment available…"
+                    placeholder={t('coachMobile.sessionLogging.adaptPlaceholder')}
                     className="resize-none text-sm min-h-[60px]"
                   />
                 </div>
                 <Button className="w-full" onClick={applySwap}>
-                  Swap for {swapSelectedEntry.toExerciseName || '—'}
+                  {t('coachMobile.sessionLogging.swapFor', { name: swapSelectedEntry.toExerciseName || '—' })}
                 </Button>
               </div>
             )}
