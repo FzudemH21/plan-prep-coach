@@ -14,6 +14,7 @@ import {
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import type { AthleteConnection } from '@/hooks/useAthleteConnections';
 import { useAthletes } from '@/hooks/useAthletes';
+import { useTranslation } from 'react-i18next';
 
 // ── Toggle row ────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,7 @@ interface Props {
 }
 
 export function CoachAthleteSettingsTab({ athleteId, connection }: Props) {
+  const { t } = useTranslation();
   const { athletes, updateAthlete } = useAthletes();
   const {
     updateWeeksAhead,
@@ -120,8 +122,8 @@ export function CoachAthleteSettingsTab({ athleteId, connection }: Props) {
       {/* Sub-section strip */}
       <div className="flex border-b">
         {([
-          { key: 'profile',  label: 'Profile',  icon: <User className="h-3 w-3" />     },
-          { key: 'settings', label: 'Settings', icon: <Settings className="h-3 w-3" /> },
+          { key: 'profile',  label: t('coachMobile.athleteSettings.profile'),  icon: <User className="h-3 w-3" />     },
+          { key: 'settings', label: t('coachMobile.athleteSettings.settings'), icon: <Settings className="h-3 w-3" /> },
         ] as { key: SubSection; label: string; icon: React.ReactNode }[]).map(({ key, label, icon }) => (
           <button
             key={key}
@@ -143,14 +145,14 @@ export function CoachAthleteSettingsTab({ athleteId, connection }: Props) {
         <div className="rounded-xl border bg-card p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Profile Information
+              {t('coachMobile.athleteSettings.profileInformation')}
             </h3>
             {!profileEditing ? (
               <button
                 onClick={handleProfileEdit}
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
-                <Pencil className="h-3 w-3" /> Edit
+                <Pencil className="h-3 w-3" /> {t('coachMobile.athleteSettings.edit')}
               </button>
             ) : (
               <div className="flex gap-2">
@@ -164,7 +166,7 @@ export function CoachAthleteSettingsTab({ athleteId, connection }: Props) {
                   disabled={profileSaving}
                   className="h-6 gap-1 text-xs text-primary px-2"
                 >
-                  <Check className="h-3 w-3" /> {profileSaving ? 'Saving…' : 'Save'}
+                  <Check className="h-3 w-3" /> {profileSaving ? t('coachMobile.athleteSettings.saving') : t('coachMobile.athleteSettings.save')}
                 </Button>
               </div>
             )}
@@ -173,10 +175,10 @@ export function CoachAthleteSettingsTab({ athleteId, connection }: Props) {
           {!profileEditing ? (
             <div className="space-y-0">
               {[
-                { label: 'Birthday', value: athlete.birthday ? format(parseISO(athlete.birthday + 'T12:00:00'), 'MMM d, yyyy') : '—' },
-                { label: 'Sex',      value: athlete.sex ?? '—' },
-                { label: 'Team',     value: athlete.team ?? '—' },
-                { label: 'Sport(s)', value: sports.length ? sports.join(', ') : '—' },
+                { label: t('coachMobile.athleteSettings.birthday'), value: athlete.birthday ? format(parseISO(athlete.birthday + 'T12:00:00'), 'MMM d, yyyy') : '—' },
+                { label: t('coachMobile.athleteSettings.sex'),      value: athlete.sex ?? '—' },
+                { label: t('coachMobile.athleteSettings.team'),     value: athlete.team ?? '—' },
+                { label: t('coachMobile.athleteSettings.sports'),   value: sports.length ? sports.join(', ') : '—' },
               ].map(({ label, value }) => (
                 <div key={label} className="flex justify-between items-center py-1.5 border-b last:border-0">
                   <span className="text-xs text-muted-foreground">{label}</span>
@@ -187,9 +189,9 @@ export function CoachAthleteSettingsTab({ athleteId, connection }: Props) {
           ) : (
             <div className="space-y-2.5">
               {[
-                { label: 'Birthday', key: 'birthday' as const, type: 'date', placeholder: 'YYYY-MM-DD' },
-                { label: 'Team',     key: 'team'     as const, type: 'text', placeholder: 'e.g. National Team' },
-                { label: 'Sport',    key: 'sport'    as const, type: 'text', placeholder: 'e.g. 100m Sprint' },
+                { label: t('coachMobile.athleteSettings.birthday'), key: 'birthday' as const, type: 'date', placeholder: t('coachMobile.athleteSettings.birthdayPlaceholder') },
+                { label: t('coachMobile.athleteSettings.team'),     key: 'team'     as const, type: 'text', placeholder: t('coachMobile.athleteSettings.teamPlaceholder') },
+                { label: t('coachMobile.athleteSettings.sport'),    key: 'sport'    as const, type: 'text', placeholder: t('coachMobile.athleteSettings.sportPlaceholder') },
               ].map(({ label, key, type, placeholder }) => (
                 <div key={key} className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground w-16 shrink-0">{label}</span>
@@ -203,16 +205,16 @@ export function CoachAthleteSettingsTab({ athleteId, connection }: Props) {
                 </div>
               ))}
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground w-16 shrink-0">Sex</span>
+                <span className="text-xs text-muted-foreground w-16 shrink-0">{t('coachMobile.athleteSettings.sex')}</span>
                 <select
                   value={profileForm.sex}
                   onChange={e => setProfileForm(f => ({ ...f, sex: e.target.value }))}
                   className="h-8 text-sm flex-1 rounded-md border bg-background px-2"
                 >
-                  <option value="">Not set</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other</option>
+                  <option value="">{t('coachMobile.athleteSettings.notSet')}</option>
+                  <option value="male">{t('coachMobile.athleteSettings.male')}</option>
+                  <option value="female">{t('coachMobile.athleteSettings.female')}</option>
+                  <option value="other">{t('coachMobile.athleteSettings.other')}</option>
                 </select>
               </div>
             </div>
@@ -227,7 +229,7 @@ export function CoachAthleteSettingsTab({ athleteId, connection }: Props) {
           {/* Athlete App connection */}
           <div className="rounded-xl border bg-card p-4 space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Athlete App
+              {t('coachMobile.athleteSettings.athleteApp')}
             </h3>
             <div className="flex items-center gap-2">
               <span className={cn(
@@ -235,12 +237,12 @@ export function CoachAthleteSettingsTab({ athleteId, connection }: Props) {
                 isConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700',
               )}>
                 <Check className="h-3 w-3" />
-                {isConnected ? 'Connected' : 'Invite pending'}
+                {isConnected ? t('coachMobile.athleteSettings.connected') : t('coachMobile.athleteSettings.invitePending')}
               </span>
             </div>
             {!isConnected && (
               <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Invite code</p>
+                <p className="text-xs text-muted-foreground">{t('coachMobile.athleteSettings.inviteCode')}</p>
                 <div className="flex items-center gap-3">
                   <code className="text-lg font-mono font-bold tracking-widest">{connection.inviteCode}</code>
                   <button
@@ -259,12 +261,12 @@ export function CoachAthleteSettingsTab({ athleteId, connection }: Props) {
           {/* Calendar access */}
           <div className="rounded-xl border bg-card p-4 space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
-              <CalendarRange className="h-3.5 w-3.5" /> Calendar Access
+              <CalendarRange className="h-3.5 w-3.5" /> {t('coachMobile.athleteSettings.calendarAccess')}
             </h3>
             <div className="flex items-center gap-3">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">Weeks visible in advance</p>
-                <p className="text-xs text-muted-foreground">How far ahead the athlete can see their plan</p>
+                <p className="text-sm font-medium">{t('coachMobile.athleteSettings.weeksAhead')}</p>
+                <p className="text-xs text-muted-foreground">{t('coachMobile.athleteSettings.weeksAheadDesc')}</p>
               </div>
               <Select
                 value={String(connection.weeksAhead)}
@@ -276,7 +278,7 @@ export function CoachAthleteSettingsTab({ athleteId, connection }: Props) {
                 </SelectTrigger>
                 <SelectContent>
                   {[1, 2, 3, 4, 6, 8, 12].map(n => (
-                    <SelectItem key={n} value={String(n)}>{n} {n === 1 ? 'week' : 'weeks'}</SelectItem>
+                    <SelectItem key={n} value={String(n)}>{t('coachMobile.athleteSettings.weeks', { count: n })}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -286,11 +288,11 @@ export function CoachAthleteSettingsTab({ athleteId, connection }: Props) {
           {/* Access controls */}
           <div className="rounded-xl border bg-card px-4">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground pt-3 pb-1 flex items-center gap-1.5">
-              <CalendarDays className="h-3.5 w-3.5" /> Access Controls
+              <CalendarDays className="h-3.5 w-3.5" /> {t('coachMobile.athleteSettings.accessControls')}
             </h3>
             <ToggleRow
-              label="Allow workout rearranging"
-              description="Athlete can move sessions between days in the Plan tab"
+              label={t('coachMobile.athleteSettings.allowRearrange')}
+              description={t('coachMobile.athleteSettings.allowRearrangeDesc')}
               checked={connection.allowRearrangeWorkouts}
               onChange={v => save('rearrange', () => updateAllowRearrangeWorkouts(connection.id, v))}
               disabled={saving === 'rearrange'}
@@ -300,11 +302,11 @@ export function CoachAthleteSettingsTab({ athleteId, connection }: Props) {
           {/* Feature flags */}
           <div className="rounded-xl border bg-card px-4">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground pt-3 pb-1 flex items-center gap-1.5">
-              <MessageCircle className="h-3.5 w-3.5" /> Features
+              <MessageCircle className="h-3.5 w-3.5" /> {t('coachMobile.athleteSettings.features')}
             </h3>
             <ToggleRow
-              label="Messages & Comments"
-              description="Show the Messages tab and exercise comment buttons in the athlete app"
+              label={t('coachMobile.athleteSettings.messagesFeature')}
+              description={t('coachMobile.athleteSettings.messagesFeatureDesc')}
               checked={connection.chatEnabled}
               onChange={v => save('chat', () => updateChatEnabled(connection.id, v))}
               disabled={saving === 'chat'}
@@ -314,11 +316,11 @@ export function CoachAthleteSettingsTab({ athleteId, connection }: Props) {
           {/* Daily monitoring */}
           <div className="rounded-xl border bg-card px-4">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground pt-3 pb-1 flex items-center gap-1.5">
-              <Activity className="h-3.5 w-3.5" /> Daily Monitoring
+              <Activity className="h-3.5 w-3.5" /> {t('coachMobile.athleteSettings.dailyMonitoring')}
             </h3>
             <ToggleRow
-              label="Enable daily check-in"
-              description="Show wellness + injury pop-up on first app open each day"
+              label={t('coachMobile.athleteSettings.enableCheckin')}
+              description={t('coachMobile.athleteSettings.enableCheckinDesc')}
               checked={connection.monitoringEnabled}
               onChange={v => save('monitoring', () => updateMonitoringEnabled(connection.id, v))}
               disabled={saving === 'monitoring'}
@@ -327,11 +329,11 @@ export function CoachAthleteSettingsTab({ athleteId, connection }: Props) {
               <div className="pb-3 pt-1 space-y-0.5 pl-1">
                 {(connection.monitoringConfig!.blocks).filter(b => b.enabled).map(b => (
                   <p key={b.id} className="text-xs text-muted-foreground">
-                    · {b.type === 'wellbeing' ? 'Wellness (5-item)' : b.type === 'ostrc' ? 'Pain & Illness (OSTRC-H)' : (b as { config?: { label?: string } }).config?.label ?? b.type}
+                    · {b.type === 'wellbeing' ? t('coachMobile.athleteSettings.wellnessBlock') : b.type === 'ostrc' ? t('coachMobile.athleteSettings.ostrcBlock') : (b as { config?: { label?: string } }).config?.label ?? b.type}
                   </p>
                 ))}
                 <p className="text-[10px] text-muted-foreground/50 pt-1">
-                  Configure blocks on the desktop app.
+                  {t('coachMobile.athleteSettings.configureOnDesktop')}
                 </p>
               </div>
             )}

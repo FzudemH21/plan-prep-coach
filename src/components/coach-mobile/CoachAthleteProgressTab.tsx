@@ -20,6 +20,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
 } from 'recharts';
 import { useAthletes } from '@/hooks/useAthletes';
+import { useTranslation } from 'react-i18next';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useExerciseMetrics, epley1RM } from '@/hooks/useExerciseMetrics';
 import type { ExerciseEntry, ExerciseSession, ParamTags } from '@/hooks/useExerciseMetrics';
@@ -88,6 +89,7 @@ function AddValueDialog({
   unit?: string | null;
   onAdd: (value: string, date: string, note: string) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const today = new Date().toISOString().slice(0, 10);
   const [value, setValue] = useState('');
   const [date, setDate] = useState(today);
@@ -110,31 +112,31 @@ function AddValueDialog({
     <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent className="w-[92vw] sm:w-[400px]">
         <DialogHeader>
-          <DialogTitle>Add {paramName} value</DialogTitle>
+          <DialogTitle>{t('coachMobile.athleteProgress.addValueTitle', { name: paramName })}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-1">
           <div className="space-y-1">
-            <Label className="text-xs">Value{unit ? ` (${unit})` : ''}</Label>
+            <Label className="text-xs">{unit ? t('coachMobile.athleteProgress.valueLabelWithUnit', { unit }) : t('coachMobile.athleteProgress.valueLabel')}</Label>
             <Input
               type="number"
-              placeholder={unit ? `e.g. 75 ${unit}` : 'Enter value'}
+              placeholder={unit ? t('coachMobile.athleteProgress.valuePlaceholderWithUnit', { unit }) : t('coachMobile.athleteProgress.valuePlaceholder')}
               value={value}
               onChange={e => setValue(e.target.value)}
             />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Date</Label>
+            <Label className="text-xs">{t('coachMobile.athleteProgress.dateLabel')}</Label>
             <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Note (optional)</Label>
-            <Input placeholder="Optional note…" value={note} onChange={e => setNote(e.target.value)} />
+            <Label className="text-xs">{t('coachMobile.athleteProgress.noteOptional')}</Label>
+            <Input placeholder={t('coachMobile.athleteProgress.notePlaceholder')} value={note} onChange={e => setNote(e.target.value)} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" size="sm" onClick={onClose}>{t('common.cancel')}</Button>
           <Button size="sm" disabled={saving || !value.trim()} onClick={handleSave}>
-            {saving ? 'Saving…' : 'Add'}
+            {saving ? t('coachMobile.athleteProgress.saving') : t('coachMobile.athleteProgress.add')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -154,6 +156,7 @@ interface MetricItem {
 }
 
 function MetricRow({ item, onClick }: { item: MetricItem; onClick: () => void }) {
+  const { t } = useTranslation();
   return (
     <button
       onClick={onClick}
@@ -168,7 +171,7 @@ function MetricRow({ item, onClick }: { item: MetricItem; onClick: () => void })
       <p className="text-sm shrink-0">
         {item.latestValue != null
           ? <span className="font-semibold">{item.latestValue}{item.unit ? ' ' + item.unit : ''}</span>
-          : <span className="text-muted-foreground text-xs">No data</span>}
+          : <span className="text-muted-foreground text-xs">{t('coachMobile.athleteProgress.noData')}</span>}
       </p>
       <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
     </button>
@@ -182,6 +185,7 @@ function MetricDetail({
   onBack: () => void;
   onAddValue: (value: string, date: string, note: string) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [addOpen, setAddOpen] = useState(false);
 
   const chartData = useMemo(() =>
@@ -206,7 +210,7 @@ function MetricDetail({
           {item.name}{item.unit ? ` (${item.unit})` : ''}
         </h3>
         <Button size="sm" variant="outline" className="gap-1 h-8 text-xs" onClick={() => setAddOpen(true)}>
-          <Plus className="h-3.5 w-3.5" /> Add
+          <Plus className="h-3.5 w-3.5" /> {t('coachMobile.athleteProgress.add')}
         </Button>
       </div>
 
@@ -236,7 +240,7 @@ function MetricDetail({
       <div className="rounded-xl border bg-card divide-y">
         {item.values.length === 0 ? (
           <p className="text-sm text-muted-foreground px-4 py-8 text-center">
-            No values yet — tap Add to record the first measurement.
+            {t('coachMobile.athleteProgress.noValues')}
           </p>
         ) : (
           item.values
@@ -278,6 +282,7 @@ function SessionRow({
   tags: ParamTags | null;
   allParamNames: string[];
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(true);
 
   const sessionParamNames = useMemo(() => {
@@ -400,7 +405,7 @@ function SessionRow({
             </table>
           </div>
           ) : (
-            <div className="px-3 py-2 text-xs text-muted-foreground">No set data logged</div>
+            <div className="px-3 py-2 text-xs text-muted-foreground">{t('coachMobile.athleteProgress.noSetData')}</div>
           )}
         </>
       )}
@@ -420,6 +425,7 @@ function TagDialog({
   tags: ParamTags | null;
   onSave: (tags: ParamTags | null) => void;
 }) {
+  const { t } = useTranslation();
   const [weightParam, setWeightParam] = useState(tags?.weightParam ?? '');
   const [repsParam, setRepsParam]     = useState(tags?.repsParam   ?? '');
   const [rirParam, setRirParam]       = useState(tags?.rirParam    ?? '');
@@ -429,23 +435,23 @@ function TagDialog({
     <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent className="w-[92vw] sm:w-[400px]">
         <DialogHeader>
-          <DialogTitle>Tag parameters — {exerciseName}</DialogTitle>
+          <DialogTitle>{t('coachMobile.athleteProgress.tagDialogTitle', { name: exerciseName })}</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground -mt-2">
-          Used to calculate estimated 1RM (Epley formula)
+          {t('coachMobile.athleteProgress.tagDialogDesc')}
         </p>
         <div className="space-y-3 py-1">
           {([
-            { label: 'Weight / Load', value: weightParam, set: setWeightParam },
-            { label: 'Reps',          value: repsParam,   set: setRepsParam   },
-            { label: 'RIR (optional)', value: rirParam,   set: setRirParam    },
+            { label: t('coachMobile.athleteProgress.weightLoad'), value: weightParam, set: setWeightParam },
+            { label: t('coachMobile.athleteProgress.reps'),       value: repsParam,   set: setRepsParam   },
+            { label: t('coachMobile.athleteProgress.rirOptional'), value: rirParam,   set: setRirParam    },
           ] as { label: string; value: string; set: (v: string) => void }[]).map(({ label, value, set }) => (
             <div key={label} className="space-y-1">
               <Label className="text-xs">{label}</Label>
               <Select value={value || NONE} onValueChange={v => set(v === NONE ? '' : v)}>
-                <SelectTrigger><SelectValue placeholder="Select param…" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('coachMobile.athleteProgress.selectParam')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE}>— None —</SelectItem>
+                  <SelectItem value={NONE}>{t('coachMobile.athleteProgress.noneOption')}</SelectItem>
                   {paramNames.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -460,16 +466,16 @@ function TagDialog({
               className="text-destructive border-destructive/30"
               onClick={() => { onSave(null); onClose(); }}
             >
-              Clear tags
+              {t('coachMobile.athleteProgress.clearTags')}
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" size="sm" onClick={onClose}>{t('common.cancel')}</Button>
           <Button
             size="sm"
             disabled={!weightParam || !repsParam}
             onClick={() => { onSave({ weightParam, repsParam, rirParam: rirParam || undefined }); onClose(); }}
           >
-            Save
+            {t('coachMobile.athleteProgress.save')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -488,6 +494,7 @@ function ExerciseDetail({
   onBack: () => void;
   onTagSave: (tags: ParamTags | null) => void;
 }) {
+  const { t } = useTranslation();
   const [tagOpen, setTagOpen] = useState(false);
   const [range, setRange] = useState<DateRangeKey>('All');
 
@@ -519,11 +526,11 @@ function ExerciseDetail({
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground -ml-1 active:opacity-60 transition-opacity"
         >
           <ChevronLeft className="h-4 w-4" />
-          Back
+          {t('coachMobile.athleteProgress.back')}
         </button>
         <div className="flex-1" />
         <Button size="sm" variant="outline" className="gap-1 h-8 text-xs shrink-0" onClick={() => setTagOpen(true)}>
-          <Tag className="h-3.5 w-3.5" /> Tag
+          <Tag className="h-3.5 w-3.5" /> {t('coachMobile.athleteProgress.tag')}
         </Button>
       </div>
 
@@ -531,13 +538,13 @@ function ExerciseDetail({
       <div>
         <h3 className="text-lg font-semibold">{entry.name}</h3>
         <p className="text-xs text-muted-foreground mt-0.5">
-          {sessions.length} session{sessions.length !== 1 ? 's' : ''} logged
+          {t('coachMobile.athleteProgress.sessionsLogged', { count: sessions.length })}
         </p>
         {tags && latestE1RM !== null && (
           <div className="flex items-baseline gap-1.5 mt-1">
             <span className="text-3xl font-bold tabular-nums">{latestE1RM.toFixed(1)}</span>
             <span className="text-muted-foreground">
-              {weightUnit ? `${weightUnit} ` : ''}est. 1RM
+              {weightUnit ? `${weightUnit} ` : ''}{t('coachMobile.athleteProgress.estOneRM')}
             </span>
           </div>
         )}
@@ -564,14 +571,14 @@ function ExerciseDetail({
                   <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
                   <Tooltip
                     contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: '6px', fontSize: '12px' }}
-                    formatter={(v: number) => [`${v.toFixed(1)}${weightUnit ? ` ${weightUnit}` : ''}`, 'est. 1RM']}
+                    formatter={(v: number) => [`${v.toFixed(1)}${weightUnit ? ` ${weightUnit}` : ''}`, t('coachMobile.athleteProgress.estOneRM')]}
                   />
                   <Area type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#e1rmGradCoach)" dot={{ r: 3, fill: 'hsl(var(--primary))' }} activeDot={{ r: 5 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
             <p className="text-[10px] text-muted-foreground text-right -mt-2">
-              Epley: weight × (1 + (reps{tags.rirParam ? ' + RIR' : ''}) / 30)
+              {tags.rirParam ? t('coachMobile.athleteProgress.epleyFormulaRir') : t('coachMobile.athleteProgress.epleyFormula')}
             </p>
           </>
         ) : (
@@ -579,9 +586,9 @@ function ExerciseDetail({
             <p className="text-xs text-muted-foreground text-center px-4">
               {chartData.length === 0
                 ? (range === 'All'
-                    ? 'Log sets with weight + reps for e1RM estimation'
-                    : `No e1RM data in the last ${DATE_RANGE_LABELS[range]}`)
-                : 'Log more sessions to see the trend'}
+                    ? t('coachMobile.athleteProgress.logSetsHint')
+                    : t('coachMobile.athleteProgress.noE1rmInRange', { range: DATE_RANGE_LABELS[range] }))
+                : t('coachMobile.athleteProgress.logMoreSessions')}
             </p>
           </div>
         )
@@ -589,18 +596,20 @@ function ExerciseDetail({
 
       {!tags && (
         <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
-          Tap <strong>Tag</strong> to mark weight, reps and RIR params — enables e1RM calculation.
+          {t('coachMobile.athleteProgress.tagHint')}
         </p>
       )}
 
       {/* Session history */}
       <div className="space-y-2">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          Session History{filteredSessions.length !== sessions.length ? ` (${filteredSessions.length} of ${sessions.length})` : ''}
+          {filteredSessions.length !== sessions.length
+            ? t('coachMobile.athleteProgress.sessionHistoryFiltered', { count: filteredSessions.length, total: sessions.length })
+            : t('coachMobile.athleteProgress.sessionHistory')}
         </p>
         {filteredSessions.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-4">
-            {range === 'All' ? 'No logged sessions yet.' : `No sessions in the last ${DATE_RANGE_LABELS[range]}`}
+            {range === 'All' ? t('coachMobile.athleteProgress.noSessionsYet') : t('coachMobile.athleteProgress.noSessionsInRange', { range: DATE_RANGE_LABELS[range] })}
           </p>
         ) : (
           [...filteredSessions].reverse().map((s, i) => (
@@ -647,6 +656,7 @@ export function CoachAthleteProgressTab({ athleteId, connectionId }: Props) {
   const { data: paramDb } = useParametersDataV2();
   const { exercises, loading: exLoading, paramTags, setParamTags, getExerciseHistory } = useExerciseMetrics(connectionId);
 
+  const { t } = useTranslation();
   const [section, setSection] = useState<Section>('body');
   const [search, setSearch] = useState('');
   const [selectedBioId, setSelectedBioId]   = useState<string | null>(null);
@@ -728,9 +738,9 @@ export function CoachAthleteProgressTab({ athleteId, connectionId }: Props) {
       {!inDetail && (
         <div className="flex border-b">
           {([
-            { key: 'body',        label: 'Body'        },
-            { key: 'performance', label: 'Performance' },
-            { key: 'exercises',   label: 'Exercises'   },
+            { key: 'body',        label: t('coachMobile.athleteProgress.body')        },
+            { key: 'performance', label: t('coachMobile.athleteProgress.performance') },
+            { key: 'exercises',   label: t('coachMobile.athleteProgress.exercises')   },
           ] as { key: Section; label: string }[]).map(({ key, label }) => (
             <button
               key={key}
@@ -754,9 +764,9 @@ export function CoachAthleteProgressTab({ athleteId, connectionId }: Props) {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           <Input
             placeholder={
-              section === 'body'        ? 'Search body metrics…'        :
-              section === 'performance' ? 'Search performance metrics…' :
-              'Search exercises…'
+              section === 'body'        ? t('coachMobile.athleteProgress.searchBody')        :
+              section === 'performance' ? t('coachMobile.athleteProgress.searchPerformance') :
+              t('coachMobile.athleteProgress.searchExercises')
             }
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -769,7 +779,7 @@ export function CoachAthleteProgressTab({ athleteId, connectionId }: Props) {
       {section === 'body' && !inDetail && (
         <div className="rounded-xl border bg-card divide-y px-4">
           {filteredBody.length === 0
-            ? <p className="text-sm text-muted-foreground py-8 text-center">No body metrics assigned yet.</p>
+            ? <p className="text-sm text-muted-foreground py-8 text-center">{t('coachMobile.athleteProgress.noBodyMetrics')}</p>
             : filteredBody.map(item => (
               <MetricRow key={item.id} item={item} onClick={() => setSelectedBioId(item.id)} />
             ))}
@@ -789,7 +799,7 @@ export function CoachAthleteProgressTab({ athleteId, connectionId }: Props) {
       {section === 'performance' && !inDetail && (
         <div className="rounded-xl border bg-card divide-y px-4">
           {filteredPerf.length === 0
-            ? <p className="text-sm text-muted-foreground py-8 text-center">No performance parameters linked yet.</p>
+            ? <p className="text-sm text-muted-foreground py-8 text-center">{t('coachMobile.athleteProgress.noPerfParams')}</p>
             : filteredPerf.map(item => (
               <MetricRow key={item.id} item={item} onClick={() => setSelectedPerfId(item.id)} />
             ))}
@@ -810,9 +820,9 @@ export function CoachAthleteProgressTab({ athleteId, connectionId }: Props) {
       {section === 'exercises' && !inDetail && (
         <div className="space-y-px">
           {exLoading ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
+            <p className="text-sm text-muted-foreground py-8 text-center">{t('common.loading')}</p>
           ) : filteredEx.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">No exercises logged yet.</p>
+            <p className="text-sm text-muted-foreground py-8 text-center">{t('coachMobile.athleteProgress.noExercisesYet')}</p>
           ) : filteredEx.map(entry => (
             <button
               key={entry.name}
@@ -822,7 +832,7 @@ export function CoachAthleteProgressTab({ athleteId, connectionId }: Props) {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{entry.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {entry.sessionCount} session{entry.sessionCount !== 1 ? 's' : ''}
+                  {t('coachMobile.athleteProgress.sessions', { count: entry.sessionCount })}
                 </p>
               </div>
               {!!paramTags[entry.name] && (
