@@ -32,6 +32,7 @@ import {
   recalculateMesocycleDates,
 } from '@/utils/dateShifting';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import type { AssignedMesocycle, ReviewedSubGoal, ReviewedEvent } from '@/types/athlete';
 import type { SubGoal, Event as TrainingEvent } from '@/types/training';
 
@@ -221,7 +222,13 @@ const STEPS = [
 type Step = typeof STEPS[number]['key'];
 
 function StepIndicator({ current }: { current: Step }) {
+  const { t } = useTranslation();
   const idx = STEPS.findIndex(s => s.key === current);
+  const stepLabels: Record<string, string> = {
+    'pick-program': t('coachMobile.assignProgram.stepProgram'),
+    'meso': t('coachMobile.assignProgram.stepMesocycles'),
+    'tests-events': t('coachMobile.assignProgram.stepTestsEvents'),
+  };
   return (
     <div className="flex items-center justify-center gap-0 py-2 shrink-0">
       {STEPS.map((step, i) => (
@@ -234,7 +241,7 @@ function StepIndicator({ current }: { current: Step }) {
               {i + 1}
             </div>
             <span className={cn('text-[10px] whitespace-nowrap', i === idx ? 'text-foreground font-medium' : 'text-muted-foreground')}>
-              {step.label}
+              {stepLabels[step.key]}
             </span>
           </div>
           {i < STEPS.length - 1 && (
@@ -258,13 +265,14 @@ interface DateEditModalProps {
 }
 
 function DateEditModal({ open, value, onUpdate, onRemove, onClose, isNew }: DateEditModalProps) {
+  const { t } = useTranslation();
   const [dateVal, setDateVal] = useState(value);
   useEffect(() => { setDateVal(value); }, [value]);
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-[320px]">
         <DialogHeader>
-          <DialogTitle>{isNew ? 'Add Date' : 'Edit Date'}</DialogTitle>
+          <DialogTitle>{isNew ? t('coachMobile.assignProgram.addDate') : t('coachMobile.assignProgram.editDate')}</DialogTitle>
         </DialogHeader>
         <div className="py-2">
           <input
@@ -277,11 +285,11 @@ function DateEditModal({ open, value, onUpdate, onRemove, onClose, isNew }: Date
         <DialogFooter className="flex gap-2 flex-col sm:flex-row">
           {!isNew && (
             <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={onRemove}>
-              Remove
+              {t('coachMobile.assignProgram.remove')}
             </Button>
           )}
           <Button size="sm" className="flex-1" disabled={!dateVal} onClick={() => { if (dateVal) { onUpdate(dateVal); onClose(); } }}>
-            {isNew ? 'Add' : 'Update'}
+            {isNew ? t('coachMobile.assignProgram.add') : t('coachMobile.assignProgram.update')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -296,6 +304,7 @@ export default function CoachMobileAssignProgramPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   const { athletes, createCalendarAssignment, getAthletePerformanceParameters, getAthleteBiometrics, biometricDefinitions } = useAthletes();
   const { connections } = useAthleteConnections();
@@ -436,7 +445,7 @@ export default function CoachMobileAssignProgramPage() {
   const handleAssign = async () => {
     if (!selectedProgram || !athlete || assigning || finalMesocycles.length === 0) return;
     if (!connection) {
-      toast({ title: 'No connection', description: 'This athlete has not been invited yet.', variant: 'destructive' });
+      toast({ title: t('coachMobile.assignProgram.toastNoConnectionTitle'), description: t('coachMobile.assignProgram.toastNoConnectionDesc'), variant: 'destructive' });
       return;
     }
 
@@ -689,23 +698,24 @@ export default function CoachMobileAssignProgramPage() {
       }
 
       if (dateMismatch) {
+        const dirKey = dateMismatch.direction === 'forward' ? 'directionForward' : 'directionBackward';
         toast({
-          title: 'Dates shifted',
-          description: `Sessions shifted ${dateMismatch.days} day${dateMismatch.days !== 1 ? 's' : ''} ${dateMismatch.direction} from the original plan.`,
+          title: t('coachMobile.assignProgram.toastShiftedTitle'),
+          description: t('coachMobile.assignProgram.toastShiftedDesc', { count: dateMismatch.days, direction: t(`coachMobile.assignProgram.${dirKey}`) }),
         });
       }
 
       toast({
-        title: 'Program assigned',
+        title: t('coachMobile.assignProgram.toastAssignedTitle'),
         description: connection.connectedAt
-          ? `${program.name} synced to ${athlete.firstName}'s app.`
-          : `${program.name} assigned. Connect the athlete to sync sessions.`,
+          ? t('coachMobile.assignProgram.toastAssignedSynced', { program: program.name, name: athlete.firstName })
+          : t('coachMobile.assignProgram.toastAssignedPending', { program: program.name }),
       });
 
       navigate(`/coach-mobile/athletes/${athleteId}`, { state: { tab: 'training' } });
     } catch (err) {
       console.error('[assign] error', err);
-      toast({ title: 'Assignment failed', description: 'Something went wrong. Please try again.', variant: 'destructive' });
+      toast({ title: t('coachMobile.assignProgram.toastFailedTitle'), description: t('coachMobile.assignProgram.toastFailedDesc'), variant: 'destructive' });
     } finally {
       setAssigning(false);
     }
@@ -760,7 +770,7 @@ export default function CoachMobileAssignProgramPage() {
   if (!athlete) {
     return (
       <div className="flex flex-col h-full items-center justify-center text-muted-foreground text-sm">
-        Athlete not found.
+        {t('coachMobile.assignProgram.athleteNotFound')}
       </div>
     );
   }
@@ -783,7 +793,7 @@ export default function CoachMobileAssignProgramPage() {
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <h1 className="text-base font-semibold flex-1 truncate">Assign Program</h1>
+        <h1 className="text-base font-semibold flex-1 truncate">{t('coachMobile.assignProgram.title')}</h1>
       </div>
 
       {/* Step indicator */}
@@ -795,10 +805,10 @@ export default function CoachMobileAssignProgramPage() {
           {/* Athlete + start date */}
           <div className="shrink-0 px-4 pb-3 space-y-3 border-b">
             <p className="text-xs text-muted-foreground">
-              Assigning to <span className="font-medium text-foreground">{athlete.firstName} {athlete.lastName}</span>
+              {t('coachMobile.assignProgram.assigningTo')} <span className="font-medium text-foreground">{athlete.firstName} {athlete.lastName}</span>
             </p>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Start Date</Label>
+              <Label className="text-xs text-muted-foreground uppercase tracking-wide">{t('coachMobile.assignProgram.startDate')}</Label>
               <input
                 type="date"
                 value={startDateStr}
@@ -808,7 +818,7 @@ export default function CoachMobileAssignProgramPage() {
               {isPastDate && (
                 <p className="text-[11px] text-amber-600 flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3 shrink-0" />
-                  Start date is in the past.
+                  {t('coachMobile.assignProgram.pastDateWarning')}
                 </p>
               )}
             </div>
@@ -818,8 +828,8 @@ export default function CoachMobileAssignProgramPage() {
             {availablePrograms.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center px-8">
                 <BookOpen className="h-10 w-10 text-muted-foreground/40 mb-4" />
-                <p className="text-sm font-medium text-muted-foreground mb-1">No programs available</p>
-                <p className="text-xs text-muted-foreground">Create a training program in the desktop wizard first.</p>
+                <p className="text-sm font-medium text-muted-foreground mb-1">{t('coachMobile.assignProgram.noProgramsTitle')}</p>
+                <p className="text-xs text-muted-foreground">{t('coachMobile.assignProgram.noProgramsDesc')}</p>
               </div>
             ) : (
               <div className="px-4 pb-6 space-y-2 pt-3">
@@ -837,8 +847,8 @@ export default function CoachMobileAssignProgramPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold truncate">{p.name}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {p.duration?.weeks ? `${p.duration.weeks} weeks` : 'Duration unknown'}
-                          {orig ? ` · planned ${format(orig, 'MMM d, yyyy')}` : ''}
+                          {p.duration?.weeks ? t('coachMobile.assignProgram.weeks', { count: p.duration.weeks }) : t('coachMobile.assignProgram.durationUnknown')}
+                          {orig ? ` · ${t('coachMobile.assignProgram.planned', { date: format(orig, 'MMM d, yyyy') })}` : ''}
                         </p>
                         {p.macrocycleData?.smartGoals?.[0]?.description && (
                           <p className="text-xs text-muted-foreground/70 mt-0.5 truncate">
@@ -865,14 +875,16 @@ export default function CoachMobileAssignProgramPage() {
               {isPastDate && (
                 <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-amber-800 dark:text-amber-300">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                  <p className="text-xs">Start date is in the past.</p>
+                  <p className="text-xs">{t('coachMobile.assignProgram.pastDateWarning')}</p>
                 </div>
               )}
               {dateMismatch && (
                 <div className="flex items-start gap-2 rounded-lg bg-muted border px-3 py-2">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-muted-foreground" />
                   <p className="text-xs text-muted-foreground">
-                    All sessions shift <strong>{dateMismatch.days} day{dateMismatch.days !== 1 ? 's' : ''} {dateMismatch.direction}</strong> from the original plan.
+                    {t('coachMobile.assignProgram.sessionShiftPrefix')}{' '}
+                    <strong>{t('coachMobile.assignProgram.days', { count: dateMismatch.days })} {t(`coachMobile.assignProgram.direction${dateMismatch.direction === 'forward' ? 'Forward' : 'Backward'}`)}</strong>
+                    {' '}{t('coachMobile.assignProgram.sessionShiftSuffix')}
                   </p>
                 </div>
               )}
@@ -882,7 +894,7 @@ export default function CoachMobileAssignProgramPage() {
           <div className="flex-1 overflow-y-auto">
             {programMesocycles.length === 0 ? (
               <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
-                No mesocycles found in this program.
+                {t('coachMobile.assignProgram.noMesocycles')}
               </div>
             ) : (
               <div className="px-4 py-3 space-y-2">
@@ -905,9 +917,9 @@ export default function CoachMobileAssignProgramPage() {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{meso.name}</p>
                             <p className="text-xs text-muted-foreground">
-                              {meso.weeks} week{meso.weeks !== 1 ? 's' : ''} · {meso.duration} days
+                              {t('coachMobile.assignProgram.weeks', { count: meso.weeks })} · {t('coachMobile.assignProgram.days', { count: meso.duration })}
                               {isMesoSelected && selMicroCount < meso.microcycles.length && (
-                                <span className="ml-1 text-primary">({selMicroCount}/{meso.microcycles.length} selected)</span>
+                                <span className="ml-1 text-primary">{t('coachMobile.assignProgram.selectedCount', { selected: selMicroCount, total: meso.microcycles.length })}</span>
                               )}
                             </p>
                           </div>
@@ -927,7 +939,7 @@ export default function CoachMobileAssignProgramPage() {
                                   className="shrink-0"
                                 />
                                 <span className="text-sm flex-1">{micro.name}</span>
-                                <span className="text-xs text-muted-foreground">{micro.duration} days</span>
+                                <span className="text-xs text-muted-foreground">{t('coachMobile.assignProgram.days', { count: micro.duration })}</span>
                               </div>
                             );
                           })}
@@ -940,7 +952,7 @@ export default function CoachMobileAssignProgramPage() {
                 {/* Summary row */}
                 {finalMesocycles.length > 0 && (
                   <div className="rounded-xl border bg-muted/30 px-4 py-3 space-y-1.5 mt-1">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Schedule</p>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{t('coachMobile.assignProgram.schedule')}</p>
                     {finalMesocycles.map((m) => (
                       <div key={m.id} className="flex justify-between text-xs">
                         <span className="text-muted-foreground truncate">{m.name}</span>
@@ -950,8 +962,8 @@ export default function CoachMobileAssignProgramPage() {
                       </div>
                     ))}
                     <div className="flex justify-between text-xs pt-1 border-t">
-                      <span className="text-muted-foreground">Total</span>
-                      <span className="font-medium">{totalWeeks} weeks · ends {format(endDate, 'MMM d, yyyy')}</span>
+                      <span className="text-muted-foreground">{t('coachMobile.assignProgram.total')}</span>
+                      <span className="font-medium">{t('coachMobile.assignProgram.weeks', { count: totalWeeks })} · {t('coachMobile.assignProgram.endsDate', { date: format(endDate, 'MMM d, yyyy') })}</span>
                     </div>
                   </div>
                 )}
@@ -965,7 +977,7 @@ export default function CoachMobileAssignProgramPage() {
               disabled={finalMesocycles.length === 0}
               onClick={() => setStep('tests-events')}
             >
-              Next
+              {t('coachMobile.assignProgram.nextButton')}
             </Button>
           </div>
         </div>
@@ -978,8 +990,8 @@ export default function CoachMobileAssignProgramPage() {
             {reviewedTests.length === 0 && reviewedEvents.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center px-8">
                 <Trophy className="h-10 w-10 text-muted-foreground/40 mb-4" />
-                <p className="text-sm font-medium text-muted-foreground mb-1">No tests or events</p>
-                <p className="text-xs text-muted-foreground">This program has no tests or events defined. You can assign it directly.</p>
+                <p className="text-sm font-medium text-muted-foreground mb-1">{t('coachMobile.assignProgram.noTestsTitle')}</p>
+                <p className="text-xs text-muted-foreground">{t('coachMobile.assignProgram.noTestsDesc')}</p>
               </div>
             ) : (
               <div className="px-4 py-3 space-y-3">
@@ -994,7 +1006,7 @@ export default function CoachMobileAssignProgramPage() {
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Baseline</Label>
+                        <Label className="text-xs text-muted-foreground">{t('coachMobile.assignProgram.baseline')}</Label>
                         <Input
                           type="number"
                           value={sg.baselineValue || ''}
@@ -1003,7 +1015,7 @@ export default function CoachMobileAssignProgramPage() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Goal</Label>
+                        <Label className="text-xs text-muted-foreground">{t('coachMobile.assignProgram.goal')}</Label>
                         <Input
                           type="number"
                           value={sg.goalValue || ''}
@@ -1013,16 +1025,16 @@ export default function CoachMobileAssignProgramPage() {
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Comments</Label>
+                      <Label className="text-xs text-muted-foreground">{t('coachMobile.assignProgram.comments')}</Label>
                       <Input
                         value={sg.comments || ''}
                         onChange={e => setReviewedTests(prev => prev.map((t, i) => i === idx ? { ...t, comments: e.target.value } : t))}
                         className="h-8 text-sm"
-                        placeholder="Notes…"
+                        placeholder={t('coachMobile.assignProgram.notesPlaceholder')}
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs text-muted-foreground">Test Dates</Label>
+                      <Label className="text-xs text-muted-foreground">{t('coachMobile.assignProgram.testDates')}</Label>
                       <div className="flex flex-wrap gap-1.5 items-center">
                         {sg.scheduledDates.map((d, di) => (
                           <button
@@ -1053,16 +1065,16 @@ export default function CoachMobileAssignProgramPage() {
                       <p className="text-sm font-semibold truncate flex-1">{evt.name}</p>
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Comments</Label>
+                      <Label className="text-xs text-muted-foreground">{t('coachMobile.assignProgram.comments')}</Label>
                       <Input
                         value={evt.comments || ''}
                         onChange={e => setReviewedEvents(prev => prev.map((e, i) => i === idx ? { ...e, comments: e.target.value } : e))}
                         className="h-8 text-sm"
-                        placeholder="Notes…"
+                        placeholder={t('coachMobile.assignProgram.notesPlaceholder')}
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs text-muted-foreground">Event Dates</Label>
+                      <Label className="text-xs text-muted-foreground">{t('coachMobile.assignProgram.eventDates')}</Label>
                       <div className="flex flex-wrap gap-1.5 items-center">
                         {evt.scheduledDates.map((d, di) => (
                           <button
@@ -1095,9 +1107,9 @@ export default function CoachMobileAssignProgramPage() {
               disabled={assigning || finalMesocycles.length === 0}
             >
               {assigning ? (
-                <><Loader2 className="h-4 w-4 animate-spin" /> Assigning…</>
+                <><Loader2 className="h-4 w-4 animate-spin" /> {t('coachMobile.assignProgram.assigning')}</>
               ) : (
-                <><CheckCircle2 className="h-4 w-4" /> Assign Program</>
+                <><CheckCircle2 className="h-4 w-4" /> {t('coachMobile.assignProgram.assignButton')}</>
               )}
             </Button>
           </div>
