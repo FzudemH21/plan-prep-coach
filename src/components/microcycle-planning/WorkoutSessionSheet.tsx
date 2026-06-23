@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Save, PanelRightClose, PanelRight, Pencil, MessageSquare, ChevronDown, X, Trophy, Calendar as CalendarIcon, TrendingUp, TrendingDown, Check, RefreshCw, BookmarkPlus } from 'lucide-react';
+import { Plus, Save, PanelRightClose, PanelRight, Pencil, MessageSquare, ChevronDown, X, Trophy, Calendar as CalendarIcon, TrendingUp, TrendingDown, Check, RefreshCw, BookmarkPlus, Printer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { WorkoutSection, WorkoutExercise, WorkoutSession, SupersetMapping } from '@/types/workout';
 import { IntensityLevel } from '@/types/training';
@@ -44,6 +44,7 @@ import { useAthletes } from '@/hooks/useAthletes';
 import { FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
 import { SaveToLibraryDialog } from '@/components/session-library/SaveToLibraryDialog';
 import { ExerciseHistorySheet, type HistoryEntry } from '@/components/shared/ExerciseHistorySheet';
+import { PrintSessionView } from '@/components/print/PrintSessionView';
 import { useExerciseMetrics } from '@/hooks/useExerciseMetrics';
 
 interface SessionSectionProp {
@@ -3319,6 +3320,9 @@ export function WorkoutSessionSheet({
               </div>
             </div>
             <div className="flex items-center gap-2 pr-10">
+              <Button variant="outline" size="sm" onClick={() => window.print()} title="Print session">
+                <Printer className="h-4 w-4" />
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)}>
                 {sidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
               </Button>
@@ -3865,6 +3869,23 @@ export function WorkoutSessionSheet({
           prefetchedEntries={historyCache ? (historyCache.get(historyTarget.toLowerCase()) ?? []) : null}
         />
       )}
+
+      {/* Print view — hidden on screen, visible only during window.print() via @media print CSS */}
+      <PrintSessionView
+        sessionName={sessionName || `Session ${sessionIndex + 1}`}
+        date={
+          dayDate && /^\d{4}-\d{2}-\d{2}$/.test(dayDate)
+            ? format(parseISO(dayDate), 'EEEE, MMMM d, yyyy')
+            : dayDate ? 'Library Session' : ''
+        }
+        dayIntensity={currentIntensity}
+        sessionIntensity={sessionIntensity}
+        sessionComments={sessionComments}
+        sections={workoutSections}
+        toolboxData={toolboxData}
+        getSupersetLabel={getSupersetLabel}
+        visibilityOverrides={parameterVisibilityOverrides}
+      />
     </WorkoutSessionProvider>
   );
 }

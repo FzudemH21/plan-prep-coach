@@ -1,0 +1,216 @@
+/* Screen: hide the print view entirely */
+.print-session-view {
+  display: none;
+}
+
+/* ─────────────────────────────────────────────
+   PRINT STYLES
+   ───────────────────────────────────────────── */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 15mm 12mm;
+  }
+
+  /* Hide everything, reveal only the print view */
+  body * {
+    visibility: hidden;
+  }
+
+  .print-session-view,
+  .print-session-view * {
+    visibility: visible;
+  }
+
+  .print-session-view {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    color: #000;
+    background: #fff;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 10pt;
+    line-height: 1.4;
+  }
+
+  /* ── Header ── */
+  .psv-header {
+    border-bottom: 2pt solid #000;
+    padding-bottom: 8pt;
+    margin-bottom: 12pt;
+  }
+
+  .psv-title {
+    font-size: 18pt;
+    font-weight: bold;
+    margin: 0 0 4pt;
+  }
+
+  .psv-meta {
+    display: flex;
+    gap: 16pt;
+    font-size: 9pt;
+    color: #333;
+    flex-wrap: wrap;
+  }
+
+  .psv-session-notes {
+    margin-top: 6pt;
+    font-size: 9pt;
+    font-style: italic;
+    color: #444;
+  }
+
+  .psv-session-notes-label {
+    font-weight: bold;
+    font-style: normal;
+  }
+
+  /* ── Section ── */
+  .psv-section {
+    margin-bottom: 14pt;
+  }
+
+  .psv-section-name {
+    font-size: 13pt;
+    font-weight: bold;
+    border-bottom: 1pt solid #666;
+    padding-bottom: 3pt;
+    margin: 0 0 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+
+  .psv-section-notes {
+    font-size: 9pt;
+    font-style: italic;
+    color: #555;
+    margin-bottom: 8pt;
+  }
+
+  /* ── Exercise ── */
+  .psv-exercise {
+    margin-bottom: 10pt;
+    padding: 6pt 0 6pt 8pt;
+    border-left: 2pt solid #ccc;
+    break-inside: avoid;
+  }
+
+  .psv-exercise-header {
+    display: flex;
+    align-items: center;
+    gap: 8pt;
+    margin-bottom: 5pt;
+  }
+
+  .psv-exercise-name {
+    font-size: 11pt;
+    font-weight: bold;
+  }
+
+  .psv-superset-label {
+    font-size: 8pt;
+    font-weight: bold;
+    background: #000;
+    color: #fff;
+    padding: 1pt 4pt;
+    border-radius: 2pt;
+    letter-spacing: 0.5pt;
+  }
+
+  .psv-each-side {
+    font-size: 8pt;
+    color: #555;
+    border: 0.5pt solid #aaa;
+    padding: 1pt 4pt;
+    border-radius: 2pt;
+  }
+
+  /* ── Parameter grid ── */
+  .psv-param-grid {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+    margin-bottom: 5pt;
+  }
+
+  .psv-param-grid th {
+    background: #f0f0f0;
+    border: 0.5pt solid #bbb;
+    padding: 3pt 6pt;
+    text-align: left;
+    font-weight: bold;
+    font-size: 8pt;
+    white-space: nowrap;
+  }
+
+  .psv-param-grid td {
+    border: 0.5pt solid #ddd;
+    padding: 3pt 6pt;
+    text-align: left;
+  }
+
+  .psv-param-grid tr:nth-child(even) td {
+    background: #fafafa;
+  }
+
+  /* ── Chips (non-grid params) ── */
+  .psv-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4pt;
+    margin-top: 4pt;
+    margin-bottom: 4pt;
+  }
+
+  .psv-chip {
+    font-size: 8pt;
+    border: 0.5pt solid #999;
+    padding: 1pt 5pt;
+    border-radius: 10pt;
+    white-space: nowrap;
+  }
+
+  /* ── Exercise notes ── */
+  .psv-exercise-notes {
+    font-size: 9pt;
+    font-style: italic;
+    color: #555;
+    margin-top: 4pt;
+    margin-bottom: 0;
+  }
+
+  /* ── Circuit block ── */
+  .psv-circuit {
+    margin-bottom: 10pt;
+    padding: 6pt 0 6pt 8pt;
+    border-left: 2pt solid #888;
+    break-inside: avoid;
+  }
+
+  .psv-circuit-header {
+    font-size: 10pt;
+    font-weight: bold;
+    margin-bottom: 4pt;
+    color: #222;
+  }
+
+  .psv-circuit-meta {
+    font-size: 8pt;
+    color: #555;
+    margin-bottom: 4pt;
+  }
+
+  .psv-circuit-exercise {
+    font-size: 9pt;
+    padding: 2pt 0;
+    border-bottom: 0.5pt solid #eee;
+  }
+
+  .psv-circuit-exercise:last-child {
+    border-bottom: none;
+  }
+}

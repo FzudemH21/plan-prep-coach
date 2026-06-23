@@ -35,6 +35,7 @@ import OnboardingPage from "./pages/OnboardingPage";
 import CoachProfilePage from "./pages/CoachProfilePage";
 import CoachMessagesPage from "./pages/CoachMessagesPage";
 import SessionLibraryPage from "./pages/SessionLibraryPage";
+import PrintPreviewPage from "./pages/dev/PrintPreviewPage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import AthleteLoginPage from "./pages/athlete/AthleteLoginPage";
@@ -99,6 +100,7 @@ function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/dev/print-preview" element={<PrintPreviewPage />} />
 
         {/* Athlete app — public routes (no auth required) */}
         <Route path="/athlete/login" element={<AthleteLoginPage />} />
