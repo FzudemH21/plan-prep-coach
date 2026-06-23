@@ -4,6 +4,7 @@ import { ToolboxDatabase, ToolboxEntry } from '@/types/toolbox';
 import { ParameterVisibilityOverrides, isParameterVisible } from '@/components/microcycle-planning/ParameterVisibilityPopover';
 import { getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { getParametersForMethod } from '@/data/methodParameters';
+import { evaluateFormula, parseNumeric } from '@/utils/formulaEvaluator';
 
 export interface PrintSessionViewProps {
   sessionName: string;
@@ -24,7 +25,11 @@ interface ParamMeta {
   isRestParameter: boolean;
   isFrequencyParameter: boolean;
   showInGridByDefault: boolean;
+  isCalculated: boolean;
 }
+
+// Percentage units — stored as 80 but need to be 0.80 in formula context
+const PCT_UNITS = new Set(['%', '%1RM', '%BW', '%maxV', '%maxHR']);
 
 function getToolboxParams(methodId: string, toolboxData?: ToolboxDatabase): ToolboxEntry[] {
   if (!toolboxData?.entries) return [];
@@ -37,7 +42,7 @@ function getToolboxParams(methodId: string, toolboxData?: ToolboxDatabase): Tool
 function buildParamMeta(
   exercise: WorkoutExercise,
   toolboxData?: ToolboxDatabase,
-): { setCount: number; displayableParams: ParamMeta[] } {
+): { setCount: number; displayableParams: ParamMeta[]; toolboxParams: ToolboxEntry[] } {
   const toolboxParams = getToolboxParams(exercise.methodId, toolboxData);
   const keys = Object.keys(exercise.parameters || {});
   const baseKeys = keys.filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k));
@@ -59,6 +64,7 @@ function buildParamMeta(
           toolboxEntry?.isRestParameter || /rest|pause|recovery/i.test(name),
         isFrequencyParameter: toolboxEntry?.isFrequencyParameter || false,
         showInGridByDefault: toolboxEntry?.showInGridByDefault ?? true,
+        isCalculated: false,
       };
     });
   } else {
@@ -70,7 +76,26 @@ function buildParamMeta(
       isRestParameter: /rest|pause|recovery/i.test(d.name),
       isFrequencyParameter: false,
       showInGridByDefault: true,
+      isCalculated: false,
     }));
+  }
+
+  // Append isCalculated toolbox entries not already in the list (same logic as WorkoutExerciseCard)
+  for (const tp of toolboxParams) {
+    if (tp.isCalculated && !!tp.formula && !params.some(p => p.name === tp.parameterName)) {
+      params.push({
+        name: tp.parameterName,
+        unit:
+          tp.parameterType === 'quantitative' && tp.options.length > 0
+            ? tp.options[0]
+            : undefined,
+        isSetParameter: false,
+        isRestParameter: false,
+        isFrequencyParameter: false,
+        showInGridByDefault: tp.showInGridByDefault ?? true,
+        isCalculated: true,
+      });
+    }
   }
 
   const setParam = params.find(p => p.isSetParameter && !p.isRestParameter);
@@ -80,7 +105,56 @@ function buildParamMeta(
     p => (!p.isSetParameter || p.isRestParameter) && !p.isFrequencyParameter,
   );
 
-  return { setCount, displayableParams };
+  return { setCount, displayableParams, toolboxParams };
+}
+
+function resolveCalcValue(
+  entry: ToolboxEntry,
+  setIndex: number,
+  exercise: WorkoutExercise,
+  toolboxParams: ToolboxEntry[],
+): string {
+  if (!entry.formula) return '—';
+
+  const ctx: Record<string, number> = {};
+
+  // Pass 1: resolve by sourceParameterIds
+  for (const srcId of (entry.sourceParameterIds ?? [])) {
+    const srcParam = toolboxParams.find(p => p.id === srcId);
+    if (!srcParam) continue;
+    const raw =
+      exercise.parameters[`${srcParam.parameterName}_set${setIndex + 1}`] ??
+      exercise.parameters[srcParam.parameterName];
+    const unit =
+      (exercise.parameters[`${srcParam.parameterName}_unit`] as string | undefined) ??
+      (srcParam.parameterType === 'quantitative' && srcParam.options.length > 0
+        ? srcParam.options[0]
+        : undefined);
+    let n = parseNumeric(raw ?? '');
+    if (!isNaN(n) && unit && PCT_UNITS.has(unit)) n = n / 100;
+    if (!isNaN(n)) ctx[srcParam.parameterName] = n;
+  }
+
+  // Pass 2: resolve remaining variables by name (fallback for stale IDs)
+  for (const sibling of toolboxParams.filter(p => !p.isCalculated)) {
+    if (ctx[sibling.parameterName] !== undefined) continue;
+    const raw =
+      exercise.parameters[`${sibling.parameterName}_set${setIndex + 1}`] ??
+      exercise.parameters[sibling.parameterName];
+    if (raw === undefined || raw === '') continue;
+    const unit =
+      (exercise.parameters[`${sibling.parameterName}_unit`] as string | undefined) ??
+      (sibling.parameterType === 'quantitative' && sibling.options.length > 0
+        ? sibling.options[0]
+        : undefined);
+    let n = parseNumeric(raw);
+    if (!isNaN(n) && unit && PCT_UNITS.has(unit)) n = n / 100;
+    if (!isNaN(n)) ctx[sibling.parameterName] = n;
+  }
+
+  const result = evaluateFormula(entry.formula, ctx);
+  if (result === null) return '—';
+  return String(Math.round(result * 2) / 2);
 }
 
 function CircuitBlock({ exercise }: { exercise: WorkoutExercise }) {
@@ -130,7 +204,7 @@ function ExerciseBlock({
   if (exercise.isCircuit) return <CircuitBlock exercise={exercise} />;
 
   const supersetLabel = getSupersetLabel(exercise.id);
-  const { setCount, displayableParams } = buildParamMeta(exercise, toolboxData);
+  const { setCount, displayableParams, toolboxParams } = buildParamMeta(exercise, toolboxData);
 
   const gridParams = displayableParams.filter(p =>
     isParameterVisible(p.name, p.showInGridByDefault, visibilityOverrides),
@@ -164,6 +238,18 @@ function ExerciseBlock({
               <tr key={i}>
                 <td>{i + 1}</td>
                 {gridParams.map(p => {
+                  if (p.isCalculated) {
+                    const entry = toolboxParams.find(tp => tp.parameterName === p.name);
+                    // Prefer manually-stored value, fall back to formula result
+                    const stored = exercise.parameters[`${p.name}_set${i + 1}`];
+                    const val =
+                      stored !== undefined && stored !== ''
+                        ? String(stored)
+                        : entry
+                        ? resolveCalcValue(entry, i, exercise, toolboxParams)
+                        : '—';
+                    return <td key={p.name} style={{ fontStyle: 'italic' }}>{val}</td>;
+                  }
                   const val =
                     exercise.parameters[`${p.name}_set${i + 1}`] ??
                     exercise.parameters[p.name] ??
