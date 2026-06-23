@@ -18,6 +18,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
 import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import type { CustomLibrary, CustomExercise, Circuit } from '@/contexts/CustomLibrariesContext';
@@ -211,6 +212,7 @@ function resolveExerciseDetail(
 }
 
 function ExerciseDetailDialog({ target, onClose }: { target: ExerciseDetailTarget | null; onClose: () => void }) {
+  const { t } = useTranslation();
   const { libraries } = useCustomLibraries();
 
   // Fall back to live library data when the session snapshot didn't carry video/description
@@ -232,7 +234,7 @@ function ExerciseDetailDialog({ target, onClose }: { target: ExerciseDetailTarge
             <DialogTitle className="text-left">{target.name}</DialogTitle>
           </DialogHeader>
           {!hasContent && (
-            <p className="text-sm text-muted-foreground text-center py-6">No details available.</p>
+            <p className="text-sm text-muted-foreground text-center py-6">{t('coachMobile.sessionEdit.exerciseDetail.noDetails')}</p>
           )}
           {thumbnailUrl && safeUrl && (
             <a href={safeUrl} target="_blank" rel="noopener noreferrer"
@@ -254,12 +256,12 @@ function ExerciseDetailDialog({ target, onClose }: { target: ExerciseDetailTarge
           {safeUrl && !thumbnailUrl && (
             <a href={safeUrl} target="_blank" rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 w-full rounded-xl border py-2.5 text-sm font-medium text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors">
-              Watch video
+              {t('coachMobile.sessionEdit.exerciseDetail.watchVideo')}
             </a>
           )}
           {resolvedDescription && (
             <div className="space-y-1">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Description</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('coachMobile.sessionEdit.exerciseDetail.description')}</p>
               <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">{resolvedDescription}</p>
             </div>
           )}
@@ -280,6 +282,7 @@ function IntensityPickerSheet({
   open: boolean; title: string; current: string | null | undefined;
   onSelect: (v: string | null) => void; onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const levels = Object.entries(INTENSITY_CONFIG)
     .filter(([k]) => /^\d+$/.test(k))
     .sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
@@ -301,7 +304,7 @@ function IntensityPickerSheet({
               </button>
             ))}
             <button onClick={() => onSelect(null)} className="text-xs text-muted-foreground py-3 text-center active:opacity-70">
-              Clear intensity
+              {t('coachMobile.sessionEdit.intensityPicker.clearIntensity')}
             </button>
           </div>
         </div>
@@ -319,6 +322,7 @@ function ExercisePickerSheet({
   onSelectExercise: (lib: CustomLibrary, ex: CustomExercise) => void;
   onSelectCircuit: (circuit: Circuit, lib: CustomLibrary) => void;
 }) {
+  const { t } = useTranslation();
   const { libraries } = useCustomLibraries();
   const [tab, setTab] = useState<'exercises' | 'circuits'>('exercises');
   const [libIdx, setLibIdx] = useState(0);
@@ -354,7 +358,7 @@ function ExercisePickerSheet({
       <DialogContent className="p-0 flex flex-col gap-0 w-[92vw] sm:w-[480px] max-h-[85vh]"
         style={{ maxHeight: '85vh' }}>
         <div className="px-4 pt-4 pb-3 border-b shrink-0">
-          <DialogHeader><DialogTitle>Add to Session</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('coachMobile.sessionEdit.exercisePicker.title')}</DialogTitle></DialogHeader>
           <div className="flex gap-0 border rounded-lg overflow-hidden mt-3">
             {(['exercises', 'circuits'] as const).map(t => (
               <button key={t} onClick={() => setTab(t)}
@@ -380,12 +384,12 @@ function ExercisePickerSheet({
               </div>
             )}
             <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search exercises…"
+              placeholder={t('coachMobile.sessionEdit.exercisePicker.searchExercises')}
               className="w-full h-9 border rounded-lg px-3 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary shrink-0" />
             <div className="flex-1 overflow-y-auto -mx-1">
               <div className="space-y-0.5 pb-6 px-1">
-                {libraries.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">No exercise libraries found.</p>}
-                {filteredExercises.length === 0 && libraries.length > 0 && <p className="text-sm text-muted-foreground text-center py-8">No exercises match your search.</p>}
+                {libraries.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">{t('coachMobile.sessionEdit.exercisePicker.noLibraries')}</p>}
+                {filteredExercises.length === 0 && libraries.length > 0 && <p className="text-sm text-muted-foreground text-center py-8">{t('coachMobile.sessionEdit.exercisePicker.noResults')}</p>}
                 {filteredExercises.map(ex => (
                   <button key={ex.id} onClick={() => { if (currentLib) onSelectExercise(currentLib, ex); }}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 active:bg-muted text-left transition-colors">
@@ -403,7 +407,7 @@ function ExercisePickerSheet({
                 <button onClick={() => setCircuitLibId(null)}
                   className={cn('px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
                     circuitLibId === null ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
-                  All
+                  {t('coachMobile.sessionEdit.exercisePicker.all')}
                 </button>
                 {librariesWithCircuits.map(l => (
                   <button key={l.id} onClick={() => setCircuitLibId(l.id)}
@@ -415,19 +419,19 @@ function ExercisePickerSheet({
               </div>
             )}
             <input type="text" value={circuitSearch} onChange={e => setCircuitSearch(e.target.value)}
-              placeholder="Search circuits…"
+              placeholder={t('coachMobile.sessionEdit.exercisePicker.searchCircuits')}
               className="w-full h-9 border rounded-lg px-3 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary shrink-0" />
             <div className="flex-1 overflow-y-auto -mx-1">
               <div className="space-y-0.5 pb-6 px-1">
                 {filteredCircuits.length === 0
-                  ? <p className="text-sm text-muted-foreground text-center py-8">{allCircuits.length === 0 ? 'No circuits in your libraries.' : 'No circuits match your search.'}</p>
+                  ? <p className="text-sm text-muted-foreground text-center py-8">{allCircuits.length === 0 ? t('coachMobile.sessionEdit.exercisePicker.noCircuits') : t('coachMobile.sessionEdit.exercisePicker.noCircuitsMatch')}</p>
                   : filteredCircuits.map(({ circuit, lib: cLib }) => (
                     <button key={circuit.id} onClick={() => onSelectCircuit(circuit, cLib)}
                       className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 active:bg-muted text-left transition-colors">
                       <RefreshCw className="h-4 w-4 text-muted-foreground shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium">{circuit.name}</p>
-                        <p className="text-xs text-muted-foreground">{circuit.exercises.length} ex · {circuit.rounds ?? 3} rounds · {cLib.name}</p>
+                        <p className="text-xs text-muted-foreground">{t('coachMobile.sessionEdit.exercisePicker.circuitInfo', { count: circuit.exercises.length, rounds: circuit.rounds ?? 3, lib: cLib.name })}</p>
                       </div>
                     </button>
                   ))}
@@ -451,6 +455,7 @@ function CircuitInSessionEditor({
   /** Called with the updated fields to apply to the session exercise. */
   onSave: (exId: string, updates: Partial<ExerciseSummary>, saveToLib?: { libraryId: string; mode: 'new' | 'overwrite' }) => void;
 }) {
+  const { t } = useTranslation();
   const { libraries, addCircuitToLibrary, updateCircuitInLibrary } = useCustomLibraries();
   const [name, setName] = useState('');
   const [rounds, setRounds] = useState('3');
@@ -534,21 +539,21 @@ function CircuitInSessionEditor({
         <DialogContent className="p-0 flex flex-col gap-0 w-[92vw] sm:w-[480px] max-h-[85vh]">
           <div className="px-4 pt-4 pb-3 border-b shrink-0 flex items-center gap-3">
             <DialogHeader className="flex-1 min-w-0">
-              <DialogTitle className="text-base">Edit Circuit</DialogTitle>
+              <DialogTitle className="text-base">{t('coachMobile.sessionEdit.circuitEditor.title')}</DialogTitle>
             </DialogHeader>
           </div>
 
           <div className="flex-1 overflow-y-auto min-h-0 px-4 py-4 space-y-4">
             {/* Name */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Name</label>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('coachMobile.sessionEdit.circuitEditor.name')}</label>
               <input value={name} onChange={e => setName(e.target.value)}
                 className="w-full h-9 border rounded-lg px-3 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
 
             {/* Rounds */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Rounds</label>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('coachMobile.sessionEdit.circuitEditor.rounds')}</label>
               <div className="flex items-center gap-3">
                 <button onClick={() => setRounds(r => String(Math.max(1, Number(r) - 1)))}
                   className="w-9 h-9 rounded-full border bg-background flex items-center justify-center active:bg-accent">
@@ -565,12 +570,12 @@ function CircuitInSessionEditor({
             {/* Rest times */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Rest between rounds (s)</label>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('coachMobile.sessionEdit.circuitEditor.restBetweenRounds')}</label>
                 <input type="number" inputMode="numeric" value={restBetweenRounds} onChange={e => setRestBetweenRounds(e.target.value)}
                   className="w-full h-9 border rounded-lg px-3 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary" />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Rest between exercises (s)</label>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('coachMobile.sessionEdit.circuitEditor.restBetweenExercises')}</label>
                 <input type="number" inputMode="numeric" value={restBetweenExercises} onChange={e => setRestBetweenExercises(e.target.value)}
                   className="w-full h-9 border rounded-lg px-3 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary" />
               </div>
@@ -578,16 +583,16 @@ function CircuitInSessionEditor({
 
             {/* Exercises */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Exercises ({exercises.length})</label>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('coachMobile.sessionEdit.circuitEditor.exercisesCount', { count: exercises.length })}</label>
               <div className="border rounded-xl overflow-hidden divide-y">
                 {exercises.length === 0 && (
-                  <p className="text-xs text-muted-foreground text-center py-4">No exercises</p>
+                  <p className="text-xs text-muted-foreground text-center py-4">{t('coachMobile.sessionEdit.circuitEditor.noExercises')}</p>
                 )}
                 {exercises.map((e, i) => (
                   <div key={e.id} className="flex items-center gap-2 px-3 py-2">
                     <span className="text-xs text-muted-foreground w-4 text-right shrink-0">{i + 1}</span>
                     <span className="text-sm flex-1 min-w-0 truncate">{e.exerciseName}</span>
-                    <span className="text-xs text-muted-foreground shrink-0">{e.reps ? `${e.reps} reps` : e.time ? `${e.time}s` : ''}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">{e.reps ? `${e.reps} ${t('coachMobile.sessionEdit.repsUnit')}` : e.time ? `${e.time}s` : ''}</span>
                     <button onClick={() => setExercises(prev => prev.filter((_, j) => j !== i))}
                       className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-destructive active:opacity-60 transition-colors shrink-0">
                       <X className="h-3.5 w-3.5" />
@@ -599,16 +604,16 @@ function CircuitInSessionEditor({
 
             {/* Comments */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Notes</label>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('coachMobile.sessionEdit.circuitEditor.notes')}</label>
               <textarea value={comments} onChange={e => setComments(e.target.value)}
-                placeholder="Circuit notes…" rows={2}
+                placeholder={t('coachMobile.sessionEdit.circuitEditor.notesPlaceholder')} rows={2}
                 className="w-full text-sm border rounded-lg px-3 py-2 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground/50" />
             </div>
           </div>
 
           <div className="px-4 py-3 border-t shrink-0 flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={handleSaveSession}>Apply to session</Button>
-            <Button className="flex-1" onClick={() => setSaveLibDialogOpen(true)}>Save to library</Button>
+            <Button variant="outline" className="flex-1" onClick={handleSaveSession}>{t('coachMobile.sessionEdit.circuitEditor.applyToSession')}</Button>
+            <Button className="flex-1" onClick={() => setSaveLibDialogOpen(true)}>{t('coachMobile.sessionEdit.circuitEditor.saveToLibrary')}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -616,10 +621,10 @@ function CircuitInSessionEditor({
       {/* Library save sub-dialog */}
       <Dialog open={saveLibDialogOpen} onOpenChange={o => { if (!o) setSaveLibDialogOpen(false); }}>
         <DialogContent className="w-[92vw] sm:w-[400px]">
-          <DialogHeader><DialogTitle>Save to Library</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('coachMobile.sessionEdit.circuitEditor.saveToLibraryTitle')}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Library</label>
+              <label className="text-xs font-medium text-muted-foreground">{t('coachMobile.sessionEdit.circuitEditor.library')}</label>
               <select value={saveLibId} onChange={e => setSaveLibId(e.target.value)}
                 className="w-full h-9 border rounded-lg px-3 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary">
                 {libraries.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -632,19 +637,19 @@ function CircuitInSessionEditor({
                   <button key={m} onClick={() => setSaveMode(m)}
                     className={cn('flex-1 py-2 text-sm font-medium transition-colors',
                       saveMode === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground bg-background hover:text-foreground')}>
-                    {m === 'overwrite' ? `Overwrite "${circuit.name}"` : 'Save as new'}
+                    {m === 'overwrite' ? t('coachMobile.sessionEdit.circuitEditor.overwrite', { name: circuit.name }) : t('coachMobile.sessionEdit.circuitEditor.saveAsNew')}
                   </button>
                 ))}
               </div>
             )}
 
             {existingMatch && saveMode === 'new' && (
-              <p className="text-xs text-amber-600">A circuit named "{name}" already exists in this library — it will be saved as a duplicate.</p>
+              <p className="text-xs text-amber-600">{t('coachMobile.sessionEdit.circuitEditor.duplicateWarning', { name })}</p>
             )}
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setSaveLibDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSaveToLib} disabled={!saveLibId}>Save</Button>
+            <Button variant="outline" onClick={() => setSaveLibDialogOpen(false)}>{t('coachMobile.sessionEdit.circuitEditor.cancel')}</Button>
+            <Button onClick={handleSaveToLib} disabled={!saveLibId}>{t('coachMobile.sessionEdit.circuitEditor.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -660,6 +665,7 @@ function SupersetPickerSheet({
   open: boolean; sourceId: string | null; sectionExercises: ExerciseSummary[];
   onLink: (targetId: string) => void; onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const sourceEx = sectionExercises.find(e => e.id === sourceId);
   const candidates = sectionExercises.filter(e => {
     if (e.id === sourceId || e.isCircuit) return false;
@@ -670,10 +676,10 @@ function SupersetPickerSheet({
     <Sheet open={open} onOpenChange={o => { if (!o) onClose(); }}>
       <SheetContent side="bottom" className={cn('rounded-t-2xl', SHEET_CENTER)}
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 32px)' }}>
-        <SheetHeader className="mb-4"><SheetTitle>Link to Superset</SheetTitle></SheetHeader>
-        {sourceEx && <p className="text-xs text-muted-foreground mb-3 px-1">Linking with: <span className="font-semibold text-foreground">{sourceEx.name}</span></p>}
+        <SheetHeader className="mb-4"><SheetTitle>{t('coachMobile.sessionEdit.supersetPicker.title')}</SheetTitle></SheetHeader>
+        {sourceEx && <p className="text-xs text-muted-foreground mb-3 px-1">{t('coachMobile.sessionEdit.supersetPicker.linkingWith')} <span className="font-semibold text-foreground">{sourceEx.name}</span></p>}
         {candidates.length === 0
-          ? <p className="text-sm text-muted-foreground text-center py-6">No other exercises available to link in this section.</p>
+          ? <p className="text-sm text-muted-foreground text-center py-6">{t('coachMobile.sessionEdit.supersetPicker.noAvailable')}</p>
           : <div className="space-y-2">
               {candidates.map(ex => (
                 <button key={ex.id} onClick={() => onLink(ex.id)}
@@ -696,6 +702,7 @@ function MethodSelectionSheet({ open, onClose, onConfirm }: {
   open: boolean; onClose: () => void;
   onConfirm: (methodId: string, visibleParams: string[], initialParams: Record<string, string | number>) => void;
 }) {
+  const { t } = useTranslation();
   const { data: toolboxData } = useToolboxData();
   const [step, setStep] = useState<'method' | 'params'>('method');
   const [search, setSearch] = useState('');
@@ -774,7 +781,7 @@ function MethodSelectionSheet({ open, onClose, onConfirm }: {
             </button>
           )}
           <div className="flex-1 min-w-0">
-            <h2 className="text-base font-semibold leading-snug">{step === 'method' ? 'Select Training Method' : 'Configure Parameters'}</h2>
+            <h2 className="text-base font-semibold leading-snug">{step === 'method' ? t('coachMobile.sessionEdit.methodSheet.selectMethod') : t('coachMobile.sessionEdit.methodSheet.configureParams')}</h2>
             {step === 'params' && selectedMethod && <p className="text-xs text-muted-foreground truncate mt-0.5">{selectedMethod.subCategory || selectedMethod.category}</p>}
           </div>
         </div>
@@ -782,12 +789,12 @@ function MethodSelectionSheet({ open, onClose, onConfirm }: {
         {step === 'method' && (
           <>
             <div className="px-4 pt-3 shrink-0">
-              <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search methods…"
+              <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder={t('coachMobile.sessionEdit.methodSheet.searchPlaceholder')}
                 className="w-full h-9 border rounded-lg px-3 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
             <div className="flex-1 overflow-y-auto px-4 pt-3 pb-4">
               {allMethods.length === 0
-                ? <p className="text-sm text-muted-foreground text-center py-8">No training methods found. Add methods in the Training Toolbox.</p>
+                ? <p className="text-sm text-muted-foreground text-center py-8">{t('coachMobile.sessionEdit.methodSheet.noMethods')}</p>
                 : Object.entries(filteredByCategory).map(([cat, methods]) => {
                     const isOpen = expandedCats.has(cat);
                     return (
@@ -813,7 +820,7 @@ function MethodSelectionSheet({ open, onClose, onConfirm }: {
                   })}
               <button onClick={() => onConfirm('', ['Reps'], { Sets: 3, Reps_set1: '', Reps_set2: '', Reps_set3: '' })}
                 className="w-full text-xs text-muted-foreground py-4 text-center hover:text-foreground transition-colors">
-                Skip — add without method
+                {t('coachMobile.sessionEdit.methodSheet.skipNoMethod')}
               </button>
             </div>
           </>
@@ -823,10 +830,10 @@ function MethodSelectionSheet({ open, onClose, onConfirm }: {
           <>
             <div className="flex-1 overflow-y-auto px-4 pt-3">
               {displayParams.length === 0
-                ? <p className="text-sm text-muted-foreground text-center py-8">No configurable parameters for this method.</p>
+                ? <p className="text-sm text-muted-foreground text-center py-8">{t('coachMobile.sessionEdit.methodSheet.noParams')}</p>
                 : (
                   <div className="space-y-2 pb-4">
-                    <p className="text-xs text-muted-foreground mb-3">Choose which parameters to show for each set:</p>
+                    <p className="text-xs text-muted-foreground mb-3">{t('coachMobile.sessionEdit.methodSheet.chooseParams')}</p>
                     {displayParams.map(p => {
                       const isOn = paramVisibility[p.parameterName] !== false;
                       return (
@@ -839,7 +846,7 @@ function MethodSelectionSheet({ open, onClose, onConfirm }: {
                             {isOn && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
                           </div>
                           <span className="text-sm font-medium">{p.parameterName}</span>
-                          {p.parameterType === 'qualitative' && <span className="text-xs text-muted-foreground ml-auto">qualitative</span>}
+                          {p.parameterType === 'qualitative' && <span className="text-xs text-muted-foreground ml-auto">{t('coachMobile.sessionEdit.methodSheet.qualitative')}</span>}
                         </button>
                       );
                     })}
@@ -847,7 +854,7 @@ function MethodSelectionSheet({ open, onClose, onConfirm }: {
                 )}
             </div>
             <div className="px-4 pb-6 pt-3 border-t shrink-0">
-              <Button className="w-full" onClick={() => buildAndConfirm(selectedMethodId)}>Add Exercise</Button>
+              <Button className="w-full" onClick={() => buildAndConfirm(selectedMethodId)}>{t('coachMobile.sessionEdit.methodSheet.addExercise')}</Button>
             </div>
           </>
         )}
@@ -862,6 +869,7 @@ function ParamConfigSheet({ open, exercise, toolboxEntries, onSave, onClose }: {
   open: boolean; exercise: ExerciseSummary | null; toolboxEntries: ToolboxEntry[];
   onSave: (exId: string, visibleParams: string[]) => void; onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const [localVisible, setLocalVisible] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -881,11 +889,11 @@ function ParamConfigSheet({ open, exercise, toolboxEntries, onSave, onClose }: {
       <SheetContent side="bottom" className={cn('rounded-t-2xl flex flex-col gap-0 p-0', SHEET_CENTER)} style={{ maxHeight: '70vh' }}>
         <SheetHeader className="px-4 pt-4 pb-3 border-b shrink-0">
           <SheetTitle className="text-base truncate">{exercise.name}</SheetTitle>
-          <p className="text-xs text-muted-foreground">Toggle visible parameters</p>
+          <p className="text-xs text-muted-foreground">{t('coachMobile.sessionEdit.paramConfig.toggleHint')}</p>
         </SheetHeader>
         <div className="flex-1 overflow-y-auto px-4 pt-3">
           {candidates.length === 0
-            ? <p className="text-sm text-muted-foreground text-center py-8">No configurable parameters found.</p>
+            ? <p className="text-sm text-muted-foreground text-center py-8">{t('coachMobile.sessionEdit.paramConfig.noParams')}</p>
             : (
               <div className="space-y-2 pb-4">
                 {candidates.map(p => {
@@ -909,7 +917,7 @@ function ParamConfigSheet({ open, exercise, toolboxEntries, onSave, onClose }: {
           <Button className="w-full" onClick={() => {
             const chosen = candidates.filter(p => localVisible[p] !== false);
             onSave(exercise.id, chosen.length > 0 ? chosen : ['Reps']);
-          }}>Done</Button>
+          }}>{t('coachMobile.sessionEdit.paramConfig.done')}</Button>
         </div>
       </SheetContent>
     </Sheet>
@@ -924,6 +932,7 @@ function SupersetConnector({
   exA: ExerciseSummary; exB: ExerciseSummary;
   onLink: () => void; onUnlink: () => void; editMode: boolean;
 }) {
+  const { t } = useTranslation();
   const linked = !!(exA.supersetId && exB.supersetId && exA.supersetId === exB.supersetId);
   if (!editMode && !linked) return null;
 
@@ -933,7 +942,7 @@ function SupersetConnector({
       {linked ? (
         editMode ? (
           <button onClick={onUnlink}
-            title="Tap to unlink from superset"
+            title={t('coachMobile.sessionEdit.unlinkSuperset')}
             className="flex items-center gap-1 px-2 py-0.5 text-xs font-bold text-primary border border-primary/40 bg-primary/5 rounded-full hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors shrink-0 active:opacity-60">
             <Link2 className="h-3 w-3" /> SS
           </button>
@@ -945,7 +954,7 @@ function SupersetConnector({
       ) : (
         editMode && (
           <button onClick={onLink}
-            title="Link to superset"
+            title={t('coachMobile.sessionEdit.linkToSuperset')}
             className="flex items-center justify-center w-6 h-6 rounded-full text-muted-foreground/30 hover:text-muted-foreground hover:bg-muted transition-colors shrink-0 active:opacity-60">
             <Link2 className="h-3 w-3" />
           </button>
@@ -1002,6 +1011,7 @@ export default function CoachMobileSessionEditPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const { libraries } = useCustomLibraries();
   const { data: toolboxData } = useToolboxData();
 
@@ -1141,7 +1151,7 @@ export default function CoachMobileSessionEditPage() {
 
   // ── Guards ─────────────────────────────────────────────────────────────────
   if (!entry || !state) {
-    return <div className="flex items-center justify-center h-64 text-sm text-muted-foreground">Session not found.</div>;
+    return <div className="flex items-center justify-center h-64 text-sm text-muted-foreground">{t('coachMobile.sessionEdit.sessionNotFound')}</div>;
   }
   const session: SessionSummary = entry.sessions[sessionIdx];
 
@@ -1511,7 +1521,7 @@ export default function CoachMobileSessionEditPage() {
     try {
       await buildRowFilter(supabase.from('athlete_schedule').update({ intensity: newIntensity }));
       originalEntry.current = updated;
-    } catch { toast({ title: 'Error saving intensity', variant: 'destructive' }); }
+    } catch { toast({ title: t('coachMobile.sessionEdit.toastIntensityError'), variant: 'destructive' }); }
     setDayIntensityOpen(false);
   }
 
@@ -1521,7 +1531,7 @@ export default function CoachMobileSessionEditPage() {
     try {
       await buildRowFilter(supabase.from('athlete_schedule').update({ sessions: updatedSessions }));
       originalEntry.current = { ...entry, sessions: updatedSessions };
-    } catch { toast({ title: 'Error saving intensity', variant: 'destructive' }); }
+    } catch { toast({ title: t('coachMobile.sessionEdit.toastIntensityError'), variant: 'destructive' }); }
     setSessionIntensityOpen(false);
   }
 
@@ -1618,10 +1628,10 @@ export default function CoachMobileSessionEditPage() {
       }
       if (queryError) throw queryError;
       originalEntry.current = { ...entry, sessions: sessionsWithFlag };
-      toast({ title: 'Saved ✓', description: 'Session updated in athlete schedule.' });
+      toast({ title: t('coachMobile.sessionEdit.toastSavedTitle'), description: t('coachMobile.sessionEdit.toastSavedDesc') });
       setMode('view');
     } catch {
-      toast({ title: 'Error', description: 'Could not save. Try again.', variant: 'destructive' });
+      toast({ title: t('coachMobile.sessionEdit.toastErrorTitle'), description: t('coachMobile.sessionEdit.toastErrorDesc'), variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -1637,18 +1647,18 @@ export default function CoachMobileSessionEditPage() {
             className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors shrink-0">
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <h1 className="flex-1 text-center font-semibold text-base truncate">{session?.name || 'Session'}</h1>
+          <h1 className="flex-1 text-center font-semibold text-base truncate">{session?.name || t('coachMobile.sessionEdit.sessionLabel')}</h1>
           <button onClick={() => setMode('edit')}
             className="text-sm font-medium text-primary hover:opacity-80 active:opacity-60 transition-opacity w-8 text-right shrink-0">
-            Edit
+            {t('coachMobile.sessionEdit.edit')}
           </button>
         </div>
 
         {sections.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
             <Dumbbell className="h-8 w-8 opacity-30" />
-            <p className="text-sm">No exercises assigned yet.</p>
-            <Button size="sm" variant="outline" onClick={() => setMode('edit')}>Edit Session</Button>
+            <p className="text-sm">{t('coachMobile.sessionEdit.noExercises')}</p>
+            <Button size="sm" variant="outline" onClick={() => setMode('edit')}>{t('coachMobile.sessionEdit.editSession')}</Button>
           </div>
         ) : (
           <>
@@ -1657,21 +1667,21 @@ export default function CoachMobileSessionEditPage() {
                 {/* Day intensity — tappable */}
                 <button onClick={() => setDayIntensityOpen(true)}
                   className="flex items-center gap-3 w-full py-1 text-left active:opacity-70">
-                  <p className="text-xs text-muted-foreground min-w-[96px]">Day Intensity</p>
-                  {entry.intensity ? <IntensityBadge intensity={entry.intensity} /> : <span className="text-xs text-muted-foreground/50 italic">Tap to set…</span>}
+                  <p className="text-xs text-muted-foreground min-w-[96px]">{t('coachMobile.sessionEdit.dayIntensity')}</p>
+                  {entry.intensity ? <IntensityBadge intensity={entry.intensity} /> : <span className="text-xs text-muted-foreground/50 italic">{t('coachMobile.sessionEdit.tapToSet')}</span>}
                 </button>
                 {/* Session intensity — tappable */}
                 <button onClick={() => setSessionIntensityOpen(true)}
                   className="flex items-center gap-3 w-full py-1 text-left active:opacity-70">
-                  <p className="text-xs text-muted-foreground min-w-[96px]">Session Intensity</p>
-                  {session.intensity ? <IntensityBadge intensity={session.intensity} /> : <span className="text-xs text-muted-foreground/50 italic">Tap to set…</span>}
+                  <p className="text-xs text-muted-foreground min-w-[96px]">{t('coachMobile.sessionEdit.sessionIntensity')}</p>
+                  {session.intensity ? <IntensityBadge intensity={session.intensity} /> : <span className="text-xs text-muted-foreground/50 italic">{t('coachMobile.sessionEdit.tapToSet')}</span>}
                 </button>
                 {/* Session logged banner */}
                 {sessionLog && (
                   <div className="rounded-xl bg-green-50 border border-green-200 p-3 flex items-start gap-3">
                     <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-green-800">Session Completed</p>
+                      <p className="text-sm font-semibold text-green-800">{t('coachMobile.sessionEdit.sessionCompleted')}</p>
                       <p className="text-xs text-green-700 mt-0.5">
                         {sessionLog.completedAt ? new Date(sessionLog.completedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}
                         {` · ${sessionLog.durationSeconds ? Math.round(sessionLog.durationSeconds / 60) : 0} min`}
@@ -1697,7 +1707,7 @@ export default function CoachMobileSessionEditPage() {
                         <div className="text-left">
                           <p className="font-semibold text-sm">{sec.name}</p>
                           {sec.notes && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{sec.notes}</p>}
-                          <p className="text-xs text-muted-foreground mt-0.5">{sec.exercises.length} exercise{sec.exercises.length !== 1 ? 's' : ''}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{t('coachMobile.sessionEdit.exercises', { count: sec.exercises.length })}</p>
                         </div>
                         <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform duration-200 shrink-0', isOpen && 'rotate-180')} />
                       </button>
@@ -1731,8 +1741,8 @@ export default function CoachMobileSessionEditPage() {
                                     </button>
                                   )}
                                   {ex.isCircuit
-                                    ? <span className="text-xs text-muted-foreground shrink-0">{ex.circuitRounds ?? 3} rounds</span>
-                                    : <span className="text-xs text-muted-foreground shrink-0">{getSetCount(ex)} sets</span>}
+                                    ? <span className="text-xs text-muted-foreground shrink-0">{t('coachMobile.sessionEdit.rounds', { count: Number(ex.circuitRounds ?? 3) })}</span>
+                                    : <span className="text-xs text-muted-foreground shrink-0">{t('coachMobile.sessionEdit.sets', { count: getSetCount(ex) })}</span>}
                                 </div>
                                 {/* Exercise notes in view mode */}
                                 {ex.notes && (
@@ -1763,22 +1773,22 @@ export default function CoachMobileSessionEditPage() {
                   <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-center gap-2">
                     <Lock className="h-4 w-4 text-amber-600 shrink-0" />
                     <p className="text-xs text-amber-800 leading-snug">
-                      Athlete is currently logging this session.
+                      {t('coachMobile.sessionEdit.athleteLogging')}
                     </p>
                   </div>
                 </div>
               )}
               <div className="p-4 flex gap-2">
               {sessionLog ? (
-                <Button variant="outline" className="w-full" onClick={() => navigate(-1)}>Close</Button>
+                <Button variant="outline" className="w-full" onClick={() => navigate(-1)}>{t('coachMobile.sessionEdit.close')}</Button>
               ) : (
                 <>
-                  <Button variant="outline" className="flex-1" disabled={!!sessionLock} onClick={() => setMode('edit')}>Edit Session</Button>
+                  <Button variant="outline" className="flex-1" disabled={!!sessionLock} onClick={() => setMode('edit')}>{t('coachMobile.sessionEdit.editSession')}</Button>
                   <Button className="flex-1 gap-1.5" disabled={!!sessionLock} onClick={() => navigate(
                     `/coach-mobile/athletes/${connectionId ?? 'unknown'}/session/log`,
                     { state: { entry, sessionIdx, connectionId, returnPath: location.pathname, returnState: state } }
                   )}>
-                    <ClipboardList className="h-4 w-4" /> Log Session
+                    <ClipboardList className="h-4 w-4" /> {t('coachMobile.sessionEdit.logSession')}
                   </Button>
                 </>
               )}
@@ -1788,9 +1798,9 @@ export default function CoachMobileSessionEditPage() {
         )}
 
         {/* Intensity pickers in view mode (auto-save) */}
-        <IntensityPickerSheet open={dayIntensityOpen} title="Day Intensity" current={entry.intensity}
+        <IntensityPickerSheet open={dayIntensityOpen} title={t('coachMobile.sessionEdit.dayIntensity')} current={entry.intensity}
           onSelect={v => autoSaveDayIntensity(v)} onClose={() => setDayIntensityOpen(false)} />
-        <IntensityPickerSheet open={sessionIntensityOpen} title="Session Intensity" current={session.intensity}
+        <IntensityPickerSheet open={sessionIntensityOpen} title={t('coachMobile.sessionEdit.sessionIntensity')} current={session.intensity}
           onSelect={v => autoSaveSessionIntensity(v)} onClose={() => setSessionIntensityOpen(false)} />
         <ExerciseDetailDialog target={detailTarget} onClose={() => setDetailTarget(null)} />
         {connectionId && historyTarget && (
@@ -1819,36 +1829,36 @@ export default function CoachMobileSessionEditPage() {
           className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-accent -ml-1 shrink-0">
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <p className="flex-1 text-sm font-semibold truncate text-center">{session?.name || 'Session'}</p>
+        <p className="flex-1 text-sm font-semibold truncate text-center">{session?.name || t('coachMobile.sessionEdit.sessionLabel')}</p>
         <Button size="sm" onClick={handleSave} disabled={saving} className="shrink-0">
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? t('coachMobile.sessionEdit.saving') : t('coachMobile.sessionEdit.save')}
         </Button>
       </div>
 
       {/* Session notes */}
       <div className="px-4 pt-3 pb-2 border-b shrink-0">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Session Notes</p>
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">{t('coachMobile.sessionEdit.sessionNotes')}</p>
         <textarea value={session.notes ?? ''} onChange={e => updateSession(s => ({ ...s, notes: e.target.value }))}
-          placeholder="Add notes for this session…" rows={2}
+          placeholder={t('coachMobile.sessionEdit.sessionNotesPlaceholder')} rows={2}
           className="w-full text-sm border rounded-lg px-3 py-2 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground/50" />
       </div>
 
       {/* Day intensity */}
       <button onClick={() => setDayIntensityOpen(true)}
         className="flex items-center justify-between px-4 py-3 border-b shrink-0 w-full text-left active:bg-accent/40">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Day Intensity</p>
-        {entry.intensity ? <IntensityBadge intensity={entry.intensity} /> : <span className="text-xs text-muted-foreground italic">Tap to set…</span>}
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{t('coachMobile.sessionEdit.dayIntensity')}</p>
+        {entry.intensity ? <IntensityBadge intensity={entry.intensity} /> : <span className="text-xs text-muted-foreground italic">{t('coachMobile.sessionEdit.tapToSet')}</span>}
       </button>
 
       {/* Session intensity */}
       <button onClick={() => setSessionIntensityOpen(true)}
         className="flex items-center justify-between px-4 py-3 border-b shrink-0 w-full text-left active:bg-accent/40">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Session Intensity</p>
-        {session.intensity ? <IntensityBadge intensity={session.intensity} /> : <span className="text-xs text-muted-foreground italic">Tap to set…</span>}
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{t('coachMobile.sessionEdit.sessionIntensity')}</p>
+        {session.intensity ? <IntensityBadge intensity={session.intensity} /> : <span className="text-xs text-muted-foreground italic">{t('coachMobile.sessionEdit.tapToSet')}</span>}
       </button>
 
       {allSections.length > 0 && expandedSections.size === 0 && expandedBeforeDrag === null && (
-        <p className="px-4 pt-3 pb-1 text-xs text-muted-foreground shrink-0">Tap to expand · Drag ≡ to reorder</p>
+        <p className="px-4 pt-3 pb-1 text-xs text-muted-foreground shrink-0">{t('coachMobile.sessionEdit.tapToExpandHint')}</p>
       )}
 
       {/* Section list — drag & drop for both sections and exercises (incl. cross-section) */}
@@ -1859,7 +1869,7 @@ export default function CoachMobileSessionEditPage() {
               <div ref={secListDrop.innerRef} {...secListDrop.droppableProps}
                 className="px-4 py-4 space-y-3 pb-10">
                 {allSections.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">No sections yet. Create a section first, then add exercises.</p>
+                  <p className="text-sm text-muted-foreground text-center py-8">{t('coachMobile.sessionEdit.noSections')}</p>
                 ) : allSections.map((section, secIdx) => {
                   const isExpanded = expandedSections.has(section.id);
                   return (
@@ -1881,7 +1891,7 @@ export default function CoachMobileSessionEditPage() {
                             <button onClick={() => toggleSection(section.id)}
                               className="flex-1 flex items-center gap-2 text-left min-w-0">
                               <span className="flex-1 text-sm font-semibold truncate">{section.name}</span>
-                              <span className="text-xs text-muted-foreground shrink-0">{section.exercises.length} ex</span>
+                              <span className="text-xs text-muted-foreground shrink-0">{t('coachMobile.sessionEdit.exerciseCount', { count: section.exercises.length })}</span>
                               <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform shrink-0', isExpanded && 'rotate-180')} />
                             </button>
 
@@ -1905,7 +1915,7 @@ export default function CoachMobileSessionEditPage() {
                             <div className="px-3 pb-2 border-b bg-muted/10">
                               <textarea value={sectionNotesMap[section.id] ?? section.notes ?? ''}
                                 onChange={e => setSectionNotesMap(prev => ({ ...prev, [section.id]: e.target.value }))}
-                                placeholder="Section notes…" rows={2}
+                                placeholder={t('coachMobile.sessionEdit.sectionNotesPlaceholder')} rows={2}
                                 className="w-full text-sm border rounded-lg px-3 py-2 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground/50 mt-2" />
                             </div>
                           )}
@@ -1921,7 +1931,7 @@ export default function CoachMobileSessionEditPage() {
                                   <>
                                     {section.exercises.length === 0 ? (
                                       <p className="text-xs text-muted-foreground text-center py-4 px-3 border border-dashed rounded-lg mx-3 my-2">
-                                        No exercises yet — add one below
+                                        {t('coachMobile.sessionEdit.noExercisesInSection')}
                                       </p>
                                     ) : section.exercises.map((ex, exIdx) => {
                                       const params = getParamColumns(ex, toolboxData?.entries);
@@ -1956,7 +1966,7 @@ export default function CoachMobileSessionEditPage() {
                                                   {!ex.isCircuit && (
                                                     <button onClick={() => { setParamConfigTarget(ex); setParamConfigOpen(true); }}
                                                       className="w-7 h-7 rounded-full flex items-center justify-center transition-colors text-muted-foreground hover:text-primary hover:bg-primary/10 shrink-0"
-                                                      title="Configure visible parameters">
+                                                      title={t('coachMobile.sessionEdit.configureParams')}>
                                                       <Settings2 className="h-3.5 w-3.5" />
                                                     </button>
                                                   )}
@@ -1966,7 +1976,7 @@ export default function CoachMobileSessionEditPage() {
                                                     onClick={() => setExerciseNotesOpen(prev => { const n = new Set(prev); n.has(ex.id) ? n.delete(ex.id) : n.add(ex.id); return n; })}
                                                     className={cn('w-7 h-7 rounded-full flex items-center justify-center transition-colors shrink-0',
                                                       hasNotes || ex.notes ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-primary hover:bg-primary/10')}
-                                                    title="Exercise notes">
+                                                    title={t('coachMobile.sessionEdit.exerciseNotesPlaceholder')}>
                                                     <AlignLeft className="h-3.5 w-3.5" />
                                                   </button>
 
@@ -1985,32 +1995,32 @@ export default function CoachMobileSessionEditPage() {
                                                             <button
                                                               onClick={() => { setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription, exerciseLibraryId: ex.exerciseLibraryId }); setExerciseActionsOpen(null); }}
                                                               className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent active:bg-accent/80 text-left">
-                                                              <Info className="h-3.5 w-3.5" /> Details
+                                                              <Info className="h-3.5 w-3.5" /> {t('coachMobile.sessionEdit.detailsAction')}
                                                             </button>
                                                           )}
                                                           {!ex.isCircuit && (
                                                             <button
                                                               onClick={() => { setChangeExerciseTargetId(ex.id); setExercisePickerOpen(true); setExerciseActionsOpen(null); }}
                                                               className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent active:bg-accent/80 text-left">
-                                                              <RefreshCw className="h-3.5 w-3.5" /> Change Exercise
+                                                              <RefreshCw className="h-3.5 w-3.5" /> {t('coachMobile.sessionEdit.changeExercise')}
                                                             </button>
                                                           )}
                                                           {ex.isCircuit && (
                                                             <button
                                                               onClick={() => { setCircuitEditTarget(ex); setExerciseActionsOpen(null); }}
                                                               className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent active:bg-accent/80 text-left">
-                                                              <Pencil className="h-3.5 w-3.5" /> Edit Circuit
+                                                              <Pencil className="h-3.5 w-3.5" /> {t('coachMobile.sessionEdit.editCircuitAction')}
                                                             </button>
                                                           )}
                                                           <button
                                                             onClick={() => { duplicateExercise(ex.id); setExerciseActionsOpen(null); }}
                                                             className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent active:bg-accent/80 text-left">
-                                                            <Copy className="h-3.5 w-3.5" /> Duplicate
+                                                            <Copy className="h-3.5 w-3.5" /> {t('coachMobile.sessionEdit.duplicate')}
                                                           </button>
                                                           <button
                                                             onClick={() => { deleteExercise(ex.id); setExerciseActionsOpen(null); }}
                                                             className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent active:bg-accent/80 text-left text-destructive">
-                                                            <Trash2 className="h-3.5 w-3.5" /> Delete
+                                                            <Trash2 className="h-3.5 w-3.5" /> {t('coachMobile.sessionEdit.delete')}
                                                           </button>
                                                         </div>
                                                       </>
@@ -2022,7 +2032,7 @@ export default function CoachMobileSessionEditPage() {
                                                 {(hasNotes || ex.notes) && (
                                                   <div className="px-3 pt-1.5 pb-2 bg-muted/5">
                                                     <textarea value={ex.notes ?? ''} onChange={e => updateExercise(ex.id, x => ({ ...x, notes: e.target.value, mobileEdited: true }))}
-                                                      placeholder="Exercise notes…" rows={2}
+                                                      placeholder={t('coachMobile.sessionEdit.exerciseNotesPlaceholder')} rows={2}
                                                       className="w-full text-sm border rounded-lg px-3 py-2 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground/50" />
                                                   </div>
                                                 )}
@@ -2030,7 +2040,7 @@ export default function CoachMobileSessionEditPage() {
                                                 {/* Sets ± */}
                                                 {!ex.isCircuit && (
                                                   <div className="flex items-center gap-2 px-3 py-2 border-b">
-                                                    <span className="text-xs text-muted-foreground flex-1">Sets</span>
+                                                    <span className="text-xs text-muted-foreground flex-1">{t('coachMobile.sessionEdit.setsLabel')}</span>
                                                     <button onClick={() => changeSetCount(ex.id, -1)}
                                                       className="w-7 h-7 rounded-full border bg-background flex items-center justify-center active:bg-accent">
                                                       <Minus className="h-3.5 w-3.5" />
@@ -2049,7 +2059,7 @@ export default function CoachMobileSessionEditPage() {
                                                     <table className="w-full">
                                                       <thead>
                                                         <tr className="border-b bg-muted/10">
-                                                          <th className="text-left px-3 py-1.5 text-xs font-medium text-muted-foreground w-8">Set</th>
+                                                          <th className="text-left px-3 py-1.5 text-xs font-medium text-muted-foreground w-8">{t('coachMobile.sessionEdit.setHeader')}</th>
                                                           {params.map(p => (
                                                             <th key={p} className="text-left px-2 py-1.5 text-xs font-medium text-muted-foreground">{p}</th>
                                                           ))}
@@ -2095,7 +2105,7 @@ export default function CoachMobileSessionEditPage() {
                                                 {ex.isCircuit && (
                                                   <>
                                                     <div className="px-3 py-2 text-xs text-muted-foreground border-b">
-                                                      {ex.circuitRounds ?? 3} rounds · {ex.circuitExercises?.length ?? 0} exercises
+                                                      {t('coachMobile.sessionEdit.rounds', { count: Number(ex.circuitRounds ?? 3) })} · {t('coachMobile.sessionEdit.exercises', { count: ex.circuitExercises?.length ?? 0 })}
                                                     </div>
                                                     <CircuitExerciseList ex={ex} onShowDetail={setDetailTarget} />
                                                   </>
@@ -2128,7 +2138,7 @@ export default function CoachMobileSessionEditPage() {
                             <div className="p-3 border-t">
                               <button onClick={() => { setPickerTargetSectionId(section.id); setExercisePickerOpen(true); }}
                                 className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed text-xs text-muted-foreground hover:text-primary hover:border-primary active:opacity-60 transition-colors">
-                                <Plus className="h-3.5 w-3.5" /> Add Exercise / Circuit
+                                <Plus className="h-3.5 w-3.5" /> {t('coachMobile.sessionEdit.addExerciseCircuit')}
                               </button>
                             </div>
                           )}
@@ -2141,7 +2151,7 @@ export default function CoachMobileSessionEditPage() {
 
                 <button onClick={() => setNewSectionDialogOpen(true)}
                   className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed text-sm text-muted-foreground hover:text-primary hover:border-primary active:opacity-60 transition-colors">
-                  <Plus className="h-4 w-4" /> New Section
+                  <Plus className="h-4 w-4" /> {t('coachMobile.sessionEdit.newSection')}
                 </button>
               </div>
             )}
@@ -2150,10 +2160,10 @@ export default function CoachMobileSessionEditPage() {
       </div>
 
       {/* ── Sheets & Dialogs ── */}
-      <IntensityPickerSheet open={dayIntensityOpen} title="Day Intensity" current={entry.intensity}
+      <IntensityPickerSheet open={dayIntensityOpen} title={t('coachMobile.sessionEdit.dayIntensity')} current={entry.intensity}
         onSelect={v => { setEntry(prev => prev ? { ...prev, intensity: v } : prev); setDayIntensityOpen(false); }}
         onClose={() => setDayIntensityOpen(false)} />
-      <IntensityPickerSheet open={sessionIntensityOpen} title="Session Intensity" current={session.intensity}
+      <IntensityPickerSheet open={sessionIntensityOpen} title={t('coachMobile.sessionEdit.sessionIntensity')} current={session.intensity}
         onSelect={v => { updateSession(s => ({ ...s, intensity: v ?? undefined })); setSessionIntensityOpen(false); }}
         onClose={() => setSessionIntensityOpen(false)} />
 
@@ -2172,14 +2182,14 @@ export default function CoachMobileSessionEditPage() {
 
       <Dialog open={newSectionDialogOpen} onOpenChange={o => { if (!o) setNewSectionDialogOpen(false); }}>
         <DialogContent className="w-[calc(100vw-32px)] max-w-[380px] rounded-2xl">
-          <DialogHeader><DialogTitle>New Section</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('coachMobile.sessionEdit.newSection')}</DialogTitle></DialogHeader>
           <div className="py-2">
             <Input value={newSectionName} onChange={e => setNewSectionName(e.target.value)}
-              placeholder="Section name (e.g. Warm-up)" onKeyDown={e => { if (e.key === 'Enter') addSection(); }} autoFocus />
+              placeholder={t('coachMobile.sessionEdit.sectionNamePlaceholder')} onKeyDown={e => { if (e.key === 'Enter') addSection(); }} autoFocus />
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setNewSectionDialogOpen(false)}>Cancel</Button>
-            <Button onClick={addSection}>Create</Button>
+            <Button variant="outline" onClick={() => setNewSectionDialogOpen(false)}>{t('coachMobile.sessionEdit.cancel')}</Button>
+            <Button onClick={addSection}>{t('coachMobile.sessionEdit.create')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
