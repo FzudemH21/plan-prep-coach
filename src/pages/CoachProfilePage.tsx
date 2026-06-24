@@ -485,7 +485,7 @@ function BrandingCard() {
     });
     // Sync logo + welcome message to every athlete connection so the
     // athlete app splash screen can read it without extra RLS queries.
-    const coachBranding = { logoBase64, welcomeMessage };
+    const coachBranding = { logoBase64, welcomeMessage, businessName };
     await Promise.all(
       connections.map((conn) =>
         syncProfileToConnection(conn.id, { ...conn.profileData, coachBranding })

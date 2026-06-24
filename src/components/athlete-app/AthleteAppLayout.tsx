@@ -209,9 +209,18 @@ export function AthleteAppLayout() {
 
       {/* Status bar */}
       <div className="flex items-center justify-between px-4 py-3 border-b bg-background/80 backdrop-blur-sm shrink-0">
-        <span className="text-sm font-medium text-foreground">
-          Plan Prep Coach
-        </span>
+        <div className="flex items-center gap-2 min-w-0">
+          {connection?.profileData?.coachBranding?.logoBase64 && (
+            <img
+              src={connection.profileData.coachBranding.logoBase64}
+              alt="Coach logo"
+              className="h-6 w-auto max-w-[80px] object-contain shrink-0"
+            />
+          )}
+          <span className="text-sm font-medium text-foreground truncate">
+            {connection?.profileData?.coachBranding?.businessName || 'Plan Prep Coach'}
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           {!loading && connection && (
             <span className="text-xs text-muted-foreground truncate max-w-[140px]">
