@@ -1040,7 +1040,7 @@ export default function CoachMobileAthleteProfilePage() {
             key={key}
             onClick={() => setTab(key)}
             className={cn(
-              'flex-1 pb-2 text-xs font-medium border-b-2 transition-colors',
+              'flex-1 py-2 text-xs font-medium border-b-2 transition-colors',
               tab === key
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
