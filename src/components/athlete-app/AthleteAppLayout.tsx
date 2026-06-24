@@ -198,7 +198,7 @@ export function AthleteAppLayout() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-full max-w-[480px] mx-auto bg-background relative">
+    <div className="flex flex-col h-[100dvh] w-full max-w-[480px] mx-auto bg-background relative">
       <DailyCheckinSheet
         open={checkinOpen}
         onClose={() => setCheckinOpen(false)}
