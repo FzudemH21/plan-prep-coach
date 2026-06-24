@@ -44,7 +44,7 @@ export function CoachMobileLayout() {
     .slice(0, 2);
 
   return (
-    <div className="flex flex-col h-screen w-full max-w-[480px] mx-auto bg-background relative overflow-hidden">
+    <div className="flex flex-col h-screen w-full max-w-[480px] mx-auto bg-background relative">
       {/* Top bar */}
       <header className="shrink-0 flex items-center gap-2 px-4 py-3 border-b bg-background/90 backdrop-blur-sm">
         <span className="flex-1 text-base font-semibold text-primary truncate">
