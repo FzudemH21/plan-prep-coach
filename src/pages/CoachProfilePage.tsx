@@ -446,7 +446,7 @@ function ProfileTab() {
 function BrandingCard() {
   const { t } = useTranslation();
   const { profile, saveProfile } = useCoachProfile();
-  const { connections, syncProfileToConnection } = useAthleteConnections();
+  const { connections, loading: connectionsLoading, syncProfileToConnection } = useAthleteConnections();
   const { toast } = useToast();
 
   const [businessName, setBusinessName] = useState(profile?.branding?.businessName ?? "");
@@ -610,7 +610,7 @@ function BrandingCard() {
           </p>
         </div>
 
-        <Button size="sm" onClick={handleSave} disabled={!dirty || !profile}>
+        <Button size="sm" onClick={handleSave} disabled={!dirty || !profile || connectionsLoading}>
           <Save className="h-4 w-4 mr-2" />
           {t('branding.save')}
         </Button>
