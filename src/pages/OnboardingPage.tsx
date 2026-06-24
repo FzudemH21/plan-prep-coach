@@ -269,12 +269,6 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip, onBack, hideSkipWar
       content: `Hi ${coachName}! Great to have you here. Tell me — how did you get into coaching and what drives you?`,
     };
 
-    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined;
-    if (!apiKey) {
-      setMessages([fallback]);
-      return;
-    }
-
     setIsLoading(true);
     sendMessage(
       [{ role: "user", content: `Welcome ${coachName}, a coach in the field of ${sports.join(", ")}. Ask one open first question.` }],

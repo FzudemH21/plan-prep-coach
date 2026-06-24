@@ -1,3 +1,5 @@
+import { supabase } from '@/lib/supabase';
+
 export interface Message {
   role: "user" | "assistant";
   content: string;
@@ -13,12 +15,35 @@ export interface FileAttachment {
   base64Data: string;
 }
 
-const API_URL = "https://api.anthropic.com/v1/messages";
+const PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL as string}/functions/v1/ai-proxy`;
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-function getApiKey(): string {
-  const key = import.meta.env.VITE_ANTHROPIC_API_KEY as string | undefined;
-  if (!key) throw new Error("VITE_ANTHROPIC_API_KEY is not set");
-  return key;
+async function proxyFetch(body: unknown): Promise<Response> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  return fetch(PROXY_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey': ANON_KEY,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+async function extractText(response: Response): Promise<string> {
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`AI proxy error ${response.status}: ${error}`);
+  }
+  const data = await response.json() as {
+    content: Array<{ type: string; text: string }>;
+  };
+  const textBlock = data.content.find((b) => b.type === 'text');
+  if (!textBlock) throw new Error('No text in API response');
+  return textBlock.text;
 }
 
 export async function sendMessage(
@@ -27,34 +52,13 @@ export async function sendMessage(
   model = "claude-haiku-4-5",
   maxTokens = 4096,
 ): Promise<string> {
-  const response = await fetch(API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": getApiKey(),
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages,
-    }),
+  const response = await proxyFetch({
+    model,
+    max_tokens: maxTokens,
+    system: systemPrompt,
+    messages,
   });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Anthropic API error ${response.status}: ${error}`);
-  }
-
-  const data = await response.json() as {
-    content: Array<{ type: string; text: string }>;
-  };
-
-  const textBlock = data.content.find((b) => b.type === "text");
-  if (!textBlock) throw new Error("No text in API response");
-  return textBlock.text;
+  return extractText(response);
 }
 
 /**
@@ -88,32 +92,11 @@ export async function sendMessageWithFile(
 
   content.push({ type: "text", text: textContent });
 
-  const response = await fetch(API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": getApiKey(),
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 2048,
-      system: systemPrompt,
-      messages: [{ role: "user", content }],
-    }),
+  const response = await proxyFetch({
+    model,
+    max_tokens: 2048,
+    system: systemPrompt,
+    messages: [{ role: "user", content }],
   });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Anthropic API error ${response.status}: ${error}`);
-  }
-
-  const data = await response.json() as {
-    content: Array<{ type: string; text: string }>;
-  };
-
-  const textBlock = data.content.find((b) => b.type === "text");
-  if (!textBlock) throw new Error("No text in API response");
-  return textBlock.text;
+  return extractText(response);
 }

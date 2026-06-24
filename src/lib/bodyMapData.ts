@@ -145,7 +145,10 @@ export const FRONT_REGIONS: SvgRegion[] = [
 ];
 
 // ── Back view regions — viewBox 0 0 211 317 ──────────────────────────────────
-// Same athlete perspective: R = lower x, L = higher x
+// Back-view perspective: the figure faces AWAY from the viewer, so the
+// patient's RIGHT side is on the viewer's RIGHT (higher x) and the patient's
+// LEFT side is on the viewer's LEFT (lower x).
+// This is the OPPOSITE of the front view: L = lower x, R = higher x.
 
 export const BACK_REGIONS: SvgRegion[] = [
   // Head / Neck — midline
@@ -153,24 +156,24 @@ export const BACK_REGIONS: SvgRegion[] = [
   { uid:'b2a',  areaId:2,  x:91,  y:31,  w:26, h:13 },
   { uid:'b2b',  areaId:2,  x:78,  y:47,  w:16, h:7  },
   { uid:'b2c',  areaId:2,  x:112, y:47,  w:14, h:6  },
-  // Shoulder
-  { uid:'b3a',  areaId:3,  side:'R', x:59,  y:55,  w:29, h:22 },
-  { uid:'b3b',  areaId:3,  side:'L', x:126, y:52,  w:25, h:28 },
+  // Shoulder — L = lower x (viewer's left = patient's left), R = higher x
+  { uid:'b3a',  areaId:3,  side:'L', x:59,  y:55,  w:29, h:22 },
+  { uid:'b3b',  areaId:3,  side:'R', x:126, y:52,  w:25, h:28 },
   // Upper arm
-  { uid:'b4a',  areaId:4,  side:'R', x:55,  y:80,  w:20, h:26 },
-  { uid:'b4b',  areaId:4,  side:'L', x:134, y:82,  w:17, h:27 },
+  { uid:'b4a',  areaId:4,  side:'L', x:55,  y:80,  w:20, h:26 },
+  { uid:'b4b',  areaId:4,  side:'R', x:134, y:82,  w:17, h:27 },
   // Elbow
-  { uid:'b5a',  areaId:5,  side:'R', x:47,  y:106, w:28, h:12 },
-  { uid:'b5b',  areaId:5,  side:'L', x:131, y:110, w:31, h:6  },
+  { uid:'b5a',  areaId:5,  side:'L', x:47,  y:106, w:28, h:12 },
+  { uid:'b5b',  areaId:5,  side:'R', x:131, y:110, w:31, h:6  },
   // Forearm
-  { uid:'b6a',  areaId:6,  side:'R', x:44,  y:121, w:27, h:27 },
-  { uid:'b6b',  areaId:6,  side:'L', x:135, y:119, w:30, h:32 },
+  { uid:'b6a',  areaId:6,  side:'L', x:44,  y:121, w:27, h:27 },
+  { uid:'b6b',  areaId:6,  side:'R', x:135, y:119, w:30, h:32 },
   // Wrist
-  { uid:'b7a',  areaId:7,  side:'R', x:42,  y:150, w:18, h:6  },
-  { uid:'b7b',  areaId:7,  side:'L', x:149, y:153, w:21, h:3  },
+  { uid:'b7a',  areaId:7,  side:'L', x:42,  y:150, w:18, h:6  },
+  { uid:'b7b',  areaId:7,  side:'R', x:149, y:153, w:21, h:3  },
   // Hand/fingers
-  { uid:'b8a',  areaId:8,  side:'R', x:32,  y:155, w:28, h:30 },
-  { uid:'b8b',  areaId:8,  side:'L', x:146, y:159, w:30, h:28 },
+  { uid:'b8a',  areaId:8,  side:'L', x:32,  y:155, w:28, h:30 },
+  { uid:'b8b',  areaId:8,  side:'R', x:146, y:159, w:30, h:28 },
   // Thoracic / Lumbar spine — midline
   { uid:'b11a', areaId:11, x:96,  y:47,  w:16, h:64 },
   { uid:'b11b', areaId:11, x:75,  y:79,  w:17, h:32 },
@@ -182,18 +185,18 @@ export const BACK_REGIONS: SvgRegion[] = [
   { uid:'b13a', areaId:13, x:76,  y:126, w:56, h:9  },
   { uid:'b13b', areaId:13, x:72,  y:135, w:66, h:28 },
   // Thigh
-  { uid:'b15a', areaId:15, side:'R', x:70,  y:165, w:32, h:37 },
-  { uid:'b15b', areaId:15, side:'L', x:104, y:165, w:31, h:38 },
+  { uid:'b15a', areaId:15, side:'L', x:70,  y:165, w:32, h:37 },
+  { uid:'b15b', areaId:15, side:'R', x:104, y:165, w:31, h:38 },
   // Knee
-  { uid:'b16a', areaId:16, side:'R', x:77,  y:203, w:24, h:8  },
-  { uid:'b16b', areaId:16, side:'L', x:107, y:206, w:25, h:6  },
+  { uid:'b16a', areaId:16, side:'L', x:77,  y:203, w:24, h:8  },
+  { uid:'b16b', areaId:16, side:'R', x:107, y:206, w:25, h:6  },
   // Lower leg
-  { uid:'b17a', areaId:17, side:'R', x:74,  y:212, w:27, h:50 },
-  { uid:'b17b', areaId:17, side:'L', x:104, y:213, w:28, h:49 },
+  { uid:'b17a', areaId:17, side:'L', x:74,  y:212, w:27, h:50 },
+  { uid:'b17b', areaId:17, side:'R', x:104, y:213, w:28, h:49 },
   // Ankle
-  { uid:'b18a', areaId:18, side:'R', x:81,  y:263, w:17, h:9  },
-  { uid:'b18b', areaId:18, side:'L', x:108, y:264, w:17, h:8  },
+  { uid:'b18a', areaId:18, side:'L', x:81,  y:263, w:17, h:9  },
+  { uid:'b18b', areaId:18, side:'R', x:108, y:264, w:17, h:8  },
   // Foot/toes
-  { uid:'b19a', areaId:19, side:'R', x:78,  y:275, w:23, h:33 },
-  { uid:'b19b', areaId:19, side:'L', x:106, y:274, w:25, h:35 },
+  { uid:'b19a', areaId:19, side:'L', x:78,  y:275, w:23, h:33 },
+  { uid:'b19b', areaId:19, side:'R', x:106, y:274, w:25, h:35 },
 ];

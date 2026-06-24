@@ -1131,12 +1131,31 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     };
   }, [editing.selectedAssignment]);
 
-  // Calendar days for the master planner — overlay liveScheduleMap session data on top of
-  // allAssignmentDays so mobile-created plans (empty editing state) show the right sessions.
+  // Calendar days for the master planner — fills in empty days between the first and last
+  // data dates so every consecutive week column shows up, then overlays live schedule data.
   const masterPlannerCalendarDays = useMemo(() => {
     if (viewMode !== 'master') return editing.allAssignmentDays;
 
-    return editing.allAssignmentDays.map(day => {
+    const baseDays = editing.allAssignmentDays;
+    if (baseDays.length === 0) return baseDays;
+
+    // Build a lookup keyed by date string
+    const existingDays = new Map(baseDays.map(d => [d.dateString, d]));
+
+    // Derive the full range from the first and last dates that already have data,
+    // then create empty placeholder entries for any date in between that is missing.
+    const sortedKeys = [...existingDays.keys()].sort();
+    const firstDate = new Date(sortedKeys[0] + 'T12:00:00');
+    const lastDate  = new Date(sortedKeys[sortedKeys.length - 1] + 'T12:00:00');
+
+    const fullRangeDays = eachDayOfInterval({ start: firstDate, end: lastDate }).map(date => {
+      const dateString = format(date, 'yyyy-MM-dd');
+      if (existingDays.has(dateString)) return existingDays.get(dateString)!;
+      const trainingDay = editing.trainingDays.find(td => td.date === dateString);
+      return { date, dateString, isCurrentMonth: true, trainingDay, sessions: [], totalExercises: 0 };
+    });
+
+    return fullRangeDays.map(day => {
       const liveEntry = liveScheduleMap.get(day.dateString);
       // A day is "explicitly cleared" only when the coach cleared it in this session
       // AND the assignment is a desktop plan (isMobileCreated=false). For mobile plans
@@ -1147,6 +1166,13 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         editing.daySplitStates[day.dateString] === 0;
 
       if (liveEntry !== undefined && !isExplicitlyCleared) {
+        // Guard: if the live entry has no sessions but the editing state does, the live
+        // entry is stale (e.g. mid-sync during the DELETE→UPSERT window or a transient
+        // realtime payload with null sessions). Fall back to editing state so the session
+        // doesn't visually disappear while the sync completes.
+        if (liveEntry.sessions.length === 0 && day.sessions.length > 0) {
+          return day;
+        }
         return {
           ...day,
           sessions: liveEntry.sessions.map((s, idx) => {
@@ -1164,7 +1190,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       }
       return day;
     });
-  }, [viewMode, editing.allAssignmentDays, liveScheduleMap, selectedAssignmentId, editing.isMobileCreated, editing.daySplitStates]);
+  }, [viewMode, editing.allAssignmentDays, editing.trainingDays, liveScheduleMap, selectedAssignmentId, editing.isMobileCreated, editing.daySplitStates]);
 
   // Query athlete_session_logs for the visible date range whenever the connection or
   // visible window changes. Keyed by session_id = "${date}-${sessionIndex}".
@@ -2552,6 +2578,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 allExerciseDistribution={editing.exerciseDistribution}
                 onExerciseChange={editing.handleExerciseChange}
                 selectedAthleteId={athlete.id}
+                athleteConnectionId={getConnectionForAthlete(athlete.id)?.id}
                 athletePerformanceParameters={athleteData.athletePerformanceParameters.filter(
                   p => p.athleteId === athlete.id
                 )}

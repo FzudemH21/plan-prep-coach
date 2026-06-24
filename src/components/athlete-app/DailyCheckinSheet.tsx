@@ -776,6 +776,13 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
                 </p>
               </div>
             )}
+
+            {/* No dots selected — show hint so athlete can still proceed */}
+            {painDots.size === 0 && !pendingKey && (
+              <p className="text-center text-xs text-muted-foreground py-2 px-4">
+                No area selected. Tap the map to mark a pain location, or tap <strong>Continue</strong> to submit with no pain.
+              </p>
+            )}
           </div>
           {saveError && (
             <p className="text-xs text-destructive text-center pb-1">
@@ -788,7 +795,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
             </Button>
             <Button
               className="flex-1"
-              disabled={painDots.size === 0 || !!pendingKey || saving}
+              disabled={!!pendingKey || saving}
               onClick={() => {
                 if (hasIllness) setStep('illness_symptoms');
                 else setStep(nextMainStep('health_q', monitoringConfig));

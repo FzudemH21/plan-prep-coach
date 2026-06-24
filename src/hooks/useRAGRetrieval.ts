@@ -45,9 +45,7 @@ interface ChunkRow {
 export function useRAGRetrieval() {
   const { user } = useAuth();
 
-  const isAvailable =
-    !!user &&
-    !!(import.meta.env.VITE_OPENAI_API_KEY as string | undefined);
+  const isAvailable = !!user;
 
   /**
    * Embed the query, run similarity search, and return a formatted string

@@ -19,6 +19,7 @@ import { getMethodSessionIndex, getModuloSessionIndex } from '@/utils/sessionInd
 import { BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
+import { useExerciseMetrics } from '@/hooks/useExerciseMetrics';
 import { evaluateFormula, parseNumeric } from '@/utils/formulaEvaluator';
 import { AthletePerformanceParameter } from '@/types/athlete';
 import {
@@ -185,6 +186,7 @@ interface MasterPlannerColumnProps {
   ) => void;
   // Athlete context for baseline value auto-fill
   selectedAthleteId?: string;
+  athleteConnectionId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
   // Body Metrics
   biometricDefinitions?: import('@/types/athlete').BiometricDefinition[];
@@ -511,6 +513,7 @@ export function MasterPlannerColumn({
   onOpenExerciseDetail,
   onExerciseChange,
   selectedAthleteId,
+  athleteConnectionId,
   athletePerformanceParameters,
   biometricDefinitions,
   athleteBiometrics,
@@ -531,6 +534,7 @@ export function MasterPlannerColumn({
   // Parameters database hook for test method dropdown
   const { data: parametersData, addParameter } = useParametersDataV2();
   const { data: parametersToolboxData } = useToolboxData();
+  const { getExerciseHistory } = useExerciseMetrics(athleteConnectionId ?? null);
   
   const toggleExerciseCollapse = (exerciseId: string) => {
     setExpandedExercises(prev => ({
@@ -838,18 +842,25 @@ export function MasterPlannerColumn({
       // Athlete data refs: 'e1RM' token, biometric def IDs, or performance param IDs
       for (const ref of ce.athleteDataRefs ?? []) {
         if (ref === 'e1RM') {
-          // Find any performance parameter named 'e1rm' (case-insensitive) as fallback
-          const e1rmParam = parametersData?.parameters.find(p => p.name.toLowerCase() === 'e1rm');
-          if (e1rmParam && selectedAthleteId) {
-            const perfEntry = (athletePerformanceParameters ?? []).find(
-              p => p.athleteId === selectedAthleteId && p.athleticismParameterId === e1rmParam.id
-            );
-            if (perfEntry?.values.length) {
-              const sorted = [...perfEntry.values].sort(
-                (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+          // Primary: exercise session history (e1RM configured in exercise metrics tab)
+          const history = getExerciseHistory(exercise.exerciseName);
+          const recent = [...history].reverse().find(s => s.e1rm !== null);
+          if (recent?.e1rm != null) {
+            ctx['e1RM'] = recent.e1rm;
+          } else {
+            // Fallback: performance parameter named 'e1rm'
+            const e1rmParam = parametersData?.parameters.find(p => p.name.toLowerCase() === 'e1rm');
+            if (e1rmParam && selectedAthleteId) {
+              const perfEntry = (athletePerformanceParameters ?? []).find(
+                p => p.athleteId === selectedAthleteId && p.athleticismParameterId === e1rmParam.id
               );
-              const n = parseFloat(sorted[0].value);
-              if (!isNaN(n)) ctx['e1RM'] = n;
+              if (perfEntry?.values.length) {
+                const sorted = [...perfEntry.values].sort(
+                  (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+                );
+                const n = parseFloat(sorted[0].value);
+                if (!isNaN(n)) ctx['e1RM'] = n;
+              }
             }
           }
         } else {

@@ -46,6 +46,7 @@ import { SaveToLibraryDialog } from '@/components/session-library/SaveToLibraryD
 import { ExerciseHistorySheet, type HistoryEntry } from '@/components/shared/ExerciseHistorySheet';
 import { PrintSessionView } from '@/components/print/PrintSessionView';
 import { useExerciseMetrics } from '@/hooks/useExerciseMetrics';
+import { useCoachProfile } from '@/hooks/useCoachProfile';
 
 interface SessionSectionProp {
   id: string;
@@ -3015,6 +3016,9 @@ export function WorkoutSessionSheet({
     });
   };
 
+  // ── Coach branding for print view ───────────────────────────────────────────
+  const { profile: coachProfile } = useCoachProfile();
+
   // ── Athlete context for auto-calculated parameters ──────────────────────────
   const { biometricDefinitions, athleteBiometrics } = useAthletes();
   // useExerciseMetrics already computes e1RM correctly using the param tags the coach
@@ -3886,6 +3890,8 @@ export function WorkoutSessionSheet({
         getSupersetLabel={getSupersetLabel}
         visibilityOverrides={parameterVisibilityOverrides}
         resolveAthleteDataRefs={resolveAthleteDataRefs}
+        coachLogo={coachProfile?.branding?.logoBase64}
+        accentColor={coachProfile?.branding?.primaryColor}
       />
     </WorkoutSessionProvider>
   );

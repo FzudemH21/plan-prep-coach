@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useCallback } from 'react';
 import { useSupabaseStore } from '@/hooks/useSupabaseStore';
+import { syncExerciseDetailToSchedule } from '@/utils/exerciseDetailSync';
 
 export interface LibraryColumn {
   id: string;
@@ -197,18 +198,45 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
   }, [data, save]);
 
   const updateExerciseInLibrary = useCallback((libraryId: string, exerciseId: string, updates: Partial<CustomExercise>) => {
+    // Detect if video or description changed — either via top-level fields or via a
+    // column with role 'video'/'description' (inline cell edit path)
+    const lib = data.libraries.find(l => l.id === libraryId);
+    const videoOrDescChanged = (
+      'videoUrl' in updates ||
+      'description' in updates ||
+      (updates.data !== undefined && lib?.columns.some(col =>
+        (col.role === 'video' || col.role === 'description') && col.id in updates.data!
+      ))
+    );
+
     save({
       ...data,
-      libraries: data.libraries.map(lib =>
-        lib.id === libraryId
+      libraries: data.libraries.map(l =>
+        l.id === libraryId
           ? {
-              ...lib,
-              exercises: lib.exercises.map(ex => ex.id === exerciseId ? { ...ex, ...updates } : ex),
+              ...l,
+              exercises: l.exercises.map(ex => ex.id === exerciseId ? { ...ex, ...updates } : ex),
               lastUpdated: new Date().toISOString(),
             }
-          : lib
+          : l
       ),
     });
+
+    if (videoOrDescChanged && lib) {
+      const ex = lib.exercises.find(e => e.id === exerciseId);
+      if (ex) {
+        const merged = { ...ex, ...updates };
+        const videoCol = lib.columns.find(c => c.role === 'video');
+        const descCol  = lib.columns.find(c => c.role === 'description');
+        const finalVideo = merged.videoUrl
+          || (videoCol ? merged.data?.[videoCol.id] as string | undefined : undefined)
+          || undefined;
+        const finalDesc = merged.description
+          || (descCol ? merged.data?.[descCol.id] as string | undefined : undefined)
+          || undefined;
+        void syncExerciseDetailToSchedule(exerciseId, finalVideo, finalDesc);
+      }
+    }
   }, [data, save]);
 
   const batchUpdateExercisesInLibrary = useCallback((

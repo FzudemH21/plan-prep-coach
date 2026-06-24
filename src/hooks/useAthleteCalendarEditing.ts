@@ -1947,16 +1947,28 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     parameterName: string,
     value: string | number
   ) => {
-    // Store parameter values - simplified for athlete calendar
+    // Store in wizard format [mesoId][mcIdx][fullMethodKey][sessionIdx][paramName]
+    // so MasterPlannerColumn.getExerciseParams can read it back for formula evaluation.
+    const trainingDay = trainingDays.find(td => td.date === dayDate);
+    const mesoId = trainingDay?.mesocycleId || selectedAssignment?.assignedMesocycles?.[0]?.id;
+    if (!mesoId) return;
+    const meso = selectedAssignment?.assignedMesocycles?.find(m => m.id === mesoId);
+    const rawMcIdx = meso?.microcycles?.findIndex((m: { id: string }) => m.id === trainingDay?.microcycleId) ?? -1;
+    const mcIdx = rawMcIdx < 0 ? 0 : rawMcIdx;
+    const fullMethodKey = categoryName ? `${methodId}::${categoryName}` : methodId;
+
     setParameterValues(prev => {
       const updated = JSON.parse(JSON.stringify(prev));
-      const key = `${dayDate}_${sessionIndex}`;
-      if (!updated[key]) updated[key] = {};
-      if (!updated[key][methodId]) updated[key][methodId] = {};
-      updated[key][methodId][parameterName] = value;
+      if (!updated[mesoId]) updated[mesoId] = {};
+      if (!updated[mesoId][mcIdx]) updated[mesoId][mcIdx] = {};
+      if (!updated[mesoId][mcIdx][fullMethodKey]) updated[mesoId][mcIdx][fullMethodKey] = {};
+      if (!updated[mesoId][mcIdx][fullMethodKey][sessionIndex]) {
+        updated[mesoId][mcIdx][fullMethodKey][sessionIndex] = {};
+      }
+      updated[mesoId][mcIdx][fullMethodKey][sessionIndex][parameterName] = value;
       return updated;
     });
-  }, []);
+  }, [trainingDays, selectedAssignment]);
 
   // Persist the full parameter snapshot for a specific exercise into adhocPlannedParams /
   // adhocVisibleParams on the exercise distribution entry.  The auto-save effect picks up

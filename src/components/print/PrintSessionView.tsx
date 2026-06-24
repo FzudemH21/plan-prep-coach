@@ -18,6 +18,10 @@ export interface PrintSessionViewProps {
   visibilityOverrides?: ParameterVisibilityOverrides;
   /** Mirror of WorkoutSessionSheet's resolveAthleteDataRefs — needed for e1RM / biometric formulas */
   resolveAthleteDataRefs?: (refs: string[], exerciseName: string) => Record<string, number | undefined>;
+  /** Coach logo URL — rendered top-right of the print header */
+  coachLogo?: string;
+  /** Coach brand accent color (hex) — applied via --coach-accent CSS variable */
+  accentColor?: string;
 }
 
 interface ParamMeta {
@@ -217,18 +221,64 @@ function CircuitBlock({ exercise }: { exercise: WorkoutExercise }) {
   );
 }
 
+// ── Superset grouping helpers ──────────────────────────────────────────────
+
+/** "A1" → "A", "B2" → "B", anything else → undefined */
+function getGroupLetter(label: string): string | undefined {
+  const m = label.match(/^([A-Z]+)\d+$/);
+  return m ? m[1] : undefined;
+}
+
+type ExerciseGroup =
+  | { type: 'solo'; exercise: WorkoutExercise }
+  | { type: 'superset'; groupLetter: string; exercises: { ex: WorkoutExercise; index: number }[] };
+
+function groupExercises(
+  exercises: WorkoutExercise[],
+  getSupersetLabel: (id: string) => string | undefined,
+): ExerciseGroup[] {
+  const labels = exercises.map(ex => {
+    const label = getSupersetLabel(ex.id);
+    const m = label?.match(/^([A-Z]+)(\d+)$/);
+    return m ? { groupLetter: m[1], index: parseInt(m[2]) } : null;
+  });
+
+  const groups: ExerciseGroup[] = [];
+  let i = 0;
+  while (i < exercises.length) {
+    const meta = labels[i];
+    if (!meta) {
+      groups.push({ type: 'solo', exercise: exercises[i] });
+      i++;
+    } else {
+      const letter = meta.groupLetter;
+      const members: { ex: WorkoutExercise; index: number }[] = [];
+      while (i < exercises.length && labels[i]?.groupLetter === letter) {
+        members.push({ ex: exercises[i], index: labels[i]!.index });
+        i++;
+      }
+      groups.push({ type: 'superset', groupLetter: letter, exercises: members });
+    }
+  }
+  return groups;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+
 function ExerciseBlock({
   exercise,
   toolboxData,
   getSupersetLabel,
   visibilityOverrides = {},
   resolveAthleteDataRefs,
+  supersetIndex,
 }: {
   exercise: WorkoutExercise;
   toolboxData?: ToolboxDatabase;
   getSupersetLabel: (id: string) => string | undefined;
   visibilityOverrides?: ParameterVisibilityOverrides;
   resolveAthleteDataRefs?: (refs: string[], exerciseName: string) => Record<string, number | undefined>;
+  supersetIndex?: number;
 }) {
   if (exercise.isCircuit) return <CircuitBlock exercise={exercise} />;
 
@@ -245,6 +295,9 @@ function ExerciseBlock({
   return (
     <div className="psv-exercise">
       <div className="psv-exercise-header">
+        {supersetIndex !== undefined && (
+          <span className="psv-superset-index">{supersetIndex}.</span>
+        )}
         <span className="psv-exercise-name">{exercise.exerciseName}</span>
         {supersetLabel && <span className="psv-superset-label">{supersetLabel}</span>}
         {exercise.eachSide && <span className="psv-each-side">Each side</span>}
@@ -320,9 +373,14 @@ export function PrintSessionView({
   getSupersetLabel,
   visibilityOverrides = {},
   resolveAthleteDataRefs,
+  coachLogo,
+  accentColor,
 }: PrintSessionViewProps) {
   return (
-    <div className="print-session-view">
+    <div
+      className="print-session-view"
+      style={accentColor ? ({ '--coach-accent': accentColor } as React.CSSProperties) : undefined}
+    >
       <div className="psv-header">
         <h1 className="psv-title">{sessionName}</h1>
         <div className="psv-meta">
@@ -340,6 +398,9 @@ export function PrintSessionView({
             {sessionComments}
           </div>
         )}
+        {coachLogo && (
+          <img className="psv-coach-logo" src={coachLogo} alt="Coach logo" />
+        )}
       </div>
 
       {sections.map(section => (
@@ -348,16 +409,36 @@ export function PrintSessionView({
           {section.comments?.trim() && (
             <p className="psv-section-notes">{section.comments}</p>
           )}
-          {section.exercises.map(exercise => (
-            <ExerciseBlock
-              key={exercise.id}
-              exercise={exercise}
-              toolboxData={toolboxData}
-              getSupersetLabel={getSupersetLabel}
-              visibilityOverrides={visibilityOverrides}
-              resolveAthleteDataRefs={resolveAthleteDataRefs}
-            />
-          ))}
+          {groupExercises(section.exercises, getSupersetLabel).map((group, gi) => {
+            if (group.type === 'superset') {
+              return (
+                <div key={`ss-${group.groupLetter}-${gi}`} className="psv-superset-group">
+                  <div className="psv-superset-group-label">Superset {group.groupLetter}</div>
+                  {group.exercises.map(({ ex, index }) => (
+                    <ExerciseBlock
+                      key={ex.id}
+                      exercise={ex}
+                      toolboxData={toolboxData}
+                      getSupersetLabel={() => undefined}
+                      supersetIndex={index}
+                      visibilityOverrides={visibilityOverrides}
+                      resolveAthleteDataRefs={resolveAthleteDataRefs}
+                    />
+                  ))}
+                </div>
+              );
+            }
+            return (
+              <ExerciseBlock
+                key={group.exercise.id}
+                exercise={group.exercise}
+                toolboxData={toolboxData}
+                getSupersetLabel={getSupersetLabel}
+                visibilityOverrides={visibilityOverrides}
+                resolveAthleteDataRefs={resolveAthleteDataRefs}
+              />
+            );
+          })}
         </div>
       ))}
     </div>

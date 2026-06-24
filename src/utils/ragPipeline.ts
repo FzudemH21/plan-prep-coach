@@ -26,16 +26,12 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const OPENAI_EMBEDDING_URL = 'https://api.openai.com/v1/embeddings';
 const EMBEDDING_MODEL = 'text-embedding-3-small';
 const CHUNK_SIZE = 400;    // target words per chunk
 const CHUNK_OVERLAP = 50;  // words of overlap between consecutive chunks
 
-function getOpenAIKey(): string {
-  const key = import.meta.env.VITE_OPENAI_API_KEY as string | undefined;
-  if (!key) throw new Error('VITE_OPENAI_API_KEY is not set');
-  return key;
-}
+const PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL as string}/functions/v1/ai-proxy`;
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 // ── Text extraction ───────────────────────────────────────────────────────────
 
@@ -118,13 +114,18 @@ export function chunkText(
 
 // ── Embedding ─────────────────────────────────────────────────────────────────
 
-/** Embed a single string via OpenAI text-embedding-3-small. */
+/** Embed a single string via OpenAI text-embedding-3-small (proxied server-side). */
 export async function embedText(text: string): Promise<number[]> {
-  const response = await fetch(OPENAI_EMBEDDING_URL, {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const response = await fetch(PROXY_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${getOpenAIKey()}`,
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey': ANON_KEY,
+      'x-target': 'openai',
     },
     body: JSON.stringify({
       model: EMBEDDING_MODEL,
@@ -134,7 +135,7 @@ export async function embedText(text: string): Promise<number[]> {
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`OpenAI embedding error ${response.status}: ${err}`);
+    throw new Error(`Embedding proxy error ${response.status}: ${err}`);
   }
 
   const data = await response.json() as {

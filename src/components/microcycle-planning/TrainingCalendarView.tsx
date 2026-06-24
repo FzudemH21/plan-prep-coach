@@ -1040,6 +1040,7 @@ export function TrainingCalendarView({
                 toast({ title: "Exercise changed", description: `Changed to ${newExercise.exerciseName}` });
               }}
               selectedAthleteId={selectedAthleteId}
+              athleteConnectionId={selectedAthleteId ? getConnectionForAthlete(selectedAthleteId)?.id : undefined}
               athletePerformanceParameters={athletePerformanceParameters}
               biometricDefinitions={biometricDefinitions}
               athleteBiometrics={athleteBiometrics}

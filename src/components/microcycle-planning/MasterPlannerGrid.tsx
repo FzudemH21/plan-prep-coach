@@ -116,6 +116,7 @@ interface MasterPlannerGridProps {
   ) => void;
   // Athlete context for baseline value auto-fill
   selectedAthleteId?: string;
+  athleteConnectionId?: string;
   athletePerformanceParameters?: AthletePerformanceParameter[];
   biometricDefinitions?: BiometricDefinition[];
   athleteBiometrics?: AthleteBiometric[];
@@ -173,6 +174,7 @@ export function MasterPlannerGrid({
   onOpenExerciseDetail,
   onExerciseChange,
   selectedAthleteId,
+  athleteConnectionId,
   athletePerformanceParameters,
   biometricDefinitions,
   athleteBiometrics,
@@ -308,6 +310,7 @@ export function MasterPlannerGrid({
               onOpenExerciseDetail={onOpenExerciseDetail}
               onExerciseChange={onExerciseChange}
               selectedAthleteId={selectedAthleteId}
+              athleteConnectionId={athleteConnectionId}
               athletePerformanceParameters={athletePerformanceParameters}
               biometricDefinitions={biometricDefinitions}
               athleteBiometrics={athleteBiometrics}
