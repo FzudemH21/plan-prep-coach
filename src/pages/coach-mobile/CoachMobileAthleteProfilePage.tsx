@@ -989,48 +989,43 @@ export default function CoachMobileAthleteProfilePage() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Back button */}
-      <div className="flex items-center px-4 pt-4 pb-2 shrink-0">
+      {/* Compact header: back · avatar + name + badge · chat */}
+      <div className="flex items-center gap-3 px-4 py-3 shrink-0 border-b">
         <button
           onClick={() => navigate('/coach-mobile/athletes')}
-          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-accent -ml-1"
+          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-accent shrink-0 -ml-1"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <div className="flex-1" />
+
+        <div className={`w-10 h-10 rounded-full ${bg} flex items-center justify-center shrink-0`}>
+          <span className="text-sm font-bold text-white">{ini}</span>
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold truncate">{fullName}</p>
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium mt-0.5',
+              isConnected ? 'bg-emerald-100 text-emerald-700'
+              : isPending  ? 'bg-amber-100 text-amber-700'
+              : 'bg-muted text-muted-foreground'
+            )}
+          >
+            {isConnected ? <><CheckCircle2 className="h-2.5 w-2.5" /> {t('coachMobile.athleteProfile.connection.connected')}</>
+            : isPending   ? <><Clock className="h-2.5 w-2.5" /> {t('coachMobile.athleteProfile.connection.invitePending')}</>
+            : t('coachMobile.athleteProfile.connection.noApp')}
+          </span>
+        </div>
+
         {connection?.athleteAuthUserId && (
           <button
             onClick={() => navigate(`/coach-mobile/athletes/${athleteId}/chat`)}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-accent text-muted-foreground hover:text-foreground"
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-accent text-muted-foreground hover:text-foreground shrink-0"
           >
             <MessageCircle className="h-5 w-5" />
           </button>
         )}
-      </div>
-
-      {/* Profile card */}
-      <div className="px-4 pb-4 flex flex-col items-center text-center gap-2 shrink-0">
-        <div className={`w-16 h-16 rounded-full ${bg} flex items-center justify-center`}>
-          <span className="text-xl font-bold text-white">{ini}</span>
-        </div>
-        <div>
-          <h2 className="text-xl font-bold">{fullName}</h2>
-          {sports.length > 0 && (
-            <p className="text-sm text-muted-foreground">{sports.join(' · ')}</p>
-          )}
-        </div>
-        <span
-          className={cn(
-            'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium',
-            isConnected ? 'bg-emerald-100 text-emerald-700'
-            : isPending  ? 'bg-amber-100 text-amber-700'
-            : 'bg-muted text-muted-foreground'
-          )}
-        >
-          {isConnected ? <><CheckCircle2 className="h-3 w-3" /> {t('coachMobile.athleteProfile.connection.connected')}</>
-          : isPending   ? <><Clock className="h-3 w-3" /> {t('coachMobile.athleteProfile.connection.invitePending')}</>
-          : t('coachMobile.athleteProfile.connection.noApp')}
-        </span>
       </div>
 
       {/* Tabs */}
