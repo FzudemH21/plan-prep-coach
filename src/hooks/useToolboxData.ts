@@ -230,10 +230,20 @@ export function useToolboxData() {
 
   const reorderParameters = useCallback(async (categorySubCategoryKey: string, reorderedParameters: ToolboxEntry[]) => {
     const [category, subCategory] = categorySubCategoryKey.split('|||');
+    // Remember the original position so the method doesn't jump to the bottom of the list.
+    const firstIndex = data.entries.findIndex(
+      e => e.category === category && e.subCategory === subCategory
+    );
     const otherEntries = data.entries.filter(
       e => !(e.category === category && e.subCategory === subCategory)
     );
-    await saveData({ ...data, entries: [...otherEntries, ...reorderedParameters] });
+    const insertAt = firstIndex >= 0 ? firstIndex : otherEntries.length;
+    const newEntries = [
+      ...otherEntries.slice(0, insertAt),
+      ...reorderedParameters,
+      ...otherEntries.slice(insertAt),
+    ];
+    await saveData({ ...data, entries: newEntries });
   }, [data, saveData]);
 
   const importData = useCallback(async (tsvText: string): Promise<number> => {
