@@ -27,7 +27,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FileText, Activity, Plus, Edit2, Trash2, MoreHorizontal } from "lucide-react";
+import { FileText, Activity, Plus, Edit2, Trash2, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { AddLibraryDialog } from "@/components/templates/AddLibraryDialog";
 import { EditLibraryDialog } from "@/components/templates/EditLibraryDialog";
 import { useCustomLibraries, CustomLibrary } from "@/hooks/useCustomLibraries";
@@ -40,7 +40,17 @@ export default function ExerciseLibrariesPage() {
   const [editingLibrary, setEditingLibrary] = useState<CustomLibrary | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [libraryToDelete, setLibraryToDelete] = useState<CustomLibrary | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | null>(null);
   const { libraries, deleteLibrary, isLoading } = useCustomLibraries();
+
+  const sortedLibraries = sortOrder === null ? libraries : [...libraries].sort((a, b) => {
+    const cmp = a.name.localeCompare(b.name);
+    return sortOrder === 'asc' ? cmp : -cmp;
+  });
+
+  const cycleSortOrder = () => setSortOrder(prev =>
+    prev === null ? 'asc' : prev === 'asc' ? 'desc' : null
+  );
   const { toast } = useToast();
 
   const handleEditLibrary = (library: CustomLibrary) => {
@@ -99,14 +109,24 @@ export default function ExerciseLibrariesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[280px]">Library Name</TableHead>
+                <TableHead className="w-[280px]">
+                  <button
+                    onClick={cycleSortOrder}
+                    className="flex items-center gap-1 hover:text-foreground transition-colors"
+                  >
+                    Library Name
+                    {sortOrder === null && <ArrowUpDown className="h-3.5 w-3.5" />}
+                    {sortOrder === 'asc' && <ArrowUp className="h-3.5 w-3.5" />}
+                    {sortOrder === 'desc' && <ArrowDown className="h-3.5 w-3.5" />}
+                  </button>
+                </TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Exercises</TableHead>
                 <TableHead className="w-[60px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {libraries.map((library) => {
+              {sortedLibraries.map((library) => {
                 const IconComponent = getLibraryIcon(library);
                 return (
                   <TableRow
