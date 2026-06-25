@@ -45,7 +45,7 @@ export default function LibraryPage() {
   // Auto-redirect to the overview when the library no longer exists (e.g. deleted)
   useEffect(() => {
     if (!isLoading && !library) {
-      navigate('/templates/libraries', { replace: true });
+      navigate('/templates/exercise-libraries', { replace: true });
     }
   }, [isLoading, library, navigate]);
 
@@ -201,7 +201,7 @@ export default function LibraryPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate("/templates/libraries")}
+            onClick={() => navigate("/templates/exercise-libraries")}
             className="flex items-center space-x-2"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -213,7 +213,7 @@ export default function LibraryPage() {
           <p className="text-muted-foreground mb-6">
             The library you're looking for doesn't exist or has been deleted.
           </p>
-          <Button onClick={() => navigate("/templates/libraries")}>
+          <Button onClick={() => navigate("/templates/exercise-libraries")}>
             Return to Exercise Libraries
           </Button>
         </div>
@@ -227,7 +227,7 @@ export default function LibraryPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => navigate("/templates/libraries")}
+          onClick={() => navigate("/templates/exercise-libraries")}
           className="flex items-center space-x-2"
         >
           <ArrowLeft className="h-4 w-4" />
