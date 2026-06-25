@@ -349,7 +349,7 @@ export function ExerciseLibraryPopup({
               <h3 className="text-sm font-medium text-muted-foreground shrink-0">Exercise Libraries</h3>
               <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value)} className="flex-1 flex flex-col overflow-hidden">
                 <TabsList className="flex flex-wrap h-auto gap-1.5 shrink-0 justify-start bg-transparent p-0">
-                  {Object.entries(allLibraries).map(([key, library]) => (
+                  {Object.entries(allLibraries).sort(([, a], [, b]) => a.name.localeCompare(b.name)).map(([key, library]) => (
                     <TabsTrigger
                       key={key}
                       value={key}
