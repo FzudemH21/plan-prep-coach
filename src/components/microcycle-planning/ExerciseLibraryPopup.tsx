@@ -344,51 +344,6 @@ export function ExerciseLibraryPopup({
           </DialogHeader>
 
           <div className="space-y-4 flex flex-col overflow-hidden">
-            {/* Search and Filter Controls */}
-            <div className="flex items-center justify-between gap-4 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="relative px-1">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search exercises..."
-                    value={filterState.search}
-                    onChange={(e) => handleSearchChange(e.target.value)}
-                    className="pl-8 w-64"
-                  />
-                  {/* Show create new exercise option when search doesn't match any exercise */}
-                  {filterState.search.trim() && !searchExistsInAllLibraries && filterState.search.trim().length > 2 && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-md p-2 shadow-md z-10">
-                      <Button
-                        variant="ghost" 
-                        size="sm"
-                        className="w-full justify-start text-left"
-                        onClick={handleCreateNewExercise}
-                      >
-                        <Plus className="h-3 w-3 mr-2" />
-                        Create "{filterState.search}" as new exercise
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                
-                {hasActiveFilters && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={clearAllFilters}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-3 w-3 mr-1" />
-                    Clear Filters
-                  </Button>
-                )}
-              </div>
-
-              <div className="text-sm text-muted-foreground">
-                {filteredAndSortedExercises.length} exercises
-              </div>
-            </div>
-
             {/* Library Tabs */}
             <div className="space-y-3 flex-1 flex flex-col overflow-hidden">
               <h3 className="text-sm font-medium text-muted-foreground shrink-0">Exercise Libraries</h3>
@@ -404,6 +359,48 @@ export function ExerciseLibraryPopup({
                     </TabsTrigger>
                   ))}
                 </TabsList>
+
+                {/* Search + filter controls — below the library tabs */}
+                <div className="flex items-center justify-between gap-4 shrink-0 mt-3">
+                  <div className="flex items-center gap-3">
+                    <div className="relative px-1">
+                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search exercises..."
+                        value={filterState.search}
+                        onChange={(e) => handleSearchChange(e.target.value)}
+                        className="pl-8 w-64"
+                      />
+                      {filterState.search.trim() && !searchExistsInAllLibraries && filterState.search.trim().length > 2 && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-md p-2 shadow-md z-10">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start text-left"
+                            onClick={handleCreateNewExercise}
+                          >
+                            <Plus className="h-3 w-3 mr-2" />
+                            Create "{filterState.search}" as new exercise
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    {hasActiveFilters && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearAllFilters}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-3 w-3 mr-1" />
+                        Clear Filters
+                      </Button>
+                    )}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {filteredAndSortedExercises.length} exercises
+                  </div>
+                </div>
 
                 {libraries.map(lib => {
                   const libCircuits = lib.circuits ?? [];
