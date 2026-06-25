@@ -393,9 +393,9 @@ export function ExerciseLibraryPopup({
             <div className="space-y-3 flex-1 flex flex-col overflow-hidden">
               <h3 className="text-sm font-medium text-muted-foreground shrink-0">Exercise Libraries</h3>
               <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value)} className="flex-1 flex flex-col overflow-hidden">
-                <TabsList className="grid w-full shrink-0" style={{ gridTemplateColumns: `repeat(${Object.keys(allLibraries).length}, 1fr)` }}>
+                <TabsList className="flex flex-wrap h-auto gap-1 shrink-0 justify-start bg-muted p-1 rounded-md">
                   {Object.entries(allLibraries).map(([key, library]) => (
-                    <TabsTrigger key={key} value={key}>
+                    <TabsTrigger key={key} value={key} className="shrink-0">
                       {library.name} ({library.data.length})
                     </TabsTrigger>
                   ))}
