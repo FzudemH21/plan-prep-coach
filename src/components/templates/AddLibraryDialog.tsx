@@ -33,7 +33,7 @@ export function AddLibraryDialog({ isOpen, onClose }: AddLibraryDialogProps) {
     try {
       addLibrary({
         name: libraryName.trim(),
-        type: 'Custom',
+        type: 'exercise',
         description: description.trim(),
         columns: [
           { id: 'exercise', name: 'Exercise', type: 'text', required: true }

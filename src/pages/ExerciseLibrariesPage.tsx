@@ -100,7 +100,6 @@ export default function ExerciseLibrariesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[280px]">Library Name</TableHead>
-                <TableHead>Type</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Exercises</TableHead>
                 <TableHead className="w-[60px]"></TableHead>
@@ -121,7 +120,6 @@ export default function ExerciseLibrariesPage() {
                         {library.name}
                       </div>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{library.type}</TableCell>
                     <TableCell className="text-muted-foreground max-w-[300px]">
                       <span className="truncate block">{library.description || "—"}</span>
                     </TableCell>
