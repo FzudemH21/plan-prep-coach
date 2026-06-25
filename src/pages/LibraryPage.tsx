@@ -45,7 +45,7 @@ export default function LibraryPage() {
   // Auto-redirect to the overview when the library no longer exists (e.g. deleted)
   useEffect(() => {
     if (!isLoading && !library) {
-      navigate('/templates', { replace: true });
+      navigate('/templates/libraries', { replace: true });
     }
   }, [isLoading, library, navigate]);
 
@@ -201,11 +201,11 @@ export default function LibraryPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate("/templates")}
+            onClick={() => navigate("/templates/libraries")}
             className="flex items-center space-x-2"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span>Back to Templates</span>
+            <span>Back to Exercise Libraries</span>
           </Button>
         </div>
         <div className="text-center py-12">
@@ -213,8 +213,8 @@ export default function LibraryPage() {
           <p className="text-muted-foreground mb-6">
             The library you're looking for doesn't exist or has been deleted.
           </p>
-          <Button onClick={() => navigate("/templates")}>
-            Return to Templates
+          <Button onClick={() => navigate("/templates/libraries")}>
+            Return to Exercise Libraries
           </Button>
         </div>
       </div>
@@ -227,11 +227,11 @@ export default function LibraryPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => navigate("/templates")}
+          onClick={() => navigate("/templates/libraries")}
           className="flex items-center space-x-2"
         >
           <ArrowLeft className="h-4 w-4" />
-          <span>Back to Templates</span>
+          <span>Back to Exercise Libraries</span>
         </Button>
         <div>
           <h1 className="text-3xl font-bold">{library.name}</h1>
