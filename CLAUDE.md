@@ -7,7 +7,7 @@
 **GitHub:** https://github.com/FzudemH21/plan-prep-coach
 **Dev Server:** `npm run dev` → localhost:8080 (PowerShell, path: `C:\Users\Hanik\plan-prep-coach`)
 
-> **Critical — Worktree awareness:** Claude Code works in a git worktree under `.claude/worktrees/<branch>/`. Changes are ONLY visible in the browser if the dev server runs from that worktree directory, NOT from the main project root. Always confirm with the user which directory their dev server is running from before declaring a fix complete. If they're on the main dev server, changes won't appear until the branch is merged to `main`.
+> **Critical — Dev server restart required:** Claude Code edits files directly in `C:\Users\Hanik\plan-prep-coach`. Felix's dev server runs from the same directory at localhost:8080. After every set of changes, **always end the turn with: "Please restart your dev server: Ctrl+C → `npm run dev`"** — Vite HMR alone is not always sufficient, and a hard-reload (`Ctrl+Shift+R`) is never sufficient.
 
 ---
 
@@ -258,7 +258,7 @@ This is always faster than guessing from static code. The computer-use + Chrome 
 - Before starting any new work: `git pull` to ensure local is up to date
 - After finishing any work: commit and push all changes so nothing is left only locally — `git add <files> && git commit && git push origin main`
 - Never leave large amounts of uncommitted work sitting in the main directory — commit in logical chunks regularly
-- Claude Code works in a worktree (`.claude/worktrees/<branch>/`). Changes are ONLY visible in the browser if the dev server runs from that worktree directory. The user's dev server runs from `C:\Users\Hanik\plan-prep-coach` (main project dir) → **after pushing, always run `git pull` in the main dir and tell the user to restart the dev server** (`Ctrl+C` → `npm run dev`) and reload http://localhost:8080. A hard-reload alone (`Ctrl+Shift+R`) is NOT sufficient.
+- Claude Code edits files **directly in `C:\Users\Hanik\plan-prep-coach`** (the main project dir, not a worktree). Felix's dev server runs from the same directory at http://localhost:8080. Changes are picked up by the running process, but Vite HMR alone is not always sufficient — **after every set of changes, end the turn with the explicit instruction: "Please restart your dev server: Ctrl+C → `npm run dev` in `C:\Users\Hanik\plan-prep-coach`"**. A hard-reload alone (`Ctrl+Shift+R`) is NOT sufficient. `git pull` is NOT needed (files are edited in place).
 - **Before every large sync commit (stash → pull → stash pop), always check the diff for accidental removals** — especially imports and component renders that were intentionally added in earlier commits. A sync commit must never silently delete features
 
 ### Scrolling in Bounded Layouts (Critical — recurrent bug!)
