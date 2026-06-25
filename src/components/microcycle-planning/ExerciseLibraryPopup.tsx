@@ -393,9 +393,13 @@ export function ExerciseLibraryPopup({
             <div className="space-y-3 flex-1 flex flex-col overflow-hidden">
               <h3 className="text-sm font-medium text-muted-foreground shrink-0">Exercise Libraries</h3>
               <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value)} className="flex-1 flex flex-col overflow-hidden">
-                <TabsList className="flex flex-wrap h-auto gap-1 shrink-0 justify-start bg-muted p-1 rounded-md">
+                <TabsList className="flex flex-wrap h-auto gap-1.5 shrink-0 justify-start bg-transparent p-0">
                   {Object.entries(allLibraries).map(([key, library]) => (
-                    <TabsTrigger key={key} value={key} className="shrink-0">
+                    <TabsTrigger
+                      key={key}
+                      value={key}
+                      className="shrink-0 border border-border rounded-md px-3 py-1.5 text-xs font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary data-[state=inactive]:bg-background data-[state=inactive]:text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                    >
                       {library.name} ({library.data.length})
                     </TabsTrigger>
                   ))}
