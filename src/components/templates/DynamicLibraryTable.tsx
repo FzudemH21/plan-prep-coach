@@ -7,7 +7,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Trash2, Edit2, MoreHorizontal, Filter, RotateCcw, FileText, Upload, Download, GripVertical, Recycle } from 'lucide-react';
 import { toCSV, downloadCSV } from '@/utils/csvUtils';
@@ -124,6 +123,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
   const [dragOverColId, setDragOverColId] = useState<string | null>(null);
   const [circuitBuilderOpen, setCircuitBuilderOpen] = useState(false);
   const [editingCircuit, setEditingCircuit] = useState<Circuit | undefined>(undefined);
+  const [activeTab, setActiveTab] = useState<'exercises' | 'circuits'>('exercises');
 
   const handleBulkImport = (
     rows: Array<Record<string, string>>,
@@ -578,188 +578,188 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
 
   return (
     <>
-      <div className="space-y-6">
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Total Exercises</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{safeLibrary.exercises.length}</div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Selected</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{selectedIds.length}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Filtered</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{filteredAndSortedExercises.length}</div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Action Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg">
-          <div className="flex items-center space-x-2">
-            <Button onClick={handleAddExercise} size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Exercise
-            </Button>
-            <Button 
-              onClick={() => setNewColumnDialog({ ...newColumnDialog, isOpen: true })} 
-              variant="outline" 
-              size="sm"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Column
-            </Button>
-            <Button onClick={handleResetFilters} variant="outline" size="sm">
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Reset Filters
-            </Button>
-            <Button onClick={() => setIsBulkImportOpen(true)} variant="outline" size="sm">
-              <Upload className="h-4 w-4 mr-2" />
-              Import CSV
-            </Button>
-            <Button onClick={handleExportCSV} variant="outline" size="sm" disabled={safeLibrary.exercises.length === 0}>
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </Button>
-          </div>
-          
-          <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-            {filterState.searchTerm && (
-              <Badge variant="secondary" className="gap-1">
-                <Filter className="h-3 w-3" />
-                Filtered
-              </Badge>
+      <div className="space-y-4">
+        {/* Tab toggle */}
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-1 w-fit">
+          <button
+            onClick={() => setActiveTab('exercises')}
+            className={cn(
+              "px-4 py-1.5 text-sm font-medium rounded-md transition-colors",
+              activeTab === 'exercises'
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground"
             )}
-            <span>{filteredAndSortedExercises.length} of {safeLibrary.exercises.length} exercises</span>
-          </div>
-        </div>
-
-        <div className="border rounded-lg overflow-hidden">
-          <Table>
-            <TableHeader className="sticky top-0 z-10 bg-background">
-              <TableRow className="bg-background hover:bg-background">
-                {safeLibrary.columns.map((column, index) => renderColumnHeader(column, index === 0))}
-                <TableHead className="w-20 bg-background">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredAndSortedExercises.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={safeLibrary.columns.length + 1} className="text-center py-12 text-muted-foreground">
-                    {safeLibrary.exercises.length === 0 
-                      ? "No exercises found. Click \"Add Exercise\" to get started."
-                      : "No exercises match the current filters."
-                    }
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredAndSortedExercises.map(exercise => (
-                  <TableRow 
-                    key={exercise.id}
-                    className={selectedIds.includes(exercise.id) ? "bg-muted/50" : ""}
-                  >
-                    {safeLibrary.columns.map((column, columnIndex) => (
-                      <TableCell key={column.id}>
-                        {renderCell(exercise, column, columnIndex === 0)}
-                      </TableCell>
-                    ))}
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteExercise(exercise.id)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-
-      {/* ── Circuits section ─────────────────────────────────────────────── */}
-      <div className="space-y-3 pt-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Recycle className="h-4 w-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold">Circuits</h3>
-            <span className="text-xs text-muted-foreground">({(library.circuits ?? []).length})</span>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => { setEditingCircuit(undefined); setCircuitBuilderOpen(true); }}
           >
-            <Plus className="h-3.5 w-3.5 mr-1" />
-            New Circuit
-          </Button>
+            Exercises ({safeLibrary.exercises.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('circuits')}
+            className={cn(
+              "px-4 py-1.5 text-sm font-medium rounded-md transition-colors",
+              activeTab === 'circuits'
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Circuits ({(library.circuits ?? []).length})
+          </button>
         </div>
 
-        {(library.circuits ?? []).length === 0 ? (
-          <div className="border-2 border-dashed rounded-lg p-6 text-center text-sm text-muted-foreground">
-            No circuits yet. Circuits group exercises into a looped sequence — great for warm-ups.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {(library.circuits ?? []).map((circuit) => (
-              <div
-                key={circuit.id}
-                className="flex items-center gap-3 px-3 py-2.5 border rounded-lg bg-card hover:bg-accent/30 transition-colors"
-              >
-                <Recycle className="h-4 w-4 text-primary shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{circuit.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {circuit.exercises.length} exercise{circuit.exercises.length !== 1 ? 's' : ''} · {circuit.restBetweenRounds}s between rounds · {circuit.restBetweenExercises}s between exercises
-                  </p>
-                  {circuit.comments && (
-                    <p className="text-xs text-muted-foreground/70 italic truncate mt-0.5">{circuit.comments}</p>
-                  )}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 shrink-0"
-                  title="Edit circuit"
-                  onClick={() => { setEditingCircuit(circuit); setCircuitBuilderOpen(true); }}
-                >
-                  <Edit2 className="h-3.5 w-3.5" />
+        {/* ── Exercises tab ── */}
+        {activeTab === 'exercises' && (
+          <div className="space-y-4">
+            {/* Action Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <Button onClick={handleAddExercise} size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Exercise
                 </Button>
                 <Button
-                  variant="ghost"
+                  onClick={() => setNewColumnDialog({ ...newColumnDialog, isOpen: true })}
+                  variant="outline"
                   size="sm"
-                  className="h-7 w-7 p-0 text-destructive hover:text-destructive shrink-0"
-                  title="Delete circuit"
-                  onClick={() => {
-                    if (confirm(`Delete circuit "${circuit.name}"?`)) {
-                      deleteCircuitFromLibrary(library.id, circuit.id);
-                      toast({ title: 'Circuit deleted' });
-                    }
-                  }}
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Column
+                </Button>
+                <Button onClick={handleResetFilters} variant="outline" size="sm">
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reset Filters
+                </Button>
+                <Button onClick={() => setIsBulkImportOpen(true)} variant="outline" size="sm">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Import
+                </Button>
+                <Button onClick={handleExportCSV} variant="outline" size="sm" disabled={safeLibrary.exercises.length === 0}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export CSV
                 </Button>
               </div>
-            ))}
+              <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                {filterState.searchTerm && (
+                  <Badge variant="secondary" className="gap-1">
+                    <Filter className="h-3 w-3" />
+                    Filtered
+                  </Badge>
+                )}
+                <span>{filteredAndSortedExercises.length} of {safeLibrary.exercises.length} exercises</span>
+              </div>
+            </div>
+
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-background">
+                  <TableRow className="bg-background hover:bg-background">
+                    {safeLibrary.columns.map((column, index) => renderColumnHeader(column, index === 0))}
+                    <TableHead className="w-20 bg-background">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredAndSortedExercises.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={safeLibrary.columns.length + 1} className="text-center py-12 text-muted-foreground">
+                        {safeLibrary.exercises.length === 0
+                          ? "No exercises yet. Click \"Add Exercise\" or import a file to get started."
+                          : "No exercises match the current filters."
+                        }
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredAndSortedExercises.map(exercise => (
+                      <TableRow
+                        key={exercise.id}
+                        className={selectedIds.includes(exercise.id) ? "bg-muted/50" : ""}
+                      >
+                        {safeLibrary.columns.map((column, columnIndex) => (
+                          <TableCell key={column.id}>
+                            {renderCell(exercise, column, columnIndex === 0)}
+                          </TableCell>
+                        ))}
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteExercise(exercise.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
+
+        {/* ── Circuits tab ── */}
+        {activeTab === 'circuits' && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">
+                {(library.circuits ?? []).length} circuit{(library.circuits ?? []).length !== 1 ? 's' : ''}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => { setEditingCircuit(undefined); setCircuitBuilderOpen(true); }}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                New Circuit
+              </Button>
+            </div>
+
+            {(library.circuits ?? []).length === 0 ? (
+              <div className="border-2 border-dashed rounded-lg p-8 text-center text-sm text-muted-foreground">
+                No circuits yet. Circuits group exercises into a looped sequence — great for warm-ups.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {(library.circuits ?? []).map((circuit) => (
+                  <div
+                    key={circuit.id}
+                    className="flex items-center gap-3 px-3 py-2.5 border rounded-lg bg-card hover:bg-accent/30 transition-colors"
+                  >
+                    <Recycle className="h-4 w-4 text-primary shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{circuit.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {circuit.exercises.length} exercise{circuit.exercises.length !== 1 ? 's' : ''} · {circuit.restBetweenRounds}s between rounds · {circuit.restBetweenExercises}s between exercises
+                      </p>
+                      {circuit.comments && (
+                        <p className="text-xs text-muted-foreground/70 italic truncate mt-0.5">{circuit.comments}</p>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 shrink-0"
+                      title="Edit circuit"
+                      onClick={() => { setEditingCircuit(circuit); setCircuitBuilderOpen(true); }}
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-destructive hover:text-destructive shrink-0"
+                      title="Delete circuit"
+                      onClick={() => {
+                        if (confirm(`Delete circuit "${circuit.name}"?`)) {
+                          deleteCircuitFromLibrary(library.id, circuit.id);
+                          toast({ title: 'Circuit deleted' });
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
