@@ -600,64 +600,65 @@ export function ExerciseDetailDialog({
                 </div>
               )}
 
-              {/* Dynamic columns — each library column gets its own section */}
-              {displayColumns.map((column, idx) => (
-                <React.Fragment key={column.id}>
-                  {(idx > 0 || isEditable) && <Separator />}
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-semibold flex items-center gap-2">
-                      {isVideoColumn(column) && <Video className="h-4 w-4" />}
-                      {column.name}
-                    </h3>
-                    {renderColumnSection(column)}
-                  </div>
-                </React.Fragment>
-              ))}
+              {/* ── Video (always first) ─────────────────────────────────────── */}
+              {(() => {
+                const videoCol = displayColumns.find(isVideoColumn);
+                return (
+                  <>
+                    {isEditable && <Separator />}
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold flex items-center gap-2">
+                        <Video className="h-4 w-4" />
+                        {videoCol ? videoCol.name : 'Video URL'}
+                      </h3>
+                      {renderVideoSection(videoCol)}
+                    </div>
+                  </>
+                );
+              })()}
 
-              {/* Empty state: library has no additional columns */}
-              {displayColumns.length === 0 && !isEditable && (
-                <p className="text-sm text-muted-foreground italic">
-                  No additional fields configured for this library.
-                </p>
-              )}
-
-              {/* Video — always shown when library has no dedicated video column */}
-              {!hasVideoColInLib && (
-                <>
-                  <Separator />
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-semibold flex items-center gap-2">
-                      <Video className="h-4 w-4" />
-                      Video URL
-                    </h3>
-                    {renderVideoSection()}
-                  </div>
-                </>
-              )}
-
-              {/* Description — always shown when library has no dedicated description column */}
-              {!displayColumns.some(isDescriptionColumn) && (
-                <>
-                  <Separator />
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-semibold">Description</h3>
-                    {isEditable ? (
-                      <Textarea
-                        value={localDescription}
-                        onChange={(e) => setLocalDescription(e.target.value)}
-                        placeholder="Enter exercise description..."
-                        className="min-h-[100px] resize-none"
-                      />
-                    ) : (localDescription || description) ? (
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                        {localDescription || description}
-                      </p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground italic">No description</p>
-                    )}
-                  </div>
-                </>
-              )}
+              {/* ── Description (always second) ──────────────────────────────── */}
+              {(() => {
+                const descCol = displayColumns.find(c => !isVideoColumn(c) && isDescriptionColumn(c));
+                const effectiveDescription = localDescription || description;
+                if (descCol) {
+                  const value = localData[descCol.id] ?? exerciseData[descCol.id] ?? '';
+                  return (
+                    <>
+                      <Separator />
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-semibold">Description</h3>
+                        {isEditable
+                          ? renderColumnInput(descCol, localData[descCol.id] ?? '', (val) => setLocalData(prev => ({ ...prev, [descCol.id]: val })))
+                          : value
+                            ? <p className="text-sm text-muted-foreground whitespace-pre-wrap">{String(value)}</p>
+                            : <p className="text-sm text-muted-foreground italic">No description</p>
+                        }
+                      </div>
+                    </>
+                  );
+                }
+                return (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold">Description</h3>
+                      {isEditable ? (
+                        <Textarea
+                          value={localDescription}
+                          onChange={(e) => setLocalDescription(e.target.value)}
+                          placeholder="Enter exercise description..."
+                          className="min-h-[100px] resize-none"
+                        />
+                      ) : effectiveDescription ? (
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{effectiveDescription}</p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground italic">No description</p>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
 
               {/* Progressions & Regressions — always shown in view/edit mode (not create) */}
               {mode !== 'create' && (
@@ -856,6 +857,44 @@ export function ExerciseDetailDialog({
                   </div>
                 </>
               )}
+
+              {/* ── Other fields — compact grid at the bottom ─────────────────── */}
+              {(() => {
+                const otherCols = displayColumns.filter(c => !isVideoColumn(c) && !isDescriptionColumn(c));
+                if (otherCols.length === 0) return null;
+                return (
+                  <>
+                    <Separator />
+                    {isEditable ? (
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+                        {otherCols.map(col => (
+                          <div key={col.id} className={cn('space-y-1.5', col.type === 'textarea' && 'col-span-2')}>
+                            <Label className="text-sm font-medium">{col.name}</Label>
+                            {renderColumnInput(col, localData[col.id] ?? '', (val) => setLocalData(prev => ({ ...prev, [col.id]: val })))}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                        {otherCols.map(col => {
+                          const value = localData[col.id] ?? exerciseData[col.id] ?? '';
+                          return (
+                            <div key={col.id} className={cn('space-y-1', col.type === 'textarea' && 'col-span-2')}>
+                              <p className="text-xs text-muted-foreground font-medium">{col.name}</p>
+                              {value
+                                ? col.type === 'textarea'
+                                  ? <p className="text-sm whitespace-pre-wrap">{String(value)}</p>
+                                  : <Badge variant="secondary" className="font-normal">{String(value)}</Badge>
+                                : <p className="text-xs text-muted-foreground italic">—</p>
+                              }
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
 
