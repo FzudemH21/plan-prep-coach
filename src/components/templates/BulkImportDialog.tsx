@@ -2,7 +2,6 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -254,7 +253,9 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
   };
 
   const goToStep4 = () => {
-    setMappings(buildMappings(activeHeadersOrdered, nameColumnHeader));
+    const specialHeaders = new Set([videoColumnHeader, descriptionColumnHeader].filter(Boolean));
+    const headersForMapping = activeHeadersOrdered.filter(h => !specialHeaders.has(h));
+    setMappings(buildMappings(headersForMapping, nameColumnHeader));
     setStep(4);
   };
 
@@ -278,26 +279,22 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
       headerToKey[nameColumnHeader] = nameLibraryColumnId;
     }
 
+    // Special columns are not in mappings — handle them directly here.
+    if (descriptionColumnHeader) {
+      headerToKey[descriptionColumnHeader] = 'description';
+    }
+    if (videoColumnHeader) {
+      headerToKey[videoColumnHeader] = `__new__${videoColumnHeader}`;
+      newColumnDefs.push({ name: videoColumnHeader, type: 'text', required: false, role: 'video' });
+    }
+
     mappings.forEach(mapping => {
       if (mapping.action === 'skip') return;
-
-      const isVideoHeader = videoColumnHeader && mapping.fileHeader === videoColumnHeader;
-      const isDescHeader = descriptionColumnHeader && mapping.fileHeader === descriptionColumnHeader;
-      const role = isVideoHeader ? 'video' : isDescHeader ? 'description' : undefined;
-
       if (mapping.action === 'create') {
         headerToKey[mapping.fileHeader] = `__new__${mapping.fileHeader}`;
-        newColumnDefs.push({
-          name: mapping.fileHeader,
-          type: role === 'description' ? 'textarea' : 'text',
-          required: false,
-          ...(role && { role }),
-        });
+        newColumnDefs.push({ name: mapping.fileHeader, type: 'text', required: false });
       } else {
         headerToKey[mapping.fileHeader] = mapping.action;
-        if (role) {
-          existingColumnRoleUpdates.push({ id: mapping.action, role });
-        }
       }
     });
 
@@ -557,27 +554,14 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
           </p>
         ) : (
           <div className="space-y-2">
-            {mappings.map((mapping, index) => {
-              const isSpecial =
-                (videoColumnHeader && mapping.fileHeader === videoColumnHeader) ||
-                (descriptionColumnHeader && mapping.fileHeader === descriptionColumnHeader);
-              return (
-                <div key={mapping.fileHeader} className="flex items-center gap-3">
-                  <span
-                    className="flex-1 font-mono text-sm truncate"
-                    title={mapping.fileHeader}
-                  >
-                    {mapping.fileHeader}
-                    {isSpecial && (
-                      <Badge variant="secondary" className="ml-2 text-[10px] py-0 font-normal">
-                        {videoColumnHeader && mapping.fileHeader === videoColumnHeader ? 'video' : 'description'}
-                      </Badge>
-                    )}
-                  </span>
-                  {renderMappingAction(mapping, index)}
-                </div>
-              );
-            })}
+            {mappings.map((mapping, index) => (
+              <div key={mapping.fileHeader} className="flex items-center gap-3">
+                <span className="flex-1 font-mono text-sm truncate" title={mapping.fileHeader}>
+                  {mapping.fileHeader}
+                </span>
+                {renderMappingAction(mapping, index)}
+              </div>
+            ))}
           </div>
         )}
       </div>
