@@ -579,12 +579,15 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
                   size="sm"
                   className="w-full gap-2"
                   onClick={() => {
-                    const headers = library.columns.map(c => c.name);
-                    const example = library.columns.map(c =>
-                      c.role === 'video' ? 'https://youtube.com/...' :
-                      c.role === 'description' ? 'Exercise description...' :
-                      c.type === 'select' && c.options?.length ? c.options[0] : 'Example value'
-                    );
+                    const headers = [...library.columns.map(c => c.name), 'Description'];
+                    const example = [
+                      ...library.columns.map(c =>
+                        c.role === 'video' ? 'https://youtube.com/...' :
+                        c.role === 'description' ? 'Exercise description...' :
+                        c.type === 'select' && c.options?.length ? c.options[0] : 'Example value'
+                      ),
+                      'Optional exercise description (shown in detail view)'
+                    ];
                     downloadCSV(`${library.name}-sample.csv`, toCSV(headers, [example]));
                   }}
                 >
