@@ -150,7 +150,7 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
   const [parseError, setParseError] = useState('');
   const [fileHeaders, setFileHeaders] = useState<string[]>([]);
   const [fileRows, setFileRows] = useState<string[][]>([]);
-  const [isExcelFile, setIsExcelFile] = useState(false);
+  const [isXlsx, setIsXlsx] = useState(false);
   const [rawFileText, setRawFileText] = useState('');
   const [separator, setSeparator] = useState(',');
 
@@ -196,18 +196,45 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
     setActiveHeaders(new Set());
     setNameColumnHeader('');
     setMappings([]);
-    setIsExcelFile(false);
+    setIsXlsx(false);
     setStep(1);
 
     const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
 
     if (ext === 'xlsx' || ext === 'xls') {
-      setIsExcelFile(true);
+      setIsXlsx(true);
+      const reader = new FileReader();
+      reader.onload = async ev => {
+        const data = ev.target?.result;
+        if (!(data instanceof ArrayBuffer)) { setParseError('Could not read file.'); return; }
+        try {
+          const XLSX = await import('xlsx');
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          if (!sheetName) { setParseError('The Excel file has no sheets.'); return; }
+          const sheet = workbook.Sheets[sheetName];
+          const rawRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });
+          if (rawRows.length === 0) { setParseError('The file appears to be empty.'); return; }
+          const headers = (rawRows[0] as unknown[]).map(v => String(v ?? '').trim());
+          const rows = rawRows.slice(1).map(row =>
+            (row as unknown[]).map(v => String(v ?? '').trim())
+          ).filter(r => r.some(c => c !== ''));
+          if (headers.length === 0) { setParseError('No headers found.'); return; }
+          setFileHeaders(headers);
+          setFileRows(rows);
+          setActiveHeaders(new Set(headers));
+          setNameColumnHeader(detectNameColumn(headers));
+        } catch {
+          setParseError('Failed to parse Excel file. Please check the file format.');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+      e.target.value = '';
       return;
     }
 
     if (ext !== 'csv') {
-      setParseError('Unsupported file type. Please upload a .csv file.');
+      setParseError('Unsupported file type. Please upload a .csv or .xlsx file.');
       return;
     }
 
@@ -325,7 +352,7 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
     setVideoColumnHeader('');
     setDescriptionColumnHeader('');
     setMappings([]);
-    setIsExcelFile(false);
+    setIsXlsx(false);
     setRawFileText('');
     setSeparator(',');
     setStep(1);
@@ -391,7 +418,7 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
 
   const renderStep1 = () => (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      {!isXlsx && <div className="flex items-center gap-3">
         <span className="text-sm font-medium shrink-0">Column separator:</span>
         <div className="flex gap-2">
           {[{ label: 'Comma (,)', value: ',' }, { label: 'Semicolon (;)', value: ';' }, { label: 'Tab', value: '\t' }].map(opt => (
@@ -405,7 +432,7 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
             </button>
           ))}
         </div>
-      </div>
+      </div>}
       <div>
         <p className="text-sm font-semibold mb-1">Which columns do you want to import?</p>
         <p className="text-xs text-muted-foreground mb-4">
@@ -578,7 +605,7 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
       <DialogContent className="max-w-xl max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-4">
           <DialogTitle>
-            {!hasFile ? 'Import CSV' : `Import from "${fileName}"`}
+            {!hasFile ? 'Import CSV / Excel' : `Import from "${fileName}"`}
           </DialogTitle>
         </DialogHeader>
 
@@ -587,15 +614,15 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
 
         <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4">
           {/* File upload area */}
-          {!hasFile && !isExcelFile && (
+          {!hasFile && (
             <div className="space-y-3">
               <div
                 className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-10 text-center cursor-pointer hover:border-primary/50 transition-colors"
                 onClick={() => fileInputRef.current?.click()}
               >
                 <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-                <p className="text-sm font-medium mb-1">Click to upload a CSV file</p>
-                <p className="text-xs text-muted-foreground">Excel files (.xlsx, .xls) require conversion to CSV first</p>
+                <p className="text-sm font-medium mb-1">Click to upload a CSV or Excel file</p>
+                <p className="text-xs text-muted-foreground">Supported formats: .csv, .xlsx, .xls</p>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -625,19 +652,6 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
                   Download sample CSV
                 </Button>
               )}
-            </div>
-          )}
-
-          {/* Excel not supported */}
-          {isExcelFile && (
-            <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-              <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <div className="text-sm">
-                <p className="font-medium text-amber-800">Excel import is not supported</p>
-                <p className="text-amber-700 mt-1">
-                  Please export your Excel file as CSV (File → Save As → CSV) and upload the CSV version.
-                </p>
-              </div>
             </div>
           )}
 
