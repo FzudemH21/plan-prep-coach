@@ -50,6 +50,8 @@ interface RenameColumnDialog {
   isOpen: boolean;
   columnId: string;
   currentName: string;
+  currentType: 'text' | 'select' | 'textarea';
+  currentOptions: string[];
 }
 
 interface DeleteColumnDialog {
@@ -96,7 +98,9 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
   const [renameDialog, setRenameDialog] = useState<RenameColumnDialog>({
     isOpen: false,
     columnId: '',
-    currentName: ''
+    currentName: '',
+    currentType: 'text',
+    currentOptions: []
   });
   const [deleteDialog, setDeleteDialog] = useState<DeleteColumnDialog>({
     isOpen: false,
@@ -238,14 +242,18 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
     toast({ title: "Success", description: "Column added successfully" });
   };
 
-  const handleRenameColumn = (newName: string) => {
-    updateColumnInLibrary(library.id, renameDialog.columnId, { name: newName });
-    toast({ title: "Success", description: "Column renamed successfully" });
-    setRenameDialog({ isOpen: false, columnId: '', currentName: '' });
+  const handleRenameColumn = (newName: string, newType: 'text' | 'select' | 'textarea', newOptions: string[]) => {
+    updateColumnInLibrary(library.id, renameDialog.columnId, {
+      name: newName,
+      type: newType,
+      options: newType === 'select' ? newOptions : undefined,
+    });
+    toast({ title: "Success", description: "Column updated successfully" });
+    setRenameDialog({ isOpen: false, columnId: '', currentName: '', currentType: 'text', currentOptions: [] });
   };
 
   const handleRenameDialogClose = () => {
-    setRenameDialog({ isOpen: false, columnId: '', currentName: '' });
+    setRenameDialog({ isOpen: false, columnId: '', currentName: '', currentType: 'text', currentOptions: [] });
   };
 
   const handleDeleteColumn = () => {
@@ -491,9 +499,9 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => setTimeout(() => setRenameDialog({ isOpen: true, columnId: column.id, currentName: column.name }), 0)}>
+                    <DropdownMenuItem onSelect={() => setTimeout(() => setRenameDialog({ isOpen: true, columnId: column.id, currentName: column.name, currentType: column.type, currentOptions: column.options ?? [] }), 0)}>
                       <Edit2 className="h-4 w-4 mr-2" />
-                      Rename Column
+                      Edit Column
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setTimeout(() => setNewColumnDialog({ ...newColumnDialog, isOpen: true }), 0)}>
                       <Plus className="h-4 w-4 mr-2" />
@@ -522,13 +530,15 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
                 setRenameDialog({
                   isOpen: true,
                   columnId: column.id,
-                  currentName: column.name
+                  currentName: column.name,
+                  currentType: column.type,
+                  currentOptions: column.options ?? [],
                 });
               }, 0);
             }}
           >
             <Edit2 className="h-4 w-4 mr-2" />
-            Rename Column
+            Edit Column
           </ContextMenuItem>
           <ContextMenuItem
             key={`add-${column.id}`}
@@ -818,6 +828,8 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
         onClose={handleRenameDialogClose}
         onRename={handleRenameColumn}
         currentName={renameDialog.currentName}
+        currentType={renameDialog.currentType}
+        currentOptions={renameDialog.currentOptions}
       />
 
       <ColumnDeleteDialog
