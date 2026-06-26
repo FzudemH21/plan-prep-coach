@@ -284,8 +284,7 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
       headerToKey[descriptionColumnHeader] = 'description';
     }
     if (videoColumnHeader) {
-      headerToKey[videoColumnHeader] = `__new__${videoColumnHeader}`;
-      newColumnDefs.push({ name: videoColumnHeader, type: 'text', required: false, role: 'video' });
+      headerToKey[videoColumnHeader] = 'videoUrl';
     }
 
     mappings.forEach(mapping => {
@@ -611,13 +610,12 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
                   size="sm"
                   className="w-full gap-2"
                   onClick={() => {
-                    const headers = [...library.columns.map(c => c.name), 'Description'];
+                    const headers = [...library.columns.map(c => c.name), 'Video URL', 'Description'];
                     const example = [
                       ...library.columns.map(c =>
-                        c.role === 'video' ? 'https://youtube.com/...' :
-                        c.role === 'description' ? 'Exercise description...' :
                         c.type === 'select' && c.options?.length ? c.options[0] : 'Example value'
                       ),
+                      'https://youtube.com/watch?v=...',
                       'Optional exercise description (shown in detail view)'
                     ];
                     downloadCSV(`${library.name}-sample.csv`, toCSV(headers, [example]));

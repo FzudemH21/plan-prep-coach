@@ -145,19 +145,21 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
     const exercises: Array<Omit<CustomExercise, 'id'>> = rows.map(row => {
       const data: Record<string, string> = {};
       let description: string | undefined;
+      let videoUrl: string | undefined;
       Object.entries(row).forEach(([key, value]) => {
         if (key.startsWith('__new__')) {
           const colName = key.slice(7);
           const realId = nameToId[colName];
           if (realId) data[realId] = value;
         } else if (key === 'description') {
-          // 'description' is a special field on the exercise, not a data column
           description = value || undefined;
+        } else if (key === 'videoUrl') {
+          videoUrl = value || undefined;
         } else {
           data[key] = value;
         }
       });
-      return description ? { data, description } : { data };
+      return { data, ...(description && { description }), ...(videoUrl && { videoUrl }) };
     });
 
     // Rename the first (name) column atomically inside the bulk import if the CSV
