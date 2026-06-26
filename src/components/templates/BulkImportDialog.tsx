@@ -14,7 +14,7 @@ import { toCSV, downloadCSV } from '@/utils/csvUtils';
 // CSV parsing (no external dependency)
 // ---------------------------------------------------------------------------
 
-function parseCSVLine(line: string): string[] {
+function parseCSVLine(line: string, sep: string): string[] {
   const result: string[] = [];
   let current = '';
   let inQuotes = false;
@@ -27,7 +27,7 @@ function parseCSVLine(line: string): string[] {
       } else {
         inQuotes = !inQuotes;
       }
-    } else if (char === ',' && !inQuotes) {
+    } else if (char === sep && !inQuotes) {
       result.push(current.trim());
       current = '';
     } else {
@@ -38,13 +38,24 @@ function parseCSVLine(line: string): string[] {
   return result;
 }
 
-function parseCSV(text: string): { headers: string[]; rows: string[][] } {
+function detectSeparator(text: string): string {
+  const firstLine = text.split(/\r?\n/)[0] ?? '';
+  const counts: Record<string, number> = { ',': 0, ';': 0, '\t': 0 };
+  let inQuotes = false;
+  for (const ch of firstLine) {
+    if (ch === '"') { inQuotes = !inQuotes; continue; }
+    if (!inQuotes && ch in counts) counts[ch]++;
+  }
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+}
+
+function parseCSV(text: string, sep: string): { headers: string[]; rows: string[][] } {
   const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.trim());
   if (lines.length === 0) return { headers: [], rows: [] };
-  const headers = parseCSVLine(lines[0]);
+  const headers = parseCSVLine(lines[0], sep);
   const rows = lines
     .slice(1)
-    .map(parseCSVLine)
+    .map(l => parseCSVLine(l, sep))
     .filter(r => r.some(c => c.trim() !== ''));
   return { headers, rows };
 }
@@ -141,6 +152,8 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
   const [fileHeaders, setFileHeaders] = useState<string[]>([]);
   const [fileRows, setFileRows] = useState<string[][]>([]);
   const [isExcelFile, setIsExcelFile] = useState(false);
+  const [rawFileText, setRawFileText] = useState('');
+  const [separator, setSeparator] = useState(',');
 
   // Step state
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -204,7 +217,10 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
       const text = ev.target?.result;
       if (typeof text !== 'string') { setParseError('Could not read file.'); return; }
       try {
-        const { headers, rows } = parseCSV(text);
+        const sep = detectSeparator(text);
+        setSeparator(sep);
+        setRawFileText(text);
+        const { headers, rows } = parseCSV(text, sep);
         if (headers.length === 0) {
           setParseError('The file appears to be empty or has no headers.');
           return;
@@ -314,6 +330,8 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
     setDescriptionColumnHeader('');
     setMappings([]);
     setIsExcelFile(false);
+    setRawFileText('');
+    setSeparator(',');
     setStep(1);
     onClose();
   };
@@ -360,8 +378,38 @@ export function BulkImportDialog({ isOpen, onClose, library, onImport }: BulkImp
   // Step content
   // ------------------------------------------------------------------
 
+  const handleSeparatorChange = (sep: string) => {
+    setSeparator(sep);
+    if (!rawFileText) return;
+    try {
+      const { headers, rows } = parseCSV(rawFileText, sep);
+      setFileHeaders(headers);
+      setFileRows(rows);
+      setActiveHeaders(new Set(headers));
+      setNameColumnHeader(detectNameColumn(headers));
+      setParseError('');
+    } catch {
+      setParseError('Could not parse file with this separator.');
+    }
+  };
+
   const renderStep1 = () => (
     <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-medium shrink-0">Column separator:</span>
+        <div className="flex gap-2">
+          {[{ label: 'Comma (,)', value: ',' }, { label: 'Semicolon (;)', value: ';' }, { label: 'Tab', value: '\t' }].map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => handleSeparatorChange(opt.value)}
+              className={`px-3 py-1 text-xs rounded border transition-colors ${separator === opt.value ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground border-border hover:border-foreground/40'}`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div>
         <p className="text-sm font-semibold mb-1">Which columns do you want to import?</p>
         <p className="text-xs text-muted-foreground mb-4">
