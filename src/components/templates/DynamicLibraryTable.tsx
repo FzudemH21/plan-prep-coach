@@ -43,6 +43,7 @@ interface FilterState {
   searchTerm: string;
   sortColumn: string | null;
   sortDirection: 'asc' | 'desc' | null;
+  valueFilters: Record<string, string[]>;
 }
 
 interface RenameColumnDialog {
@@ -92,7 +93,8 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
   const [filterState, setFilterState] = useState<FilterState>({
     searchTerm: '',
     sortColumn: null,
-    sortDirection: null
+    sortDirection: null,
+    valueFilters: {}
   });
   const [renameDialog, setRenameDialog] = useState<RenameColumnDialog>({
     isOpen: false,
@@ -268,16 +270,12 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
   const filteredAndSortedExercises = useMemo(() => {
     let filtered = safeLibrary.exercises;
 
-    // Apply search filter
-    if (filterState.searchTerm) {
-      const searchLower = filterState.searchTerm.toLowerCase();
-      filtered = filtered.filter(exercise => {
-        return safeLibrary.columns.some(column => {
-          const value = exercise.data[column.id] || '';
-          return value.toString().toLowerCase().includes(searchLower);
-        });
-      });
-    }
+    // Apply value filters per column
+    Object.entries(filterState.valueFilters).forEach(([colId, values]) => {
+      if (values.length > 0) {
+        filtered = filtered.filter(exercise => values.includes(exercise.data[colId] || ''));
+      }
+    });
 
     // Apply sorting
     if (filterState.sortColumn && filterState.sortDirection) {
@@ -302,8 +300,11 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
     return filtered;
   }, [safeLibrary.exercises, safeLibrary.columns, filterState]);
 
-  const handleFilterChange = (column: string, searchTerm: string) => {
-    setFilterState(prev => ({ ...prev, searchTerm }));
+  const handleValueFilterChange = (columnId: string, values: string[]) => {
+    setFilterState(prev => ({
+      ...prev,
+      valueFilters: { ...prev.valueFilters, [columnId]: values }
+    }));
   };
 
   const handleSortChange = (column: string, direction: 'asc' | 'desc' | null) => {
@@ -318,7 +319,8 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
     setFilterState({
       searchTerm: '',
       sortColumn: null,
-      sortDirection: null
+      sortDirection: null,
+      valueFilters: {}
     });
     setSelectedIds([]);
   };
@@ -485,13 +487,12 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
               </div>
               <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <CustomLibraryColumnFilter
-                  column={column.id}
-                  searchTerm={filterState.sortColumn === column.id ? filterState.searchTerm : ''}
-                  onSearchChange={(value) => handleFilterChange(column.id, value)}
-                  onSortChange={(direction) => handleSortChange(column.id, direction)}
-                  selectedIds={selectedIds}
-                  onSelectionChange={setSelectedIds}
+                  columnId={column.id}
+                  columnName={column.name}
                   exercises={safeLibrary.exercises}
+                  selectedValues={filterState.valueFilters[column.id] ?? []}
+                  onValueFilterChange={(values) => handleValueFilterChange(column.id, values)}
+                  onSortChange={(direction) => handleSortChange(column.id, direction)}
                   sortDirection={filterState.sortColumn === column.id ? filterState.sortDirection : null}
                 />
                 <DropdownMenu>
@@ -637,7 +638,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
                 </Button>
               </div>
               <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                {filterState.searchTerm && (
+                {Object.values(filterState.valueFilters).some(v => v.length > 0) && (
                   <Badge variant="secondary" className="gap-1">
                     <Filter className="h-3 w-3" />
                     Filtered

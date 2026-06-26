@@ -1,181 +1,156 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Separator } from '@/components/ui/separator';
-import { ArrowUpAZ, ArrowDownZA, Filter, Check, X } from 'lucide-react';
+import { ArrowUpAZ, ArrowDownZA, Filter } from 'lucide-react';
 import { CustomExercise } from '@/hooks/useCustomLibraries';
+import { cn } from '@/lib/utils';
 
 interface CustomLibraryColumnFilterProps {
-  column: string;
-  searchTerm: string;
-  onSearchChange: (value: string) => void;
-  onSortChange: (direction: 'asc' | 'desc' | null) => void;
-  selectedIds: string[];
-  onSelectionChange: (ids: string[]) => void;
+  columnId: string;
+  columnName: string;
   exercises: CustomExercise[];
+  selectedValues: string[];
+  onValueFilterChange: (values: string[]) => void;
+  onSortChange: (direction: 'asc' | 'desc' | null) => void;
   sortDirection: 'asc' | 'desc' | null;
 }
 
 export function CustomLibraryColumnFilter({
-  column,
-  searchTerm,
-  onSearchChange,
-  onSortChange,
-  selectedIds,
-  onSelectionChange,
+  columnId,
+  columnName,
   exercises,
-  sortDirection
+  selectedValues,
+  onValueFilterChange,
+  onSortChange,
+  sortDirection,
 }: CustomLibraryColumnFilterProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
 
-  // Get unique values for this column
-  const columnValues = exercises
-    .map(exercise => exercise.data[column] || '')
-    .filter(Boolean)
-    .filter((value, index, self) => self.indexOf(value) === index)
-    .sort();
+  const isActive = selectedValues.length > 0;
 
-  // Filter exercises based on search term
-  const filteredExercises = searchTerm
-    ? exercises.filter(exercise => {
-        const value = exercise.data[column] || '';
-        return value.toLowerCase().includes(searchTerm.toLowerCase());
-      })
-    : exercises;
+  // All unique non-empty values for this column, sorted A-Z
+  const allValues = [...new Set(
+    exercises.map(ex => ex.data[columnId] || '').filter(Boolean)
+  )].sort();
 
-  const handleSelectAll = () => {
-    const allIds = exercises.map(exercise => exercise.id);
-    onSelectionChange(allIds);
+  // Values visible in the list after local search
+  const visibleValues = search
+    ? allValues.filter(v => v.toLowerCase().includes(search.toLowerCase()))
+    : allValues;
+
+  const allVisibleSelected = visibleValues.length > 0 && visibleValues.every(v => selectedValues.includes(v));
+  const someVisibleSelected = visibleValues.some(v => selectedValues.includes(v));
+
+  const toggleValue = (value: string, checked: boolean) => {
+    if (checked) {
+      onValueFilterChange([...selectedValues, value]);
+    } else {
+      onValueFilterChange(selectedValues.filter(v => v !== value));
+    }
   };
 
-  const handleClearAll = () => {
-    onSelectionChange([]);
+  const toggleAll = (checked: boolean) => {
+    if (checked) {
+      onValueFilterChange([...new Set([...selectedValues, ...visibleValues])]);
+    } else {
+      onValueFilterChange(selectedValues.filter(v => !visibleValues.includes(v)));
+    }
   };
-
-  const handleSelectFiltered = () => {
-    const filteredIds = filteredExercises.map(exercise => exercise.id);
-    const newSelection = [...new Set([...selectedIds, ...filteredIds])];
-    onSelectionChange(newSelection);
-  };
-
-  const handleClearFiltered = () => {
-    const filteredIds = filteredExercises.map(exercise => exercise.id);
-    const newSelection = selectedIds.filter(id => !filteredIds.includes(id));
-    onSelectionChange(newSelection);
-  };
-
-  const hasSearchResults = searchTerm && filteredExercises.length > 0;
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
+    <Popover open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) setSearch(''); }}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 px-2 hover:bg-accent"
+          className={cn('h-8 px-2 hover:bg-accent', isActive && 'text-primary')}
         >
-          <Filter className="h-4 w-4" />
+          <Filter className={cn('h-4 w-4', isActive && 'fill-primary/20')} />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="start">
-        <div className="space-y-4 p-4">
-          {/* Search Section */}
-          <div className="space-y-2">
-            <h4 className="font-medium text-sm">Search</h4>
-            <Input
-              placeholder={`Search ${column.toLowerCase()}...`}
-              value={searchTerm}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className="h-8"
-            />
+      <PopoverContent className="w-72 p-0" align="start">
+        {/* Header */}
+        <div className="px-3 py-2.5 border-b">
+          <Input
+            placeholder={`Search ${columnName.toLowerCase()}...`}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-8"
+            autoFocus
+          />
+        </div>
+
+        {/* Sort */}
+        <div className="px-3 py-2 border-b flex items-center justify-between">
+          <span className="text-xs text-muted-foreground font-medium">Sort Column</span>
+          <div className="flex gap-1">
+            <Button
+              variant={sortDirection === 'asc' ? 'default' : 'outline'}
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => onSortChange(sortDirection === 'asc' ? null : 'asc')}
+            >
+              <ArrowUpAZ className="h-3.5 w-3.5 mr-1" /> A-Z
+            </Button>
+            <Button
+              variant={sortDirection === 'desc' ? 'default' : 'outline'}
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => onSortChange(sortDirection === 'desc' ? null : 'desc')}
+            >
+              <ArrowDownZA className="h-3.5 w-3.5 mr-1" /> Z-A
+            </Button>
           </div>
+        </div>
 
-          <Separator />
-
-          {/* Sort Section */}
-          <div className="space-y-2">
-            <h4 className="font-medium text-sm">Sort</h4>
-            <div className="flex gap-2">
-              <Button
-                variant={sortDirection === 'asc' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => onSortChange(sortDirection === 'asc' ? null : 'asc')}
-                className="flex-1 h-8"
-              >
-                <ArrowUpAZ className="h-4 w-4 mr-1" />
-                A-Z
-              </Button>
-              <Button
-                variant={sortDirection === 'desc' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => onSortChange(sortDirection === 'desc' ? null : 'desc')}
-                className="flex-1 h-8"
-              >
-                <ArrowDownZA className="h-4 w-4 mr-1" />
-                Z-A
-              </Button>
-            </div>
+        {/* Select All row */}
+        {visibleValues.length > 0 && (
+          <div className="px-3 py-2 border-b">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <Checkbox
+                checked={allVisibleSelected}
+                onCheckedChange={(checked) => toggleAll(!!checked)}
+                className={cn(!allVisibleSelected && someVisibleSelected && 'data-[state=unchecked]:bg-primary/20')}
+              />
+              <span className="text-sm font-medium">Select All ({visibleValues.length})</span>
+            </label>
           </div>
+        )}
 
-          <Separator />
+        {/* Value list */}
+        <div className="max-h-52 overflow-y-auto py-1">
+          {visibleValues.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic px-3 py-3">
+              {allValues.length === 0 ? 'No values in this column' : 'No matches'}
+            </p>
+          ) : (
+            visibleValues.map(value => (
+              <label key={value} className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-muted/40 cursor-pointer">
+                <Checkbox
+                  checked={selectedValues.includes(value)}
+                  onCheckedChange={(checked) => toggleValue(value, !!checked)}
+                />
+                <span className="text-sm truncate">{value}</span>
+              </label>
+            ))
+          )}
+        </div>
 
-          {/* Selection Section */}
-          <div className="space-y-2">
-            <h4 className="font-medium text-sm">Selection</h4>
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSelectAll}
-                className="h-8"
-              >
-                <Check className="h-4 w-4 mr-1" />
-                Select All
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleClearAll}
-                className="h-8"
-              >
-                <X className="h-4 w-4 mr-1" />
-                Clear All
-              </Button>
-            </div>
-            
-            {hasSearchResults && (
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSelectFiltered}
-                  className="h-8 text-xs"
-                >
-                  <Check className="h-4 w-4 mr-1" />
-                  Select Filtered
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleClearFiltered}
-                  className="h-8 text-xs"
-                >
-                  <X className="h-4 w-4 mr-1" />
-                  Clear Filtered
-                </Button>
-              </div>
-            )}
-          </div>
-
-          <Separator />
-
-          {/* Close Button */}
+        {/* Footer */}
+        <div className="px-3 py-2 border-t flex items-center justify-between">
           <Button
-            onClick={() => setIsOpen(false)}
-            className="w-full h-8"
+            variant="ghost"
             size="sm"
+            className="h-7 text-xs"
+            onClick={() => onValueFilterChange([])}
+            disabled={selectedValues.length === 0}
           >
+            Clear All
+          </Button>
+          <Button size="sm" className="h-7 text-xs" onClick={() => setIsOpen(false)}>
             Close
           </Button>
         </div>
