@@ -27,7 +27,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FileText, Activity, Plus, Edit2, Trash2, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { FileText, Activity, Plus, Edit2, Trash2, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown, Copy } from "lucide-react";
 import { AddLibraryDialog } from "@/components/templates/AddLibraryDialog";
 import { EditLibraryDialog } from "@/components/templates/EditLibraryDialog";
 import { useCustomLibraries, CustomLibrary } from "@/hooks/useCustomLibraries";
@@ -41,7 +41,7 @@ export default function ExerciseLibrariesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [libraryToDelete, setLibraryToDelete] = useState<CustomLibrary | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | null>(null);
-  const { libraries, deleteLibrary, isLoading } = useCustomLibraries();
+  const { libraries, deleteLibrary, duplicateLibrary, isLoading } = useCustomLibraries();
 
   const sortedLibraries = sortOrder === null ? libraries : [...libraries].sort((a, b) => {
     const cmp = a.name.localeCompare(b.name);
@@ -155,6 +155,10 @@ export default function ExerciseLibrariesPage() {
                           <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditLibrary(library); }}>
                             <Edit2 className="h-4 w-4 mr-2" />
                             Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); duplicateLibrary(library.id); toast({ title: "Library duplicated", description: `"${library.name} (Copy)" has been created.` }); }}>
+                            <Copy className="h-4 w-4 mr-2" />
+                            Duplicate
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem

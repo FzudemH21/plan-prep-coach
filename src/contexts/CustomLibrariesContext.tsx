@@ -90,6 +90,7 @@ interface CustomLibrariesContextType {
   addLibrary: (library: Omit<CustomLibrary, 'id' | 'exercises' | 'createdAt' | 'lastUpdated'>) => CustomLibrary;
   editLibrary: (libraryId: string, updates: Partial<Pick<CustomLibrary, 'name' | 'description'>>) => void;
   deleteLibrary: (libraryId: string) => void;
+  duplicateLibrary: (libraryId: string) => void;
   addExerciseToLibrary: (libraryId: string, exercise: Omit<CustomExercise, 'id'>) => CustomExercise;
   updateExerciseInLibrary: (libraryId: string, exerciseId: string, updates: Partial<CustomExercise>) => void;
   /** Apply multiple exercise updates in a single save — avoids stale-closure overwrite when batching many updates at once. */
@@ -180,6 +181,28 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
 
   const deleteLibrary = useCallback((libraryId: string) => {
     save({ ...data, libraries: data.libraries.filter(lib => lib.id !== libraryId) });
+  }, [data, save]);
+
+  const duplicateLibrary = useCallback((libraryId: string) => {
+    const source = data.libraries.find(lib => lib.id === libraryId);
+    if (!source) return;
+    const now = new Date().toISOString();
+    const baseId = `${source.id}-copy`;
+    let uniqueId = baseId;
+    let counter = 1;
+    while (data.libraries.some(lib => lib.id === uniqueId)) {
+      uniqueId = `${baseId}-${counter++}`;
+    }
+    const copy: CustomLibrary = {
+      ...source,
+      id: uniqueId,
+      name: `${source.name} (Copy)`,
+      exercises: source.exercises.map(ex => ({ ...ex, id: `${Date.now()}-${ex.id}` })),
+      circuits: source.circuits ? source.circuits.map(c => ({ ...c, id: `${Date.now()}-${c.id}` })) : [],
+      createdAt: now,
+      lastUpdated: now,
+    };
+    save({ ...data, libraries: [...data.libraries, copy] });
   }, [data, save]);
 
   // ── Exercise operations ───────────────────────────────────────────────────
@@ -455,6 +478,7 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
     addLibrary,
     editLibrary,
     deleteLibrary,
+    duplicateLibrary,
     addExerciseToLibrary,
     updateExerciseInLibrary,
     batchUpdateExercisesInLibrary,
