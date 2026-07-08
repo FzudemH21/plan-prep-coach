@@ -673,7 +673,7 @@ export function ExerciseDetailDialog({
                       {/* Add Progression button (above current) */}
                       {mode === 'edit' && addingDirection !== 'progression' && (
                         <button
-                          onClick={() => setAddingDirection('progression')}
+                          onClick={() => { setAddingDirection('progression'); setPickerLevelStr(String(progs.length + 1)); }}
                           className="w-full flex items-center gap-1.5 px-2 py-1 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                         >
                           <Plus className="h-3 w-3" />
@@ -781,7 +781,7 @@ export function ExerciseDetailDialog({
                       {/* Add Regression button (below current) */}
                       {mode === 'edit' && addingDirection !== 'regression' && (
                         <button
-                          onClick={() => setAddingDirection('regression')}
+                          onClick={() => { setAddingDirection('regression'); setPickerLevelStr(String(regressions.length + 1)); }}
                           className="w-full flex items-center gap-1.5 px-2 py-1 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
                         >
                           <Plus className="h-3 w-3" />
