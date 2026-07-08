@@ -57,30 +57,110 @@ export function useExerciseProgressions(exerciseId: string | null) {
     const reverseDirection: ProgressionDirection =
       params.direction === 'progression' ? 'regression' : 'progression';
 
-    // Insert both directions in one call, storing names so athletes can read them
+    // Fetch existing entries in the same direction so we can build chain links
+    const { data: existingChain } = await supabase
+      .from('exercise_progressions')
+      .select('to_exercise_id, to_exercise_name, level')
+      .eq('from_exercise_id', exerciseId)
+      .eq('coach_user_id', user.id)
+      .eq('direction', params.direction)
+      .neq('to_exercise_id', params.toExerciseId);
+
+    // Build all rows: direct pair + one pair per existing chain member
+    type Row = {
+      coach_user_id: string;
+      from_exercise_id: string;
+      to_exercise_id: string;
+      to_exercise_name: string;
+      direction: ProgressionDirection;
+      level: number;
+      notes: string | null;
+    };
+
+    const rows: Row[] = [
+      {
+        coach_user_id: user.id,
+        from_exercise_id: exerciseId,
+        to_exercise_id: params.toExerciseId,
+        to_exercise_name: params.toExerciseName,
+        direction: params.direction,
+        level: params.level,
+        notes: params.notes || null,
+      },
+      {
+        coach_user_id: user.id,
+        from_exercise_id: params.toExerciseId,
+        to_exercise_id: exerciseId,
+        to_exercise_name: params.fromExerciseName,
+        direction: reverseDirection,
+        level: params.level,
+        notes: params.notes || null,
+      },
+    ];
+
+    for (const item of (existingChain ?? [])) {
+      const itemLevel = item.level as number;
+      const itemExerciseId = item.to_exercise_id as string;
+      const itemExerciseName = (item.to_exercise_name as string) || '';
+      const relLevel = Math.abs(params.level - itemLevel);
+      if (relLevel === 0) continue;
+
+      if (params.level > itemLevel) {
+        // New exercise is further along the chain than this item.
+        // item → new: same direction (item is closer, new is further)
+        // new → item: reverse direction
+        rows.push(
+          {
+            coach_user_id: user.id,
+            from_exercise_id: itemExerciseId,
+            to_exercise_id: params.toExerciseId,
+            to_exercise_name: params.toExerciseName,
+            direction: params.direction,
+            level: relLevel,
+            notes: null,
+          },
+          {
+            coach_user_id: user.id,
+            from_exercise_id: params.toExerciseId,
+            to_exercise_id: itemExerciseId,
+            to_exercise_name: itemExerciseName,
+            direction: reverseDirection,
+            level: relLevel,
+            notes: null,
+          },
+        );
+      } else {
+        // New exercise is closer to anchor than this item.
+        // new → item: same direction
+        // item → new: reverse direction
+        rows.push(
+          {
+            coach_user_id: user.id,
+            from_exercise_id: params.toExerciseId,
+            to_exercise_id: itemExerciseId,
+            to_exercise_name: itemExerciseName,
+            direction: params.direction,
+            level: relLevel,
+            notes: null,
+          },
+          {
+            coach_user_id: user.id,
+            from_exercise_id: itemExerciseId,
+            to_exercise_id: params.toExerciseId,
+            to_exercise_name: params.toExerciseName,
+            direction: reverseDirection,
+            level: relLevel,
+            notes: null,
+          },
+        );
+      }
+    }
+
     const { data, error } = await supabase
       .from('exercise_progressions')
-      .insert([
-        {
-          coach_user_id: user.id,
-          from_exercise_id: exerciseId,
-          to_exercise_id: params.toExerciseId,
-          to_exercise_name: params.toExerciseName,
-          direction: params.direction,
-          level: params.level,
-          notes: params.notes || null,
-        },
-        {
-          coach_user_id: user.id,
-          from_exercise_id: params.toExerciseId,
-          to_exercise_id: exerciseId,
-          to_exercise_name: params.fromExerciseName,
-          direction: reverseDirection,
-          level: params.level,
-          notes: params.notes || null,
-        },
-      ])
+      .insert(rows)
       .select();
+
     if (!error && data) {
       const forward = data.find(
         (r: Record<string, unknown>) =>
