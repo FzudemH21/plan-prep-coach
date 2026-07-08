@@ -143,7 +143,7 @@ export function ExerciseDetailDialog({
   const [pickerLibraryOpen, setPickerLibraryOpen] = useState(false);
   const [pickerExerciseId, setPickerExerciseId] = useState('');
   const [pickerExerciseName, setPickerExerciseName] = useState('');
-  const [pickerLevel, setPickerLevel] = useState(1);
+  const [pickerLevelStr, setPickerLevelStr] = useState('1');
   const [pickerNotes, setPickerNotes] = useState('');
   const [pickerSaving, setPickerSaving] = useState(false);
 
@@ -186,7 +186,7 @@ export function ExerciseDetailDialog({
   function resetPicker() {
     setPickerExerciseId('');
     setPickerExerciseName('');
-    setPickerLevel(1);
+    setPickerLevelStr('1');
     setPickerNotes('');
     setPickerLibraryOpen(false);
     setAddingDirection(null);
@@ -200,7 +200,7 @@ export function ExerciseDetailDialog({
       toExerciseName: pickerExerciseName,
       fromExerciseName: exerciseName,
       direction: addingDirection,
-      level: pickerLevel,
+      level: Math.max(1, parseInt(pickerLevelStr) || 1),
       notes: pickerNotes,
     });
     setPickerSaving(false);
@@ -660,8 +660,8 @@ export function ExerciseDetailDialog({
                 );
               })()}
 
-              {/* Progressions & Regressions — always shown in view/edit mode (not create) */}
-              {mode !== 'create' && (
+              {/* Progressions & Regressions */}
+              {(
                 <>
                   <Separator />
                   <div className="space-y-3">
@@ -729,7 +729,7 @@ export function ExerciseDetailDialog({
                       {/* Current exercise (centre) */}
                       <div className="flex items-center gap-2 rounded-md px-2 py-2 bg-primary/10 border border-primary/30 text-sm">
                         <div className="h-3.5 w-3.5 rounded-full bg-primary shrink-0" />
-                        <span className="font-semibold flex-1 truncate">{exerciseName}</span>
+                        <span className="font-semibold flex-1 truncate">{localName || exerciseName || 'New exercise'}</span>
                         <span className="text-xs text-muted-foreground">current</span>
                       </div>
 
@@ -790,7 +790,11 @@ export function ExerciseDetailDialog({
                       )}
 
                       {regressions.length === 0 && progs.length === 0 && mode !== 'edit' && (
-                        <p className="text-xs text-muted-foreground italic px-2">No progressions or regressions defined yet.</p>
+                        <p className="text-xs text-muted-foreground italic px-2">
+                          {mode === 'create'
+                            ? 'Save the exercise first, then add progressions & regressions in Edit mode.'
+                            : 'No progressions or regressions defined yet.'}
+                        </p>
                       )}
                     </div>
                     </DragDropContext>
@@ -823,8 +827,12 @@ export function ExerciseDetailDialog({
                               <Input
                                 type="number"
                                 min={1}
-                                value={pickerLevel}
-                                onChange={e => setPickerLevel(Math.max(1, parseInt(e.target.value) || 1))}
+                                value={pickerLevelStr}
+                                onChange={e => setPickerLevelStr(e.target.value)}
+                                onBlur={e => {
+                                  const n = parseInt(e.target.value);
+                                  setPickerLevelStr(String(isNaN(n) || n < 1 ? 1 : n));
+                                }}
                                 className="h-9 w-24"
                               />
                             </div>

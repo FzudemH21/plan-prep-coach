@@ -1,7 +1,9 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { ArrowLeft, Pencil, Check, X } from 'lucide-react';
 import { useCustomLibraries } from '@/hooks/useCustomLibraries';
 import { DynamicLibraryTable } from '@/components/templates/DynamicLibraryTable';
 import { WizardAIAssistant, type ApplySuggestion } from '@/components/wizard/WizardAIAssistant';
@@ -32,6 +34,7 @@ export default function LibraryPage() {
   const {
     libraries,
     isLoading,
+    editLibrary,
     addExerciseToLibrary,
     updateExerciseInLibrary,
     batchUpdateExercisesInLibrary,
@@ -39,6 +42,10 @@ export default function LibraryPage() {
     addColumnToLibrary,
     deleteColumnFromLibrary,
   } = useCustomLibraries();
+
+  const [isEditingMeta, setIsEditingMeta] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
 
   const library = findLibraryBySlug(libraries, libraryName || '');
 
@@ -233,10 +240,64 @@ export default function LibraryPage() {
           <ArrowLeft className="h-4 w-4" />
           <span>Back to Exercise Libraries</span>
         </Button>
-        <div>
-          <h1 className="text-3xl font-bold">{library.name}</h1>
-          <p className="text-muted-foreground">{library.description}</p>
-        </div>
+        {isEditingMeta ? (
+          <div className="flex items-start gap-3 flex-1">
+            <div className="flex-1 space-y-2">
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="text-xl font-bold h-10"
+                placeholder="Library name"
+                autoFocus
+              />
+              <Textarea
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                className="resize-none text-sm"
+                placeholder="Description (optional)"
+                rows={2}
+              />
+            </div>
+            <div className="flex gap-1 mt-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 w-8 p-0"
+                onClick={() => {
+                  if (editName.trim()) {
+                    editLibrary(library.id, { name: editName.trim(), description: editDesc.trim() });
+                  }
+                  setIsEditingMeta(false);
+                }}
+              >
+                <Check className="h-4 w-4 text-green-600" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 w-8 p-0"
+                onClick={() => setIsEditingMeta(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 group">
+            <div>
+              <h1 className="text-3xl font-bold">{library.name}</h1>
+              {library.description && <p className="text-muted-foreground">{library.description}</p>}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity mt-1"
+              onClick={() => { setEditName(library.name); setEditDesc(library.description || ''); setIsEditingMeta(true); }}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
 
       <DynamicLibraryTable library={library} />
