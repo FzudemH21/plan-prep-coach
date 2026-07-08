@@ -156,6 +156,68 @@ export function useExerciseProgressions(exerciseId: string | null) {
       }
     }
 
+    // Traverse ancestors of A (exercises "above" A in the opposite direction)
+    // so the new exercise is also linked into the broader chain.
+    // E.g. if Calf Dribbles → Ankle Dribbles(1) already exists and we add
+    // 3-Position Leg Cycle as regression(1) of Ankle Dribbles, Calf Dribbles
+    // should automatically get 3-Position Leg Cycle as regression(2).
+    const visited = new Set<string>([exerciseId, params.toExerciseId]);
+    for (const item of (existingChain ?? [])) visited.add(item.to_exercise_id as string);
+
+    let ancestorQueue: Array<{ id: string; cumulativeLevel: number }> = [
+      { id: exerciseId, cumulativeLevel: 0 },
+    ];
+
+    while (ancestorQueue.length > 0) {
+      const batchIds = ancestorQueue.map(q => q.id);
+      const { data: ancestorEntries } = await supabase
+        .from('exercise_progressions')
+        .select('from_exercise_id, to_exercise_id, to_exercise_name, level')
+        .in('from_exercise_id', batchIds)
+        .eq('coach_user_id', user.id)
+        .eq('direction', reverseDirection);
+
+      const nextQueue: Array<{ id: string; cumulativeLevel: number }> = [];
+
+      for (const entry of (ancestorEntries ?? [])) {
+        const ancestorId = entry.to_exercise_id as string;
+        if (visited.has(ancestorId)) continue;
+        visited.add(ancestorId);
+
+        const parent = ancestorQueue.find(q => q.id === (entry.from_exercise_id as string));
+        const parentCumLevel = parent?.cumulativeLevel ?? 0;
+        const ancestorCumLevel = parentCumLevel + (entry.level as number);
+        const totalLevel = params.level + ancestorCumLevel;
+
+        // ancestor → new exercise: same direction as what we're adding
+        // new exercise → ancestor: reverse direction
+        rows.push(
+          {
+            coach_user_id: user.id,
+            from_exercise_id: ancestorId,
+            to_exercise_id: params.toExerciseId,
+            to_exercise_name: params.toExerciseName,
+            direction: params.direction,
+            level: totalLevel,
+            notes: null,
+          },
+          {
+            coach_user_id: user.id,
+            from_exercise_id: params.toExerciseId,
+            to_exercise_id: ancestorId,
+            to_exercise_name: (entry.to_exercise_name as string) || '',
+            direction: reverseDirection,
+            level: totalLevel,
+            notes: null,
+          },
+        );
+
+        nextQueue.push({ id: ancestorId, cumulativeLevel: ancestorCumLevel });
+      }
+
+      ancestorQueue = nextQueue;
+    }
+
     const { data, error } = await supabase
       .from('exercise_progressions')
       .insert(rows)
