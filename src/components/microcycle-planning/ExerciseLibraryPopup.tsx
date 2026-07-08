@@ -29,8 +29,9 @@ interface ExerciseLibraryPopupProps {
   onSelectExercises: (exercises: ExerciseSelection[]) => void;
   selectedExerciseIds: string[];
   onExerciseCreated: (exercise: ExerciseSelection) => void;
-  singleSelect?: boolean; // When true, radio-style single selection with explicit confirm
-  title?: string; // Override the dialog title
+  singleSelect?: boolean;
+  title?: string;
+  defaultLibraryId?: string; // Pre-select this library tab when the popup opens
 }
 
 export function ExerciseLibraryPopup({
@@ -41,6 +42,7 @@ export function ExerciseLibraryPopup({
   onExerciseCreated,
   singleSelect = false,
   title,
+  defaultLibraryId,
 }: ExerciseLibraryPopupProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<string>('');
@@ -57,12 +59,14 @@ export function ExerciseLibraryPopup({
 
   const { libraries } = useCustomLibraries();
 
-  // Set default active tab when libraries are loaded
+  // When the popup opens, jump to the default library; fall back to first library
   useEffect(() => {
-    if (libraries.length > 0 && !activeTab) {
-      setActiveTab(libraries[0].id);
-    }
-  }, [libraries, activeTab]);
+    if (!isOpen || libraries.length === 0) return;
+    const target = defaultLibraryId && libraries.find(lib => lib.id === defaultLibraryId)
+      ? defaultLibraryId
+      : libraries[0].id;
+    setActiveTab(target);
+  }, [isOpen, defaultLibraryId, libraries]);
 
   // Prepare data for all libraries using CustomLibrariesContext
   const allLibraries = useMemo(() => {

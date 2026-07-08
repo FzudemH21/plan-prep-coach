@@ -929,6 +929,7 @@ export function ExerciseDetailDialog({
         onClose={() => setPickerLibraryOpen(false)}
         singleSelect
         title={addingDirection === 'progression' ? 'Select Progression Exercise' : addingDirection === 'regression' ? 'Select Regression Exercise' : 'Select Exercise'}
+        defaultLibraryId={library?.id ?? libraryId}
         selectedExerciseIds={[
           exerciseId,
           ...progressions.map(p => p.toExerciseId),
