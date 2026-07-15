@@ -36,7 +36,7 @@ interface SubCategoryData {
 export default function ToolboxDatabase() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { data, isLoading, addEntries, deleteEntry, copyEntry, renameSubCategory, renameMethodCategory, reorderParameters, importData, exportData } = useToolboxData();
+  const { data, isLoading, addEntries, deleteEntry, deleteSubCategory, copyEntry, renameSubCategory, renameMethodCategory, reorderParameters, importData, exportData } = useToolboxData();
   
   const [searchTerm, setSearchTerm] = useState("");
   const [columnSorts, setColumnSorts] = useState<Record<SortColumn, ColumnSort | null>>({
@@ -274,9 +274,7 @@ export default function ToolboxDatabase() {
 
   const confirmDeleteSubCategory = () => {
     if (!pendingDeleteItem) return;
-    pendingDeleteItem.parameters.forEach(parameter => {
-      deleteEntry(parameter.id);
-    });
+    void deleteSubCategory(pendingDeleteItem.key);
     toast({
       title: "Method Deleted",
       description: `"${pendingDeleteItem.subCategory}" and all its parameters have been deleted.`

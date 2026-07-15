@@ -213,6 +213,16 @@ export function useToolboxData() {
     await saveData({ ...data, entries: data.entries.filter(e => e.id !== id) });
   }, [data, saveData]);
 
+  const deleteSubCategory = useCallback(async (categorySubCategoryKey: string) => {
+    const [category, subCategory] = categorySubCategoryKey.split('|||');
+    await saveData({
+      ...data,
+      entries: data.entries.filter(
+        e => !(e.category === category && e.subCategory === subCategory)
+      ),
+    });
+  }, [data, saveData]);
+
   const copyEntry = useCallback(async (categorySubCategoryKey: string) => {
     const [category, subCategory] = categorySubCategoryKey.split('|||');
     const existingEntries = data.entries.filter(
@@ -336,6 +346,7 @@ export function useToolboxData() {
     addEntries,
     updateEntry,
     deleteEntry,
+    deleteSubCategory,
     copyEntry,
     renameSubCategory,
     renameMethodCategory,
