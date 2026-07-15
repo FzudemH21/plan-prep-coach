@@ -240,6 +240,18 @@ export function useToolboxData() {
     });
   }, [data, saveData]);
 
+  const renameMethodCategory = useCallback(async (categorySubCategoryKey: string, newCategory: string) => {
+    const [category, subCategory] = categorySubCategoryKey.split('|||');
+    await saveData({
+      ...data,
+      entries: data.entries.map(e =>
+        e.category === category && e.subCategory === subCategory
+          ? { ...e, category: newCategory }
+          : e
+      ),
+    });
+  }, [data, saveData]);
+
   const reorderParameters = useCallback(async (categorySubCategoryKey: string, reorderedParameters: ToolboxEntry[]) => {
     const [category, subCategory] = categorySubCategoryKey.split('|||');
     // Remember the original position so the method doesn't jump to the bottom of the list.
@@ -326,6 +338,7 @@ export function useToolboxData() {
     deleteEntry,
     copyEntry,
     renameSubCategory,
+    renameMethodCategory,
     reorderParameters,
     importData,
     exportData,

@@ -36,7 +36,7 @@ interface SubCategoryData {
 export default function ToolboxDatabase() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { data, isLoading, addEntries, deleteEntry, copyEntry, renameSubCategory, reorderParameters, importData, exportData } = useToolboxData();
+  const { data, isLoading, addEntries, deleteEntry, copyEntry, renameSubCategory, renameMethodCategory, reorderParameters, importData, exportData } = useToolboxData();
   
   const [searchTerm, setSearchTerm] = useState("");
   const [columnSorts, setColumnSorts] = useState<Record<SortColumn, ColumnSort | null>>({
@@ -690,6 +690,11 @@ export default function ToolboxDatabase() {
             const key = `${selectedSubCategory.category}|||${selectedSubCategory.subCategory}`;
             void renameSubCategory(key, newName);
             setSelectedSubCategory({ ...selectedSubCategory, subCategory: newName });
+          }}
+          onCategoryChange={(newCategory) => {
+            const key = `${selectedSubCategory.category}|||${selectedSubCategory.subCategory}`;
+            void renameMethodCategory(key, newCategory);
+            setSelectedSubCategory({ ...selectedSubCategory, category: newCategory });
           }}
         />
       )}

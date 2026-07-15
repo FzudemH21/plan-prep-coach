@@ -139,6 +139,7 @@ interface ParameterManagementDialogProps {
   parameters: ToolboxEntry[];
   onUpdateParameters: (parameters: ToolboxEntry[]) => void;
   onSubCategoryChange?: (newName: string) => void;
+  onCategoryChange?: (newCategory: string) => void;
 }
 
 export function ParameterManagementDialog({
@@ -149,10 +150,13 @@ export function ParameterManagementDialog({
   parameters,
   onUpdateParameters,
   onSubCategoryChange,
+  onCategoryChange,
 }: ParameterManagementDialogProps) {
   const [editingParameter, setEditingParameter] = useState<ToolboxEntry | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
+  const [editingCategory, setEditingCategory] = useState(false);
+  const [categoryInput, setCategoryInput] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showAddCategoryDialog, setShowAddCategoryDialog] = useState(false);
   const [newParameter, setNewParameter] = useState({
@@ -421,49 +425,96 @@ export function ParameterManagementDialog({
           <DialogHeader>
             <DialogTitle>Manage Parameters</DialogTitle>
             <DialogDescription asChild>
-              <div className="flex items-center gap-1 group/name">
-                <span className="text-muted-foreground">{category} →</span>
-                {editingName ? (
-                  <>
-                    <Input
-                      className="h-6 py-0 px-1 text-sm w-48"
-                      value={nameInput}
-                      onChange={e => setNameInput(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && nameInput.trim()) {
-                          onSubCategoryChange?.(nameInput.trim());
-                          setEditingName(false);
-                        } else if (e.key === 'Escape') {
-                          setEditingName(false);
-                        }
-                      }}
-                      autoFocus
-                    />
-                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => {
-                      if (nameInput.trim()) onSubCategoryChange?.(nameInput.trim());
-                      setEditingName(false);
-                    }}>
-                      <Check className="h-3 w-3 text-green-600" />
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditingName(false)}>
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <span className="font-medium text-foreground">{subCategory}</span>
-                    {onSubCategoryChange && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0 opacity-0 group-hover/name:opacity-100 transition-opacity"
-                        onClick={() => { setNameInput(subCategory); setEditingName(true); }}
-                      >
-                        <Pencil className="h-3 w-3" />
+              <div className="flex items-center gap-1 flex-wrap">
+                {/* Category */}
+                <div className="flex items-center gap-1 group/cat">
+                  {editingCategory ? (
+                    <>
+                      <Input
+                        className="h-6 py-0 px-1 text-sm w-48"
+                        value={categoryInput}
+                        onChange={e => setCategoryInput(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && categoryInput.trim()) {
+                            onCategoryChange?.(categoryInput.trim());
+                            setEditingCategory(false);
+                          } else if (e.key === 'Escape') {
+                            setEditingCategory(false);
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => {
+                        if (categoryInput.trim()) onCategoryChange?.(categoryInput.trim());
+                        setEditingCategory(false);
+                      }}>
+                        <Check className="h-3 w-3 text-green-600" />
                       </Button>
-                    )}
-                  </>
-                )}
+                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditingCategory(false)}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-medium text-foreground">{category}</span>
+                      {onCategoryChange && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 opacity-0 group-hover/cat:opacity-100 transition-opacity"
+                          onClick={() => { setCategoryInput(category); setEditingCategory(true); }}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
+                <span className="text-muted-foreground">→</span>
+                {/* Method name */}
+                <div className="flex items-center gap-1 group/name">
+                  {editingName ? (
+                    <>
+                      <Input
+                        className="h-6 py-0 px-1 text-sm w-48"
+                        value={nameInput}
+                        onChange={e => setNameInput(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && nameInput.trim()) {
+                            onSubCategoryChange?.(nameInput.trim());
+                            setEditingName(false);
+                          } else if (e.key === 'Escape') {
+                            setEditingName(false);
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => {
+                        if (nameInput.trim()) onSubCategoryChange?.(nameInput.trim());
+                        setEditingName(false);
+                      }}>
+                        <Check className="h-3 w-3 text-green-600" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditingName(false)}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-medium text-foreground">{subCategory}</span>
+                      {onSubCategoryChange && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 opacity-0 group-hover/name:opacity-100 transition-opacity"
+                          onClick={() => { setNameInput(subCategory); setEditingName(true); }}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             </DialogDescription>
           </DialogHeader>
