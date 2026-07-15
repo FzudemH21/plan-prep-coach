@@ -423,9 +423,8 @@ export function ParameterManagementDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Manage Parameters</DialogTitle>
-            <DialogDescription asChild>
-              <div className="flex items-center gap-1 flex-wrap">
+            <DialogTitle asChild>
+              <div className="flex items-center gap-1 flex-wrap text-xl font-semibold">
                 {/* Category */}
                 <div className="flex items-center gap-1 group/cat">
                   {editingCategory ? (
@@ -516,7 +515,8 @@ export function ParameterManagementDialog({
                   )}
                 </div>
               </div>
-            </DialogDescription>
+            </DialogTitle>
+            <DialogDescription>Manage Parameters</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6">
