@@ -36,7 +36,7 @@ interface SubCategoryData {
 export default function ToolboxDatabase() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { data, isLoading, addEntries, deleteEntry, copyEntry, reorderParameters, importData, exportData } = useToolboxData();
+  const { data, isLoading, addEntries, deleteEntry, copyEntry, renameSubCategory, reorderParameters, importData, exportData } = useToolboxData();
   
   const [searchTerm, setSearchTerm] = useState("");
   const [columnSorts, setColumnSorts] = useState<Record<SortColumn, ColumnSort | null>>({
@@ -681,11 +681,16 @@ export default function ToolboxDatabase() {
           onOpenChange={setIsParameterDialogOpen}
           category={selectedSubCategory.category}
           subCategory={selectedSubCategory.subCategory}
-          parameters={data.entries.filter(e => 
-            e.category === selectedSubCategory.category && 
+          parameters={data.entries.filter(e =>
+            e.category === selectedSubCategory.category &&
             e.subCategory === selectedSubCategory.subCategory
           )}
           onUpdateParameters={handleUpdateParameters}
+          onSubCategoryChange={(newName) => {
+            const key = `${selectedSubCategory.category}|||${selectedSubCategory.subCategory}`;
+            void renameSubCategory(key, newName);
+            setSelectedSubCategory({ ...selectedSubCategory, subCategory: newName });
+          }}
         />
       )}
 

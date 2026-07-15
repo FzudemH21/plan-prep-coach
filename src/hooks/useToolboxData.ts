@@ -228,6 +228,18 @@ export function useToolboxData() {
     await saveData({ ...data, entries: [...data.entries, ...newEntries] });
   }, [data, saveData]);
 
+  const renameSubCategory = useCallback(async (categorySubCategoryKey: string, newSubCategory: string) => {
+    const [category, subCategory] = categorySubCategoryKey.split('|||');
+    await saveData({
+      ...data,
+      entries: data.entries.map(e =>
+        e.category === category && e.subCategory === subCategory
+          ? { ...e, subCategory: newSubCategory }
+          : e
+      ),
+    });
+  }, [data, saveData]);
+
   const reorderParameters = useCallback(async (categorySubCategoryKey: string, reorderedParameters: ToolboxEntry[]) => {
     const [category, subCategory] = categorySubCategoryKey.split('|||');
     // Remember the original position so the method doesn't jump to the bottom of the list.
@@ -313,6 +325,7 @@ export function useToolboxData() {
     updateEntry,
     deleteEntry,
     copyEntry,
+    renameSubCategory,
     reorderParameters,
     importData,
     exportData,

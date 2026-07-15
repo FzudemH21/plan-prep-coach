@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Calculator, AlertCircle, ChevronDown } from 'lucide-react';
+import { Plus, Calculator, AlertCircle, ChevronDown, Pencil, Check, X } from 'lucide-react';
 import { ToolboxEntry } from '@/types/toolbox';
 import { DraggableParameterList } from './DraggableParameterList';
 import { DraggableExerciseCategoryList } from './DraggableExerciseCategoryList';
@@ -138,6 +138,7 @@ interface ParameterManagementDialogProps {
   subCategory: string;
   parameters: ToolboxEntry[];
   onUpdateParameters: (parameters: ToolboxEntry[]) => void;
+  onSubCategoryChange?: (newName: string) => void;
 }
 
 export function ParameterManagementDialog({
@@ -147,8 +148,11 @@ export function ParameterManagementDialog({
   subCategory,
   parameters,
   onUpdateParameters,
+  onSubCategoryChange,
 }: ParameterManagementDialogProps) {
   const [editingParameter, setEditingParameter] = useState<ToolboxEntry | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showAddCategoryDialog, setShowAddCategoryDialog] = useState(false);
   const [newParameter, setNewParameter] = useState({
@@ -416,8 +420,51 @@ export function ParameterManagementDialog({
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Manage Parameters</DialogTitle>
-            <DialogDescription>
-              {category} → {subCategory}
+            <DialogDescription asChild>
+              <div className="flex items-center gap-1 group/name">
+                <span className="text-muted-foreground">{category} →</span>
+                {editingName ? (
+                  <>
+                    <Input
+                      className="h-6 py-0 px-1 text-sm w-48"
+                      value={nameInput}
+                      onChange={e => setNameInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && nameInput.trim()) {
+                          onSubCategoryChange?.(nameInput.trim());
+                          setEditingName(false);
+                        } else if (e.key === 'Escape') {
+                          setEditingName(false);
+                        }
+                      }}
+                      autoFocus
+                    />
+                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => {
+                      if (nameInput.trim()) onSubCategoryChange?.(nameInput.trim());
+                      setEditingName(false);
+                    }}>
+                      <Check className="h-3 w-3 text-green-600" />
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditingName(false)}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-medium text-foreground">{subCategory}</span>
+                    {onSubCategoryChange && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 opacity-0 group-hover/name:opacity-100 transition-opacity"
+                        onClick={() => { setNameInput(subCategory); setEditingName(true); }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
             </DialogDescription>
           </DialogHeader>
 
