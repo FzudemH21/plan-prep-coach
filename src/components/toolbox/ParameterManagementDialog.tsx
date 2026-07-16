@@ -236,7 +236,7 @@ export function ParameterManagementDialog({
       subCategory,
       parameterName: newParameter.parameterName,
       parameterType: newParameter.parameterType,
-      options: newParameter.isCalculated ? [] : newParameter.options,
+      options: newParameter.options,
       isFrequencyParameter: newParameter.isCalculated ? false : newParameter.isFrequencyParameter,
       isSetParameter: newParameter.isCalculated ? false : newParameter.isSetParameter,
       isRestParameter: newParameter.isCalculated ? false : newParameter.isRestParameter,
@@ -1006,6 +1006,29 @@ export function ParameterManagementDialog({
                           </p>
                         </div>
                       )}
+
+                      <div>
+                        <Label>Result Unit (optional)</Label>
+                        <Select
+                          value={(editingParameter.options || [])[0] || '__none__'}
+                          onValueChange={(value) => setEditingParameter({
+                            ...editingParameter,
+                            options: value === '__none__' ? [] : [value],
+                          })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="No unit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">No unit</SelectItem>
+                            {PREDEFINED_UNITS.map((unit) => (
+                              <SelectItem key={unit.value} value={unit.value}>
+                                {unit.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1364,6 +1387,29 @@ export function ParameterManagementDialog({
                         </p>
                       </div>
                     )}
+
+                    <div>
+                      <Label>Result Unit (optional)</Label>
+                      <Select
+                        value={newParameter.options[0] || '__none__'}
+                        onValueChange={(value) => setNewParameter({
+                          ...newParameter,
+                          options: value === '__none__' ? [] : [value],
+                        })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="No unit" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">No unit</SelectItem>
+                          {PREDEFINED_UNITS.map((unit) => (
+                            <SelectItem key={unit.value} value={unit.value}>
+                              {unit.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 )}
               </div>
