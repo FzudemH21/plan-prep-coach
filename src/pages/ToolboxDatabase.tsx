@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ParameterManagementDialog } from "@/components/toolbox/ParameterManagementDialog";
 import { ToolboxColumnFilter } from "@/components/toolbox/ToolboxColumnFilter";
 import { MethodTemplatesPanel } from "@/components/toolbox/MethodTemplatesPanel";
+import { WizardAIAssistant } from "@/components/wizard/WizardAIAssistant";
 
 type SortOrder = 'asc' | 'desc';
 type SortColumn = 'category' | 'subCategory';
@@ -339,6 +340,39 @@ export default function ToolboxDatabase() {
       description: "Toolbox database has been exported successfully."
     });
   };
+
+  const toolboxContext = useMemo(() => {
+    const grouped = new Map<string, Map<string, ToolboxEntry[]>>();
+    data.entries.forEach(e => {
+      if (!grouped.has(e.category)) grouped.set(e.category, new Map());
+      const methods = grouped.get(e.category)!;
+      if (!methods.has(e.subCategory)) methods.set(e.subCategory, []);
+      methods.get(e.subCategory)!.push(e);
+    });
+
+    const lines: string[] = ['## Training Toolbox\n'];
+    grouped.forEach((methods, category) => {
+      lines.push(`### Category: ${category}`);
+      methods.forEach((params, method) => {
+        lines.push(`  Method: ${method}`);
+        params.forEach(p => {
+          const flags = [
+            p.isFrequencyParameter && 'frequency',
+            p.isSetParameter && 'sets',
+            p.isRestParameter && 'rest',
+            p.isCalculated && `calculated: ${p.formula}`,
+          ].filter(Boolean).join(', ');
+          const unit = p.options?.length ? ` [${p.options.join('/')}]` : '';
+          const opts = !p.isCalculated && p.parameterType === 'qualitative' && p.options?.length
+            ? ` options: ${p.options.join(', ')}` : '';
+          lines.push(`    - ${p.parameterName} (${p.parameterType}${unit}${opts}${flags ? ' | ' + flags : ''})`);
+        });
+        const cats = params[0]?.exerciseCategories;
+        if (cats?.length) lines.push(`    Exercise categories: ${cats.join(', ')}`);
+      });
+    });
+    return lines.join('\n');
+  }, [data.entries]);
 
   if (isLoading) {
     return (
@@ -727,6 +761,19 @@ export default function ToolboxDatabase() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <WizardAIAssistant
+        stepLabel="Training Toolbox"
+        wizardContext={toolboxContext}
+        assistantRole={`You are an expert sports scientist and strength & conditioning consultant helping a coach review and think through their Training Toolbox — the database of training methods, categories, and parameters used for programming.
+
+You have full read access to the toolbox (all categories, methods, and parameters). You can discuss, analyse, and advise on method structure, parameter choices, exercise categories, periodization logic, and sports science rationale.
+
+IMPORTANT rules:
+- This is a DISCUSSION-ONLY assistant. You cannot make changes to the toolbox.
+- Be honest about the limits of your knowledge. If you are unsure about something or don't know the answer, say so explicitly. Never make things up or present uncertain information as fact.
+- When referencing methods or parameters, use the exact names shown in the context.
+- If the coach asks about something not in the toolbox, say you don't see it in the current data.`}
+      />
     </div>
   );
 }
