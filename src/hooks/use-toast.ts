@@ -6,7 +6,7 @@ import type {
 } from "@/components/ui/toast"
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const TOAST_REMOVE_DELAY = 1000 // ms after close before removing from state (exit animation)
 
 type ToasterToast = ToastProps & {
   id: string
@@ -139,7 +139,7 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">
 
-function toast({ ...props }: Toast) {
+function toast({ duration = 3000, ...props }: Toast & { duration?: number }) {
   const id = genId()
 
   const update = (props: ToasterToast) =>
@@ -160,6 +160,10 @@ function toast({ ...props }: Toast) {
       },
     },
   })
+
+  if (duration !== Infinity) {
+    setTimeout(dismiss, duration)
+  }
 
   return {
     id: id,
