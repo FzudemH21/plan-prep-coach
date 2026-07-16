@@ -1041,7 +1041,9 @@ export function ParameterManagementDialog({
 
       {/* Add Parameter Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent>
+        <DialogPortal>
+          <DialogOverlay className="z-[150]" />
+          <DialogContent className="z-[160]">
           <DialogHeader>
             <DialogTitle>Add New Parameter</DialogTitle>
           </DialogHeader>
@@ -1453,7 +1455,8 @@ export function ParameterManagementDialog({
               </Button>
             </div>
           </div>
-        </DialogContent>
+          </DialogContent>
+        </DialogPortal>
       </Dialog>
 
       {/* Add Exercise Category Dialog */}
