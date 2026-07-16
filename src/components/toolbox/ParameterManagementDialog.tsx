@@ -354,6 +354,13 @@ export function ParameterManagementDialog({
     setShowAddCategoryDialog(false);
   };
 
+  const handleRenameExerciseCategory = (oldName: string, newName: string) => {
+    const currentCategories = parameters[0]?.exerciseCategories || [];
+    const updatedCategories = currentCategories.map(cat => cat === oldName ? newName : cat);
+    const updatedParameters = parameters.map(p => ({ ...p, exerciseCategories: updatedCategories }));
+    onUpdateParameters(updatedParameters);
+  };
+
   const handleDeleteExerciseCategory = (categoryToDelete: string) => {
     const currentCategories = parameters[0]?.exerciseCategories || [];
     const updatedCategories = currentCategories.filter(cat => cat !== categoryToDelete);
@@ -581,6 +588,7 @@ export function ParameterManagementDialog({
                   categories={exerciseCategories}
                   onReorder={handleReorderExerciseCategories}
                   onDeleteCategory={handleDeleteExerciseCategory}
+                  onRenameCategory={handleRenameExerciseCategory}
                 />
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
@@ -1461,7 +1469,9 @@ export function ParameterManagementDialog({
 
       {/* Add Exercise Category Dialog */}
       <Dialog open={showAddCategoryDialog} onOpenChange={setShowAddCategoryDialog}>
-        <DialogContent>
+        <DialogPortal>
+          <DialogOverlay className="z-[150]" />
+          <DialogContent className="z-[160]">
           <DialogHeader>
             <DialogTitle>Add Exercise Category</DialogTitle>
           </DialogHeader>
@@ -1489,7 +1499,8 @@ export function ParameterManagementDialog({
               </Button>
             </div>
           </div>
-        </DialogContent>
+          </DialogContent>
+        </DialogPortal>
       </Dialog>
     </>
   );
