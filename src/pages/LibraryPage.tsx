@@ -7,6 +7,9 @@ import { ArrowLeft, Pencil, Check, X } from 'lucide-react';
 import { useCustomLibraries } from '@/hooks/useCustomLibraries';
 import { DynamicLibraryTable } from '@/components/templates/DynamicLibraryTable';
 import { WizardAIAssistant, type ApplySuggestion } from '@/components/wizard/WizardAIAssistant';
+import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
+import { useCoachMemory } from '@/hooks/useCoachMemory';
+import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
 
 // Convert library name to URL-safe slug
 const createSlug = (name: string): string => {
@@ -47,6 +50,11 @@ export default function LibraryPage() {
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
 
+  const globalAIContext = useGlobalAIContext();
+  const { coachMemoryContext } = useCoachMemory();
+  const { retrieve } = useRAGRetrieval();
+  const [ragContext, setRagContext] = useState('');
+
   const library = findLibraryBySlug(libraries, libraryName || '');
 
   // Auto-redirect to the overview when the library no longer exists (e.g. deleted)
@@ -55,6 +63,11 @@ export default function LibraryPage() {
       navigate('/templates/exercise-libraries', { replace: true });
     }
   }, [isLoading, library, navigate]);
+
+  useEffect(() => {
+    if (!library) return;
+    retrieve(library.name).then(setRagContext);
+  }, [retrieve, library?.name]);
 
   // Build AI context describing the current library state
   const buildLibraryContext = useCallback(() => {
@@ -308,6 +321,9 @@ export default function LibraryPage() {
         assistantRole={`You are an expert strength & conditioning assistant helping a coach manage their Exercise Library called "${library.name}". You can add, update, or delete exercises and columns in this library. Always use the exact column names, exercise IDs, and library ID shown in context. When adding exercises, infer sensible values for all listed columns based on the exercise name and type. When deleting exercises or columns, always confirm with the coach first since this is irreversible.`}
         onApplySuggestion={handleAIApply}
         onApplyAll={handleAIApplyAll}
+        globalContext={globalAIContext}
+        coachMemoryContext={coachMemoryContext}
+        ragContext={ragContext}
       />
     </div>
   );

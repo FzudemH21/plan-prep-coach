@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
 import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
-import { useCoachProfile } from '@/hooks/useCoachProfile';
+import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
+import { useCoachMemory } from '@/hooks/useCoachMemory';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -67,7 +68,8 @@ export default function AthleticismDatabaseV2() {
   const { data: toolboxData } = useToolboxData();
 
   // ── AI Assistant ───────────────────────────────────────────────────────────
-  const { coachProfile } = useCoachProfile();
+  const globalAIContext = useGlobalAIContext();
+  const { coachMemoryContext } = useCoachMemory();
   const { retrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
 
@@ -116,8 +118,6 @@ export default function AthleticismDatabaseV2() {
     const query = paramNames || 'sports performance parameters training methods';
     retrieve(query).then(setRagContext);
   }, [retrieve, data?.parameters]);
-
-  const coachContext = coachProfile?.extractedProfile ?? '';
 
   // ── AI apply handler ───────────────────────────────────────────────────────
 
@@ -647,8 +647,9 @@ export default function AthleticismDatabaseV2() {
       <WizardAIAssistant
         stepLabel="Parameter Database"
         wizardContext={parameterContext}
-        coachMemoryContext={coachContext}
+        coachMemoryContext={coachMemoryContext}
         ragContext={ragContext}
+        globalContext={globalAIContext}
         onApplySuggestion={handleAIApply}
         assistantRole="Answer sports science questions and help the coach define and structure their parameter database. This is a general template database — it is NOT tied to any specific athlete, training phase, or mesocycle. Parameters already in the database are examples or templates, not athlete-specific data. Do NOT ask about the coach's athlete, training phase, season context, or testing infrastructure unless the coach explicitly brings it up. When suggesting or filling parameters, use general scientific specifications (e.g. 'Ground contact time at maximum velocity, 30–60m phase') without assuming any particular athlete context. Suggest relevant parameters, categories, units, and evidence-based rationale. When asked, suggest interactions between parameters or links to training methods. Do not make unsolicited judgments about parameters the coach has already added."
       />

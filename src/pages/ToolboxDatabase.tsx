@@ -18,7 +18,8 @@ import { ParameterManagementDialog } from "@/components/toolbox/ParameterManagem
 import { ToolboxColumnFilter } from "@/components/toolbox/ToolboxColumnFilter";
 import { MethodTemplatesPanel } from "@/components/toolbox/MethodTemplatesPanel";
 import { WizardAIAssistant } from "@/components/wizard/WizardAIAssistant";
-import { useCoachProfile } from "@/hooks/useCoachProfile";
+import { useGlobalAIContext } from "@/hooks/useGlobalAIContext";
+import { useCoachMemory } from "@/hooks/useCoachMemory";
 import { useRAGRetrieval } from "@/hooks/useRAGRetrieval";
 
 type SortOrder = 'asc' | 'desc';
@@ -40,10 +41,10 @@ export default function ToolboxDatabase() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data, isLoading, addEntries, deleteEntry, deleteSubCategory, copyEntry, renameSubCategory, renameMethodCategory, reorderParameters, importData, exportData } = useToolboxData();
-  const { coachProfile } = useCoachProfile();
+  const globalAIContext = useGlobalAIContext();
+  const { coachMemoryContext } = useCoachMemory();
   const { retrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
-  const coachContext = coachProfile?.extractedProfile ?? '';
   
   const [searchTerm, setSearchTerm] = useState("");
   const [columnSorts, setColumnSorts] = useState<Record<SortColumn, ColumnSort | null>>({
@@ -777,8 +778,9 @@ export default function ToolboxDatabase() {
       <WizardAIAssistant
         stepLabel="Training Toolbox"
         wizardContext={toolboxContext}
-        coachMemoryContext={coachContext}
+        coachMemoryContext={coachMemoryContext}
         ragContext={ragContext}
+        globalContext={globalAIContext}
         assistantRole={`You are an expert sports scientist and strength & conditioning consultant helping a coach review and think through their Training Toolbox — the database of training methods, categories, and parameters used for programming.
 
 You have full read access to the toolbox (all categories, methods, and parameters) as well as the coach's profile and any relevant uploaded documents. You can discuss, analyse, and advise on method structure, parameter choices, exercise categories, periodization logic, and sports science rationale.
