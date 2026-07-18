@@ -229,7 +229,12 @@ export function useToolboxData() {
       e => e.category === category && e.subCategory === subCategory
     );
     if (existingEntries.length === 0) return;
-    const newSubCategory = `${subCategory} (Copy)`;
+    let newSubCategory = `${subCategory} (Copy)`;
+    let copyCounter = 2;
+    while (data.entries.some(e => e.category === category && e.subCategory === newSubCategory)) {
+      newSubCategory = `${subCategory} (Copy ${copyCounter})`;
+      copyCounter++;
+    }
     const newEntries = existingEntries.map(entry => ({
       ...entry,
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
