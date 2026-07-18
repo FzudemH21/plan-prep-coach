@@ -43,6 +43,8 @@ const PREDEFINED_UNITS = [
   { value: '%maxV', label: '%maxV (% of peak velocity)' },
   { value: 'bpm', label: 'bpm (heart rate)' },
   { value: '%maxHR', label: '%maxHR (% of max heart rate)' },
+  { value: '%vVO2max', label: '%vVO2max (% of velocity at VO2max)' },
+  { value: '%vIFT', label: '%vIFT (% of velocity at IFT)' },
   { value: 'W', label: 'W (watts)' },
   { value: 'W/kg', label: 'W/kg (watts per kg bodyweight)' },
   { value: 'rpm', label: 'rpm (revolutions per minute)' },
