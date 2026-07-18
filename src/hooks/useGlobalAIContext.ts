@@ -72,11 +72,18 @@ export function useGlobalAIContext(includeExerciseDetails = false): string {
     // ── Exercise Libraries ───────────────────────────────────────────────────
     if (libraries.length > 0) {
       const libSections = libraries.map(lib => {
+        // Column schema — always included so the AI understands the structure
+        const dataCols = lib.columns.filter(c => c.role !== 'video');
+        const colNames = dataCols.map(c =>
+          `${c.name} (${c.type}${c.options?.length ? ': ' + c.options.join('/') : ''})`
+        ).join(', ');
+        const schemaLine = `  Columns: ${colNames || '(none)'}`;
+
         if (!includeExerciseDetails) {
-          // Summary only — keeps tokens low on steps that don't need exercise IDs
           const total = lib.exercises.length;
-          return `Library: "${lib.name}" (${total} exercise${total !== 1 ? 's' : ''})`;
+          return `Library: "${lib.name}" | libraryId: ${lib.id} (${total} exercise${total !== 1 ? 's' : ''})\n${schemaLine}`;
         }
+
         const firstColId = lib.columns[0]?.id ?? 'exercise';
         const categoryCol = lib.columns.find(c =>
           c.name.toLowerCase().includes('categor') && !c.role
@@ -84,9 +91,13 @@ export function useGlobalAIContext(includeExerciseDetails = false): string {
         const exerciseLines = lib.exercises.map(ex => {
           const name = ex.data[firstColId] || 'Unnamed';
           const category = categoryCol ? (ex.data[categoryCol.id] ?? '') : '';
-          return `  - ${name}${category ? ` [${category}]` : ''} | exerciseId: ${ex.id} | libraryId: ${lib.id}`;
+          return `  - ${name}${category ? ` [${category}]` : ''} | exerciseId: ${ex.id}`;
         });
-        return `Library: "${lib.name}" (${lib.exercises.length} exercises)\n${exerciseLines.length > 0 ? exerciseLines.join('\n') : '  (no exercises yet)'}`;
+        return [
+          `Library: "${lib.name}" | libraryId: ${lib.id} (${lib.exercises.length} exercises)`,
+          schemaLine,
+          exerciseLines.length > 0 ? exerciseLines.join('\n') : '  (no exercises yet)',
+        ].join('\n');
       });
       sections.push(`## Exercise Libraries\n${libSections.join('\n\n')}`);
     } else {

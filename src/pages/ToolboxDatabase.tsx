@@ -41,7 +41,7 @@ export default function ToolboxDatabase() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data, isLoading, addEntries, deleteEntry, deleteSubCategory, copyEntry, renameSubCategory, renameMethodCategory, reorderParameters, importData, exportData } = useToolboxData();
-  const globalAIContext = useGlobalAIContext();
+  const globalAIContext = useGlobalAIContext(true);
   const { coachMemoryContext } = useCoachMemory();
   const { retrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
