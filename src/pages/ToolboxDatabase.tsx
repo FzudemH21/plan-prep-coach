@@ -436,23 +436,7 @@ export default function ToolboxDatabase() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Methods</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{new Set(data.entries.map(e => `${e.category}|||${e.subCategory}`)).size}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Sub-Categories</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{subCategoryData.length}</div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Categories</CardTitle>
@@ -461,6 +445,14 @@ export default function ToolboxDatabase() {
             <div className="text-2xl font-bold">
               {new Set(data.entries.map(e => e.category)).size}
             </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Methods</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{new Set(data.entries.map(e => `${e.category}|||${e.subCategory}`)).size}</div>
           </CardContent>
         </Card>
         <Card>
