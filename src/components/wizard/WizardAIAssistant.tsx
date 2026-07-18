@@ -795,10 +795,17 @@ export function WizardAIAssistant({
   const { isListening, toggle: toggleMic, isSupported: micSupported, stopListening } =
     useSpeechInput(handleVoiceResult);
 
-  // Auto-scroll
+  // Auto-scroll on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Jump to bottom instantly when the panel is opened with existing messages
+  useEffect(() => {
+    if (isOpen && messages.length > 0) {
+      bottomRef.current?.scrollIntoView({ behavior: "instant" });
+    }
+  }, [isOpen]);
 
   // Build coach context string from profile
   const coachContext = profile
