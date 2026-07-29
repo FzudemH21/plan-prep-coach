@@ -174,6 +174,13 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   // on every keystroke.  Cleared when the athlete changes (component re-mount).
   const athleteFormulaDataRef = useRef<AthleteFormulaData | null>(null);
 
+  // Mutex that prevents concurrent syncAthleteSchedule calls.
+  // Without this, the auto-sync effect fires 6+ times simultaneously (once per
+  // connectionsLoading toggle caused by Supabase auth-lock contention).
+  // Each concurrent sync does DELETE-then-UPSERT; interleaving makes a later
+  // DELETE wipe rows that an earlier UPSERT just wrote, leaving the DB empty.
+  const syncInProgressRef = useRef(false);
+
   // Dates explicitly cleared by the coach this session.
   // The poll effect and realtime subscription both use this to prevent re-populating
   // liveScheduleMap with stale Supabase rows during the window between the optimistic
@@ -591,6 +598,13 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     }
     const assignment = editing.selectedAssignment;
     if (!assignment) return;
+    // Mutex: skip if another sync is already running. The concurrent fires are all
+    // triggered by the same editing state, so the one that proceeds syncs the correct data.
+    if (syncInProgressRef.current) {
+      console.log('[autoSync] skipped — sync already in progress');
+      return;
+    }
+    syncInProgressRef.current = true;
     syncAthleteSchedule(
       connection.id,
       assignment,
@@ -617,6 +631,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           variant: 'destructive',
         });
       }
+    }).finally(() => {
+      syncInProgressRef.current = false;
     });
   // Re-run when a save completes OR when connections finish loading (so a save
   // that was deferred due to "connections still loading" gets retried automatically).
@@ -685,6 +701,14 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       }
     }
 
+    // Mutex: if an auto-sync is already running, skip and let it complete.
+    // Don't add to loadSyncedRef so this fires again on the next dep change (a
+    // connectionsLoading toggle), by which time the auto-sync should be done.
+    if (syncInProgressRef.current) {
+      console.log('[loadSync] skipped — sync in progress, will retry');
+      return;
+    }
+    syncInProgressRef.current = true;
     loadSyncedRef.current.add(selectedAssignmentId);
 
     // Build athlete formula data (e1RM, biometrics, perf params) once per load so
@@ -712,7 +736,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         e.sessionIntensities,
         enrichEvents(getEventsForAthlete(athlete.id)),
         formulaData,
-      ).catch(err => console.error('[loadSync] ✗ sync failed:', err));
+      ).catch(err => console.error('[loadSync] ✗ sync failed:', err))
+        .finally(() => { syncInProgressRef.current = false; });
     }).catch(e => {
       // Formula data build failed — still sync without it (formula cols stay as "Auto")
       console.warn('[loadSync] formula data build failed, syncing without it:', e);
@@ -729,7 +754,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         ed.supersets,
         ed.sessionIntensities,
         enrichEvents(getEventsForAthlete(athlete.id)),
-      ).catch(e2 => console.error('[loadSync] ✗ sync failed:', e2));
+      ).catch(e2 => console.error('[loadSync] ✗ sync failed:', e2))
+        .finally(() => { syncInProgressRef.current = false; });
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAssignmentId, editing.isInitializing, editing.trainingDays.length, connectionsLoading]);
