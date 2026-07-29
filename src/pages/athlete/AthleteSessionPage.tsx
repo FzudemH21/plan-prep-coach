@@ -1208,9 +1208,8 @@ export default function AthleteSessionPage() {
             <p className="text-sm">No exercises assigned yet.</p>
           </div>
         ) : (
-          <>
-            <ScrollArea className="flex-1">
-              <div className="px-4 py-4 space-y-3">
+          <ScrollArea className="flex-1">
+            <div className="px-4 py-4 space-y-3">
                 {/* Completed banner */}
                 {currentLog && (
                   <div className="rounded-xl bg-green-50 border border-green-200 p-3 flex items-start gap-3">
@@ -1416,55 +1415,61 @@ export default function AthleteSessionPage() {
                 })}
               </div>
             </ScrollArea>
+        )}
 
-            {/* Start CTA */}
-            <div className="border-t bg-background shrink-0">
-              {sessionLock && !currentLog && (
-                <div className="px-4 pt-3 pb-1">
-                  <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-center gap-2">
-                    <Timer className="h-4 w-4 text-amber-600 shrink-0" />
-                    <p className="text-xs text-amber-800 leading-snug">
-                      Your coach is currently logging this session. You cannot log it at the moment.
-                    </p>
-                  </div>
-                </div>
-              )}
-              <div className="px-4 py-4">
-                {currentLog ? (
-                  <Button className="w-full" size="lg" variant="outline" onClick={() => navigate(-1)}>
-                    Close
-                  </Button>
-                ) : (
-                  <Button className="w-full" size="lg" disabled={!!sessionLock} onClick={async () => {
-                    // Hard gate: re-check at tap time to catch race conditions
-                    if (connection) {
-                      const lock = await checkSessionLock(connection.id, entry.date, session.id, 'athlete');
-                      if (lock) { setSessionLock(lock); return; }
-                    }
-                    setPhase('sectionIntro');
-                    if (connection) {
-                      const { data } = await supabase
-                        .from('athlete_session_logs')
-                        .insert({
-                          athlete_connection_id: connection.id,
-                          date: entry.date,
-                          session_id: session.id,
-                          session_name: session.name,
-                          started_at: new Date().toISOString(),
-                          started_by: 'athlete',
-                        })
-                        .select('id')
-                        .single();
-                      if (data) setSessionLogId(data.id);
-                    }
-                  }}>
-                    Start Workout
-                  </Button>
-                )}
+        {/* Start CTA — always visible so athletes can log any session, even ones without exercises */}
+        <div className="border-t bg-background shrink-0">
+          {sessionLock && !currentLog && (
+            <div className="px-4 pt-3 pb-1">
+              <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-center gap-2">
+                <Timer className="h-4 w-4 text-amber-600 shrink-0" />
+                <p className="text-xs text-amber-800 leading-snug">
+                  Your coach is currently logging this session. You cannot log it at the moment.
+                </p>
               </div>
             </div>
-          </>
-        )}
+          )}
+          <div className="px-4 py-4">
+            {currentLog ? (
+              <Button className="w-full" size="lg" variant="outline" onClick={() => navigate(-1)}>
+                Close
+              </Button>
+            ) : (
+              <Button className="w-full" size="lg" disabled={!!sessionLock} onClick={async () => {
+                // Hard gate: re-check at tap time to catch race conditions
+                if (connection) {
+                  const lock = await checkSessionLock(connection.id, entry.date, session.id, 'athlete');
+                  if (lock) { setSessionLock(lock); return; }
+                }
+                if (connection) {
+                  const { data } = await supabase
+                    .from('athlete_session_logs')
+                    .insert({
+                      athlete_connection_id: connection.id,
+                      date: entry.date,
+                      session_id: session.id,
+                      session_name: session.name,
+                      started_at: new Date().toISOString(),
+                      started_by: 'athlete',
+                    })
+                    .select('id')
+                    .single();
+                  if (data) setSessionLogId(data.id);
+                }
+                // No exercises: skip straight to log so athlete can record RPE/duration
+                if (sections.length === 0) {
+                  startWorkoutTimer();
+                  setPhase('done');
+                  setBorgSheetOpen(true);
+                } else {
+                  setPhase('sectionIntro');
+                }
+              }}>
+                Start Workout
+              </Button>
+            )}
+          </div>
+        </div>
 
         {/* Abandon workout confirmation */}
         <AlertDialog open={abandonWarning} onOpenChange={o => { if (!o) setAbandonWarning(false); }}>
