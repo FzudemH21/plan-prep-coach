@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import type { AthleteProfileData } from '@/hooks/useAthleteConnections';
@@ -135,6 +135,19 @@ export interface SessionLog {
   setsLogged: unknown[];
 }
 
+function mapScheduleRow(row: Record<string, unknown>): AthleteScheduleEntry {
+  return {
+    id: row.id as string,
+    date: row.date as string,
+    intensity: row.intensity as string | null,
+    sessions: (row.sessions as SessionSummary[]) || [],
+    events: (row.events as AthleteCalendarEvent[]) || [],
+    programName: row.program_name as string | null,
+    mesocycleName: row.mesocycle_name as string | null,
+    microcycleName: row.microcycle_name as string | null,
+  };
+}
+
 export function useAthleteApp() {
   const { user, loading: authLoading } = useAuth();
   const [connection, setConnection] = useState<AthleteConnection | null>(null);
@@ -145,6 +158,30 @@ export function useAthleteApp() {
 
   const isAthlete = user?.user_metadata?.role === 'athlete';
 
+  // Stores the active connection id so stable callbacks can access the latest value without stale closures.
+  const connectionIdRef = useRef<string | null>(null);
+
+  // Stable schedule-fetch function — reads connection id from ref so it never goes stale.
+  // Called on initial load, Supabase Realtime events, and tab-visibility changes.
+  const refetchSchedule = useCallback(async () => {
+    const connId = connectionIdRef.current;
+    if (!connId) return;
+    const todayLocal = new Date();
+    const fromLocal = new Date(todayLocal); fromLocal.setDate(todayLocal.getDate() - 7);
+    const toLocal   = new Date(todayLocal); toLocal.setDate(todayLocal.getDate() + 90);
+    const localStr  = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const { data: schedData } = await supabase
+      .from('athlete_schedule')
+      .select('*')
+      .eq('athlete_connection_id', connId)
+      .gte('date', localStr(fromLocal))
+      .lte('date', localStr(toLocal))
+      .order('date', { ascending: true });
+    console.log(`[useAthleteApp] ✓ schedule refreshed: ${(schedData || []).length} rows`);
+    setSchedule((schedData || []).map(mapScheduleRow));
+  }, []); // stable — reads from ref; setSchedule is a stable React dispatcher
+
   useEffect(() => {
     if (authLoading) return;
     if (!user || !isAthlete) {
@@ -152,6 +189,9 @@ export function useAthleteApp() {
       setLoading(false);
       return;
     }
+
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     async function load() {
       console.log(`[useAthleteApp] ▶ loading for user=${user!.id} role=${user!.user_metadata?.role}`);
@@ -195,48 +235,22 @@ export function useAthleteApp() {
         const splash = conn.profileData?.coachBranding ?? {};
         try { localStorage.setItem('ppc-athlete-splash', JSON.stringify(splash)); } catch { /* ignore */ }
 
-        // Load schedule (90-day window around today) — use local date strings so the
-        // window edges align with the same calendar day the athlete app displays.
-        const todayLocal = new Date();
-        const fromLocal = new Date(todayLocal); fromLocal.setDate(todayLocal.getDate() - 7);
-        const toLocal = new Date(todayLocal); toLocal.setDate(todayLocal.getDate() + 90);
-        const localStr = (d: Date) =>
-          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        const fromStr = localStr(fromLocal);
-        const toStr = localStr(toLocal);
-        console.log(`[useAthleteApp] querying athlete_schedule | connectionId=${conn.id} | from=${fromStr} to=${toStr}`);
-
-        const { data: schedData, error: schedErr } = await supabase
-          .from('athlete_schedule')
-          .select('*')
-          .eq('athlete_connection_id', conn.id)
-          .gte('date', fromStr)
-          .lte('date', toStr)
-          .order('date', { ascending: true });
-        if (schedErr) {
-          console.error('[useAthleteApp] ✗ schedule query failed:', schedErr.code, schedErr.message);
-          throw schedErr;
-        }
-        console.log(`[useAthleteApp] ✓ schedule rows returned: ${(schedData || []).length} | dates: ${(schedData || []).map((r: Record<string,unknown>) => r.date).join(', ').slice(0, 120)}`);
-
-        setSchedule((schedData || []).map((row: Record<string, unknown>) => ({
-          id: row.id as string,
-          date: row.date as string,
-          intensity: row.intensity as string | null,
-          sessions: (row.sessions as SessionSummary[]) || [],
-          events: (row.events as AthleteCalendarEvent[]) || [],
-          programName: row.program_name as string | null,
-          mesocycleName: row.mesocycle_name as string | null,
-          microcycleName: row.microcycle_name as string | null,
-        })));
+        // Store connection id in ref so refetchSchedule can use it, then do initial fetch
+        connectionIdRef.current = conn.id;
+        await refetchSchedule();
 
         // Load session logs (non-fatal — schedule stays usable if this fails)
+        const todayLocal = new Date();
+        const fromLocal = new Date(todayLocal); fromLocal.setDate(todayLocal.getDate() - 7);
+        const toLocal   = new Date(todayLocal); toLocal.setDate(todayLocal.getDate() + 90);
+        const localStr  = (d: Date) =>
+          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         const { data: logsData } = await supabase
           .from('athlete_session_logs')
           .select('id, date, session_id, session_name, started_at, completed_at, borg_rating, duration_seconds, comment, sets_logged')
           .eq('athlete_connection_id', conn.id)
-          .gte('date', fromStr)
-          .lte('date', toStr);
+          .gte('date', localStr(fromLocal))
+          .lte('date', localStr(toLocal));
         setSessionLogs((logsData ?? []).map((row: Record<string, unknown>) => ({
           id: row.id as string,
           date: row.date as string,
@@ -249,13 +263,49 @@ export function useAthleteApp() {
           comment: row.comment as string | null,
           setsLogged: (row.sets_logged as unknown[]) || [],
         })));
+
+        // Subscribe to Supabase Realtime for live schedule updates (e.g. coach adds a session).
+        // Debounce by 800 ms: a coach sync upserts many rows at once — wait for the burst to finish.
+        channel = supabase
+          .channel(`athlete-schedule-${conn.id}`)
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'athlete_schedule', filter: `athlete_connection_id=eq.${conn.id}` },
+            () => {
+              console.log('[useAthleteApp] realtime: athlete_schedule changed — scheduling refetch');
+              if (debounceTimer) clearTimeout(debounceTimer);
+              debounceTimer = setTimeout(() => {
+                refetchSchedule().catch(console.error);
+              }, 800);
+            },
+          )
+          .subscribe((status) => {
+            console.log('[useAthleteApp] realtime channel status:', status);
+          });
+
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load athlete data');
       } finally {
         setLoading(false);
       }
     }
+
+    // Re-fetch schedule when athlete returns to the tab (covers "already had app open" case)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refetchSchedule().catch(console.error);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     load();
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      if (channel) supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, authLoading, isAthlete]);
 
   const refetchLogs = useCallback(async () => {
@@ -396,5 +446,5 @@ export function useAthleteApp() {
     if (error) throw error;
   }, [connection]);
 
-  return { connection, schedule, sessionLogs, loading, error, isAthlete, getTodayEntry, getUpcomingDays, updateProfile, getSessionLog, refetchLogs, moveSession, submitTestResult };
+  return { connection, schedule, sessionLogs, loading, error, isAthlete, getTodayEntry, getUpcomingDays, updateProfile, getSessionLog, refetchLogs, refetchSchedule, moveSession, submitTestResult };
 }
