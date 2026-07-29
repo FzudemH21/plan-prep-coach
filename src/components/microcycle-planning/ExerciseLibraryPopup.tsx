@@ -290,6 +290,10 @@ export function ExerciseLibraryPopup({
     });
 
     onSelectExercises(selectedExercises);
+    // Clear selection immediately so reopening the dialog starts fresh.
+    // (The parent may close by flipping isOpen without calling handleClose,
+    // which means onOpenChange never fires and selectedItems would persist.)
+    setSelectedItems(new Set());
   };
 
   const handleClose = () => {
