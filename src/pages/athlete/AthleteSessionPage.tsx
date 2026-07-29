@@ -225,10 +225,13 @@ interface CompletionSheetProps {
   /** ID of the in-progress row created when "Start Workout" was tapped.
    *  When present, we UPDATE that row instead of INSERTing a new one. */
   sessionLogId?: string | null;
+  /** When provided, a non-empty session note is forwarded to the athlete-coach chat. */
+  onSendToChat?: (text: string, sessionName: string, date: string) => Promise<void>;
 }
 
 function CompletionSheet({
   open, onClose, connectionId, date, sessionId, sessionName, durationSeconds, setsLogged, onSaved, sessionLogId,
+  onSendToChat,
 }: CompletionSheetProps) {
   const [borgRating, setBorgRating] = useState<number | null>(null);
   const [comment, setComment] = useState('');
@@ -237,11 +240,12 @@ function CompletionSheet({
 
   async function handleSave() {
     setSaving(true);
+    const trimmedComment = comment.trim();
     const completionPayload = {
       completed_at: new Date().toISOString(),
       borg_rating: borgRating,
       duration_seconds: durationSeconds > 0 ? durationSeconds : null,
-      comment: comment.trim() || null,
+      comment: trimmedComment || null,
       sets_logged: setsLogged,
     };
 
@@ -268,6 +272,12 @@ function CompletionSheet({
       toast({ title: 'Error saving session', description: error.message, variant: 'destructive' });
       return;
     }
+
+    // Forward the note to the athlete-coach chat (fire-and-forget, non-blocking)
+    if (trimmedComment && onSendToChat) {
+      onSendToChat(trimmedComment, sessionName, date).catch(() => {/* silent */});
+    }
+
     toast({ title: 'Session logged!' });
     onSaved();
   }
@@ -1987,6 +1997,12 @@ export default function AthleteSessionPage() {
             setsLogged={setsLoggedPayload}
             onSaved={handleSaved}
             sessionLogId={sessionLogId}
+            onSendToChat={async (text, sName, d) => {
+              await chatSend(text, {
+                messageType: 'session_note',
+                reference: { sessionName: sName, date: d },
+              });
+            }}
           />
         )}
 

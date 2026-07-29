@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 
 export type SenderRole = 'coach' | 'athlete';
-export type MessageType = 'text' | 'exercise_comment';
+export type MessageType = 'text' | 'exercise_comment' | 'session_note';
 
 export interface MessageReference {
   exerciseName?: string;

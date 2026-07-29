@@ -153,7 +153,7 @@ function ThreadView({
                 const isOwn = msg.senderRole === 'coach';
                 return (
                   <div key={msg.id} className={cn('flex flex-col', isOwn ? 'items-end' : 'items-start')}>
-                    {msg.messageType === 'exercise_comment' && msg.reference && (
+                    {(msg.messageType === 'exercise_comment' || msg.messageType === 'session_note') && msg.reference && (
                       <button
                         onClick={() => navigate('/athletes', {
                           state: {
@@ -165,10 +165,13 @@ function ThreadView({
                         })}
                         className={cn(
                           'text-xs px-2 py-0.5 rounded-full mb-0.5 max-w-[80%] text-left hover:opacity-80 active:opacity-60 transition-opacity hover:underline underline-offset-2',
-                          isOwn ? 'bg-primary/10 text-primary' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                          msg.messageType === 'session_note'
+                            ? (isOwn ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300')
+                            : (isOwn ? 'bg-primary/10 text-primary' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300')
                         )}
                       >
-                        📎 {[
+                        {msg.messageType === 'session_note' ? '📝' : '📎'}{' '}
+                        {[
                           msg.reference.exerciseName,
                           msg.reference.sectionName,
                           msg.reference.sessionName,

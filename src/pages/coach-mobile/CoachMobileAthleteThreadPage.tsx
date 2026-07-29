@@ -181,16 +181,18 @@ export default function CoachMobileAthleteThreadPage() {
                 const isOwn = msg.senderRole === 'coach';
                 return (
                   <div key={msg.id} className={cn('flex flex-col', isOwn ? 'items-end' : 'items-start')}>
-                    {msg.messageType === 'exercise_comment' && msg.reference && (
+                    {(msg.messageType === 'exercise_comment' || msg.messageType === 'session_note') && msg.reference && (
                       <span
                         className={cn(
                           'text-xs px-2 py-0.5 rounded-full mb-0.5 max-w-[80%] text-left',
-                          isOwn
-                            ? 'bg-primary/10 text-primary self-end'
-                            : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 self-start'
+                          msg.messageType === 'session_note'
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 self-start'
+                            : (isOwn
+                              ? 'bg-primary/10 text-primary self-end'
+                              : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 self-start')
                         )}
                       >
-                        📎{' '}
+                        {msg.messageType === 'session_note' ? '📝' : '📎'}{' '}
                         {[
                           msg.reference.exerciseName,
                           msg.reference.sectionName,
