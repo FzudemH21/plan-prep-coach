@@ -192,6 +192,12 @@ export function useAthleteApp() {
 
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    // Prevents an orphaned async load() from subscribing after the effect was cleaned up.
+    // Without this, if deps change before load() reaches the subscription code, cleanup
+    // runs with channel=null (no-op), then load() finishes and subscribes. The next
+    // effect run hits the same channel name (already subscribed) → throws the
+    // "cannot add postgres_changes callbacks after subscribe()" error.
+    let cancelled = false;
 
     async function load() {
       console.log(`[useAthleteApp] ▶ loading for user=${user!.id} role=${user!.user_metadata?.role}`);
@@ -264,29 +270,40 @@ export function useAthleteApp() {
           setsLogged: (row.sets_logged as unknown[]) || [],
         })));
 
-        // Subscribe to Supabase Realtime for live schedule updates (e.g. coach adds a session).
-        // Debounce by 800 ms: a coach sync upserts many rows at once — wait for the burst to finish.
-        channel = supabase
-          .channel(`athlete-schedule-${conn.id}`)
-          .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'athlete_schedule', filter: `athlete_connection_id=eq.${conn.id}` },
-            () => {
-              console.log('[useAthleteApp] realtime: athlete_schedule changed — scheduling refetch');
-              if (debounceTimer) clearTimeout(debounceTimer);
-              debounceTimer = setTimeout(() => {
-                refetchSchedule().catch(console.error);
-              }, 800);
-            },
-          )
-          .subscribe((status) => {
-            console.log('[useAthleteApp] realtime channel status:', status);
-          });
+        // Guard: if the effect was cleaned up while we were awaiting above, bail now.
+        // This prevents the orphaned load() from subscribing a channel after cleanup
+        // already ran (with channel=null). Without this, the next effect run would hit
+        // the same channel name (already subscribed) → "cannot add postgres_changes
+        // callbacks after subscribe()" → crash.
+        if (cancelled) return;
+
+        // Non-fatal try/catch: a Realtime subscription failure must never crash the
+        // entire athlete app — the schedule already loaded via refetchSchedule() above.
+        try {
+          channel = supabase
+            .channel(`athlete-schedule-${conn.id}`)
+            .on(
+              'postgres_changes',
+              { event: '*', schema: 'public', table: 'athlete_schedule', filter: `athlete_connection_id=eq.${conn.id}` },
+              () => {
+                console.log('[useAthleteApp] realtime: athlete_schedule changed — scheduling refetch');
+                if (debounceTimer) clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                  refetchSchedule().catch(console.error);
+                }, 800);
+              },
+            )
+            .subscribe((status) => {
+              console.log('[useAthleteApp] realtime channel status:', status);
+            });
+        } catch (realtimeErr) {
+          console.warn('[useAthleteApp] realtime subscription failed (non-fatal):', realtimeErr);
+        }
 
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load athlete data');
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load athlete data');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
@@ -301,6 +318,7 @@ export function useAthleteApp() {
     load();
 
     return () => {
+      cancelled = true;
       if (debounceTimer) clearTimeout(debounceTimer);
       if (channel) supabase.removeChannel(channel);
       document.removeEventListener('visibilitychange', handleVisibility);
