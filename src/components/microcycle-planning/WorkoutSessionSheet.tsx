@@ -118,6 +118,10 @@ interface WorkoutSessionSheetProps {
   // When true, skip reading session intensity from global localStorage keys
   // and always derive from dailyIntensityData (used in Athlete Calendar context)
   useExternalIntensityOnly?: boolean;
+  // Editing-state session intensity from the parent's sessionIntensities map.
+  // Takes priority over liveScheduleEntry so a coach's unsaved desktop edit is
+  // immediately reflected when the sheet is (re)opened before Realtime propagates.
+  editedSessionIntensity?: IntensityLevel;
   // When true, use AdHocMethodSelectionDialog instead of MethodSelectionDialog
   // Allows selecting from all toolbox methods instead of periodization-configured methods
   isAdHocSession?: boolean;
@@ -354,6 +358,7 @@ export function WorkoutSessionSheet({
   isLibrarySession = false,
   athleteConnectionId,
   liveScheduleEntry,
+  editedSessionIntensity,
 }: WorkoutSessionSheetProps) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -1124,7 +1129,7 @@ export function WorkoutSessionSheet({
             if (liveSession.notes !== undefined && liveSession.notes !== null) {
               setSessionComments(liveSession.notes);
             }
-            if (liveSession.intensity) {
+            if (liveSession.intensity && !editedSessionIntensity) {
               setSessionIntensity(liveSession.intensity as IntensityLevel);
             }
 
@@ -1258,7 +1263,7 @@ export function WorkoutSessionSheet({
         const liveSession = liveScheduleEntry.sessions[sessionIndex];
         if (liveSession) {
           if (liveSession.notes !== undefined && liveSession.notes !== null) setSessionComments(liveSession.notes);
-          if (liveSession.intensity) setSessionIntensity(liveSession.intensity as IntensityLevel);
+          if (liveSession.intensity && !editedSessionIntensity) setSessionIntensity(liveSession.intensity as IntensityLevel);
           if ((liveSession.exercises ?? []).length > 0) {
             // Only lock the override flag when we actually got exercises — if exercises
             // are empty here (Supabase sync not yet complete), leave the flag false so the
@@ -1300,7 +1305,7 @@ export function WorkoutSessionSheet({
     if (liveSession.notes !== undefined && liveSession.notes !== null) {
       setSessionComments(liveSession.notes);
     }
-    if (liveSession.intensity) {
+    if (liveSession.intensity && !editedSessionIntensity) {
       setSessionIntensity(liveSession.intensity as IntensityLevel);
     }
 
@@ -1511,13 +1516,15 @@ export function WorkoutSessionSheet({
 
       // Load session intensity - behavior depends on context
       if (useExternalIntensityOnly) {
-        // In Athlete Calendar context: prefer session-level intensity from Supabase
-        // (set by mobile coach app) over the plan-derived day intensity.
-        // Fall back to day intensity when Supabase data hasn't arrived yet.
+        // Priority order:
+        // 1. editedSessionIntensity — local editing state (desktop unsaved edit, wins
+        //    immediately so reopening before Realtime fires shows the correct value)
+        // 2. liveScheduleEntry — Supabase live value (from mobile coach app or prior sync)
+        // 3. currentIntensity — plan-derived day intensity fallback
         const liveSessionIntensity = liveScheduleEntry?.sessions[sessionIndex]?.intensity;
-        const resolvedIntensity = (liveSessionIntensity != null && liveSessionIntensity !== '')
-          ? liveSessionIntensity
-          : (currentIntensity || 'moderate');
+        const resolvedIntensity = editedSessionIntensity
+          ?? ((liveSessionIntensity != null && liveSessionIntensity !== '') ? liveSessionIntensity : null)
+          ?? (currentIntensity || 'moderate');
         setSessionIntensity(resolvedIntensity as IntensityLevel);
       } else {
         // In Training Wizard context: try localStorage first, then fall back to day intensity

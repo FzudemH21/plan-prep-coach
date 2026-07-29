@@ -417,10 +417,11 @@ export function AthleteCalendarDayCell({
                 )}
               >
                 {day.sessions.map((session, idx) => {
-                  // Look up log by session.id (new format: ${assignmentId}-${date}-${idx}).
-                  // Fall back to the legacy positional format for logs created before the ID change.
-                  const sessionLog = sessionLogs?.get(session.id)
-                    ?? sessionLogs?.get(`${day.dateString}-${session.sessionIndex}`);
+                  // Look up log by session.id (format: ${assignmentId}-${date}-${idx}).
+                  // The legacy positional fallback was removed: all current sessions use the
+                  // assignment-prefixed format, so the fallback caused stale "In Progress" state
+                  // when an old log (from a deleted assignment) shared the same date+index.
+                  const sessionLog = sessionLogs?.get(session.id);
                   const isCompleted = !!sessionLog?.completed_at;
                   const isInProgress = !!sessionLog?.started_at && !sessionLog?.completed_at;
                   const isLocked = isCompleted || isInProgress;

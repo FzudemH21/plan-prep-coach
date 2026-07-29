@@ -2851,6 +2851,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           selectedAthleteId={athlete.id}
           athletePerformanceParameters={athleteData.getAthletePerformanceParameters(athlete.id)}
           liveScheduleEntry={liveScheduleMap.get(selectedSessionInfo.dayDate)}
+          editedSessionIntensity={
+            editing.sessionIntensities?.[`${selectedSessionInfo.dayDate}-${selectedSessionInfo.sessionIndex}`] ?? undefined
+          }
           onOpenAIAssistant={(ctx: FocusedSessionContext) => {
             setFocusedSessionCtx(ctx);
             setAiOpenTrigger(prev => prev + 1);
