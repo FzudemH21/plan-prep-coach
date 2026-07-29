@@ -329,9 +329,28 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         setTestEventDays(storedTestEventDays);
 
         // Build training days using stored intensity data
-        const days = parsed.trainingDays?.length > 0
+        const rawDays: TrainingDay[] = parsed.trainingDays?.length > 0
           ? parsed.trainingDays
           : buildTrainingDaysFromAssignment(assignment, storedDailyIntensity);
+
+        // Reconcile: any date present in daySplitStates with sessions > 0 but absent
+        // from trainingDays was added via handleAddSession before the fix that also
+        // appended to trainingDays. Without this, those sessions are visible in the
+        // calendar but never included in the Supabase sync.
+        const tdDates = new Set(rawDays.map((d: TrainingDay) => d.date));
+        const extraDays: TrainingDay[] = [];
+        for (const [date, count] of Object.entries(storedDaySplitStates)) {
+          if ((count as number) > 0 && !tdDates.has(date)) {
+            extraDays.push({
+              date,
+              sessions: count as number,
+              sessionNames: Array.from({ length: count as number }, (_, i) => `Session ${i + 1}`),
+              isTrainingDay: true,
+              intensity: 'moderate' as IntensityLevel,
+            });
+          }
+        }
+        const days = extraDays.length > 0 ? [...rawDays, ...extraDays] : rawDays;
         setTrainingDays(days);
 
         // Set the fingerprint to match loaded data so we don't immediately re-save
