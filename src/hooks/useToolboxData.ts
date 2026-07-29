@@ -213,13 +213,27 @@ export function useToolboxData() {
     await saveData({ ...data, entries: data.entries.filter(e => e.id !== id) });
   }, [data, saveData]);
 
+  const setMethodDescription = useCallback(async (categorySubCategoryKey: string, description: string) => {
+    const existing = data.methodDescriptions ?? {};
+    const updated = { ...existing };
+    if (description) {
+      updated[categorySubCategoryKey] = description;
+    } else {
+      delete updated[categorySubCategoryKey];
+    }
+    await saveData({ ...data, methodDescriptions: updated });
+  }, [data, saveData]);
+
   const deleteSubCategory = useCallback(async (categorySubCategoryKey: string) => {
     const [category, subCategory] = categorySubCategoryKey.split('|||');
+    const updatedDescriptions = { ...(data.methodDescriptions ?? {}) };
+    delete updatedDescriptions[categorySubCategoryKey];
     await saveData({
       ...data,
       entries: data.entries.filter(
         e => !(e.category === category && e.subCategory === subCategory)
       ),
+      methodDescriptions: updatedDescriptions,
     });
   }, [data, saveData]);
 
@@ -240,11 +254,20 @@ export function useToolboxData() {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       subCategory: newSubCategory,
     }));
-    await saveData({ ...data, entries: [...data.entries, ...newEntries] });
+    const updatedDescriptions = { ...(data.methodDescriptions ?? {}) };
+    const srcDesc = updatedDescriptions[categorySubCategoryKey];
+    if (srcDesc) updatedDescriptions[`${category}|||${newSubCategory}`] = srcDesc;
+    await saveData({ ...data, entries: [...data.entries, ...newEntries], methodDescriptions: updatedDescriptions });
   }, [data, saveData]);
 
   const renameSubCategory = useCallback(async (categorySubCategoryKey: string, newSubCategory: string) => {
     const [category, subCategory] = categorySubCategoryKey.split('|||');
+    const updatedDescriptions = { ...(data.methodDescriptions ?? {}) };
+    const desc = updatedDescriptions[categorySubCategoryKey];
+    if (desc !== undefined) {
+      delete updatedDescriptions[categorySubCategoryKey];
+      updatedDescriptions[`${category}|||${newSubCategory}`] = desc;
+    }
     await saveData({
       ...data,
       entries: data.entries.map(e =>
@@ -252,11 +275,18 @@ export function useToolboxData() {
           ? { ...e, subCategory: newSubCategory }
           : e
       ),
+      methodDescriptions: updatedDescriptions,
     });
   }, [data, saveData]);
 
   const renameMethodCategory = useCallback(async (categorySubCategoryKey: string, newCategory: string) => {
     const [category, subCategory] = categorySubCategoryKey.split('|||');
+    const updatedDescriptions = { ...(data.methodDescriptions ?? {}) };
+    const desc = updatedDescriptions[categorySubCategoryKey];
+    if (desc !== undefined) {
+      delete updatedDescriptions[categorySubCategoryKey];
+      updatedDescriptions[`${newCategory}|||${subCategory}`] = desc;
+    }
     await saveData({
       ...data,
       entries: data.entries.map(e =>
@@ -264,6 +294,7 @@ export function useToolboxData() {
           ? { ...e, category: newCategory }
           : e
       ),
+      methodDescriptions: updatedDescriptions,
     });
   }, [data, saveData]);
 
@@ -356,6 +387,7 @@ export function useToolboxData() {
     renameSubCategory,
     renameMethodCategory,
     reorderParameters,
+    setMethodDescription,
     importData,
     exportData,
     saveData,

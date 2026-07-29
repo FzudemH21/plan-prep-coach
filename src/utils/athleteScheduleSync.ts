@@ -865,6 +865,34 @@ export async function syncAthleteSchedule(
     // Non-fatal — if we can't read existing data, proceed without preserving.
   }
 
+  // ── Restore existing exercises when none were distributed ────────────────────
+  // When exerciseDistribution is empty (e.g. initializeFromAssignment was used because
+  // no desktop localStorage snapshot exists — typical for freshly-assigned plans that
+  // have not yet been edited in the athlete calendar), fall back to the full exercise
+  // content from the prefetched athlete_schedule rows.  This prevents the auto-sync
+  // from clearing plan exercises that the assign-time sync already wrote to Supabase
+  // when the coach only adds a session or edits intensities on a plan with no local
+  // exercise snapshot.  New sessions (index ≥ existing count) are left empty as intended.
+  // This runs BEFORE the mobileEdited / mobileAdded passes so they can still apply
+  // their delta updates on top of the restored exercise arrays.
+  if (exercises.length === 0 && existingSessionsMap.size > 0) {
+    for (const row of rows) {
+      const existingSessions = existingSessionsMap.get(row.date);
+      if (!existingSessions || existingSessions.length === 0) continue;
+      row.sessions = row.sessions.map((session, sIdx) => {
+        const existing = existingSessions[sIdx];
+        if (!existing) return session; // Newly added session — keep empty
+        return {
+          ...session,
+          exercises: existing.exercises ?? [],
+          exerciseCount: (existing.exercises ?? []).length,
+        };
+      });
+    }
+    console.log('[syncAthleteSchedule] no exercises passed — restored existing exercises from athlete_schedule for ' +
+      existingSessionsMap.size + ' date(s)');
+  }
+
   // Apply preserved mobile params on top of the newly computed rows.
   if (mobileParamsMap.size > 0) {
     for (const row of rows) {

@@ -7,6 +7,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { DisplayModeProvider } from "@/contexts/DisplayModeContext";
 import { CustomLibrariesProvider } from "@/contexts/CustomLibrariesContext";
 import { WizardDataProvider } from "@/contexts/WizardDataContext";
+import { AIChatProvider } from "@/contexts/AIChatContext";
 import { AthleteAppLayout } from "@/components/athlete-app/AthleteAppLayout";
 import { CoachMobileLayout } from "@/components/coach-mobile/CoachMobileLayout";
 import CoachMobileAthletesPage from "./pages/coach-mobile/CoachMobileAthletesPage";
@@ -194,11 +195,13 @@ const App = () => (
     <TooltipProvider>
       <DisplayModeProvider>
         <CustomLibrariesProvider>
+          <AIChatProvider>
           <WizardDataProvider>
           <Toaster />
           <Sonner />
           <AppWithLanguagePicker />
           </WizardDataProvider>
+          </AIChatProvider>
         </CustomLibrariesProvider>
       </DisplayModeProvider>
     </TooltipProvider>

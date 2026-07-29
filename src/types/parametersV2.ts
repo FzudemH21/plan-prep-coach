@@ -29,6 +29,7 @@ export interface ParameterMethodV2 {
   methodId: string;                // "Sprinting - Acceleration" format from Toolbox
   rationale?: string;              // The "why" - optional explanation
   evidence?: string;               // Research citations / supporting evidence
+  evidenceQuality?: string;        // GRADE-inspired: "strong" | "moderate" | "preliminary" | "expert_opinion"
 }
 
 export interface ParametersDatabaseV2 {

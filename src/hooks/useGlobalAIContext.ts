@@ -24,12 +24,20 @@ export function useGlobalAIContext(includeExerciseDetails = false): string {
     const sections: string[] = [];
 
     // ── Training Toolbox ─────────────────────────────────────────────────────
-    const methodMap = new Map<string, { params: string[]; categories: Set<string> }>();
+    const methodMap = new Map<string, { params: string[]; categories: Set<string>; descKey: string }>();
     for (const entry of toolboxData?.entries ?? []) {
       const methodId = entry.subCategory
         ? `${entry.category} - ${entry.subCategory}`
         : entry.category;
-      if (!methodMap.has(methodId)) methodMap.set(methodId, { params: [], categories: new Set() });
+      if (!methodMap.has(methodId)) {
+        methodMap.set(methodId, {
+          params: [],
+          categories: new Set(),
+          descKey: entry.subCategory
+            ? `${entry.category}|||${entry.subCategory}`
+            : `${entry.category}|||`,
+        });
+      }
       const slot = methodMap.get(methodId)!;
       if (entry.parameterName) slot.params.push(
         `${entry.parameterName} (${entry.parameterType}${entry.options?.length ? ': ' + entry.options.join('/') : ''})`
@@ -37,11 +45,13 @@ export function useGlobalAIContext(includeExerciseDetails = false): string {
       (entry.exerciseCategories ?? []).forEach((c: string) => slot.categories.add(c));
     }
     if (methodMap.size > 0) {
-      const methodLines = Array.from(methodMap.entries()).map(([method, { params, categories }]) => {
+      const methodLines = Array.from(methodMap.entries()).map(([method, { params, categories, descKey }]) => {
         const splitNote = categories.size > 0
           ? ` [split into categories: ${Array.from(categories).join(', ')}]`
           : ' [not split — assign exercises without a category]';
-        return `- ${method}${splitNote}${params.length ? '\n    Parameters: ' + params.join(', ') : ''}`;
+        const desc = toolboxData?.methodDescriptions?.[descKey];
+        const descLine = desc ? `\n    Description: ${desc}` : '';
+        return `- ${method}${splitNote}${descLine}${params.length ? '\n    Parameters: ' + params.join(', ') : ''}`;
       });
       sections.push(`## Training Toolbox (${methodMap.size} methods)\n${methodLines.join('\n')}`);
     } else {

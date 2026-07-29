@@ -21,13 +21,10 @@ import { useAuth } from '@/hooks/useAuth';
 // ── Config ────────────────────────────────────────────────────────────────────
 
 /** Minimum cosine similarity score to include a chunk (0–1). */
-const MATCH_THRESHOLD = 0.35;
+const MATCH_THRESHOLD = 0.30;
 
 /** Maximum number of chunks to inject per query. */
-const MATCH_COUNT = 5;
-
-/** Maximum characters per chunk in the formatted output. */
-const MAX_CHUNK_CHARS = 600;
+const MATCH_COUNT = 15;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -79,14 +76,8 @@ export function useRAGRetrieval() {
         if (chunks.length === 0) return '';
 
         // 3. Format chunks into an injectable string block
-        // Deduplicate by document so each source appears grouped
         const formatted = chunks
-          .map((chunk) => {
-            const preview = chunk.content.length > MAX_CHUNK_CHARS
-              ? chunk.content.slice(0, MAX_CHUNK_CHARS) + '…'
-              : chunk.content;
-            return `Source: ${chunk.document_name}\n${preview}`;
-          })
+          .map((chunk) => `Source: ${chunk.document_name}\n${chunk.content}`)
           .join('\n\n---\n\n');
 
         return formatted;

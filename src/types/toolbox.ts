@@ -26,4 +26,5 @@ export interface ToolboxEntry {
 export interface ToolboxDatabase {
   entries: ToolboxEntry[];
   lastUpdated: string;
+  methodDescriptions?: Record<string, string>; // key: "category|||subCategory"
 }

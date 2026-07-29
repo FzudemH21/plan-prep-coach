@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { sendMessage, type Message } from "@/utils/anthropicApi";
 import { useCoachProfile } from "@/hooks/useCoachProfile";
 import { useSpeechInput } from "@/hooks/useSpeechInput";
+import { useAIChatContext } from "@/contexts/AIChatContext";
+import { useRAGRetrieval } from "@/hooks/useRAGRetrieval";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,7 +28,7 @@ export type ApplySuggestion =
   /** MacrocyclePage Steps 1 & 2 — delete an existing event entirely */
   | { type: "remove_event"; eventName: string }
   /** MacrocyclePage Step 3 — add new methods to the training plan, each with an optional rationale */
-  | { type: "add_methods"; methods: Array<{ name: string; rationale?: string; evidence?: string }> }
+  | { type: "add_methods"; methods: Array<{ name: string; rationale?: string; evidence?: string; evidenceQuality?: string }> }
   | { type: "set_mesocycle_config"; count: number; weeksDuration: number }
   /** MesocyclePage Step 1 — configure the full mesocycle/microcycle structure with per-microcycle durations and intensities */
   | { type: "configure_mesocycles"; mesocycles: Array<{ name?: string; microcycles: Array<{ duration: number; intensity?: string; name?: string }> }> }
@@ -35,7 +37,7 @@ export type ApplySuggestion =
   /** MesocyclePage Step 3 — distribute existing methods across specific mesocycles */
   | { type: "allocate_methods"; allocations: Array<{ methodName: string; mesocycleNames: string[] }> }
   /** MesocyclePage Step 3 — add new training methods to the plan */
-  | { type: "add_methods"; methods: Array<{ name: string; rationale?: string; evidence?: string }> }
+  | { type: "add_methods"; methods: Array<{ name: string; rationale?: string; evidence?: string; evidenceQuality?: string }> }
   /** MacrocyclePage Step 3 & MesocyclePage Step 3 — remove methods from the plan entirely */
   | { type: "remove_methods"; methodNames: string[] }
   | { type: "set_method_intensities"; methodName: string; frequency: number; sets: number; reps: string; intensity: string }
@@ -107,6 +109,10 @@ export type ApplySuggestion =
   | { type: "add_parameter_method"; parameterName: string; methodId: string; rationale?: string; evidence?: string }
   /** Parameter Database — link multiple training methods to parameters at once */
   | { type: "add_parameter_methods_bulk"; links: Array<{ parameterName: string; methodId: string; rationale?: string; evidence?: string }> }
+  /** Parameter Database — update rationale/evidence on an existing method link */
+  | { type: "update_parameter_method"; parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string }
+  /** Parameter Database — remove a training method link from a parameter */
+  | { type: "remove_parameter_method"; parameterName: string; methodId: string }
   /** Exercise Library — add a new exercise row */
   | { type: "library_add_exercise"; libraryId: string; data: Record<string, string>; description?: string; videoUrl?: string }
   /** Exercise Library — delete an exercise by id (or name as fallback) */
@@ -116,11 +122,19 @@ export type ApplySuggestion =
   /** Exercise Library — add a new column */
   | { type: "library_add_column"; libraryId: string; name: string; columnType: "text" | "select" | "textarea"; options?: string[] }
   /** Exercise Library — delete a column by id (or name as fallback) */
-  | { type: "library_delete_column"; libraryId: string; columnId?: string; columnName?: string };
+  | { type: "library_delete_column"; libraryId: string; columnId?: string; columnName?: string }
+  /** Training Toolbox — set or clear the description for a method (key: "category|||subCategory") */
+  | { type: "set_method_description"; methodKey: string; description: string };
 
 export interface WizardAIAssistantProps {
   /** Human-readable label for the current wizard step, e.g. "Goal & Method Selection" */
   stepLabel: string;
+  /**
+   * Stable key for this chat instance. History is stored in a session-level context
+   * keyed by this value, so navigating away and back restores the conversation.
+   * Defaults to stepLabel when omitted.
+   */
+  chatId?: string;
   /** A plain-text snapshot of the current wizard state built by the parent page */
   wizardContext: string;
   /**
@@ -204,6 +218,7 @@ Specific triggers — emit the relevant action block even without an explicit re
 - Coach asks what exercises to use, or says "recommend exercises for [method]" → emit assign_exercises (library exercises only)
 - Coach mentions a goal with no test dates yet and the plan has a date range → proactively suggest scheduling tests and emit schedule_tests
 - At Step 4: whenever you discuss or recommend periodization for a method, ALWAYS check the "Available programming templates" list first. If a relevant template exists, mention it by name and offer to apply it via apply_template. Do this even if the coach did not ask about templates.
+- Coach asks to edit, update, improve, or rewrite rationale/evidence/evidenceQuality for a method already linked to a parameter → immediately emit update_parameter_method (NOT add_parameter_method — check "Existing method links" first).
 
 Exception: always confirm before emitting destructive actions (delete_session, remove_methods, remove_goal, remove_event).
 
@@ -220,8 +235,8 @@ Available types and their fields:
   Creates a new event entry without scheduling any dates. Use ONLY when the event does not already exist in the Events list in context.
 - remove_event: {"type":"remove_event","eventName":"<exact event name from the Events list in context>"}
   Deletes an event entirely (removes it and all its scheduled dates). Use the EXACT name from the Events list.
-- add_methods: {"type":"add_methods","methods":[{"name":"<exact method name>","rationale":"<why this method supports the goal>","evidence":"<optional: research citations or supporting evidence>"},{"name":"<exact method name>","rationale":"<rationale>"}]}
-  ONLY suggest or add methods whose exact name appears in the "Training Toolbox" list in context. Never invent method names from general knowledge. Always include a rationale for methods that are not goal-linked. evidence is optional — include when you can cite specific research.
+- add_methods: {"type":"add_methods","methods":[{"name":"<exact method name>","rationale":"<why this method supports the goal>","evidence":"<optional: research citations or supporting evidence>","evidenceQuality":"<optional: strong|moderate|preliminary|expert_opinion>"},{"name":"<exact method name>","rationale":"<rationale>"}]}
+  ONLY suggest or add methods whose exact name appears in the "Training Toolbox" list in context. Never invent method names from general knowledge. Always include a rationale for methods that are not goal-linked. evidence is optional — include when you can cite specific research. evidenceQuality rates the strength of that evidence using GRADE-inspired levels: "strong" (systematic review / meta-analysis), "moderate" (RCTs / well-controlled studies), "preliminary" (observational / cohort / cross-sectional), "expert_opinion" (case reports, coaching practice, expert consensus). Include it whenever you also provide evidence.
 - set_mesocycle_config: {"type":"set_mesocycle_config","count":<number>,"weeksDuration":<weeks per mesocycle>}
   Use for quick uniform setup (all mesocycles same length, all microcycles 7 days). For variable durations use configure_mesocycles instead.
 - configure_mesocycles: {"type":"configure_mesocycles","mesocycles":[{"name":"Mesocycle 1","microcycles":[{"duration":7,"intensity":"2"},{"duration":7,"intensity":"5"},{"duration":7,"intensity":"7"},{"duration":7,"intensity":"1"}]},{"name":"Mesocycle 2","microcycles":[{"duration":7,"intensity":"5"},{"duration":7,"intensity":"7"},{"duration":5,"intensity":"9"},{"duration":2,"intensity":"1"}]}]}
@@ -319,8 +334,15 @@ Available types and their fields:
   Use this when adding multiple interactions at once. Preferred over add_interaction when adding 2 or more interactions.
 - add_parameter_method: {"type":"add_parameter_method","parameterName":"<exact name of existing parameter>","methodId":"<exact method ID from wizard context>","rationale":"<optional: why this method improves this parameter>","evidence":"<optional: research citations or supporting evidence>"}
   Only use method IDs as listed in the wizard context. Do not invent method IDs.
+  IMPORTANT: Before emitting this, check the "Existing method links" section of the context. If a link between this parameterName and methodId ALREADY EXISTS, use update_parameter_method instead — do NOT emit add_parameter_method for an existing link.
 - add_parameter_methods_bulk: {"type":"add_parameter_methods_bulk","links":[{"parameterName":"<exact parameter name>","methodId":"<exact method ID from wizard context>","rationale":"<optional>","evidence":"<optional: research citations>"},{"parameterName":"<exact parameter name>","methodId":"<exact method ID from wizard context>"}]}
   Use this when linking multiple training methods to parameters at once. Preferred over add_parameter_method when adding 2 or more links.
+  IMPORTANT: For any link where parameterName+methodId already appears in "Existing method links", emit update_parameter_method for that pair instead of including it here.
+- update_parameter_method: {"type":"update_parameter_method","parameterName":"<exact parameter name>","methodId":"<exact method ID>","rationale":"<new rationale text>","evidence":"<optional: new evidence>","evidenceQuality":"<optional: strong|moderate|preliminary|expert_opinion>"}
+  ALWAYS use this when the coach wants to edit, change, improve, or rewrite the rationale, evidence, or evidence quality for a method that is already linked to a parameter. Do NOT use add_parameter_method for existing links.
+  Use ONLY parameterNames and methodIds listed in the "Existing method links" section of the wizard context. Supply only the fields you want to change; omit fields you want to leave as-is. To clear a field, set it to an empty string. GRADE-inspired evidenceQuality values: strong = systematic review/meta-analysis; moderate = RCT/well-controlled study; preliminary = observational/cohort evidence; expert_opinion = case reports/coaching practice.
+- remove_parameter_method: {"type":"remove_parameter_method","parameterName":"<exact parameter name>","methodId":"<exact method ID>"}
+  Removes a training method link from a parameter entirely. Always confirm with the coach before emitting — this is irreversible. Use exact parameterName and methodId as shown in the "Existing method links" section of the wizard context.
 - library_add_exercise: {"type":"library_add_exercise","libraryId":"<exact library id from context>","data":{"<column name>":"<value>","<column name>":"<value>"},"description":"<optional notes or description>","videoUrl":"<optional video url>"}
   Adds a new exercise row to the library. Use column names EXACTLY as listed in the Library Columns section of context. libraryId must match the id shown in context. Omit any column you don't have a value for — do not include empty strings.
 - library_delete_exercise: {"type":"library_delete_exercise","libraryId":"<exact library id>","exerciseId":"<exact id from context>","exerciseName":"<name for confirmation>"}
@@ -331,6 +353,8 @@ Available types and their fields:
   Adds a new column to the library. columnType is "text", "select", or "textarea". For "select" type include "options" array with dropdown choices. For text/textarea omit options or leave empty.
 - library_delete_column: {"type":"library_delete_column","libraryId":"<exact library id>","columnId":"<exact id from context>","columnName":"<name for confirmation>"}
   Deletes a column from the library. All exercise data for this column will be permanently lost. Always confirm with the coach before applying. Use the exact columnId from context.
+- set_method_description: {"type":"set_method_description","methodKey":"<Category|||SubCategory>","description":"<description text>"}
+  Sets or updates the coach's description for a training method in the Toolbox. methodKey must be the exact "Category|||SubCategory" key (three pipe characters, no spaces around them). Use the category and method names exactly as listed in the Training Toolbox section of context. To clear a description, set description to an empty string. Emit this immediately when the coach asks you to write, set, or update a method description — do not wait for confirmation.
 
 Rules:
 - You may include MULTIPLE [[APPLY: ...]] blocks in one message — one per action. Place them all at the very end of your message.
@@ -608,6 +632,10 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return `Link method to ${action.parameterName}${action.rationale ? `: ${action.rationale.slice(0, 60)}…` : ""}`;
     case "add_parameter_methods_bulk":
       return `Link ${action.links.length} method${action.links.length !== 1 ? "s" : ""} to parameters: ${action.links.map((l) => `${l.methodId} → ${l.parameterName}`).join(", ")}`;
+    case "update_parameter_method":
+      return `Update method link: ${action.methodId} → ${action.parameterName}`;
+    case "remove_parameter_method":
+      return `Remove method link: ${action.methodId} from ${action.parameterName}`;
     case "library_add_exercise":
       return `Add exercise to library`;
     case "library_delete_exercise":
@@ -621,6 +649,10 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return `Add column: "${action.name}" (${action.columnType})`;
     case "library_delete_column":
       return `Delete column: "${action.columnName ?? action.columnId}"`;
+    case "set_method_description":
+      return action.description
+        ? `Set description for ${action.methodKey.replace('|||', ' → ')}: "${action.description.slice(0, 60)}${action.description.length > 60 ? '…' : ''}"`
+        : `Clear description for ${action.methodKey.replace('|||', ' → ')}`;
     case "apply_template":
       return `Apply template "${action.templateName ?? action.templateId}" to ${action.methodName}${action.mesocycleName ? ` (${action.mesocycleName} only)` : ''}`;
     case "save_as_template":
@@ -678,13 +710,13 @@ function SuggestionGroupCard({
         {actions.length === 1 ? "Suggested action" : `${actions.length} suggested actions`}
       </div>
       {groupSummary ? (
-        <p className="text-xs text-foreground leading-snug">{groupSummary}</p>
+        <p className="text-xs text-foreground leading-snug break-words">{groupSummary}</p>
       ) : (
         <ul className="space-y-0.5">
           {actions.map((action, i) => (
             <li key={i} className="text-xs text-foreground leading-snug flex gap-1.5">
               {actions.length > 1 && <span className="text-muted-foreground shrink-0">{i + 1}.</span>}
-              <span>{getSuggestionPreview(action)}</span>
+              <span className="break-words min-w-0">{getSuggestionPreview(action)}</span>
             </li>
           ))}
         </ul>
@@ -748,18 +780,19 @@ function AssistantMessage({
   const cleanText = text.replace(APPLY_REGEX, "").trim();
 
   return (
-    <span>
+    <div className="min-w-0">
       <ChatMarkdown text={cleanText} />
       {suggestions.length > 0 && (
         <SuggestionGroupCard actions={suggestions} onApply={onApply ?? (() => {})} onApplyAll={onApplyAll} />
       )}
-    </span>
+    </div>
   );
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function WizardAIAssistant({
+  chatId,
   stepLabel,
   wizardContext,
   coachMemoryContext,
@@ -772,6 +805,7 @@ export function WizardAIAssistant({
   focusedSessionContext,
 }: WizardAIAssistantProps) {
   const { profile } = useCoachProfile();
+  const { retrieve } = useRAGRetrieval();
   const [isOpen, setIsOpen] = useState(false);
 
   // Open the panel whenever forceOpen counter increments
@@ -779,10 +813,18 @@ export function WizardAIAssistant({
     if (forceOpen && forceOpen > 0) setIsOpen(true);
   }, [forceOpen]);
 
-  const [messages, setMessages] = useState<Message[]>([]);
+  // Chat history lives in session-level context so it survives page navigation.
+  const resolvedChatId = chatId ?? stepLabel;
+  const aiChat = useAIChatContext();
+  const messages = aiChat?.chats[resolvedChatId]?.messages ?? [];
+  const setChatMessages = aiChat?.setMessages;
+
+  // Ref always holds the latest messages — used in async callbacks to avoid stale closures.
+  const messagesRef = useRef<Message[]>([]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const hasOpened = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef(input);
   useEffect(() => { inputRef.current = input; }, [input]);
@@ -825,22 +867,12 @@ export function WizardAIAssistant({
   // and use a static greeting — sending wizardContext would cause the AI to
   // volunteer unsolicited analysis of existing content.
   const generateOpener = useCallback(async () => {
-    if (hasOpened.current) return;
-    hasOpened.current = true;
-
-    if (assistantRole) {
-      setMessages([{
-        role: "assistant",
-        content: `Hi! How can I help you?`,
-      }]);
-      return;
-    }
-
-    setMessages([{
+    if (messagesRef.current.length > 0) return;
+    setChatMessages?.(resolvedChatId, [{
       role: "assistant",
       content: `Hi! How can I help you?`,
     }]);
-  }, [coachContext, stepLabel, wizardContext, assistantRole, coachMemoryContext]);
+  }, [resolvedChatId, setChatMessages]);
 
   const handleOpen = () => {
     setIsOpen(true);
@@ -856,23 +888,28 @@ export function WizardAIAssistant({
     const text = inputRef.current.trim();
     if (!text) return;
 
-    const newMessages: Message[] = [...messages, { role: "user" as const, content: text }];
-    setMessages(newMessages);
+    const newMessages: Message[] = [...messagesRef.current, { role: "user" as const, content: text }];
+    setChatMessages?.(resolvedChatId, newMessages);
     setInput("");
     setIsLoading(true);
 
     try {
+      // Retrieve fresh, query-relevant chunks for this specific message.
+      // Falls back to the static ragContext prop if retrieval fails or returns nothing.
+      const freshRagContext = await retrieve(text).catch(() => '');
+      const effectiveRagContext = freshRagContext || ragContext;
+
       const reply = await sendMessage(
         newMessages,
-        buildSystemPrompt(coachContext, wizardContext, !!onApplySuggestion, coachMemoryContext, ragContext, assistantRole, globalContext, focusedSessionContext),
+        buildSystemPrompt(coachContext, wizardContext, !!onApplySuggestion, coachMemoryContext, effectiveRagContext, assistantRole, globalContext, focusedSessionContext),
         "claude-sonnet-4-5",
         8192
       );
-      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+      setChatMessages?.(resolvedChatId, [...messagesRef.current, { role: "assistant", content: reply }]);
     } catch (err) {
       console.error("[WizardAIAssistant] sendMessage failed:", err);
       const errMsg = err instanceof Error ? err.message : String(err);
-      setMessages((prev) => [...prev, {
+      setChatMessages?.(resolvedChatId, [...messagesRef.current, {
         role: "assistant",
         content: `Sorry, an error occurred: ${errMsg}`,
       }]);
@@ -923,7 +960,7 @@ export function WizardAIAssistant({
               "fixed right-0 top-0 bottom-0 z-[200]",
               "w-full md:w-[400px]",
               "bg-card border-l shadow-2xl",
-              "flex flex-col"
+              "flex flex-col overflow-x-hidden"
             )}
           >
             {/* Header */}
@@ -970,7 +1007,7 @@ export function WizardAIAssistant({
                       }
                     </div>
                     <div className={cn(
-                      "max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed",
+                      "min-w-0 max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed break-words overflow-hidden",
                       msg.role === "assistant"
                         ? "bg-muted text-foreground rounded-tl-sm"
                         : "bg-primary text-primary-foreground rounded-tr-sm"

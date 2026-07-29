@@ -274,6 +274,61 @@ export function useCoachDocuments() {
   );
 
   /**
+   * Upload multiple files in parallel and commit all successful docs in ONE
+   * atomic write — avoids the stale-closure overwrite bug that occurs when
+   * callers loop over `addDocument` concurrently (each call closes over the
+   * same `index` snapshot and the last commit wins, dropping the rest).
+   *
+   * Returns one result entry per input file so callers can report per-file errors.
+   */
+  const addDocuments = useCallback(
+    async (
+      files: File[],
+      folderId: string | null = null
+    ): Promise<Array<{ file: File; doc?: CoachDocument; error?: string }>> => {
+      const results = await Promise.allSettled(
+        files.map(async (file) => {
+          const id = genId();
+          const ext = file.name.includes('.') ? file.name.split('.').pop() : undefined;
+          const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const storagePath = `${id}${ext ? `.${ext}` : ''}_${safeName}`;
+          await uploadFile(storagePath, file);
+          const doc: CoachDocument = {
+            id,
+            name: file.name,
+            type: file.type || 'application/octet-stream',
+            size: file.size,
+            folderId,
+            uploadedAt: new Date().toISOString(),
+            storagePath,
+          };
+          return doc;
+        })
+      );
+
+      const successDocs: CoachDocument[] = [];
+      const output: Array<{ file: File; doc?: CoachDocument; error?: string }> = [];
+
+      results.forEach((result, i) => {
+        if (result.status === 'fulfilled') {
+          successDocs.push(result.value);
+          output.push({ file: files[i], doc: result.value });
+        } else {
+          const msg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+          output.push({ file: files[i], error: msg });
+        }
+      });
+
+      if (successDocs.length > 0) {
+        commit({ ...index, documents: [...index.documents, ...successDocs] });
+      }
+
+      return output;
+    },
+    [index, commit]
+  );
+
+  /**
    * Delete a document: optimistically removes from local metadata immediately
    * so the UI updates without waiting, then best-effort deletes from Supabase
    * Storage in the background.
@@ -361,6 +416,7 @@ export function useCoachDocuments() {
     renameFolder,
     deleteFolder,
     addDocument,
+    addDocuments,
     deleteDocument,
     moveDocument,
     downloadDocument,

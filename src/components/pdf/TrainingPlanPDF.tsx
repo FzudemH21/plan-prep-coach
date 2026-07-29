@@ -713,8 +713,10 @@ interface TrainingPlanPDFProps {
   athleteDisplayName?: string | null;
   athleteSport?: string | null;
   athleteTeam?: string | null;
-  /** Parameter DB rationale/evidence keyed by methodId */
-  methodRationale?: Record<string, { rationale?: string; evidence?: string }>;
+  /** Parameter DB rationale/evidence per goal, keyed by methodId */
+  methodRationale?: Record<string, {
+    goalContributions: Array<{ goalName: string; rationale?: string; evidence?: string; evidenceQuality?: string }>;
+  }>;
 }
 
 export function TrainingPlanPDF({
@@ -771,20 +773,36 @@ export function TrainingPlanPDF({
   // Total goal count for badge (main + sub)
   const goals = smartGoals.map((g) => g.description ?? "").filter(Boolean);
 
-  const methods: Array<{ name: string; rationale?: string; evidence?: string }> = [
+  type GoalContribution = { goalName: string; rationale?: string; evidence?: string; evidenceQuality?: string };
+  type MethodEntry = {
+    name: string;
+    goalContributions: GoalContribution[];
+    rationale?: string;
+    evidence?: string;
+    evidenceQuality?: string;
+  };
+
+  const EQ_LABEL: Record<string, string> = {
+    strong: "Strong",
+    moderate: "Moderate",
+    preliminary: "Preliminary",
+    expert_opinion: "Expert Opinion",
+  };
+
+  const methods: MethodEntry[] = [
     ...(macro?.selectedMethods ?? []).map((name: string) => ({
       name,
-      rationale: methodRationale[name]?.rationale,
-      evidence: methodRationale[name]?.evidence,
+      goalContributions: methodRationale[name]?.goalContributions ?? [],
     })),
     ...((macro?.manuallyAddedMethods ?? []).map(
-      (m: { methodId?: string; name?: string; method?: string; rationale?: string; evidence?: string }) => {
+      (m: { methodId?: string; name?: string; method?: string; rationale?: string; evidence?: string; evidenceQuality?: string }) => {
         const methodName = m.methodId ?? m.name ?? m.method ?? "";
-        const dbEntry = methodRationale[methodName] ?? {};
         return {
           name: methodName,
-          rationale: m.rationale || dbEntry.rationale,
-          evidence: m.evidence || dbEntry.evidence,
+          goalContributions: methodRationale[methodName]?.goalContributions ?? [],
+          rationale: m.rationale,
+          evidence: m.evidence,
+          evidenceQuality: m.evidenceQuality,
         };
       },
     )),
@@ -1479,23 +1497,86 @@ export function TrainingPlanPDF({
                         }}>
                           {method.name}
                         </Text>
-                        {method.rationale ? (
-                          <Text style={{
-                            fontFamily: "Geist", fontWeight: 400, fontSize: 9,
-                            color: D.ink, lineHeight: 1.5, marginTop: 4,
-                          }}>
-                            {method.rationale}
-                          </Text>
-                        ) : null}
-                        {method.evidence ? (
-                          <Text style={{
-                            fontFamily: "Geist", fontWeight: 400, fontSize: 8,
-                            color: "#6b7280", lineHeight: 1.5, marginTop: 3,
-                            fontStyle: "italic",
-                          }}>
-                            {method.evidence}
-                          </Text>
-                        ) : null}
+
+                        {/* Per-goal breakdown (from parameter DB) */}
+                        {method.goalContributions.length > 0 ? (
+                          <View style={{ marginTop: 5, gap: 6 }}>
+                            {method.goalContributions.map((gc, j) => (
+                              <View
+                                key={j}
+                                style={{
+                                  paddingLeft: 8,
+                                  borderLeftWidth: 1.5,
+                                  borderLeftColor: accentLight,
+                                }}
+                              >
+                                {gc.goalName ? (
+                                  <Text style={{
+                                    fontFamily: "Geist", fontWeight: 700, fontSize: 7.5,
+                                    color: accent, letterSpacing: 0.6,
+                                    textTransform: "uppercase", marginBottom: 2,
+                                  }}>
+                                    {gc.goalName}
+                                  </Text>
+                                ) : null}
+                                {gc.rationale ? (
+                                  <Text style={{
+                                    fontFamily: "Geist", fontWeight: 400, fontSize: 9,
+                                    color: D.ink, lineHeight: 1.5,
+                                  }}>
+                                    {gc.rationale}
+                                  </Text>
+                                ) : null}
+                                {gc.evidence ? (
+                                  <Text style={{
+                                    fontFamily: "Geist", fontWeight: 400, fontSize: 8,
+                                    color: "#6b7280", lineHeight: 1.5, marginTop: 2,
+                                    fontStyle: "italic",
+                                  }}>
+                                    {gc.evidence}
+                                  </Text>
+                                ) : null}
+                                {gc.evidenceQuality ? (
+                                  <Text style={{
+                                    fontFamily: "Geist", fontWeight: 700, fontSize: 7.5,
+                                    color: accent, marginTop: 2,
+                                  }}>
+                                    Evidence: {EQ_LABEL[gc.evidenceQuality] ?? gc.evidenceQuality}
+                                  </Text>
+                                ) : null}
+                              </View>
+                            ))}
+                          </View>
+                        ) : (
+                          /* Fallback: direct rationale for manually-added methods */
+                          <>
+                            {method.rationale ? (
+                              <Text style={{
+                                fontFamily: "Geist", fontWeight: 400, fontSize: 9,
+                                color: D.ink, lineHeight: 1.5, marginTop: 4,
+                              }}>
+                                {method.rationale}
+                              </Text>
+                            ) : null}
+                            {method.evidence ? (
+                              <Text style={{
+                                fontFamily: "Geist", fontWeight: 400, fontSize: 8,
+                                color: "#6b7280", lineHeight: 1.5, marginTop: 3,
+                                fontStyle: "italic",
+                              }}>
+                                {method.evidence}
+                              </Text>
+                            ) : null}
+                            {method.evidenceQuality ? (
+                              <Text style={{
+                                fontFamily: "Geist", fontWeight: 700, fontSize: 7.5,
+                                color: accent, marginTop: 2,
+                              }}>
+                                Evidence: {EQ_LABEL[method.evidenceQuality] ?? method.evidenceQuality}
+                              </Text>
+                            ) : null}
+                          </>
+                        )}
                       </View>
                     </View>
                   </View>

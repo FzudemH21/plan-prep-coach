@@ -31,7 +31,8 @@ import { parseDateStr } from "@/utils/dateUtils";
 import { useAthletes } from "@/hooks/useAthletes";
 import { getAthleteDisplayName, Athlete } from "@/types/athlete";
 import { cn } from "@/lib/utils";
-import { AddSmartGoalDialog, AddSubGoalDialog, AddAdditionalMethodDialog } from "@/components/macrocycle";
+import { AddSmartGoalDialog, AddSubGoalDialog, AddAdditionalMethodDialog, EVIDENCE_QUALITY_OPTIONS } from "@/components/macrocycle";
+import type { EvidenceQuality } from "@/components/macrocycle/AddAdditionalMethodDialog";
 import { AddParameterDialogV2 } from "@/components/goals/AddParameterDialogV2";
 import { useToolboxData } from "@/hooks/useToolboxData";
 import { AlertTriangle, ArrowLeft } from "lucide-react";
@@ -52,6 +53,7 @@ interface ManuallyAddedMethod {
   methodId: string;
   rationale?: string;
   evidence?: string;
+  evidenceQuality?: EvidenceQuality;
 }
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -2227,7 +2229,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   };
 
   // Handle adding a manually added method
-  const handleAddManualMethod = (method: { methodId: string; rationale: string; evidence?: string }) => {
+  const handleAddManualMethod = (method: { methodId: string; rationale: string; evidence?: string; evidenceQuality?: EvidenceQuality }) => {
     setManuallyAddedMethods(prev => [...prev, method]);
     // Also select it
     setSelectedMethods(prev => new Set([...prev, method.methodId]));
@@ -2523,29 +2525,36 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                               </div>
                             </div>
                           ) : (
-                            <div className="flex items-start gap-2">
-                              {method.rationale ? (
-                                <p className="text-sm text-muted-foreground italic flex-1">
-                                  "{method.rationale}"
-                                </p>
-                              ) : (
-                                <p className="text-sm text-yellow-600 dark:text-yellow-500 flex items-center gap-1 flex-1">
-                                  <AlertTriangle className="h-3 w-3" />
-                                  No rationale provided
-                                </p>
+                            <div className="space-y-1">
+                              <div className="flex items-start gap-2">
+                                {method.rationale ? (
+                                  <p className="text-sm text-muted-foreground italic flex-1">
+                                    "{method.rationale}"
+                                  </p>
+                                ) : (
+                                  <p className="text-sm text-yellow-600 dark:text-yellow-500 flex items-center gap-1 flex-1">
+                                    <AlertTriangle className="h-3 w-3" />
+                                    No rationale provided
+                                  </p>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-xs"
+                                  onClick={() => {
+                                    setEditingMethodRationale(method.methodId);
+                                    setEditingRationaleValue(method.rationale || "");
+                                  }}
+                                >
+                                  <Pencil className="h-3 w-3 mr-1" />
+                                  {method.rationale ? "Edit" : "Add Rationale"}
+                                </Button>
+                              </div>
+                              {method.evidenceQuality && (
+                                <Badge variant="outline" className="text-xs">
+                                  Evidence: {EVIDENCE_QUALITY_OPTIONS.find(o => o.value === method.evidenceQuality)?.label}
+                                </Badge>
                               )}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 text-xs"
-                                onClick={() => {
-                                  setEditingMethodRationale(method.methodId);
-                                  setEditingRationaleValue(method.rationale || "");
-                                }}
-                              >
-                                <Pencil className="h-3 w-3 mr-1" />
-                                {method.rationale ? "Edit" : "Add Rationale"}
-                              </Button>
                             </div>
                           )}
                         </div>
@@ -2622,6 +2631,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                               <AlertTriangle className="h-3 w-3" />
                               No rationale provided
                             </p>
+                          )}
+                          {method.evidenceQuality && (
+                            <Badge variant="outline" className="text-xs mt-1">
+                              Evidence: {EVIDENCE_QUALITY_OPTIONS.find(o => o.value === method.evidenceQuality)?.label}
+                            </Badge>
                           )}
                         </div>
                       </div>
@@ -2821,7 +2835,13 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           }).join("\n")}`
         : "No goal-linked methods on this page (no parameter-method links configured in the database for the current goals).";
       const manualStr = manuallyAddedMethods.length
-        ? `Manually added methods:\n${manuallyAddedMethods.map((m) => `✓ ${m.methodId}${m.rationale ? ` — ${m.rationale}` : ""}`).join("\n")}`
+        ? `Manually added methods:\n${manuallyAddedMethods.map((m) => {
+            let line = `✓ ${m.methodId}`;
+            if (m.rationale) line += ` — rationale: "${m.rationale}"`;
+            if (m.evidence) line += ` | evidence: "${m.evidence}"`;
+            if (m.evidenceQuality) line += ` | evidenceQuality: "${m.evidenceQuality}"`;
+            return line;
+          }).join("\n")}`
         : "";
       const allToolboxMethods = [...new Set(
         (toolboxData?.entries ?? []).map(e => `${e.category} - ${e.subCategory}`)
@@ -2927,11 +2947,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         break;
       case "add_methods": {
         const goalLinkedIds = new Set(getAllMethodsWithAssociations().map(m => m.methodId));
-        action.methods.forEach(({ name, rationale, evidence }) => {
+        action.methods.forEach(({ name, rationale, evidence, evidenceQuality }) => {
           if (goalLinkedIds.has(name)) {
             setSelectedMethods((prev) => new Set([...prev, name]));
           } else {
-            handleAddManualMethod({ methodId: name, rationale: rationale ?? "", evidence });
+            handleAddManualMethod({ methodId: name, rationale: rationale ?? "", evidence, evidenceQuality: evidenceQuality as EvidenceQuality | undefined });
           }
         });
         break;

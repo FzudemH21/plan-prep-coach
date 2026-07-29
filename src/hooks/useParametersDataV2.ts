@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useSupabaseStore } from './useSupabaseStore';
 import { ParametersDatabaseV2, ParameterV2, ParameterInteraction, ParameterMethodV2, InteractionDirection, InteractionStrength } from '@/types/parametersV2';
 
@@ -85,6 +85,12 @@ export function useParametersDataV2() {
     defaultValue: defaultDatabase,
     migrate: migrateLegacy,
   });
+
+  // Tracks the latest committed-or-pending data so sequential writes within the
+  // same render cycle (e.g. "Apply All" firing multiple updates synchronously)
+  // each build on the previous result rather than all reading the same stale `data`.
+  const pendingRef = useRef(data);
+  useEffect(() => { pendingRef.current = data; }, [data]);
 
   const saveData = useCallback(async (newData: ParametersDatabaseV2) => {
     await setData({ ...newData, lastUpdated: new Date().toISOString() });
@@ -227,15 +233,21 @@ export function useParametersDataV2() {
   }, [data, saveData]);
 
   const updateParameterMethod = useCallback(async (id: string, updates: Partial<ParameterMethodV2>) => {
-    await saveData({
-      ...data,
-      parameterMethods: data.parameterMethods.map(m => m.id === id ? { ...m, ...updates } : m),
-    });
-  }, [data, saveData]);
+    const base = pendingRef.current;
+    const next = {
+      ...base,
+      parameterMethods: base.parameterMethods.map(m => m.id === id ? { ...m, ...updates } : m),
+    };
+    pendingRef.current = next;
+    await saveData(next);
+  }, [saveData]);
 
   const removeParameterMethod = useCallback(async (id: string) => {
-    await saveData({ ...data, parameterMethods: data.parameterMethods.filter(m => m.id !== id) });
-  }, [data, saveData]);
+    const base = pendingRef.current;
+    const next = { ...base, parameterMethods: base.parameterMethods.filter(m => m.id !== id) };
+    pendingRef.current = next;
+    await saveData(next);
+  }, [saveData]);
 
   const getMethodsForParameter = useCallback((parameterId: string) =>
     data.parameterMethods.filter(m => m.parameterId === parameterId),

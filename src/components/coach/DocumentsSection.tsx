@@ -338,7 +338,7 @@ export function DocumentsSection() {
     addFolder,
     renameFolder,
     deleteFolder,
-    addDocument,
+    addDocuments,
     deleteDocument,
     moveDocument,
     downloadDocument,
@@ -473,11 +473,34 @@ export function DocumentsSection() {
       if (!files.length) return;
       setUploading(true);
       try {
-        const docs = await Promise.all(files.map((f) => addDocument(f, currentFolderId)));
-        toast({ title: `${files.length} document${files.length > 1 ? "s" : ""} uploaded` });
+        const results = await addDocuments(files, currentFolderId);
 
-        // Trigger RAG ingestion in the background for supported file types
-        if (user) {
+        const succeeded = results.filter((r) => r.doc);
+        const failed = results.filter((r) => r.error);
+
+        if (succeeded.length > 0) {
+          toast({ title: `${succeeded.length} document${succeeded.length > 1 ? "s" : ""} uploaded` });
+        }
+
+        if (failed.length > 0) {
+          failed.forEach(({ file, error }) => {
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(0);
+            const lower = (error ?? '').toLowerCase();
+            const friendlyError =
+              lower.includes('payload') || lower.includes('size') || lower.includes('413') || lower.includes('exceeded')
+                ? `File too large (${sizeMB} MB). Go to Supabase → Storage → Buckets → documents → Edit and increase the file size limit.`
+                : (error ?? 'Unknown error');
+            toast({
+              title: `Failed to upload "${file.name}"`,
+              description: friendlyError,
+              variant: 'destructive',
+            });
+          });
+        }
+
+        // Trigger RAG ingestion in the background for successfully uploaded PDFs/text
+        const docs = succeeded.map((r) => r.doc!);
+        if (user && docs.length > 0) {
           const ingestable = docs.filter(
             (d) => d.storagePath && (
               d.type === 'application/pdf' ||
@@ -497,17 +520,17 @@ export function DocumentsSection() {
                   onProgress: (pct) => console.log(`[RAG] ${doc.name}: ${pct}%`),
                 }).finally(() => setIndexingCount((n) => Math.max(0, n - 1)))
               )
-            ).then((results) => {
-              const succeeded = results.filter((r) => r.success).length;
-              const failed = results.filter((r) => !r.success);
-              if (succeeded > 0) {
+            ).then((ragResults) => {
+              const ragSucceeded = ragResults.filter((r) => r.success).length;
+              const ragFailed = ragResults.filter((r) => !r.success);
+              if (ragSucceeded > 0) {
                 toast({
-                  title: `${succeeded} document${succeeded > 1 ? 's' : ''} indexed for AI`,
+                  title: `${ragSucceeded} document${ragSucceeded > 1 ? 's' : ''} indexed for AI`,
                   description: 'The AI assistant can now reference these documents.',
                 });
               }
-              if (failed.length > 0) {
-                const reasons = failed.map((r) => !r.success ? (r.message ?? r.reason) : '').filter(Boolean).join('; ');
+              if (ragFailed.length > 0) {
+                const reasons = ragFailed.map((r) => !r.success ? (r.message ?? r.reason) : '').filter(Boolean).join('; ');
                 console.error('[RAG] Ingestion failed:', reasons);
                 toast({
                   title: 'Indexing failed',
@@ -518,14 +541,12 @@ export function DocumentsSection() {
             });
           }
         }
-      } catch {
-        toast({ title: "Upload failed", variant: "destructive" });
       } finally {
         setUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
       }
     },
-    [addDocument, currentFolderId, toast, user]
+    [addDocuments, currentFolderId, toast, user]
   );
 
   const isEmpty = currentFolders.length === 0 && currentDocs.length === 0;
@@ -540,8 +561,8 @@ export function DocumentsSection() {
               Documents
             </CardTitle>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Training plans, analyses, reference material – stored locally.
-              Drag documents onto folders to move them.
+              Training plans, analyses, reference material.
+              Drag documents onto folders to move them. Hold Ctrl / Cmd in the file picker to select multiple files at once.
             </p>
           </div>
 

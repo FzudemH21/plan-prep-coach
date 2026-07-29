@@ -105,10 +105,21 @@ export default function AthleticismDatabaseV2() {
       ? uniqueMethods.map((m) => `- "${m.label}" → methodId: "${m.methodId}"`).join('\n')
       : 'No training methods found in your toolbox. Add methods in the Training Methods Toolbox first.';
 
+    const methodLinksList = data?.parameterMethods?.length
+      ? data.parameterMethods.map((link) => {
+          const param = data.parameters.find((p) => p.id === link.parameterId);
+          if (!param) return null;
+          return `- parameterName: "${param.name}" | methodId: "${link.methodId}"` +
+            (link.rationale ? ` | rationale: "${link.rationale}"` : '') +
+            (link.evidence ? ` | evidence: "${link.evidence}"` : '') +
+            (link.evidenceQuality ? ` | evidenceQuality: "${link.evidenceQuality}"` : '');
+        }).filter(Boolean).join('\n')
+      : 'No method links defined yet.';
+
     return [
       `Parameters (${data?.parameters?.length ?? 0} total):\n${paramList}`,
       `Interactions defined: ${data?.interactions?.length ?? 0}`,
-      `Method links defined: ${data?.parameterMethods?.length ?? 0}`,
+      `Existing method links (${data?.parameterMethods?.length ?? 0} total — use these exact parameterName and methodId values when updating or removing):\n${methodLinksList}`,
       `Available training methods — use the exact methodId string shown when applying:\n${methodList}`,
     ].join('\n\n');
   }, [data, toolboxData]);
@@ -213,8 +224,44 @@ export default function AthleticismDatabaseV2() {
           variant: 'destructive',
         });
       }
+
+    } else if (action.type === 'update_parameter_method') {
+      const param = findParam(action.parameterName);
+      if (!param) {
+        toast({ title: 'Parameter not found', description: `"${action.parameterName}" does not exist.`, variant: 'destructive' });
+        return;
+      }
+      const link = data?.parameterMethods?.find(
+        (m) => m.parameterId === param.id && m.methodId === action.methodId,
+      );
+      if (!link) {
+        toast({ title: 'Method link not found', description: `"${action.methodId}" is not linked to "${action.parameterName}".`, variant: 'destructive' });
+        return;
+      }
+      const updates: { rationale?: string; evidence?: string; evidenceQuality?: string } = {};
+      if (action.rationale !== undefined) updates.rationale = action.rationale;
+      if (action.evidence !== undefined) updates.evidence = action.evidence;
+      if (action.evidenceQuality !== undefined) updates.evidenceQuality = action.evidenceQuality;
+      await updateParameterMethod(link.id, updates);
+      toast({ title: `Method link updated for "${action.parameterName}"` });
+
+    } else if (action.type === 'remove_parameter_method') {
+      const param = findParam(action.parameterName);
+      if (!param) {
+        toast({ title: 'Parameter not found', description: `"${action.parameterName}" does not exist.`, variant: 'destructive' });
+        return;
+      }
+      const link = data?.parameterMethods?.find(
+        (m) => m.parameterId === param.id && m.methodId === action.methodId,
+      );
+      if (!link) {
+        toast({ title: 'Method link not found', description: `"${action.methodId}" is not linked to "${action.parameterName}".`, variant: 'destructive' });
+        return;
+      }
+      await removeParameterMethod(link.id);
+      toast({ title: `Method unlinked from "${action.parameterName}"` });
     }
-  }, [addParameter, addParametersBulk, addInteraction, addInteractionsBulk, addParameterMethod, addParameterMethodsBulk, findParam, toast]);
+  }, [data, addParameter, addParametersBulk, addInteraction, addInteractionsBulk, addParameterMethod, addParameterMethodsBulk, updateParameterMethod, removeParameterMethod, findParam, toast]);
 
   // Sorting state
   const [sortColumn, setSortColumn] = useState<SortColumn>('parameter');
@@ -651,7 +698,9 @@ export default function AthleticismDatabaseV2() {
         ragContext={ragContext}
         globalContext={globalAIContext}
         onApplySuggestion={handleAIApply}
-        assistantRole="Answer sports science questions and help the coach define and structure their parameter database. This is a general template database — it is NOT tied to any specific athlete, training phase, or mesocycle. Parameters already in the database are examples or templates, not athlete-specific data. Do NOT ask about the coach's athlete, training phase, season context, or testing infrastructure unless the coach explicitly brings it up. When suggesting or filling parameters, use general scientific specifications (e.g. 'Ground contact time at maximum velocity, 30–60m phase') without assuming any particular athlete context. Suggest relevant parameters, categories, units, and evidence-based rationale. When asked, suggest interactions between parameters or links to training methods. Do not make unsolicited judgments about parameters the coach has already added."
+        assistantRole="Answer sports science questions and help the coach define and structure their parameter database. This is a general template database — it is NOT tied to any specific athlete, training phase, or mesocycle. Parameters already in the database are examples or templates, not athlete-specific data. Do NOT ask about the coach's athlete, training phase, season context, or testing infrastructure unless the coach explicitly brings it up. When suggesting or filling parameters, use general scientific specifications (e.g. 'Ground contact time at maximum velocity, 30–60m phase') without assuming any particular athlete context. Suggest relevant parameters, categories, units, and evidence-based rationale. When asked, suggest interactions between parameters or links to training methods. Do not make unsolicited judgments about parameters the coach has already added.
+
+Training Toolbox awareness (critical): The global context contains the coach's full Training Toolbox — every method with its parameters and, where the coach has written one, a Description field explaining what the method means in their context. Before suggesting any parameter-method link, read ALL method descriptions in the Training Toolbox section of the global context. Use the descriptions to reason about which parameters each method actually develops, at what intensities and volumes, and through which physiological pathways. A method description might reveal a specific focus (e.g. 'high-velocity maximal strength') that makes some parameter links strong (peak power, RFD, velocity at 1RM) and others weak (aerobic capacity, flexibility). Always reference the description when writing the rationale for a link — quote it briefly if relevant. If a method has no description yet, fall back to the method name and its configured parameters to infer the link. Never suggest a parameter-method link without first checking whether the method description provides direct evidence for or against it."
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ParameterManagementDialog } from "@/components/toolbox/ParameterManagementDialog";
 import { ToolboxColumnFilter } from "@/components/toolbox/ToolboxColumnFilter";
 import { MethodTemplatesPanel } from "@/components/toolbox/MethodTemplatesPanel";
-import { WizardAIAssistant } from "@/components/wizard/WizardAIAssistant";
+import { WizardAIAssistant, type ApplySuggestion } from "@/components/wizard/WizardAIAssistant";
 import { useGlobalAIContext } from "@/hooks/useGlobalAIContext";
 import { useCoachMemory } from "@/hooks/useCoachMemory";
 import { useRAGRetrieval } from "@/hooks/useRAGRetrieval";
@@ -40,7 +40,7 @@ interface SubCategoryData {
 export default function ToolboxDatabase() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { data, isLoading, addEntries, deleteEntry, deleteSubCategory, copyEntry, renameSubCategory, renameMethodCategory, reorderParameters, importData, exportData } = useToolboxData();
+  const { data, isLoading, addEntries, deleteEntry, deleteSubCategory, copyEntry, renameSubCategory, renameMethodCategory, reorderParameters, setMethodDescription, importData, exportData, saveData } = useToolboxData();
   const globalAIContext = useGlobalAIContext(true);
   const { coachMemoryContext } = useCoachMemory();
   const { retrieve } = useRAGRetrieval();
@@ -361,7 +361,9 @@ export default function ToolboxDatabase() {
     grouped.forEach((methods, category) => {
       lines.push(`### Category: ${category}`);
       methods.forEach((params, method) => {
-        lines.push(`  Method: ${method}`);
+        const descKey = `${category}|||${method}`;
+        const desc = data.methodDescriptions?.[descKey];
+        lines.push(`  Method: ${method}${desc ? ` — "${desc}"` : ''}`);
         params.forEach(p => {
           const flags = [
             p.isFrequencyParameter && 'frequency',
@@ -379,7 +381,36 @@ export default function ToolboxDatabase() {
       });
     });
     return lines.join('\n');
-  }, [data.entries]);
+  }, [data.entries, data.methodDescriptions]);
+
+  // Keep a ref so batch saves always read the latest data, not a stale closure
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
+  const handleToolboxAIApply = useCallback((action: ApplySuggestion) => {
+    if (action.type === 'set_method_description') {
+      const current = dataRef.current;
+      const updated = { ...(current.methodDescriptions ?? {}), [action.methodKey]: action.description };
+      if (!action.description) delete updated[action.methodKey];
+      void saveData({ ...current, methodDescriptions: updated });
+      toast({ title: 'Description updated', description: action.description ? `Set for ${action.methodKey.replace('|||', ' → ')}` : `Cleared for ${action.methodKey.replace('|||', ' → ')}` });
+    }
+  }, [saveData, toast]);
+
+  const handleToolboxAIApplyAll = useCallback((actions: ApplySuggestion[]) => {
+    const descActions = actions.filter(
+      (a): a is Extract<ApplySuggestion, { type: 'set_method_description' }> => a.type === 'set_method_description'
+    );
+    if (descActions.length === 0) return;
+    const current = dataRef.current;
+    const updated = { ...(current.methodDescriptions ?? {}) };
+    for (const a of descActions) {
+      if (a.description) updated[a.methodKey] = a.description;
+      else delete updated[a.methodKey];
+    }
+    void saveData({ ...current, methodDescriptions: updated });
+    toast({ title: `${descActions.length} description${descActions.length !== 1 ? 's' : ''} updated` });
+  }, [saveData, toast]);
 
   useEffect(() => {
     const query = data.entries.length
@@ -734,6 +765,10 @@ export default function ToolboxDatabase() {
             void renameMethodCategory(key, newCategory);
             setSelectedSubCategory({ ...selectedSubCategory, category: newCategory });
           }}
+          description={data.methodDescriptions?.[`${selectedSubCategory.category}|||${selectedSubCategory.subCategory}`] ?? ''}
+          onDescriptionChange={(desc) => {
+            void setMethodDescription(`${selectedSubCategory.category}|||${selectedSubCategory.subCategory}`, desc);
+          }}
         />
       )}
 
@@ -777,11 +812,15 @@ export default function ToolboxDatabase() {
 
 You have full read access to the toolbox (all categories, methods, and parameters) as well as the coach's profile and any relevant uploaded documents. You can discuss, analyse, and advise on method structure, parameter choices, exercise categories, periodization logic, and sports science rationale.
 
+You can also write or update the description for any method using the [[APPLY: {"type":"set_method_description","methodKey":"Category|||SubCategory","description":"..."}]] block. The methodKey must use the exact "Category|||SubCategory" format (three pipe characters). To clear a description, set description to an empty string.
+
 IMPORTANT rules:
-- This is a DISCUSSION-ONLY assistant. You cannot make changes to the toolbox.
 - Be honest about the limits of your knowledge. If you are unsure about something or don't know the answer, say so explicitly. Never make things up or present uncertain information as fact.
 - When referencing methods or parameters, use the exact names shown in the context.
-- If the coach asks about something not in the toolbox, say you don't see it in the current data.`}
+- If the coach asks about something not in the toolbox, say you don't see it in the current data.
+- You can ONLY change method descriptions — no other toolbox edits are possible via APPLY blocks.`}
+        onApplySuggestion={handleToolboxAIApply}
+        onApplyAll={handleToolboxAIApplyAll}
       />
     </div>
   );

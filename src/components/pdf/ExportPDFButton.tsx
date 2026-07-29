@@ -103,36 +103,48 @@ export function ExportPDFButton({
   const { athletes } = useAthletes();
   const { data: parametersData } = useParametersDataV2();
 
-  // Build methodId → {rationale, evidence} lookup from the parameter database,
-  // restricted to parameters that are the plan's primary or sub-goals so that
-  // only goal-relevant rationale appears in the PDF.
+  // Build methodId → per-goal contributions from the parameter database,
+  // restricted to parameters that are the plan's goals so that only
+  // goal-relevant rationale appears in the "Science Behind It" PDF page.
   const methodRationale = useMemo(() => {
     const macro = program.macrocycleData;
 
-    // Collect the parameter IDs that are actual plan goals
-    const goalParamIds = new Set<string>();
-    (macro?.smartGoals ?? []).forEach((g: { linkedParameterId?: string }) => {
-      if (g.linkedParameterId) goalParamIds.add(g.linkedParameterId);
-    });
-    (macro?.subGoals ?? []).forEach((sg: { parameterLinkedId?: string }) => {
-      if (sg.parameterLinkedId) goalParamIds.add(sg.parameterLinkedId);
-    });
+    // Build paramId → goal description map
+    const goalsByParamId: Record<string, string> = {};
+    (macro?.smartGoals ?? []).forEach(
+      (g: { linkedParameterId?: string; description?: string }) => {
+        if (g.linkedParameterId && g.description)
+          goalsByParamId[g.linkedParameterId] = g.description;
+      },
+    );
+    (macro?.subGoals ?? []).forEach(
+      (sg: { parameterLinkedId?: string; description?: string }) => {
+        if (sg.parameterLinkedId && sg.description)
+          goalsByParamId[sg.parameterLinkedId] = sg.description;
+      },
+    );
 
-    const map: Record<string, { rationale?: string; evidence?: string }> = {};
+    const goalParamIds = new Set(Object.keys(goalsByParamId));
 
-    // Only include rationale/evidence from parameter-method links where the
-    // parameter is one of the plan's goals
+    type GoalContribution = {
+      goalName: string;
+      rationale?: string;
+      evidence?: string;
+      evidenceQuality?: string;
+    };
+    const map: Record<string, { goalContributions: GoalContribution[] }> = {};
+
     for (const pm of parametersData.parameterMethods) {
       if (!pm.methodId) continue;
       if (goalParamIds.size > 0 && !goalParamIds.has(pm.parameterId)) continue;
       if (!pm.rationale && !pm.evidence) continue;
-      const existing = map[pm.methodId] ?? {};
-      const rationales = [existing.rationale, pm.rationale].filter(Boolean);
-      const evidences  = [existing.evidence,  pm.evidence ].filter(Boolean);
-      map[pm.methodId] = {
-        rationale: rationales.length > 0 ? [...new Set(rationales)].join(" | ") : undefined,
-        evidence:  evidences.length  > 0 ? [...new Set(evidences) ].join(" | ") : undefined,
-      };
+      if (!map[pm.methodId]) map[pm.methodId] = { goalContributions: [] };
+      map[pm.methodId].goalContributions.push({
+        goalName: goalsByParamId[pm.parameterId] ?? "",
+        rationale: pm.rationale,
+        evidence: pm.evidence,
+        evidenceQuality: pm.evidenceQuality,
+      });
     }
     return map;
   }, [parametersData.parameterMethods, program.macrocycleData]);

@@ -36,6 +36,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
+const EVIDENCE_QUALITY_OPTIONS = [
+  { value: "strong",         label: "Strong",         description: "Systematic review / meta-analysis with consistent results" },
+  { value: "moderate",       label: "Moderate",       description: "Single or multiple RCTs / well-controlled studies" },
+  { value: "preliminary",    label: "Preliminary",    description: "Observational, cohort, or cross-sectional evidence" },
+  { value: "expert_opinion", label: "Expert Opinion", description: "Case reports, coaching practice, or expert consensus" },
+] as const;
+
 interface EditParameterDialogV2Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -305,6 +312,10 @@ export function EditParameterDialogV2({
     onUpdateMethod(methodDbId, { evidence: evidenceValue });
     setEditingEvidence(null);
     setEvidenceValue('');
+  };
+
+  const handleSaveEvidenceQuality = (methodDbId: string, value: string) => {
+    onUpdateMethod(methodDbId, { evidenceQuality: value === "__none__" ? undefined : value || undefined });
   };
 
   const getStrengthIcon = (strength?: InteractionStrength) => {
@@ -890,6 +901,27 @@ export function EditParameterDialogV2({
                           )}
                         </div>
                       )}
+
+                      {/* Evidence Quality section */}
+                      <div className="mt-1">
+                        <Select
+                          value={method.evidenceQuality ?? "__none__"}
+                          onValueChange={(v) => handleSaveEvidenceQuality(method.id, v)}
+                        >
+                          <SelectTrigger className="h-7 text-xs w-full">
+                            <SelectValue placeholder="+ Set evidence quality" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">— none —</SelectItem>
+                            {EVIDENCE_QUALITY_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                <span className="font-medium">{opt.label}</span>
+                                <span className="text-muted-foreground ml-1 text-xs">— {opt.description}</span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   ))}
                 </div>

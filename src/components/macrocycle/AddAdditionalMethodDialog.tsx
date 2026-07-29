@@ -3,16 +3,26 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Check, ChevronsUpDown, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToolboxData } from "@/hooks/useToolboxData";
 
+export type EvidenceQuality = "strong" | "moderate" | "preliminary" | "expert_opinion";
+
+export const EVIDENCE_QUALITY_OPTIONS: { value: EvidenceQuality; label: string; description: string }[] = [
+  { value: "strong",         label: "Strong",         description: "Systematic review / meta-analysis with consistent results" },
+  { value: "moderate",       label: "Moderate",       description: "Single or multiple RCTs / well-controlled studies" },
+  { value: "preliminary",    label: "Preliminary",    description: "Observational, cohort, or cross-sectional evidence" },
+  { value: "expert_opinion", label: "Expert Opinion", description: "Case reports, coaching practice, or expert consensus" },
+];
+
 interface AddAdditionalMethodDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAdd: (method: { methodId: string; rationale: string; evidence?: string }) => void;
+  onAdd: (method: { methodId: string; rationale: string; evidence?: string; evidenceQuality?: EvidenceQuality }) => void;
   excludedMethods: Set<string>;
 }
 
@@ -26,12 +36,13 @@ export function AddAdditionalMethodDialog({
   const [selectedMethod, setSelectedMethod] = useState<string>("");
   const [rationale, setRationale] = useState("");
   const [evidence, setEvidence] = useState("");
+  const [evidenceQuality, setEvidenceQuality] = useState<EvidenceQuality | "">("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   // Get all unique methods from toolbox, grouped by category
   const availableMethods = useMemo(() => {
     const methodSet = new Map<string, { category: string; subCategory: string }>();
-    
+
     toolboxData.entries.forEach(entry => {
       const methodId = `${entry.category} - ${entry.subCategory}`;
       if (!excludedMethods.has(methodId) && !methodSet.has(methodId)) {
@@ -41,7 +52,7 @@ export function AddAdditionalMethodDialog({
         });
       }
     });
-    
+
     return Array.from(methodSet.entries()).map(([methodId, info]) => ({
       methodId,
       ...info
@@ -64,25 +75,32 @@ export function AddAdditionalMethodDialog({
     return grouped;
   }, [availableMethods]);
 
-  const sortedCategories = useMemo(() => 
-    Object.keys(methodsByCategory).sort(), 
+  const sortedCategories = useMemo(() =>
+    Object.keys(methodsByCategory).sort(),
     [methodsByCategory]
   );
 
-  const handleAdd = () => {
-    if (!selectedMethod) return;
-    onAdd({ methodId: selectedMethod, rationale: rationale.trim(), evidence: evidence.trim() || undefined });
-    // Reset form
+  const reset = () => {
     setSelectedMethod("");
     setRationale("");
     setEvidence("");
+    setEvidenceQuality("");
+  };
+
+  const handleAdd = () => {
+    if (!selectedMethod) return;
+    onAdd({
+      methodId: selectedMethod,
+      rationale: rationale.trim(),
+      evidence: evidence.trim() || undefined,
+      evidenceQuality: evidenceQuality || undefined,
+    });
+    reset();
     onOpenChange(false);
   };
 
   const handleCancel = () => {
-    setSelectedMethod("");
-    setRationale("");
-    setEvidence("");
+    reset();
     onOpenChange(false);
   };
 
@@ -177,6 +195,32 @@ export function AddAdditionalMethodDialog({
               placeholder="Research citations or supporting evidence..."
               className="min-h-[60px]"
             />
+          </div>
+
+          {/* Evidence Quality Dropdown */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              Evidence Quality
+              <span className="text-muted-foreground text-xs font-normal">(optional)</span>
+            </Label>
+            <Select
+              value={evidenceQuality}
+              onValueChange={(v) => setEvidenceQuality(v as EvidenceQuality)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Rate the quality of evidence..." />
+              </SelectTrigger>
+              <SelectContent>
+                {EVIDENCE_QUALITY_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{opt.label}</span>
+                      <span className="text-xs text-muted-foreground">{opt.description}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

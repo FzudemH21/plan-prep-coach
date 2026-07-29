@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -142,6 +143,8 @@ interface ParameterManagementDialogProps {
   onUpdateParameters: (parameters: ToolboxEntry[]) => void;
   onSubCategoryChange?: (newName: string) => void;
   onCategoryChange?: (newCategory: string) => void;
+  description?: string;
+  onDescriptionChange?: (description: string) => void;
 }
 
 export function ParameterManagementDialog({
@@ -153,6 +156,8 @@ export function ParameterManagementDialog({
   onUpdateParameters,
   onSubCategoryChange,
   onCategoryChange,
+  description,
+  onDescriptionChange,
 }: ParameterManagementDialogProps) {
   const [editingParameter, setEditingParameter] = useState<ToolboxEntry | null>(null);
   const [editingName, setEditingName] = useState(false);
@@ -527,6 +532,18 @@ export function ParameterManagementDialog({
             </DialogTitle>
             <DialogDescription>Manage Parameters</DialogDescription>
           </DialogHeader>
+
+          {/* Method description */}
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Method Description</Label>
+            <Textarea
+              placeholder="Describe what this method means in your context — the AI can read and update this field."
+              value={description ?? ''}
+              onChange={e => onDescriptionChange?.(e.target.value)}
+              rows={4}
+              className="resize-none text-sm"
+            />
+          </div>
 
           <div className="space-y-6">
             {/* Warning Box for Missing Parameters */}

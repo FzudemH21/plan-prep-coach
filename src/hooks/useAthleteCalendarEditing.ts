@@ -399,10 +399,12 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     if (loadingAssignmentIdRef.current !== null) return;
     // 4. This assignment hasn't been successfully loaded yet
     if (loadedAssignmentIdRef.current !== selectedAssignmentId) return;
-    // 5. Mobile-created assignment with no exercises yet — do NOT write to localStorage.
-    // Writing an empty exerciseDistribution would cause the auto-sync to overwrite Supabase
-    // rows that the mobile assign-flow already wrote with the correct session exercises.
-    if (isMobileCreated && exerciseDistribution.length === 0) return;
+    // 5. Mobile-created assignment with no exercises yet AND no manually-added sessions —
+    // do NOT write to localStorage. Writing empty exerciseDistribution + all-zero daySplitStates
+    // would cause the auto-sync to overwrite Supabase rows the mobile assign-flow already wrote.
+    // Exception: if the coach has manually added a session (some daySplitStates > 0), allow the
+    // save so the new session persists and syncs to the mobile app.
+    if (isMobileCreated && exerciseDistribution.length === 0 && !Object.values(daySplitStates).some(v => v > 0)) return;
 
     // Build full save payload for accurate fingerprinting
     const savePayload = {

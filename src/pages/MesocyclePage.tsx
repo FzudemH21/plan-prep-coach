@@ -6,7 +6,7 @@ import React, { useState, useEffect, useMemo, useCallback, useTransition } from 
 import { useAthletes } from '@/hooks/useAthletes';
 import { getAthleteDisplayName } from '@/types/athlete';
 import { TrainingPlanOverview } from '@/components/shared/TrainingPlanOverview';
-import { AddAdditionalMethodDialog } from '@/components/macrocycle/AddAdditionalMethodDialog';
+import type { EvidenceQuality } from '@/components/macrocycle/AddAdditionalMethodDialog';
 import { MethodDeleteDialog } from '@/components/shared/MethodDeleteDialog';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -95,7 +95,6 @@ export default function MesocyclePage() {
   const [expandedMesocycles, setExpandedMesocycles] = useState<Set<string>>(new Set());
   const [globalMicrocycleSplitStates, setGlobalMicrocycleSplitStates] = useState<Record<string, boolean>>({});
   const [manuallyAddedMethods, setManuallyAddedMethods] = useState<string[]>([]);
-  const [isAddMethodDialogOpen, setIsAddMethodDialogOpen] = useState(false);
   const [methodToDelete, setMethodToDelete] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [categorySplitStates, setCategorySplitStates] = useState<Record<string, boolean>>({});
@@ -1278,6 +1277,23 @@ export default function MesocyclePage() {
     return Array.from(methodsSet);
   }, [macrocycleData, manuallyAddedMethods]);
 
+  // Metadata (rationale, evidence, evidenceQuality) for methods that were manually
+  // added in Macrocycle Step 3 — keyed by methodId so downstream UI can look them up.
+  const macrocycleMethodMetadata = useMemo((): Record<string, { rationale?: string; evidence?: string; evidenceQuality?: EvidenceQuality }> => {
+    const map: Record<string, { rationale?: string; evidence?: string; evidenceQuality?: EvidenceQuality }> = {};
+    if (!macrocycleData?.manuallyAddedMethods) return map;
+    (macrocycleData.manuallyAddedMethods as any[]).forEach((method) => {
+      if (method && typeof method === 'object' && method.methodId) {
+        map[method.methodId] = {
+          rationale: method.rationale,
+          evidence: method.evidence,
+          evidenceQuality: method.evidenceQuality,
+        };
+      }
+    });
+    return map;
+  }, [macrocycleData?.manuallyAddedMethods]);
+
   const groupMethodsByToolboxCategory = useMemo(() => {
     // Filter to only valid string methods
     const methods = getMethodsForAllocatedSubGoals.filter(
@@ -1907,51 +1923,6 @@ export default function MesocyclePage() {
             </div>
           )}
           
-          {/* Manual Method Selection */}
-          <div className="border rounded-lg p-4 bg-muted/20 mt-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="space-y-1">
-                <h4 className="font-medium">Manual Method Selection</h4>
-                <p className="text-sm text-muted-foreground">
-                  Add training methods from the toolbox that are not covered by your selected sub-goals.
-                </p>
-              </div>
-              <Button 
-                onClick={() => setIsAddMethodDialogOpen(true)}
-                variant="outline"
-                className="shrink-0"
-              >
-                Add Method
-              </Button>
-            </div>
-            
-            {/* Show manually added methods */}
-            {manuallyAddedMethods.length > 0 && (
-              <div className="mt-3 space-y-2">
-                <Label className="text-sm font-medium">Manually Added Methods:</Label>
-                <div className="flex flex-wrap gap-2">
-                  {manuallyAddedMethods.map((method) => (
-                    <Badge 
-                      key={method} 
-                      variant="secondary"
-                      className="flex items-center gap-1"
-                    >
-                      <span className="text-xs">Manual:</span>
-                      {method}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0 ml-1"
-                        onClick={() => handleRemoveMethod(method)}
-                      >
-                        ×
-                      </Button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
         </CardContent>
       </Card>
 
@@ -2797,21 +2768,6 @@ export default function MesocyclePage() {
   }, [clearSelection, dragState.isDragging, addToSelection, handleFillRight]);
 
   // Manual method management functions
-  const handleAddMethod = useCallback((method: string) => {
-    // Add to manually added methods list
-    const newManualMethods = [...manuallyAddedMethods, method];
-    setManuallyAddedMethods(newManualMethods);
-    localStorage.setItem('manuallyAddedMethods', JSON.stringify(newManualMethods));
-    
-    // Auto-allocate to all mesocycles so it appears in the allocation grid immediately
-    const allMesocycleIds = mesocycles.map(m => m.id);
-    setMethodAllocations(prev => {
-      const updated = { ...prev, [method]: allMesocycleIds };
-      localStorage.setItem('methodAllocations', JSON.stringify(updated));
-      return updated;
-    });
-  }, [manuallyAddedMethods, mesocycles]);
-
   const handleRemoveMethod = useCallback((method: string) => {
     // Remove from manually added methods
     const newManualMethods = manuallyAddedMethods.filter(m => m !== method);
@@ -2885,10 +2841,6 @@ export default function MesocyclePage() {
   }, []);
 
   // Get methods that are already selected (to exclude from add dialog)
-  const getExcludedMethods = useCallback(() => {
-    return getMethodsForAllocatedSubGoals;
-  }, [getMethodsForAllocatedSubGoals]);
-
   // Precompute method parameters map to avoid recalculation on every render
   const methodParametersMap = useMemo(() => {
     const map: Record<string, Array<{
@@ -3595,6 +3547,18 @@ export default function MesocyclePage() {
                                     <div className="line-clamp-3 text-md font-medium text-foreground" title={fullMethodName}>
                                       {categoryName ? `${subCategory}-${categoryName}` : subCategory}
                                     </div>
+                                    {!categoryName && toolboxData?.methodDescriptions?.[`${category}|||${subCategory}`] && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Info className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground flex-shrink-0 cursor-default" />
+                                          </TooltipTrigger>
+                                          <TooltipContent className="max-w-xs">
+                                            <p className="text-xs">{toolboxData.methodDescriptions![`${category}|||${subCategory}`]}</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
                                                     {/* Warning badge if no frequency parameter */}
                                                     {!hasValidFrequencyParameter(baseMethodName) && (
                                                       <TooltipProvider>
@@ -5144,8 +5108,21 @@ export default function MesocyclePage() {
     const allocatedMethods = Object.keys(methodAllocations).filter(
       (m) => methodAllocations[m]?.length > 0
     );
+    // Build description lookup: "Category - SubCategory" → description
+    const descLookup = new Map<string, string>();
+    if (toolboxData?.methodDescriptions) {
+      Object.entries(toolboxData.methodDescriptions).forEach(([key, desc]) => {
+        if (desc) {
+          const [cat, sub] = key.split('|||');
+          descLookup.set(sub ? `${cat} - ${sub}` : cat, desc);
+        }
+      });
+    }
     const methodsStr = allocatedMethods.length
-      ? `Allocated methods:\n${allocatedMethods.map((m) => `- ${m}`).join("\n")}`
+      ? `Allocated methods:\n${allocatedMethods.map((m) => {
+          const desc = descLookup.get(m);
+          return `- ${m}${desc ? ` — "${desc}"` : ''}`;
+        }).join("\n")}`
       : "";
 
     // Step 5: exercise library override block + available exercises
@@ -5263,7 +5240,7 @@ export default function MesocyclePage() {
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, planStartDate, planEndDate, totalWeeks, expectedTotalDays, totalMesocycleDays, daysMismatch, mesocycles, methodAllocations, mesoStepLabel, exerciseLibraries, exerciseCellData, parameterValues, templates, getTemplatesForWizardMethod]);
+  }, [currentStep, athleteName, macrocycleData, planStartDate, planEndDate, totalWeeks, expectedTotalDays, totalMesocycleDays, daysMismatch, mesocycles, methodAllocations, mesoStepLabel, exerciseLibraries, exerciseCellData, parameterValues, templates, getTemplatesForWizardMethod, toolboxData]);
 
   // ── AI Apply handler ──────────────────────────────────────────────────────
   const handleMesoAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
@@ -5556,14 +5533,6 @@ export default function MesocyclePage() {
         
         {/* Keyboard Shortcuts Panel - only show on Method Periodization step */}
         {currentStep === 4 && <KeyboardShortcutsPanel />}
-        
-        {/* Add Method Dialog */}
-        <AddAdditionalMethodDialog
-          open={isAddMethodDialogOpen}
-          onOpenChange={setIsAddMethodDialogOpen}
-          onAdd={(m) => handleAddMethod(m.methodId)}
-          excludedMethods={new Set(getExcludedMethods())}
-        />
         
         {/* Delete Method Dialog */}
         <MethodDeleteDialog

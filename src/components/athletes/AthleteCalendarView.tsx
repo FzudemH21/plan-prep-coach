@@ -565,18 +565,21 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   useEffect(() => {
     if (!editing.lastSavedAt || !selectedAssignmentId) return;
     // Skip if the desktop has no exercise data to contribute.
+    // Exception: if the coach has manually added sessions (some daySplitStates > 0), allow the
+    // sync so that new sessions reach the mobile app and persist across navigation.
+    const hasManualSessions = Object.values(editing.daySplitStates).some(v => v > 0);
     // Guard A: mobile-created flag — set when initializeFromAssignment runs (no localStorage key).
-    // While exercises are still empty, refuse to sync regardless of other conditions.
-    if (editing.isMobileCreated && editing.exerciseDistribution.length === 0) return;
-    // Guard B: also skip if exercises are empty and no localStorage key exists (mobile-created).
+    // While exercises are still empty AND no sessions were manually added, refuse to sync.
+    if (editing.isMobileCreated && editing.exerciseDistribution.length === 0 && !hasManualSessions) return;
+    // Guard B: also skip if exercises are empty, no localStorage key exists, and no manual sessions.
     if (
       editing.exerciseDistribution.length === 0 &&
+      !hasManualSessions &&
       !localStorage.getItem(`athlete-assignment-${selectedAssignmentId}`)
     ) return;
     // Guard C: skip if exercises are empty but training days exist — corrupted/partial snapshot.
-    // Syncing with empty exercises would delete all Supabase sessions and the assignment would
-    // visually disappear. The Supabase data from assign-time is authoritative here.
-    if (editing.exerciseDistribution.length === 0 && editing.trainingDays.length > 0) return;
+    // Exception: manual sessions (daySplitStates > 0) are a valid reason to sync with no exercises.
+    if (editing.exerciseDistribution.length === 0 && editing.trainingDays.length > 0 && !hasManualSessions) return;
     const connection = getConnectionForAthlete(athlete.id);
     if (!connection) {
       // Distinguish: connections still loading vs. athlete has no invite link
@@ -638,12 +641,10 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     if (!localStorage.getItem(`athlete-assignment-${selectedAssignmentId}`)) return;
 
     // Skip if the snapshot exists but exerciseDistribution is empty while training
-    // days are present. This indicates a corrupted/partial snapshot (e.g. created by
-    // an earlier bug where the MERGE path wrote only training days but no exercises).
-    // Syncing with empty exercises would delete all Supabase sessions — the assignment
-    // would visually disappear. The Supabase data written at assign-time is authoritative
-    // in this case and should not be overwritten.
-    if (editing.exerciseDistribution.length === 0 && editing.trainingDays.length > 0) return;
+    // days are present — indicates a corrupted/partial snapshot. Exception: allow the
+    // load-sync when the coach has manually added sessions (some daySplitStates > 0).
+    if (editing.exerciseDistribution.length === 0 && editing.trainingDays.length > 0 &&
+      !Object.values(editing.daySplitStates).some(v => v > 0)) return;
 
     const connection = getConnectionForAthlete(athlete.id);
     if (!connection) return;
@@ -1487,21 +1488,23 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       }
 
       // Compute day-level intensity for the overview square.
-      // Priority: live Supabase value > program planned intensity (mobile-created) > editing state > default.
+      // Priority: editing state > live Supabase > program planned intensity > default.
+      // Editing state wins so that intensity changes the coach makes on desktop are
+      // reflected immediately, before the async Supabase sync completes.
       let dayIntensityForSquare: IntensityLevel = 'moderate';
       if (selectedAssignmentId) {
         const liveDayIntensity = liveDiByDate.get(dateString);
         const liveTrainingDay = liveTdByDate.get(dateString);
         const liveRowIntensity = liveScheduleMap.get(dateString)?.rowIntensity;
-        if (liveRowIntensity) {
-          // Live Supabase value wins — reflects any mobile coach intensity edit.
+        if (liveDayIntensity?.intensity) {
+          // Editing hook state wins — gives immediate feedback on intensity edits.
+          dayIntensityForSquare = liveDayIntensity.intensity as IntensityLevel;
+        } else if (liveRowIntensity) {
+          // Fall back to Supabase for days not covered by the editing hook.
           dayIntensityForSquare = liveRowIntensity as IntensityLevel;
         } else if (programIntensityMap?.get(dateString)) {
-          // Mobile-created assignment: use planned intensity from the program
-          // (athlete_schedule.intensity is null for syncs that pre-date the intensity fix).
+          // Mobile-created assignment: use planned intensity from the program.
           dayIntensityForSquare = programIntensityMap.get(dateString) as IntensityLevel;
-        } else if (liveDayIntensity?.intensity) {
-          dayIntensityForSquare = liveDayIntensity.intensity as IntensityLevel;
         } else if (liveTrainingDay?.intensity) {
           dayIntensityForSquare = liveTrainingDay.intensity;
         }
@@ -1527,12 +1530,16 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       if (liveEntry !== undefined && assignmentId && !isExplicitlyCleared) {
         sessions.length = 0;
         liveEntry.sessions.forEach((s, idx) => {
+          // Editing hook's per-session intensity wins for immediate feedback;
+          // fall back to Supabase value, then the day-level intensity.
+          const perSessionKey = `${dateString}-${idx}`;
+          const editedIntensity = editing.sessionIntensities?.[perSessionKey];
           sessions.push({
             id: s.id,
             sessionIndex: idx,
             sessionName: s.sessionName,
             exerciseCount: s.exerciseCount,
-            intensity: (s.intensity ?? dayIntensityForSquare) as IntensityLevel,
+            intensity: (editedIntensity ?? s.intensity ?? dayIntensityForSquare) as IntensityLevel,
             assignmentId: assignmentId ?? '',
           });
         });
