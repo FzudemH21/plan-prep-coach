@@ -1184,7 +1184,7 @@ export default function AthleteSessionPage() {
 
   if (phase === 'overview') {
     return (
-      <div className="flex flex-col h-full bg-background max-w-[480px] mx-auto">
+      <div className="absolute inset-0 flex flex-col bg-background max-w-[480px] mx-auto overflow-hidden">
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
           <button
@@ -1570,7 +1570,7 @@ export default function AthleteSessionPage() {
     const totalSections = sections.length;
 
     return (
-      <div className="flex flex-col h-full bg-background max-w-[480px] mx-auto">
+      <div className="absolute inset-0 flex flex-col bg-background max-w-[480px] mx-auto overflow-hidden">
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
           <button
@@ -1630,7 +1630,7 @@ export default function AthleteSessionPage() {
 
   if (phase === 'rest') {
     return (
-      <div className="flex flex-col h-full bg-background items-center justify-center gap-8 px-6 max-w-[480px] mx-auto">
+      <div className="absolute inset-0 flex flex-col bg-background items-center justify-center gap-8 px-6 max-w-[480px] mx-auto overflow-hidden">
         <div className="flex flex-col items-center gap-2">
           <Timer className="h-8 w-8 text-primary opacity-70" />
           <p className="text-lg font-semibold text-muted-foreground">Rest</p>
@@ -1683,7 +1683,7 @@ export default function AthleteSessionPage() {
     const isLastSection = sectionIdx === sections.length - 1;
 
     return (
-      <div className="flex flex-col h-full bg-background max-w-[480px] mx-auto">
+      <div className="absolute inset-0 flex flex-col bg-background max-w-[480px] mx-auto overflow-hidden">
         {/* Header */}
         <div className="flex items-center gap-2 px-4 py-3 border-b shrink-0">
           <button
