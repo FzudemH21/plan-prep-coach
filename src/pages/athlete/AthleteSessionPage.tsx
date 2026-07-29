@@ -1208,7 +1208,7 @@ export default function AthleteSessionPage() {
             <p className="text-sm">No exercises assigned yet.</p>
           </div>
         ) : (
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             <div className="px-4 py-4 space-y-3">
                 {/* Completed banner */}
                 {currentLog && (
@@ -1724,7 +1724,7 @@ export default function AthleteSessionPage() {
         </div>
 
         {/* All exercises in this section — grouped by superset */}
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 min-h-0">
           <div className="px-4 py-3 space-y-4">
             {sectionExercises.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
