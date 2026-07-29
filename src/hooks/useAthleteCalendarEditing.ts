@@ -503,19 +503,31 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       return { ...prev, [dayDate]: currentSessions + 1 };
     });
 
-    setTrainingDays(prev =>
-      prev.map(day => {
-        if (day.date !== dayDate) return day;
-        const sessions = (day.sessions || 0) + 1;
-        const sessionNames = [...(day.sessionNames || [])];
-        sessionNames.push(`Session ${sessions}`);
-        // If the day was 'off', promote it to 'moderate' so the session
-        // is visible in the calendar (display logic hides 'off' days with
-        // no exercises).
-        const intensity = day.intensity === 'off' ? 'moderate' as IntensityLevel : day.intensity;
-        return { ...day, sessions, sessionNames, intensity, isTrainingDay: true };
-      })
-    );
+    setTrainingDays(prev => {
+      const exists = prev.some(day => day.date === dayDate);
+      if (exists) {
+        return prev.map(day => {
+          if (day.date !== dayDate) return day;
+          const sessions = (day.sessions || 0) + 1;
+          const sessionNames = [...(day.sessionNames || [])];
+          sessionNames.push(`Session ${sessions}`);
+          // If the day was 'off', promote it to 'moderate' so the session
+          // is visible in the calendar (display logic hides 'off' days with
+          // no exercises).
+          const intensity = day.intensity === 'off' ? 'moderate' as IntensityLevel : day.intensity;
+          return { ...day, sessions, sessionNames, intensity, isTrainingDay: true };
+        });
+      }
+      // Date is outside the original plan range (not in trainingDays).
+      // Append a new entry so the sync picks it up and writes it to athlete_schedule.
+      return [...prev, {
+        date: dayDate,
+        sessions: 1,
+        sessionNames: ['Session 1'],
+        isTrainingDay: true,
+        intensity: 'moderate' as IntensityLevel,
+      }];
+    });
 
     // Mirror the intensity reset in dailyIntensityData so the display
     // correctly renders the newly-added session for formerly-off days.
