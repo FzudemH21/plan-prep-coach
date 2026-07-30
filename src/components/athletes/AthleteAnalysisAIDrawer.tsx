@@ -3,6 +3,7 @@ import { Bot, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useAuth } from '@/hooks/useAuth';
 import {
   Sheet,
   SheetContent,
@@ -95,11 +96,13 @@ async function fetchAndBuildContext(
   connectionId: string,
   performanceParameters: AthletePerformanceParameter[],
   parametersV2: ParameterV2[],
+  coachUserId: string,
+  athleteLocalId: string,
 ): Promise<string> {
   const today = format(new Date(), 'yyyy-MM-dd');
   const from = format(subMonths(new Date(), 3), 'yyyy-MM-dd');
 
-  const [logsRes, schedRes, checkinsRes, testRes] = await Promise.all([
+  const [logsRes, schedRes, checkinsRes, testRes, anamnesisRes] = await Promise.all([
     supabase
       .from('athlete_session_logs')
       .select('date, session_name, borg_rating, duration_seconds, completed_at, sets_logged')
@@ -125,12 +128,28 @@ async function fetchAndBuildContext(
       .select('parameter_id, value, recorded_at')
       .eq('athlete_connection_id', connectionId)
       .order('recorded_at'),
+    coachUserId && athleteLocalId
+      ? supabase
+          .from('athlete_anamneses')
+          .select('conducted_at, template_snapshot, field_values, ai_summary, notes')
+          .eq('coach_user_id', coachUserId)
+          .eq('athlete_local_id', athleteLocalId)
+          .order('conducted_at', { ascending: false })
+          .limit(3)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   const logs = logsRes.data ?? [];
   const schedule = schedRes.data ?? [];
   const checkins = checkinsRes.data ?? [];
   const testResults = testRes.data ?? [];
+  const anamnesisRows = (anamnesisRes.data ?? []) as Array<{
+    conducted_at: string;
+    template_snapshot: { name?: string; sections?: Array<{ fields: Array<{ id: string; label: string }> }> };
+    field_values: Record<string, string>;
+    ai_summary: string | null;
+    notes: string;
+  }>;
 
   // ── Internal load ─────────────────────────────────────────────────────────
   const completedLogs = logs.filter(
@@ -238,6 +257,29 @@ async function fetchAndBuildContext(
     };
   });
 
+  // ── Anamnesis records ─────────────────────────────────────────────────────
+  const KEY_FIELD_IDS = ['f-complaint', 'f-injury-history', 'f-medications', 'f-key-findings', 'f-training-priorities', 'f-contraindications'];
+  const anamnesisSummary = anamnesisRows.map((row) => {
+    const date = row.conducted_at.slice(0, 10);
+    const templateName = row.template_snapshot?.name ?? 'Anamnesis';
+    const keyFields: Record<string, string> = {};
+    for (const section of row.template_snapshot?.sections ?? []) {
+      for (const field of section.fields) {
+        if (KEY_FIELD_IDS.includes(field.id)) {
+          const val = row.field_values?.[field.id]?.trim();
+          if (val) keyFields[field.label] = val;
+        }
+      }
+    }
+    return {
+      date,
+      template: templateName,
+      aiSummary: row.ai_summary?.trim() || null,
+      keyFields: Object.keys(keyFields).length > 0 ? keyFields : null,
+      coachNotes: row.notes?.trim() || null,
+    };
+  });
+
   return JSON.stringify(
     {
       window: `${from} to ${today}`,
@@ -258,6 +300,8 @@ async function fetchAndBuildContext(
         perfSummary.length > 0 ? perfSummary : 'No performance data recorded',
       dailyMonitoring:
         monitoringSummary.length > 0 ? monitoringSummary : 'No monitoring data available',
+      anamnesisRecords:
+        anamnesisSummary.length > 0 ? anamnesisSummary : 'No anamnesis records on file',
     },
     null,
     2
@@ -282,6 +326,7 @@ export function AthleteAnalysisAIDrawer({
 }: AthleteAnalysisAIDrawerProps) {
   const { getConnectionForAthlete } = useAthleteConnections();
   const connectionId = getConnectionForAthlete(athleteId)?.id ?? null;
+  const { user } = useAuth();
 
   const [open, setOpen] = useState(false);
   // displayMessages — what the user sees in the chat UI
@@ -310,14 +355,14 @@ export function AthleteAnalysisAIDrawer({
     if (contextStr !== null || contextLoading || !connectionId) return;
     setContextLoading(true);
     try {
-      const ctx = await fetchAndBuildContext(connectionId, performanceParameters, parametersV2);
+      const ctx = await fetchAndBuildContext(connectionId, performanceParameters, parametersV2, user?.id ?? '', athleteId);
       setContextStr(ctx);
     } catch (e) {
       console.error('Failed to build AI context', e);
     } finally {
       setContextLoading(false);
     }
-  }, [connectionId, contextStr, contextLoading, performanceParameters, parametersV2]);
+  }, [connectionId, contextStr, contextLoading, performanceParameters, parametersV2, user, athleteId]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();

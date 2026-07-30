@@ -42,6 +42,7 @@ import { useWizardAutoSave } from "@/hooks/useWizardAutoSave";
 import { WizardAIAssistant } from "@/components/wizard/WizardAIAssistant";
 import { useRAGRetrieval } from "@/hooks/useRAGRetrieval";
 import { useGlobalAIContext } from "@/hooks/useGlobalAIContext";
+import { useAnamnesisAIContext } from "@/hooks/useAnamnesisAIContext";
 import { useCoachMemory } from "@/hooks/useCoachMemory";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
@@ -110,6 +111,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   // State for selected methods in Training Methods overview
   const [selectedMethods, setSelectedMethods] = useState<Set<string>>(new Set());
   const { coachMemoryContext } = useCoachMemory({ currentMethods: Array.from(selectedMethods) });
+  const anamnesisAIContext = useAnamnesisAIContext(selectedAthleteId ?? null);
 
   // State for manually added methods with rationale
   const [manuallyAddedMethods, setManuallyAddedMethods] = useState<ManuallyAddedMethod[]>([]);
@@ -3124,6 +3126,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         ragContext={ragContext}
         globalContext={globalAIContext}
         coachMemoryContext={coachMemoryContext}
+        anamnesisContext={anamnesisAIContext || undefined}
       />
     </>
   );

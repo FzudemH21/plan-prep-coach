@@ -38,6 +38,7 @@ import { WizardAIAssistant, FocusedSessionContext } from '@/components/wizard/Wi
 import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
 import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
 import { useCoachMemory } from '@/hooks/useCoachMemory';
+import { useAnamnesisAIContext } from '@/hooks/useAnamnesisAIContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { supabase } from '@/lib/supabase';
@@ -89,6 +90,7 @@ export default function MicrocyclePlanningPage() {
   const [ragContext, setRagContext] = useState('');
   const globalAIContext = useGlobalAIContext(currentStep === 2);
   const { coachMemoryContext, saveToMemory } = useCoachMemory({ currentMethods: macrocycleData?.selectedMethods ?? [] });
+  const anamnesisAIContext = useAnamnesisAIContext(selectedAthleteId ?? null);
   const { user } = useAuth();
   const [accumulatedDialogOpen, setAccumulatedDialogOpen] = useState(false);
   const [accumulatedProgramId, setAccumulatedProgramId] = useState('');
@@ -5070,6 +5072,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
         coachMemoryContext={coachMemoryContext}
         forceOpen={aiOpenTrigger}
         focusedSessionContext={focusedSessionCtx}
+        anamnesisContext={anamnesisAIContext || undefined}
       />
     </div>
   );

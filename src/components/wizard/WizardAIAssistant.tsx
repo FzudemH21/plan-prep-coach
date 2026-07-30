@@ -187,6 +187,13 @@ export interface WizardAIAssistantProps {
    * exactly which day/session the coach is currently viewing.
    */
   focusedSessionContext?: FocusedSessionContext;
+  /**
+   * Formatted anamnesis & health history for the selected athlete.
+   * Built by useAnamnesisAIContext in the calling wizard page and injected
+   * into the system prompt so the AI is aware of injuries, contraindications,
+   * and training priorities from the most recent anamnesis records.
+   */
+  anamnesisContext?: string;
 }
 
 /** Context passed when the AI is opened from inside a workout session card. */
@@ -418,6 +425,7 @@ function buildSystemPrompt(
   assistantRole?: string,
   globalContext?: string,
   focusedSessionContext?: FocusedSessionContext,
+  anamnesisContext?: string,
 ): string {
   const memoryBlock = coachMemoryContext
     ? `\n\n## Coach's Past Plans (most recent first — defer to newer patterns when in doubt)\n${coachMemoryContext}`
@@ -426,6 +434,7 @@ function buildSystemPrompt(
     ? `\n\n## Relevant Research & References (retrieved from the coach's uploaded documents)\n${ragContext}\n\n## Research Integration Instructions\n- Cite the source document name when referencing uploaded research.\n- Cross-reference the uploaded content against your own sports science knowledge (textbooks, peer-reviewed literature, established guidelines e.g. NSCA, ACSM).\n- If an uploaded source aligns with scientific consensus, note that briefly.\n- If an uploaded source contradicts or challenges consensus, explicitly flag it: explain both positions and let the coach decide — do not silently blend conflicting views.\n- If sources within the uploaded documents contradict each other, surface that tension clearly.\n- Never fabricate citations. Only cite documents that appear in the References section above.\n\n## Evidence Hierarchy (apply when evaluating any source — uploaded or from your own knowledge)\nWeight evidence by study design, from strongest to weakest:\n1. Meta-analysis / Systematic review — highest confidence; synthesizes multiple studies; flag if heterogeneity is high (I² > 75%) as pooled conclusions may be unreliable\n2. Randomised Controlled Trial (RCT) — strong causal inference; note sample size, blinding quality, and whether the population matches the athlete\n3. Controlled trial without randomisation — moderate confidence; confounding risk higher\n4. Prospective cohort study — useful for dose-response and long-term outcomes; observational only\n5. Case-control study — good for rare outcomes; susceptible to recall and selection bias\n6. Cross-sectional study — snapshot only; cannot establish causality\n7. Case series / Case report — hypothesis-generating; very low generalisability\n8. Expert opinion / Consensus statement — useful when evidence is sparse; weight by the credibility of the body issuing it (e.g. NSCA, ACSM, IOC)\nWhen citing or evaluating a source, briefly indicate its level (e.g. "RCT, n=24" or "systematic review of 12 RCTs"). When a recommendation rests only on lower-level evidence, say so explicitly rather than presenting it with the same confidence as meta-analytic findings.`
     : "";
   const globalBlock = globalContext ? `\n\n${globalContext}` : "";
+  const anamnesisBlock = anamnesisContext ? `\n\n${anamnesisContext}` : "";
   const focusedSessionBlock = focusedSessionContext
     ? `\n\n## Currently Viewing (coach opened AI from inside this session)
 Day: ${focusedSessionContext.dayLabel}
@@ -496,7 +505,7 @@ Use hyphens (not underscores). "Deload" = active recovery week at very low load.
 Parameter values set in the Periodization Table (Phase 2 Step 4) flow automatically down to exercises and the training calendar. Changing a value at a higher level propagates consistently downward. Tests and events scheduled in Phase 1 appear in the mesocycle calendar and athlete calendar upon plan assignment.
 
 ## Coach Background
-${coachContext}${memoryBlock}${ragBlock}${globalBlock}${focusedSessionBlock}
+${coachContext}${memoryBlock}${ragBlock}${globalBlock}${anamnesisBlock}${focusedSessionBlock}
 
 ## ${contextLabel}
 ${wizardContext}
@@ -803,6 +812,7 @@ export function WizardAIAssistant({
   globalContext,
   forceOpen,
   focusedSessionContext,
+  anamnesisContext,
 }: WizardAIAssistantProps) {
   const { profile } = useCoachProfile();
   const { retrieve } = useRAGRetrieval();
@@ -901,7 +911,7 @@ export function WizardAIAssistant({
 
       const reply = await sendMessage(
         newMessages,
-        buildSystemPrompt(coachContext, wizardContext, !!onApplySuggestion, coachMemoryContext, effectiveRagContext, assistantRole, globalContext, focusedSessionContext),
+        buildSystemPrompt(coachContext, wizardContext, !!onApplySuggestion, coachMemoryContext, effectiveRagContext, assistantRole, globalContext, focusedSessionContext, anamnesisContext),
         "claude-sonnet-4-5",
         8192
       );
