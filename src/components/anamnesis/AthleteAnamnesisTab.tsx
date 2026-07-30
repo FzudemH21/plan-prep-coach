@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -498,7 +497,7 @@ Use clear, clinical language suitable for professional documentation. Skip secti
   const allSections: (AnamnesisSection & { isCustom?: boolean })[] = templateSnapshot.sections;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Sticky meta row */}
       <div className="shrink-0 px-6 pb-4 border-b space-y-3">
         <div className="flex gap-3">
@@ -580,7 +579,7 @@ Use clear, clinical language suitable for professional documentation. Skip secti
       </div>
 
       {/* Scrollable form body */}
-      <ScrollArea className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-6 py-4 space-y-6">
           {allSections.length === 0 && !initial && (
             <p className="text-sm text-muted-foreground text-center py-6">
@@ -770,7 +769,7 @@ Use clear, clinical language suitable for professional documentation. Skip secti
             )}
           </div>
         </div>
-      </ScrollArea>
+      </div>
 
       {/* Footer */}
       <div className="shrink-0 px-6 py-4 border-t flex items-center justify-between gap-3">
