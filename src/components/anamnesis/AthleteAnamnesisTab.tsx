@@ -13,11 +13,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -993,22 +993,19 @@ export function AthleteAnamnesisTab({ athlete }: { athlete: Athlete }) {
         ))}
       </div>
 
-      {/* Sheet for create / edit */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent
-          side="right"
-          className="w-full sm:max-w-xl flex flex-col gap-0 p-0"
-        >
-          <SheetHeader className="px-6 pt-6 pb-4 shrink-0">
-            <SheetTitle>
+      {/* Dialog for create / edit */}
+      <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
+        <DialogContent className="max-w-[720px] w-full max-h-[90vh] flex flex-col gap-0 p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
+            <DialogTitle>
               {selectedRecord
                 ? `Anamnesis · ${(() => {
                     try { return format(parseISO(selectedRecord.conductedAt + 'T12:00:00'), 'd MMM yyyy'); }
                     catch { return selectedRecord.conductedAt; }
                   })()}`
                 : 'New Anamnesis'}
-            </SheetTitle>
-          </SheetHeader>
+            </DialogTitle>
+          </DialogHeader>
           <RecordForm
             initial={selectedRecord
               ? {
@@ -1032,8 +1029,8 @@ export function AthleteAnamnesisTab({ athlete }: { athlete: Athlete }) {
             isSaving={isSaving}
             isDeleting={isDeleting}
           />
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
