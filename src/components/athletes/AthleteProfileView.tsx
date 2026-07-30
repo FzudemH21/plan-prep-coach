@@ -31,7 +31,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Save, Trash2, X, Calendar, User, Mic, MicOff, Clock, Files, TrendingUp, Settings, BarChart2, Activity, MessageCircle, Send, Loader2, Paperclip, ImageIcon, Film, FileText, AlertTriangle } from 'lucide-react';
+import { Plus, Save, Trash2, X, Calendar, User, Mic, MicOff, Clock, Files, TrendingUp, Settings, BarChart2, Activity, MessageCircle, Send, Loader2, Paperclip, ImageIcon, Film, FileText, AlertTriangle, ClipboardList } from 'lucide-react';
 import { useSpeechInput } from '@/hooks/useSpeechInput';
 import {
   Athlete,
@@ -50,6 +50,7 @@ import { AthleteSettingsTab } from './AthleteSettingsTab';
 import { AthleteAnalysisTab } from './AthleteAnalysisTab';
 import { AthleteMonitoringTab } from './AthleteMonitoringTab';
 import { AthleteAnalysisAIDrawer } from './AthleteAnalysisAIDrawer';
+import { AthleteAnamnesisTab } from '@/components/anamnesis/AthleteAnamnesisTab';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
@@ -317,6 +318,10 @@ export function AthleteProfileView({
           <TabsTrigger value="documents" className="gap-2">
             <Files className="h-4 w-4" />
             Documents
+          </TabsTrigger>
+          <TabsTrigger value="anamnesis" className="gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Anamnesis
           </TabsTrigger>
           <TabsTrigger value="analysis" className="gap-2">
             <BarChart2 className="h-4 w-4" />
@@ -728,6 +733,10 @@ export function AthleteProfileView({
 
         <TabsContent value="documents" className="flex-1 mt-0 min-h-0 overflow-y-auto">
             <AthleteDocumentsTab athleteId={athlete.id} />
+        </TabsContent>
+
+        <TabsContent value="anamnesis" className="flex-1 mt-0 min-h-0 flex flex-col p-1 pr-4">
+          <AthleteAnamnesisTab athlete={athlete} />
         </TabsContent>
 
         <TabsContent value="analysis" forceMount className="flex-1 mt-0 min-h-0 data-[state=inactive]:hidden">

@@ -49,6 +49,7 @@ import {
   RotateCcw,
   Camera,
 } from "lucide-react";
+import { AnamnesisTemplateEditor } from "@/components/anamnesis/AnamnesisTemplateEditor";
 import { cn } from "@/lib/utils";
 
 // ─────────────────────────────────────────────
@@ -839,6 +840,10 @@ export default function CoachProfilePage() {
             <Settings className="h-3.5 w-3.5" />
             {t('coachProfile.tabs.settings')}
           </TabsTrigger>
+          <TabsTrigger value="anamnesis" className="flex items-center gap-1.5">
+            <ClipboardList className="h-3.5 w-3.5" />
+            Anamnesis
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile">
@@ -868,6 +873,10 @@ export default function CoachProfilePage() {
 
         <TabsContent value="settings">
           <SettingsTab />
+        </TabsContent>
+
+        <TabsContent value="anamnesis">
+          <AnamnesisTemplateEditor />
         </TabsContent>
       </Tabs>
     </div>
