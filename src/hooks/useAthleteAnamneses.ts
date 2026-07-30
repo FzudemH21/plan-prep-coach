@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
-import type { AthleteAnamnesis, AnamnesisField, AnamnesisTemplateSnapshot } from '@/types/anamnesis';
+import type { AthleteAnamnesis, AnamnesisField, AnamnesisTemplateSnapshot, AnamnesisAttachment } from '@/types/anamnesis';
 
 // ── DB row → TS type ──────────────────────────────────────────────────────────
 
@@ -17,6 +17,7 @@ interface DbAnamnesis {
   custom_field_values: Record<string, string>;
   notes: string;
   ai_summary: string | null;
+  attachments: AnamnesisAttachment[];
   created_at: string;
   updated_at: string;
 }
@@ -34,6 +35,7 @@ function fromDb(row: DbAnamnesis): AthleteAnamnesis {
     customFieldValues: row.custom_field_values ?? {},
     notes: row.notes ?? '',
     aiSummary: row.ai_summary ?? null,
+    attachments: row.attachments ?? [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -87,6 +89,7 @@ export function useAthleteAnamneses(athleteLocalId: string) {
             custom_field_values: payload.customFieldValues,
             notes: payload.notes,
             ai_summary: payload.aiSummary,
+            attachments: payload.attachments ?? [],
           })
           .select()
           .single();
@@ -115,6 +118,7 @@ export function useAthleteAnamneses(athleteLocalId: string) {
         if (updates.customFieldValues !== undefined) dbUpdates.custom_field_values = updates.customFieldValues;
         if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
         if (updates.aiSummary !== undefined) dbUpdates.ai_summary = updates.aiSummary;
+        if (updates.attachments !== undefined) dbUpdates.attachments = updates.attachments;
 
         const { data, error } = await supabase
           .from('athlete_anamneses')

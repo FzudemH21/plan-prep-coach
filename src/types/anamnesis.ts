@@ -1,5 +1,13 @@
 export type AnamnesisFieldType = 'text' | 'textarea' | 'number' | 'select' | 'boolean';
 
+export interface AnamnesisAttachment {
+  name: string;
+  type: 'image' | 'document';
+  mimeType: string;
+  path: string;
+  size: number;
+}
+
 export interface AnamnesisField {
   id: string;
   label: string;
@@ -40,6 +48,7 @@ export interface AthleteAnamnesis {
   customFieldValues: Record<string, string>;
   notes: string;
   aiSummary: string | null;
+  attachments: AnamnesisAttachment[];
   createdAt: string;
   updatedAt: string;
 }

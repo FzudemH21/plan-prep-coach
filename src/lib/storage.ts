@@ -47,6 +47,26 @@ export interface ChatAttachmentMeta {
   size: number;
 }
 
+// ── Anamnesis file upload ─────────────────────────────────────────────────────
+// Stores attachments under anamnesis/{coachUserId}/{athleteLocalId}/{timestamp}_{filename}
+// in the documents bucket (private — accessed via signed URLs).
+
+export async function uploadAnamnesisFile(
+  coachUserId: string,
+  athleteLocalId: string,
+  file: File
+): Promise<{ name: string; type: 'image' | 'document'; mimeType: string; path: string; size: number }> {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `anamnesis/${coachUserId}/${athleteLocalId}/${Date.now()}_${safeName}`;
+  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+    upsert: false,
+    contentType: file.type,
+  });
+  if (error) throw error;
+  const type: 'image' | 'document' = file.type.startsWith('image/') ? 'image' : 'document';
+  return { name: file.name, type, mimeType: file.type, path, size: file.size };
+}
+
 export async function uploadChatFile(
   connectionId: string,
   file: File

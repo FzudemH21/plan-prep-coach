@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,15 +32,17 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   Plus, Trash2, Loader2, ClipboardList, Sparkles, ChevronRight, X,
-  ChevronUp, ChevronDown, Pencil,
+  ChevronUp, ChevronDown, Pencil, Paperclip, FileText, FileImage, ExternalLink,
 } from 'lucide-react';
 import { useAthleteAnamneses } from '@/hooks/useAthleteAnamneses';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
 import { TemplateEditorDialog } from '@/components/anamnesis/AnamnesisTemplateEditor';
 import { sendMessage } from '@/utils/anthropicApi';
+import { uploadAnamnesisFile, deleteFile, getSignedUrl } from '@/lib/storage';
+import { useAuth } from '@/hooks/useAuth';
 import type { Athlete } from '@/types/athlete';
 import type {
-  AthleteAnamnesis, AnamnesisField, AnamnesisFieldType, AnamnesisSection,
+  AthleteAnamnesis, AnamnesisField, AnamnesisFieldType, AnamnesisSection, AnamnesisAttachment,
 } from '@/types/anamnesis';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -263,6 +265,7 @@ interface RecordFormProps {
   initial: Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'createdAt' | 'updatedAt'> | null;
   athleteLocalId: string;
   athleteName: string;
+  coachUserId: string;
   onSave: (data: Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   onDelete?: () => Promise<void>;
   isSaving: boolean;
@@ -273,6 +276,7 @@ function RecordForm({
   initial,
   athleteLocalId,
   athleteName,
+  coachUserId,
   onSave,
   onDelete,
   isSaving,
@@ -302,7 +306,55 @@ function RecordForm({
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [aiSummary, setAiSummary] = useState<string | null>(initial?.aiSummary ?? null);
   const [generatingSummary, setGeneratingSummary] = useState(false);
+  const [attachments, setAttachments] = useState<AnamnesisAttachment[]>(initial?.attachments ?? []);
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Load signed URLs for any attachment that doesn't have one yet
+  useEffect(() => {
+    const missing = attachments.filter((a) => !signedUrls[a.path]);
+    if (missing.length === 0) return;
+    (async () => {
+      const updates: Record<string, string> = {};
+      await Promise.all(
+        missing.map(async (a) => {
+          try { updates[a.path] = await getSignedUrl(a.path, 3600); } catch { /* ignore */ }
+        }),
+      );
+      if (Object.keys(updates).length > 0) setSignedUrls((prev) => ({ ...prev, ...updates }));
+    })();
+  }, [attachments]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    e.target.value = '';
+    const oversized = files.filter((f) => f.size > 20 * 1024 * 1024);
+    if (oversized.length > 0) {
+      toast({ title: 'File too large', description: 'Each file must be under 20 MB.', variant: 'destructive' });
+      return;
+    }
+    setUploadingFile(true);
+    try {
+      const uploaded = await Promise.all(
+        files.map((f) => uploadAnamnesisFile(coachUserId, athleteLocalId, f)),
+      );
+      setAttachments((prev) => [...prev, ...uploaded]);
+    } catch (err) {
+      console.error('[AnamnesisTab] upload error', err);
+      toast({ title: 'Upload failed', description: 'Could not upload file.', variant: 'destructive' });
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const handleRemoveAttachment = async (path: string) => {
+    setAttachments((prev) => prev.filter((a) => a.path !== path));
+    setSignedUrls((prev) => { const next = { ...prev }; delete next[path]; return next; });
+    deleteFile(path).catch(() => {});
+  };
 
   const handleTemplateChange = (id: string) => {
     const t = templates.find((x) => x.id === id);
@@ -414,6 +466,7 @@ Use clear, clinical language suitable for professional documentation. Skip secti
       customFieldValues,
       notes,
       aiSummary,
+      attachments,
     });
   };
 
@@ -574,6 +627,92 @@ Use clear, clinical language suitable for professional documentation. Skip secti
             />
           </div>
 
+          {/* Attachments */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-semibold">Attachments</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingFile}
+              >
+                {uploadingFile
+                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                  : <Paperclip className="h-3 w-3" />}
+                {uploadingFile ? 'Uploading…' : 'Add file'}
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+                multiple
+                onChange={handleFileSelect}
+              />
+            </div>
+            {attachments.length === 0 && !uploadingFile && (
+              <p className="text-xs text-muted-foreground">
+                Attach images or documents (max 20 MB each).
+              </p>
+            )}
+            <div className="space-y-1.5">
+              {attachments.map((att) => (
+                <div
+                  key={att.path}
+                  className="flex items-center gap-2 p-2 rounded border bg-background"
+                >
+                  {att.type === 'image' && signedUrls[att.path] ? (
+                    <img
+                      src={signedUrls[att.path]}
+                      alt={att.name}
+                      className="h-10 w-10 rounded object-cover shrink-0 cursor-pointer"
+                      onClick={() => window.open(signedUrls[att.path], '_blank')}
+                    />
+                  ) : (
+                    <div className="h-10 w-10 rounded bg-muted flex items-center justify-center shrink-0">
+                      {att.type === 'image'
+                        ? <FileImage className="h-5 w-5 text-muted-foreground" />
+                        : <FileText className="h-5 w-5 text-muted-foreground" />}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{att.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {att.size >= 1024 * 1024
+                        ? `${(att.size / 1024 / 1024).toFixed(1)} MB`
+                        : `${Math.round(att.size / 1024)} KB`}
+                    </p>
+                  </div>
+                  {signedUrls[att.path] && (
+                    <a
+                      href={signedUrls[att.path]}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </Button>
+                    </a>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                    onClick={() => handleRemoveAttachment(att.path)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* AI Summary */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -694,6 +833,12 @@ function RecordCard({
               AI Summary
             </Badge>
           )}
+          {(record.attachments?.length ?? 0) > 0 && (
+            <Badge variant="outline" className="text-xs px-1.5 py-0 gap-1">
+              <Paperclip className="h-2.5 w-2.5" />
+              {record.attachments.length}
+            </Badge>
+          )}
         </div>
         {preview && (
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{preview}</p>
@@ -713,6 +858,7 @@ function RecordCard({
 
 export function AthleteAnamnesisTab({ athlete }: { athlete: Athlete }) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const { anamneses, loading, createAnamnesis, updateAnamnesis, deleteAnamnesis } =
     useAthleteAnamneses(athlete.id);
 
@@ -760,6 +906,10 @@ export function AthleteAnamnesisTab({ athlete }: { athlete: Athlete }) {
 
   const handleDelete = async () => {
     if (!selectedRecord) return;
+    // Fire-and-forget cleanup of stored files
+    (selectedRecord.attachments ?? []).forEach((att) => {
+      deleteFile(att.path).catch(() => {});
+    });
     setIsDeleting(true);
     const ok = await deleteAnamnesis(selectedRecord.id);
     setIsDeleting(false);
@@ -843,10 +993,12 @@ export function AthleteAnamnesisTab({ athlete }: { athlete: Athlete }) {
                   customFieldValues: selectedRecord.customFieldValues,
                   notes: selectedRecord.notes,
                   aiSummary: selectedRecord.aiSummary,
+                  attachments: selectedRecord.attachments ?? [],
                 }
               : null}
             athleteLocalId={athlete.id}
             athleteName={athleteName}
+            coachUserId={user?.id ?? ''}
             onSave={handleSave}
             onDelete={selectedRecord ? handleDelete : undefined}
             isSaving={isSaving}
