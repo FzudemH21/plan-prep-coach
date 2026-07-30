@@ -198,6 +198,8 @@ export function AthleteProfileView({
 
   // Notes state
   const [newNoteText, setNewNoteText] = useState('');
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState('');
 
   // Voice input for notes
   const handleVoiceNoteResult = useCallback(
@@ -231,6 +233,22 @@ export function AthleteProfileView({
     };
     onUpdateAthlete({ notesHistory: [newEntry, ...(athlete.notesHistory ?? [])] });
     setNewNoteText('');
+  };
+
+  const handleUpdateNote = (id: string, text: string) => {
+    const updated = (athlete.notesHistory ?? []).map((n) =>
+      n.id === id ? { ...n, text } : n,
+    );
+    onUpdateAthlete({ notesHistory: updated });
+    setEditingNoteId(null);
+  };
+
+  const handleDeleteNote = (id: string) => {
+    const updated = (athlete.notesHistory ?? []).filter((n) => n.id !== id);
+    onUpdateAthlete({
+      notesHistory: updated,
+      ...(id === '__migrated__' ? { notes: '' } : {}),
+    });
   };
 
   // Start in edit mode if it's a new athlete
@@ -303,6 +321,10 @@ export function AthleteProfileView({
             <User className="h-4 w-4" />
             Profile
           </TabsTrigger>
+          <TabsTrigger value="anamnesis" className="gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Anamnesis
+          </TabsTrigger>
           <TabsTrigger value="monitoring" className="gap-2">
             <Activity className="h-4 w-4" />
             Monitoring
@@ -318,10 +340,6 @@ export function AthleteProfileView({
           <TabsTrigger value="documents" className="gap-2">
             <Files className="h-4 w-4" />
             Documents
-          </TabsTrigger>
-          <TabsTrigger value="anamnesis" className="gap-2">
-            <ClipboardList className="h-4 w-4" />
-            Anamnesis
           </TabsTrigger>
           <TabsTrigger value="analysis" className="gap-2">
             <BarChart2 className="h-4 w-4" />
@@ -625,14 +643,52 @@ export function AthleteProfileView({
                 <div className="space-y-2">
                   {allNotes.map((note) => (
                     <div key={note.id} className="rounded-lg border bg-muted/30 px-3 py-2.5 text-sm">
-                      <p className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-                        <Clock className="h-3 w-3 flex-shrink-0" />
-                        {format(new Date(note.timestamp), 'MMM d, yyyy · HH:mm')}
-                        {note.id === '__migrated__' && (
-                          <span className="ml-1 italic">(imported)</span>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Clock className="h-3 w-3 flex-shrink-0" />
+                          {format(new Date(note.timestamp), 'MMM d, yyyy · HH:mm')}
+                          {note.id === '__migrated__' && (
+                            <span className="ml-1 italic">(imported)</span>
+                          )}
+                        </p>
+                        {editingNoteId !== note.id && (
+                          <div className="flex gap-0.5">
+                            <button
+                              onClick={() => { setEditingNoteId(note.id); setEditingNoteText(note.text); }}
+                              className="p-1 rounded hover:bg-muted-foreground/20 text-muted-foreground hover:text-foreground"
+                            >
+                              <Save className="h-3 w-3" style={{ display: 'none' }} />
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteNote(note.id)}
+                              className="p-1 rounded hover:bg-muted-foreground/20 text-muted-foreground hover:text-destructive"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                            </button>
+                          </div>
                         )}
-                      </p>
-                      <p className="whitespace-pre-wrap leading-snug">{note.text}</p>
+                      </div>
+                      {editingNoteId === note.id ? (
+                        <div className="space-y-1.5">
+                          <Textarea
+                            value={editingNoteText}
+                            onChange={(e) => setEditingNoteText(e.target.value)}
+                            className="min-h-[72px] resize-y text-sm"
+                            autoFocus
+                          />
+                          <div className="flex gap-1.5 justify-end">
+                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setEditingNoteId(null)}>
+                              Cancel
+                            </Button>
+                            <Button size="sm" className="h-7 text-xs" onClick={() => handleUpdateNote(note.id, editingNoteText)} disabled={!editingNoteText.trim()}>
+                              Save
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="whitespace-pre-wrap leading-snug">{note.text}</p>
+                      )}
                     </div>
                   ))}
                 </div>
