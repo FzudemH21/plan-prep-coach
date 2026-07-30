@@ -229,7 +229,7 @@ function SectionEditor({
 
 // ── Template editor dialog ────────────────────────────────────────────────────
 
-function TemplateEditorDialog({
+export function TemplateEditorDialog({
   initial,
   open,
   onClose,

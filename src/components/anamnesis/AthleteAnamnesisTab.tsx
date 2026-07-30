@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { useAthleteAnamneses } from '@/hooks/useAthleteAnamneses';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
+import { TemplateEditorDialog } from '@/components/anamnesis/AnamnesisTemplateEditor';
 import { sendMessage } from '@/utils/anthropicApi';
 import type { Athlete } from '@/types/athlete';
 import type {
@@ -277,7 +278,10 @@ function RecordForm({
   isSaving,
   isDeleting,
 }: RecordFormProps) {
-  const { templates } = useAnamnesisTemplates();
+  const { templates, createTemplate } = useAnamnesisTemplates();
+
+  const [showNewTemplate, setShowNewTemplate] = useState(false);
+  const [savingNewTemplate, setSavingNewTemplate] = useState(false);
 
   const [conductedAt, setConductedAt] = useState(initial?.conductedAt ?? todayIso());
   const [templateId, setTemplateId] = useState<string | null>(initial?.templateId ?? null);
@@ -303,10 +307,19 @@ function RecordForm({
     if (!t) return;
     setTemplateId(id);
     setTemplateSnapshot({ name: t.name, sections: t.sections });
-    // Keep existing values that happen to match field IDs; clear orphaned ones
     setFieldValues({});
     setCustomFieldValues({});
     setAiSummary(null);
+  };
+
+  const handleSaveNewTemplate = async (name: string, sections: AnamnesisSection[]) => {
+    setSavingNewTemplate(true);
+    const created = await createTemplate(name, sections);
+    setSavingNewTemplate(false);
+    if (created) {
+      setShowNewTemplate(false);
+      handleTemplateChange(created.id);
+    }
   };
 
   const setFieldValue = (fieldId: string, value: string) => {
@@ -408,14 +421,10 @@ Use clear, clinical language suitable for professional documentation. Skip secti
           </div>
           <div className="flex-1 space-y-1">
             <Label className="text-xs">Template</Label>
-            {templates.length === 0 ? (
-              <p className="text-xs text-muted-foreground pt-2">
-                No templates — create one in Coach Profile → Anamnesis.
-              </p>
-            ) : (
+            <div className="flex gap-1.5">
               <Select value={templateId ?? ''} onValueChange={handleTemplateChange}>
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue placeholder="Select template…" />
+                <SelectTrigger className="h-9 text-sm flex-1">
+                  <SelectValue placeholder={templates.length === 0 ? 'No templates yet…' : 'Select template…'} />
                 </SelectTrigger>
                 <SelectContent>
                   {templates.map((t) => (
@@ -423,8 +432,29 @@ Use clear, clinical language suitable for professional documentation. Skip secti
                   ))}
                 </SelectContent>
               </Select>
-            )}
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 shrink-0"
+                onClick={() => setShowNewTemplate(true)}
+                title="Create new template"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
+
+          {showNewTemplate && (
+            <TemplateEditorDialog
+              key="new-from-anamnesis"
+              initial={{ name: '', sections: [{ id: uid(), title: '', fields: [{ id: uid(), label: '', fieldType: 'text' as const }] }] }}
+              open
+              onClose={() => setShowNewTemplate(false)}
+              onSave={handleSaveNewTemplate}
+              isSaving={savingNewTemplate}
+            />
+          )}
         </div>
       </div>
 
