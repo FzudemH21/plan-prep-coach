@@ -258,24 +258,26 @@ async function fetchAndBuildContext(
   });
 
   // ── Anamnesis records ─────────────────────────────────────────────────────
-  const KEY_FIELD_IDS = ['f-complaint', 'f-injury-history', 'f-medications', 'f-key-findings', 'f-training-priorities', 'f-contraindications'];
   const anamnesisSummary = anamnesisRows.map((row) => {
     const date = row.conducted_at.slice(0, 10);
     const templateName = row.template_snapshot?.name ?? 'Anamnesis';
-    const keyFields: Record<string, string> = {};
+    // Include all filled fields from all sections — works for any template structure
+    const sections: Array<{ section: string; fields: Record<string, string> }> = [];
     for (const section of row.template_snapshot?.sections ?? []) {
+      const fields: Record<string, string> = {};
       for (const field of section.fields) {
-        if (KEY_FIELD_IDS.includes(field.id)) {
-          const val = row.field_values?.[field.id]?.trim();
-          if (val) keyFields[field.label] = val;
-        }
+        const val = row.field_values?.[field.id]?.trim();
+        if (val) fields[field.label] = val;
+      }
+      if (Object.keys(fields).length > 0) {
+        sections.push({ section: section.title, fields });
       }
     }
     return {
       date,
       template: templateName,
       aiSummary: row.ai_summary?.trim() || null,
-      keyFields: Object.keys(keyFields).length > 0 ? keyFields : null,
+      sections: sections.length > 0 ? sections : null,
       coachNotes: row.notes?.trim() || null,
     };
   });

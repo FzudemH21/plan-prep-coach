@@ -7,30 +7,25 @@ function formatRecord(rec: AthleteAnamnesis, index: number): string {
   const templateName = rec.templateSnapshot?.name ?? 'Anamnesis';
   const lines: string[] = [`### Record ${index + 1} — ${date} (${templateName})`];
 
-  // AI-generated summary first — most dense signal
+  // AI-generated summary first — most informative
   if (rec.aiSummary?.trim()) {
     lines.push(`**AI Summary:** ${rec.aiSummary.trim()}`);
   }
 
-  // Pull key fields from all sections in the snapshot
-  const keyFieldIds = [
-    'f-complaint',
-    'f-injury-history',
-    'f-medications',
-    'f-key-findings',
-    'f-training-priorities',
-    'f-contraindications',
-  ];
-
+  // All sections and their filled fields — works for any template structure
   for (const section of rec.templateSnapshot?.sections ?? []) {
+    const sectionLines: string[] = [];
     for (const field of section.fields) {
-      if (!keyFieldIds.includes(field.id)) continue;
       const val = rec.fieldValues[field.id]?.trim();
-      if (val) lines.push(`**${field.label}:** ${val}`);
+      if (val) sectionLines.push(`  **${field.label}:** ${val}`);
+    }
+    if (sectionLines.length > 0) {
+      lines.push(`**${section.title}:**`);
+      lines.push(...sectionLines);
     }
   }
 
-  // Free-form notes
+  // Free-form coach notes
   if (rec.notes?.trim()) {
     lines.push(`**Coach notes:** ${rec.notes.trim()}`);
   }
@@ -41,6 +36,8 @@ function formatRecord(rec: AthleteAnamnesis, index: number): string {
 /**
  * Returns a formatted anamnesis context string for AI injection.
  * Returns '' when there is no athlete selected or no records.
+ * Includes all filled fields from all sections (not just hardcoded IDs),
+ * so it works correctly regardless of which template was used.
  */
 export function useAnamnesisAIContext(athleteLocalId: string | null | undefined): string {
   const { anamneses } = useAthleteAnamneses(athleteLocalId ?? '');
