@@ -237,6 +237,8 @@ export function TemplateEditorDialog({
   isSaving,
   onSaveAsNew,
   isSavingAsNew,
+  onDelete,
+  isDeleting,
 }: {
   initial: { name: string; sections: AnamnesisSection[] };
   open: boolean;
@@ -245,6 +247,8 @@ export function TemplateEditorDialog({
   isSaving: boolean;
   onSaveAsNew?: (name: string, sections: AnamnesisSection[]) => Promise<void>;
   isSavingAsNew?: boolean;
+  onDelete?: () => Promise<void>;
+  isDeleting?: boolean;
 }) {
   const [name, setName] = useState(initial.name);
   const [sections, setSections] = useState<AnamnesisSection[]>(initial.sections);
@@ -313,13 +317,44 @@ export function TemplateEditorDialog({
           </div>
         </ScrollArea>
 
-        <DialogFooter className="px-6 py-4 border-t shrink-0">
-          <Button variant="outline" onClick={onClose} disabled={isSaving || isSavingAsNew}>Cancel</Button>
+        <DialogFooter className="px-6 py-4 border-t shrink-0 flex-row items-center">
+          {onDelete && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive gap-1.5 mr-auto"
+                  disabled={isSaving || isSavingAsNew || isDeleting}
+                >
+                  {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this template?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    The template will be removed. Existing anamnesis records that used it are not affected.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={onDelete}
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+          <Button variant="outline" onClick={onClose} disabled={isSaving || isSavingAsNew || isDeleting}>Cancel</Button>
           {onSaveAsNew && (
             <Button
               variant="outline"
               onClick={() => onSaveAsNew(name, sections)}
-              disabled={!name.trim() || isSaving || isSavingAsNew}
+              disabled={!name.trim() || isSaving || isSavingAsNew || isDeleting}
             >
               {isSavingAsNew && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Save as new
@@ -327,7 +362,7 @@ export function TemplateEditorDialog({
           )}
           <Button
             onClick={() => onSave(name, sections)}
-            disabled={!name.trim() || isSaving || isSavingAsNew}
+            disabled={!name.trim() || isSaving || isSavingAsNew || isDeleting}
           >
             {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Save Template
@@ -348,6 +383,7 @@ export function AnamnesisTemplateEditor() {
   const [isCreating, setIsCreating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingAsNew, setIsSavingAsNew] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [newFromDefault, setNewFromDefault] = useState(false);
 
   const handleEdit = (t: AnamnesisTemplate) => {
@@ -395,6 +431,19 @@ export function AnamnesisTemplateEditor() {
       setEditingTemplate(null);
     } else {
       toast({ title: 'Error', description: 'Failed to create template.', variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteFromDialog = async () => {
+    if (!editingTemplate) return;
+    setIsDeleting(true);
+    const ok = await deleteTemplate(editingTemplate.id);
+    setIsDeleting(false);
+    if (ok) {
+      toast({ title: 'Template deleted' });
+      setEditingTemplate(null);
+    } else {
+      toast({ title: 'Error', description: 'Failed to delete template.', variant: 'destructive' });
     }
   };
 
@@ -523,6 +572,8 @@ export function AnamnesisTemplateEditor() {
           isSaving={isSaving}
           onSaveAsNew={handleSaveEditAsNew}
           isSavingAsNew={isSavingAsNew}
+          onDelete={handleDeleteFromDialog}
+          isDeleting={isDeleting}
         />
       )}
     </div>

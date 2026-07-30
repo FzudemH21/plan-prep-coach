@@ -282,13 +282,14 @@ function RecordForm({
   isSaving,
   isDeleting,
 }: RecordFormProps) {
-  const { templates, createTemplate, updateTemplate } = useAnamnesisTemplates();
+  const { templates, createTemplate, updateTemplate, deleteTemplate } = useAnamnesisTemplates();
 
   const [showNewTemplate, setShowNewTemplate] = useState(false);
   const [savingNewTemplate, setSavingNewTemplate] = useState(false);
   const [showEditTemplate, setShowEditTemplate] = useState(false);
   const [savingEditTemplate, setSavingEditTemplate] = useState(false);
   const [savingEditAsNew, setSavingEditAsNew] = useState(false);
+  const [deletingTemplate, setDeletingTemplate] = useState(false);
 
   const [conductedAt, setConductedAt] = useState(initial?.conductedAt ?? todayIso());
   const [templateId, setTemplateId] = useState<string | null>(initial?.templateId ?? null);
@@ -395,6 +396,20 @@ function RecordForm({
     if (created) {
       setShowEditTemplate(false);
       handleTemplateChange(created.id);
+    }
+  };
+
+  const handleDeleteEditTemplate = async () => {
+    if (!templateId) return;
+    setDeletingTemplate(true);
+    const ok = await deleteTemplate(templateId);
+    setDeletingTemplate(false);
+    if (ok) {
+      setShowEditTemplate(false);
+      setTemplateId(null);
+      setTemplateSnapshot({ name: '', sections: [] });
+      setFieldValues({});
+      setCustomFieldValues({});
     }
   };
 
@@ -556,6 +571,8 @@ Use clear, clinical language suitable for professional documentation. Skip secti
                 isSaving={savingEditTemplate}
                 onSaveAsNew={handleSaveEditAsNewTemplate}
                 isSavingAsNew={savingEditAsNew}
+                onDelete={handleDeleteEditTemplate}
+                isDeleting={deletingTemplate}
               />
             ) : null;
           })()}
