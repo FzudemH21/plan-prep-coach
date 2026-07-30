@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import type { AnamnesisTemplate, AnamnesisSection } from '@/types/anamnesis';
+import { DEFAULT_ANAMNESIS_TEMPLATE } from '@/types/anamnesis';
 
 // ── DB row → TS type ──────────────────────────────────────────────────────────
 
@@ -43,7 +44,22 @@ export function useAnamnesisTemplates() {
         .order('created_at', { ascending: true });
 
       if (error) throw error;
-      setTemplates((data as DbTemplate[]).map(fromDb));
+      const fetched = (data as DbTemplate[]).map(fromDb);
+      if (fetched.length === 0) {
+        // First-time use: seed the default template as a real editable record
+        const { data: seeded } = await supabase
+          .from('anamnesis_templates')
+          .insert({
+            coach_user_id: user.id,
+            name: DEFAULT_ANAMNESIS_TEMPLATE.name,
+            sections: DEFAULT_ANAMNESIS_TEMPLATE.sections,
+          })
+          .select()
+          .single();
+        setTemplates(seeded ? [fromDb(seeded as DbTemplate)] : []);
+      } else {
+        setTemplates(fetched);
+      }
     } catch (err) {
       console.error('[useAnamnesisTemplates] fetch error', err);
     } finally {

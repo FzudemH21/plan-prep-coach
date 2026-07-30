@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   Plus, Trash2, Loader2, ClipboardList, Sparkles, ChevronRight, X,
-  ChevronUp, ChevronDown,
+  ChevronUp, ChevronDown, Pencil,
 } from 'lucide-react';
 import { useAthleteAnamneses } from '@/hooks/useAthleteAnamneses';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
@@ -278,10 +278,12 @@ function RecordForm({
   isSaving,
   isDeleting,
 }: RecordFormProps) {
-  const { templates, createTemplate } = useAnamnesisTemplates();
+  const { templates, createTemplate, updateTemplate } = useAnamnesisTemplates();
 
   const [showNewTemplate, setShowNewTemplate] = useState(false);
   const [savingNewTemplate, setSavingNewTemplate] = useState(false);
+  const [showEditTemplate, setShowEditTemplate] = useState(false);
+  const [savingEditTemplate, setSavingEditTemplate] = useState(false);
 
   const [conductedAt, setConductedAt] = useState(initial?.conductedAt ?? todayIso());
   const [templateId, setTemplateId] = useState<string | null>(initial?.templateId ?? null);
@@ -319,6 +321,18 @@ function RecordForm({
     if (created) {
       setShowNewTemplate(false);
       handleTemplateChange(created.id);
+    }
+  };
+
+  const handleSaveEditTemplate = async (name: string, sections: AnamnesisSection[]) => {
+    if (!templateId) return;
+    setSavingEditTemplate(true);
+    const ok = await updateTemplate(templateId, { name, sections });
+    setSavingEditTemplate(false);
+    if (ok) {
+      setShowEditTemplate(false);
+      // Refresh snapshot so the current form reflects the updated template
+      setTemplateSnapshot({ name, sections });
     }
   };
 
@@ -432,6 +446,18 @@ Use clear, clinical language suitable for professional documentation. Skip secti
                   ))}
                 </SelectContent>
               </Select>
+              {templateId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0"
+                  onClick={() => setShowEditTemplate(true)}
+                  title="Edit selected template"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -455,6 +481,19 @@ Use clear, clinical language suitable for professional documentation. Skip secti
               isSaving={savingNewTemplate}
             />
           )}
+          {showEditTemplate && templateId && (() => {
+            const t = templates.find((x) => x.id === templateId);
+            return t ? (
+              <TemplateEditorDialog
+                key={`edit-${templateId}`}
+                initial={{ name: t.name, sections: t.sections }}
+                open
+                onClose={() => setShowEditTemplate(false)}
+                onSave={handleSaveEditTemplate}
+                isSaving={savingEditTemplate}
+              />
+            ) : null;
+          })()}
         </div>
       </div>
 
