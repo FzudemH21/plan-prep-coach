@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,6 +49,28 @@ import { cn } from '@/lib/utils';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
+
+function renderMarkdown(text: string): React.ReactNode {
+  const lines = text.split('\n');
+  return lines.map((line, idx) => {
+    const trail = idx < lines.length - 1 ? '\n' : '';
+    if (/^#{1,2} /.test(line)) {
+      const content = line.replace(/^#{1,2} /, '');
+      return <React.Fragment key={idx}><strong>{content}</strong>{trail}</React.Fragment>;
+    }
+    const parts = line.split(/(\*\*[^*]+\*\*)/g);
+    const inline = parts.map((p, i) =>
+      p.startsWith('**') && p.endsWith('**')
+        ? <strong key={i}>{p.slice(2, -2)}</strong>
+        : p
+    );
+    return <React.Fragment key={idx}>{inline}{trail}</React.Fragment>;
+  });
+}
+
+function stripMarkdown(text: string): string {
+  return text.replace(/^#{1,6} /gm, '').replace(/\*\*([^*]+)\*\*/g, '$1');
+}
 
 function todayIso(): string {
   const d = new Date();
@@ -760,7 +782,7 @@ Use clear, clinical language suitable for professional documentation. Skip secti
             </div>
             {aiSummary ? (
               <div className="rounded-md border bg-muted/30 p-3 text-sm whitespace-pre-wrap">
-                {aiSummary}
+                {renderMarkdown(aiSummary)}
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">
@@ -833,7 +855,7 @@ function RecordCard({
   })();
 
   const preview = record.aiSummary
-    ? record.aiSummary.slice(0, 120) + (record.aiSummary.length > 120 ? '…' : '')
+    ? (() => { const s = stripMarkdown(record.aiSummary!); return s.slice(0, 120) + (s.length > 120 ? '…' : ''); })()
     : record.notes.slice(0, 120) + (record.notes.length > 120 ? '…' : '');
 
   const totalFields = record.templateSnapshot.sections.reduce((s, sec) => s + sec.fields.length, 0);
