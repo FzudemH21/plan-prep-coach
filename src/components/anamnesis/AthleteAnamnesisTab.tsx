@@ -288,6 +288,7 @@ function RecordForm({
   const [savingNewTemplate, setSavingNewTemplate] = useState(false);
   const [showEditTemplate, setShowEditTemplate] = useState(false);
   const [savingEditTemplate, setSavingEditTemplate] = useState(false);
+  const [savingEditAsNew, setSavingEditAsNew] = useState(false);
 
   const [conductedAt, setConductedAt] = useState(initial?.conductedAt ?? todayIso());
   const [templateId, setTemplateId] = useState<string | null>(initial?.templateId ?? null);
@@ -383,8 +384,17 @@ function RecordForm({
     setSavingEditTemplate(false);
     if (ok) {
       setShowEditTemplate(false);
-      // Refresh snapshot so the current form reflects the updated template
       setTemplateSnapshot({ name, sections });
+    }
+  };
+
+  const handleSaveEditAsNewTemplate = async (name: string, sections: AnamnesisSection[]) => {
+    setSavingEditAsNew(true);
+    const created = await createTemplate(name, sections);
+    setSavingEditAsNew(false);
+    if (created) {
+      setShowEditTemplate(false);
+      handleTemplateChange(created.id);
     }
   };
 
@@ -544,6 +554,8 @@ Use clear, clinical language suitable for professional documentation. Skip secti
                 onClose={() => setShowEditTemplate(false)}
                 onSave={handleSaveEditTemplate}
                 isSaving={savingEditTemplate}
+                onSaveAsNew={handleSaveEditAsNewTemplate}
+                isSavingAsNew={savingEditAsNew}
               />
             ) : null;
           })()}

@@ -235,12 +235,16 @@ export function TemplateEditorDialog({
   onClose,
   onSave,
   isSaving,
+  onSaveAsNew,
+  isSavingAsNew,
 }: {
   initial: { name: string; sections: AnamnesisSection[] };
   open: boolean;
   onClose: () => void;
   onSave: (name: string, sections: AnamnesisSection[]) => Promise<void>;
   isSaving: boolean;
+  onSaveAsNew?: (name: string, sections: AnamnesisSection[]) => Promise<void>;
+  isSavingAsNew?: boolean;
 }) {
   const [name, setName] = useState(initial.name);
   const [sections, setSections] = useState<AnamnesisSection[]>(initial.sections);
@@ -310,10 +314,20 @@ export function TemplateEditorDialog({
         </ScrollArea>
 
         <DialogFooter className="px-6 py-4 border-t shrink-0">
-          <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancel</Button>
+          <Button variant="outline" onClick={onClose} disabled={isSaving || isSavingAsNew}>Cancel</Button>
+          {onSaveAsNew && (
+            <Button
+              variant="outline"
+              onClick={() => onSaveAsNew(name, sections)}
+              disabled={!name.trim() || isSaving || isSavingAsNew}
+            >
+              {isSavingAsNew && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save as new
+            </Button>
+          )}
           <Button
             onClick={() => onSave(name, sections)}
-            disabled={!name.trim() || isSaving}
+            disabled={!name.trim() || isSaving || isSavingAsNew}
           >
             {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Save Template
@@ -333,6 +347,7 @@ export function AnamnesisTemplateEditor() {
   const [editingTemplate, setEditingTemplate] = useState<AnamnesisTemplate | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingAsNew, setIsSavingAsNew] = useState(false);
   const [newFromDefault, setNewFromDefault] = useState(false);
 
   const handleEdit = (t: AnamnesisTemplate) => {
@@ -368,6 +383,18 @@ export function AnamnesisTemplateEditor() {
       setEditingTemplate(null);
     } else {
       toast({ title: 'Error', description: 'Failed to save template.', variant: 'destructive' });
+    }
+  };
+
+  const handleSaveEditAsNew = async (name: string, sections: AnamnesisSection[]) => {
+    setIsSavingAsNew(true);
+    const created = await createTemplate(name, sections);
+    setIsSavingAsNew(false);
+    if (created) {
+      toast({ title: 'Template created', description: `"${name}" saved as a new template.` });
+      setEditingTemplate(null);
+    } else {
+      toast({ title: 'Error', description: 'Failed to create template.', variant: 'destructive' });
     }
   };
 
@@ -494,6 +521,8 @@ export function AnamnesisTemplateEditor() {
           onClose={() => setEditingTemplate(null)}
           onSave={handleSaveEdit}
           isSaving={isSaving}
+          onSaveAsNew={handleSaveEditAsNew}
+          isSavingAsNew={isSavingAsNew}
         />
       )}
     </div>
