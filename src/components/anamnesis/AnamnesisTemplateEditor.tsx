@@ -29,7 +29,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Plus, Trash2, ChevronUp, ChevronDown, Edit, Loader2, ClipboardList, X,
 } from 'lucide-react';
@@ -291,7 +290,7 @@ export function TemplateEditorDialog({
           />
         </div>
 
-        <ScrollArea className="flex-1 min-h-0 px-6">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6">
           <div className="space-y-2 pb-4">
             {sections.map((section, idx) => (
               <SectionEditor
@@ -315,7 +314,7 @@ export function TemplateEditorDialog({
               Add Section
             </Button>
           </div>
-        </ScrollArea>
+        </div>
 
         <DialogFooter className="px-6 py-4 border-t shrink-0 flex-row items-center">
           {onDelete && (
