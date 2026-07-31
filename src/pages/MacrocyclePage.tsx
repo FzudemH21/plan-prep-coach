@@ -849,6 +849,49 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   };
 
   const handleRemoveGoal = (goalId: string) => {
+    // Collect sub-goal IDs belonging to this goal (manual + derived)
+    const manualSubGoalIds = new Set(
+      subGoals.filter(sg => sg.parentGoalId === goalId).map(sg => sg.id)
+    );
+    const derivedSubGoalIds = new Set(
+      derivedSubGoals.filter(dsg => dsg.parentGoalId === goalId).map(dsg => dsg.id)
+    );
+    const allSubGoalIds = new Set([...manualSubGoalIds, ...derivedSubGoalIds]);
+
+    // Quality keys linked to those sub-goals
+    const removedQualityKeys = new Set(
+      Object.keys(methodsByQuality).filter(k => allSubGoalIds.has(k.split('::')[0]))
+    );
+
+    // Methods that were tied to the deleted goal
+    const candidatesToRemove = new Set(
+      [...removedQualityKeys].flatMap(k => methodsByQuality[k]?.list ?? [])
+    );
+
+    // Methods still needed by remaining goals or manually added — keep those
+    const stillNeeded = new Set([
+      ...Object.entries(methodsByQuality)
+        .filter(([k]) => !removedQualityKeys.has(k))
+        .flatMap(([, v]) => v.list),
+      ...manuallyAddedMethods.map(m => m.methodId),
+    ]);
+
+    setSelectedMethods(prev => {
+      const next = new Set(prev);
+      for (const m of candidatesToRemove) {
+        if (!stillNeeded.has(m)) next.delete(m);
+      }
+      return next;
+    });
+
+    // Clean up manual sub-goals and their quality assignments
+    setSubGoals(prev => prev.filter(sg => !manualSubGoalIds.has(sg.id)));
+    setQualitiesBySubGoal(prev => {
+      const next = { ...prev };
+      for (const id of allSubGoalIds) delete next[id];
+      return next;
+    });
+
     setSmartGoals(prev => prev.filter(g => g.id !== goalId));
   };
 
