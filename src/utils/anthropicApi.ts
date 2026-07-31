@@ -46,9 +46,11 @@ async function extractText(response: Response): Promise<string> {
   return textBlock.text;
 }
 
+export type SystemBlock = { type: "text"; text: string; cache_control?: { type: "ephemeral" } };
+
 export async function sendMessage(
   messages: Message[],
-  systemPrompt: string,
+  systemPrompt: string | SystemBlock[],
   model = "claude-haiku-4-5",
   maxTokens = 4096,
 ): Promise<string> {

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, X, Send, Mic, MicOff, Loader2, ChevronRight, CheckCircle2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { sendMessage, type Message } from "@/utils/anthropicApi";
+import { sendMessage, type Message, type SystemBlock } from "@/utils/anthropicApi";
 import { compressConversation, COMPRESSION_THRESHOLD } from "@/utils/compressConversation";
 import { useCoachProfile } from "@/hooks/useCoachProfile";
 import { useSpeechInput } from "@/hooks/useSpeechInput";
@@ -434,7 +434,7 @@ function buildSystemPrompt(
   globalContext?: string,
   focusedSessionContext?: FocusedSessionContext,
   anamnesisContext?: string,
-): string {
+): SystemBlock[] {
   const memoryBlock = coachMemoryContext
     ? `\n\n## Coach's Past Plans (most recent first — defer to newer patterns when in doubt)\n${coachMemoryContext}`
     : "";
@@ -464,10 +464,10 @@ IMPORTANT: The coach is currently looking at this session. "this", "here", "this
   const roleBlock = assistantRole
     ? `## Your role\n${assistantRole}`
     : DEFAULT_ROLE;
-  // When assistantRole is provided (e.g. Parameter Database), label the context
-  // block differently so the AI doesn't treat it as an athlete-specific plan state.
   const contextLabel = assistantRole ? "Database State" : "Current Context";
-  return `You are an expert sports scientist and training advisor working inside Plan Prep Coach — a training planning app for coaches and sports scientists that replaces complex Excel workflows with a guided, intelligent wizard.
+
+  // Block 1: stable — app description, role, and instructions never change between messages
+  const stableText = `You are an expert sports scientist and training advisor working inside Plan Prep Coach — a training planning app for coaches and sports scientists that replaces complex Excel workflows with a guided, intelligent wizard.
 
 ## About Plan Prep Coach
 
@@ -514,16 +514,22 @@ Use hyphens (not underscores). "Deload" = active recovery week at very low load.
 ### Data Flow
 Parameter values set in the Periodization Table (Phase 2 Step 4) flow automatically down to exercises and the training calendar. Changing a value at a higher level propagates consistently downward. Tests and events scheduled in Phase 1 appear in the mesocycle calendar and athlete calendar upon plan assignment.
 
-## Coach Background
+${roleBlock}
+
+${INTELLECTUAL_INTEGRITY}${canApply ? APPLY_FORMAT_INSTRUCTIONS : ""}`;
+
+  // Block 2: volatile — coach profile and current plan state change each turn
+  const volatileText = `## Coach Background
 ${coachContext}${memoryBlock}${ragBlock}${globalBlock}${focusedSessionBlock}
 
 ## ${contextLabel}
 ${wizardContext}
-${anamnesisBlock}
+${anamnesisBlock}`;
 
-${roleBlock}
-
-${INTELLECTUAL_INTEGRITY}${canApply ? APPLY_FORMAT_INSTRUCTIONS : ""}`;
+  return [
+    { type: "text" as const, text: stableText, cache_control: { type: "ephemeral" as const } },
+    { type: "text" as const, text: volatileText },
+  ];
 }
 
 function buildProactiveSystem(assistantRole?: string): string {
