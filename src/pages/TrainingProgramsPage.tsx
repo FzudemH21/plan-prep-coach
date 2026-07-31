@@ -49,6 +49,7 @@ import { useAthletes } from "@/hooks/useAthletes";
 import { useToast } from "@/hooks/use-toast";
 import { format, formatDistanceToNow } from "date-fns";
 import { useWizardData } from "@/contexts/WizardDataContext";
+import { useAIChatContext } from "@/contexts/AIChatContext";
 
 export default function TrainingProgramsPage() {
   const navigate = useNavigate();
@@ -56,6 +57,7 @@ export default function TrainingProgramsPage() {
   const { programs, isLoading, copyProgram, deleteProgram, loadProgramIntoSession, clearSession } = useTrainingPrograms();
   const { athletes } = useAthletes();
   const { loadWizardSession } = useWizardData();
+  const aiChat = useAIChatContext();
   
   const [searchQuery, setSearchQuery] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -112,6 +114,7 @@ export default function TrainingProgramsPage() {
   const handleEditProgram = (program: TrainingProgram) => {
     loadProgramIntoSession(program.id);
     loadWizardSession();
+    aiChat?.initChatsFromLocalStorage();
     navigate('/macrocycle');
   };
 

@@ -17,6 +17,7 @@ import { useAthletes } from "@/hooks/useAthletes";
 import { getAthleteDisplayName } from "@/types/athlete";
 import { formatDistanceToNow } from "date-fns";
 import { useWizardData } from "@/contexts/WizardDataContext";
+import { useAIChatContext } from "@/contexts/AIChatContext";
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -24,6 +25,7 @@ export default function HomePage() {
   const { getRecentPrograms, loadProgramIntoSession } = useTrainingPrograms();
   const { athletes } = useAthletes();
   const { loadWizardSession } = useWizardData();
+  const aiChat = useAIChatContext();
 
   const recentPrograms = getRecentPrograms(6);
 
@@ -45,6 +47,7 @@ export default function HomePage() {
   const handleProgramClick = (programId: string) => {
     loadProgramIntoSession(programId);
     loadWizardSession();
+    aiChat?.initChatsFromLocalStorage();
     navigate('/macrocycle');
   };
 

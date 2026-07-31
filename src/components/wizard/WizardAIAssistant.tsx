@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, X, Send, Mic, MicOff, Loader2, ChevronRight, CheckCircle2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { sendMessage, type Message } from "@/utils/anthropicApi";
+import { compressConversation, COMPRESSION_THRESHOLD } from "@/utils/compressConversation";
 import { useCoachProfile } from "@/hooks/useCoachProfile";
 import { useSpeechInput } from "@/hooks/useSpeechInput";
 import { useAIChatContext } from "@/contexts/AIChatContext";
@@ -925,7 +926,18 @@ export function WizardAIAssistant({
         "claude-sonnet-4-5",
         8192
       );
-      setChatMessages?.(resolvedChatId, [...messagesRef.current, { role: "assistant", content: reply }]);
+      const withReply: Message[] = [...messagesRef.current, { role: "assistant" as const, content: reply }];
+      setChatMessages?.(resolvedChatId, withReply);
+
+      // Compress in the background when the thread grows long.
+      // The auto-save picks up the compressed version via the localStorage mirror.
+      if (withReply.length >= COMPRESSION_THRESHOLD) {
+        compressConversation(withReply).then(compressed => {
+          if (compressed.length < withReply.length) {
+            setChatMessages?.(resolvedChatId, compressed);
+          }
+        }).catch(() => {});
+      }
     } catch (err) {
       console.error("[WizardAIAssistant] sendMessage failed:", err);
       const errMsg = err instanceof Error ? err.message : String(err);

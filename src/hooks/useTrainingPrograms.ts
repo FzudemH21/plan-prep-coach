@@ -26,6 +26,9 @@ export interface TrainingProgram {
   lastModifiedAt: string;
   status: 'draft' | 'active' | 'completed' | 'archived';
 
+  // Persisted AI chat history keyed by chatId (wizard step label)
+  aiConversations: Record<string, import('@/utils/anthropicApi').Message[]> | null;
+
   // Macrocycle data
   macrocycleData: {
     planName: string;
@@ -131,6 +134,7 @@ export function useTrainingPrograms() {
       sessionSections: program.sessionSections || null,
       supersets: program.supersets || null,
       methodAllocations: program.methodAllocations || null,
+      aiConversations: program.aiConversations || null,
     };
 
     await saveData({ ...data, programs: [...data.programs, newProgram] });
@@ -192,6 +196,13 @@ export function useTrainingPrograms() {
     if (program.methodAllocations) localStorage.setItem('methodAllocations', JSON.stringify(program.methodAllocations));
     localStorage.setItem('activeProgramId', id);
 
+    // Restore AI conversations so initChatsFromLocalStorage() picks them up
+    if (program.aiConversations) {
+      localStorage.setItem('aiConversations', JSON.stringify(program.aiConversations));
+    } else {
+      localStorage.removeItem('aiConversations');
+    }
+
     return true;
   }, [data.programs]);
 
@@ -239,6 +250,7 @@ export function useTrainingPrograms() {
       sessionSections: get('sessionSections'),
       supersets: get('supersets'),
       methodAllocations: get('methodAllocations'),
+      aiConversations: get('aiConversations'),
     };
   }, []);
 
@@ -264,6 +276,7 @@ export function useTrainingPrograms() {
       'macrocycleData', 'mesocycleData', 'trainingDays', 'exerciseDistribution',
       'parameterValues', 'dailyIntensityData', 'daySplitStates', 'sessionSections',
       'supersets', 'methodAllocations', 'macrocycleStep', 'mesocycleStep', 'microcycleStep', 'activeProgramId',
+      'aiConversations',
     ];
     staticKeys.forEach(key => localStorage.removeItem(key));
 
