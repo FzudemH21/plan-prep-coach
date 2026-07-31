@@ -484,9 +484,9 @@ Macrocycle → Mesocycle(s) → Microcycle(s) → Training Day(s) → Session(s)
 - **Microcycle**: A training unit within a mesocycle — typically 7 days but any duration is supported. Microcycles within the same mesocycle CAN have different durations (e.g. 7+7+7+5 days). Each microcycle has one intensity level.
 - **Training Day / Session**: Specific days and sessions within a microcycle. A day can have multiple sessions. Sessions contain sections (warm-up, main, cooldown) with exercises.
 
-### Intensity Scale (8 levels, low → high)
-off → deload → easy → easy-moderate → moderate → moderate-hard → hard → extremely-hard
-Use hyphens (not underscores). "Deload" = active recovery week at very low load.
+### Intensity Scale (Borg CR10, 11 levels, string numerics "0"–"10")
+"0" = Rest | "1" = Very Easy | "2" = Easy | "3" = Moderate | "4" = Somewhat Hard | "5" = Hard | "6" = Hard+ | "7" = Very Hard | "8" = Very Hard+ | "9" = Extremely Hard | "10" = Maximal
+Applied at mesocycle, microcycle, daily, and session level. Used identically for planned and self-reported athlete values.
 
 ### Databases (coach-configurable)
 - **Athlete Database**: Athlete profiles with demographics, performance parameter values, assigned plans, personal calendar
