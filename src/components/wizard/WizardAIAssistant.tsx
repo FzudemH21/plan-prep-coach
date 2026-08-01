@@ -114,6 +114,8 @@ export type ApplySuggestion =
   | { type: "update_parameter_method"; parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string }
   /** Parameter Database — remove a training method link from a parameter */
   | { type: "remove_parameter_method"; parameterName: string; methodId: string }
+  /** Parameter Database — remove an interaction between two parameters */
+  | { type: "remove_interaction"; sourceParameterName: string; targetParameterName: string }
   /** Exercise Library — add a new exercise row */
   | { type: "library_add_exercise"; libraryId: string; data: Record<string, string>; description?: string; videoUrl?: string }
   /** Exercise Library — delete an exercise by id (or name as fallback) */
@@ -352,6 +354,8 @@ Available types and their fields:
   Use ONLY parameterNames and methodIds listed in the "Existing method links" section of the wizard context. Supply only the fields you want to change; omit fields you want to leave as-is. To clear a field, set it to an empty string. GRADE-inspired evidenceQuality values: strong = systematic review/meta-analysis; moderate = RCT/well-controlled study; preliminary = observational/cohort evidence; expert_opinion = case reports/coaching practice.
 - remove_parameter_method: {"type":"remove_parameter_method","parameterName":"<exact parameter name>","methodId":"<exact method ID>"}
   Removes a training method link from a parameter entirely. Always confirm with the coach before emitting — this is irreversible. Use exact parameterName and methodId as shown in the "Existing method links" section of the wizard context.
+- remove_interaction: {"type":"remove_interaction","sourceParameterName":"<exact parameter name>","targetParameterName":"<exact parameter name>"}
+  Removes an existing interaction between two parameters. Use exact names as listed in the "Interactions already defined" index. Always confirm with the coach before emitting — this is irreversible.
 - library_add_exercise: {"type":"library_add_exercise","libraryId":"<exact library id from context>","data":{"<column name>":"<value>","<column name>":"<value>"},"description":"<optional notes or description>","videoUrl":"<optional video url>"}
   Adds a new exercise row to the library. Use column names EXACTLY as listed in the Library Columns section of context. libraryId must match the id shown in context. Omit any column you don't have a value for — do not include empty strings.
 - library_delete_exercise: {"type":"library_delete_exercise","libraryId":"<exact library id>","exerciseId":"<exact id from context>","exerciseName":"<name for confirmation>"}
@@ -663,6 +667,8 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return `Update method link: ${action.methodId} → ${action.parameterName}`;
     case "remove_parameter_method":
       return `Remove method link: ${action.methodId} from ${action.parameterName}`;
+    case "remove_interaction":
+      return `Remove interaction: ${action.sourceParameterName} → ${action.targetParameterName}`;
     case "library_add_exercise":
       return `Add exercise to library`;
     case "library_delete_exercise":

@@ -282,8 +282,25 @@ export default function AthleticismDatabaseV2() {
       }
       await removeParameterMethod(link.id);
       toast({ title: `Method unlinked from "${action.parameterName}"` });
+
+    } else if (action.type === 'remove_interaction') {
+      const source = findParam(action.sourceParameterName);
+      const target = findParam(action.targetParameterName);
+      if (!source || !target) {
+        toast({ title: 'Parameter not found', description: 'Make sure both parameters exist.', variant: 'destructive' });
+        return;
+      }
+      const interaction = (data?.interactions ?? []).find(
+        (i) => i.sourceParameterId === source.id && i.targetParameterId === target.id
+      );
+      if (!interaction) {
+        toast({ title: 'Interaction not found', description: `No interaction from "${action.sourceParameterName}" → "${action.targetParameterName}".`, variant: 'destructive' });
+        return;
+      }
+      await removeInteraction(interaction.id);
+      toast({ title: `Interaction removed: ${action.sourceParameterName} → ${action.targetParameterName}` });
     }
-  }, [data, addParameter, addParametersBulk, addInteraction, addInteractionsBulk, addParameterMethod, addParameterMethodsBulk, updateParameterMethod, removeParameterMethod, findParam, toast]);
+  }, [data, addParameter, addParametersBulk, addInteraction, addInteractionsBulk, addParameterMethod, addParameterMethodsBulk, updateParameterMethod, removeParameterMethod, removeInteraction, findParam, toast]);
 
   // Sorting state
   const [sortColumn, setSortColumn] = useState<SortColumn>('parameter');
