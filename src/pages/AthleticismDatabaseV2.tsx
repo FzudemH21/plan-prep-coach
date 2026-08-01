@@ -177,7 +177,16 @@ export default function AthleticismDatabaseV2() {
   }, [data?.parameters]);
 
   const handleAIApply = useCallback(async (action: import('@/components/wizard/WizardAIAssistant').ApplySuggestion) => {
-    if (action.type === 'add_parameter') {
+    if (action.type === 'remove_parameter') {
+      const param = findParam(action.parameterName);
+      if (!param) {
+        toast({ title: 'Parameter not found', description: `"${action.parameterName}" does not exist.`, variant: 'destructive' });
+        return;
+      }
+      await deleteParameter(param.id);
+      toast({ title: `Parameter "${action.parameterName}" removed` });
+
+    } else if (action.type === 'add_parameter') {
       await addParameter({ name: action.name, category: action.category, unit: action.unit, applicableSports: action.applicableSports });
       toast({ title: `Parameter "${action.name}" added` });
 
@@ -323,7 +332,7 @@ export default function AthleticismDatabaseV2() {
         });
       }
     }
-  }, [data, addParameter, addParametersBulk, addInteraction, addInteractionsBulk, addParameterMethod, addParameterMethodsBulk, updateParameterMethod, removeParameterMethod, removeInteraction, findParam, toast]);
+  }, [data, addParameter, addParametersBulk, deleteParameter, addInteraction, addInteractionsBulk, addParameterMethod, addParameterMethodsBulk, updateParameterMethod, removeParameterMethod, removeInteraction, findParam, toast]);
 
   // Batch apply — builds the complete final state in one pass then writes once.
   // This avoids stale-closure overwrites AND lets step N+1 see changes made in step N
@@ -332,7 +341,7 @@ export default function AthleticismDatabaseV2() {
     if (!data) { for (const a of actions) await handleAIApply(a); return; }
 
     const batchable = new Set([
-      'add_parameter', 'add_parameters_bulk',
+      'add_parameter', 'add_parameters_bulk', 'remove_parameter',
       'add_interaction', 'add_interactions_bulk',
       'remove_interaction', 'remove_interactions_bulk',
       'add_parameter_method', 'add_parameter_methods_bulk',
@@ -347,7 +356,7 @@ export default function AthleticismDatabaseV2() {
     let parameters = [...data.parameters];
     let interactions = [...data.interactions];
     let parameterMethods = [...data.parameterMethods];
-    let paramsAdded = 0, interactionsAdded = 0, interactionsRemoved = 0, methodsAdded = 0;
+    let paramsAdded = 0, paramsRemoved = 0, interactionsAdded = 0, interactionsRemoved = 0, methodsAdded = 0;
 
     // Looks up in the WORKING parameters array so newly added params are found immediately
     const findWorking = (name: string) => {
@@ -373,6 +382,13 @@ export default function AthleticismDatabaseV2() {
             paramsAdded++;
           }
         }
+      } else if (action.type === 'remove_parameter') {
+        const param = findWorking(action.parameterName);
+        if (!param) continue;
+        parameters = parameters.filter(p => p.id !== param.id);
+        interactions = interactions.filter(i => i.sourceParameterId !== param.id && i.targetParameterId !== param.id);
+        parameterMethods = parameterMethods.filter(m => m.parameterId !== param.id);
+        paramsRemoved++;
       } else if (action.type === 'add_interaction') {
         const src = findWorking(action.sourceParameterName);
         const tgt = findWorking(action.targetParameterName);
@@ -425,6 +441,7 @@ export default function AthleticismDatabaseV2() {
     await saveData({ ...data, parameters, interactions, parameterMethods });
     const parts: string[] = [];
     if (paramsAdded > 0) parts.push(`${paramsAdded} parameter${paramsAdded !== 1 ? 's' : ''} added`);
+    if (paramsRemoved > 0) parts.push(`${paramsRemoved} parameter${paramsRemoved !== 1 ? 's' : ''} removed`);
     if (interactionsAdded > 0) parts.push(`${interactionsAdded} interaction${interactionsAdded !== 1 ? 's' : ''} added`);
     if (interactionsRemoved > 0) parts.push(`${interactionsRemoved} interaction${interactionsRemoved !== 1 ? 's' : ''} removed`);
     if (methodsAdded > 0) parts.push(`${methodsAdded} method link${methodsAdded !== 1 ? 's' : ''} added`);

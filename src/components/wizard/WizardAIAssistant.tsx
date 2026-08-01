@@ -100,6 +100,8 @@ export type ApplySuggestion =
   | { type: "clear_week"; microcycleName: string }
   /** Parameter Database — add a new parameter */
   | { type: "add_parameter"; name: string; category?: string; unit?: string; applicableSports?: string[] }
+  /** Parameter Database — remove a parameter and all its linked interactions and method links */
+  | { type: "remove_parameter"; parameterName: string }
   /** Parameter Database — add multiple parameters at once */
   | { type: "add_parameters_bulk"; parameters: Array<{ name: string; category?: string; unit?: string; applicableSports?: string[] }> }
   /** Parameter Database — add an interaction between two existing parameters (by name) */
@@ -340,6 +342,8 @@ Available types and their fields:
 - add_parameters_bulk: {"type":"add_parameters_bulk","parameters":[{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>","applicableSports":["<sport>"]},{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>"}]}
   Use this when adding multiple parameters at once (e.g. filling a whole database section). Preferred over add_parameter when adding 2 or more parameters.
   applicableSports per entry is optional — omit for universal parameters, include for sport-specific ones.
+- remove_parameter: {"type":"remove_parameter","parameterName":"<exact parameter name as listed in context>"}
+  Permanently removes a parameter AND all its interactions and method links. Always confirm with the coach first — this is irreversible. Use the exact name as shown in the Parameters list in context.
 - add_interaction: {"type":"add_interaction","sourceParameterName":"<exact name of existing parameter>","targetParameterName":"<exact name of existing parameter>","direction":"contributes_to","strength":"<strong|moderate|weak>"}
   direction "contributes_to" means sourceParameter positively influences targetParameter. Use exact parameter names as listed in the wizard context.
 - add_interactions_bulk: {"type":"add_interactions_bulk","interactions":[{"sourceParameterName":"<exact name>","targetParameterName":"<exact name>","direction":"contributes_to","strength":"<strong|moderate|weak>"},{"sourceParameterName":"<exact name>","targetParameterName":"<exact name>","direction":"contributes_to","strength":"<strong|moderate|weak>"}]}
@@ -657,6 +661,8 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return `Clear all sessions & exercises from "${action.microcycleName}"`;
     case "add_parameter":
       return `Add parameter: ${action.name}${action.category ? ` (${action.category})` : ""}${action.unit ? ` [${action.unit}]` : ""}`;
+    case "remove_parameter":
+      return `Remove parameter: ${action.parameterName} (and all its interactions & method links)`;
     case "add_parameters_bulk":
       return `Add ${action.parameters.length} parameter${action.parameters.length !== 1 ? "s" : ""}: ${action.parameters.map((p) => p.name).join(", ")}`;
     case "add_interaction":
