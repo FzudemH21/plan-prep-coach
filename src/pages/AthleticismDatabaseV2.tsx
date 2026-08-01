@@ -299,6 +299,29 @@ export default function AthleticismDatabaseV2() {
       }
       await removeInteraction(interaction.id);
       toast({ title: `Interaction removed: ${action.sourceParameterName} → ${action.targetParameterName}` });
+
+    } else if (action.type === 'remove_interactions_bulk') {
+      const failed: string[] = [];
+      let removed = 0;
+      for (const i of action.interactions) {
+        const source = findParam(i.sourceParameterName);
+        const target = findParam(i.targetParameterName);
+        if (!source || !target) { failed.push(`${i.sourceParameterName} → ${i.targetParameterName}`); continue; }
+        const interaction = (data?.interactions ?? []).find(
+          (ex) => ex.sourceParameterId === source.id && ex.targetParameterId === target.id
+        );
+        if (!interaction) { failed.push(`${i.sourceParameterName} → ${i.targetParameterName}`); continue; }
+        await removeInteraction(interaction.id);
+        removed++;
+      }
+      if (removed > 0) toast({ title: `${removed} interaction${removed !== 1 ? 's' : ''} removed` });
+      if (failed.length > 0) {
+        toast({
+          title: `${failed.length} interaction${failed.length !== 1 ? 's' : ''} not found — skipped`,
+          description: failed.slice(0, 3).join(' | ') + (failed.length > 3 ? ` + ${failed.length - 3} more` : ''),
+          variant: 'destructive',
+        });
+      }
     }
   }, [data, addParameter, addParametersBulk, addInteraction, addInteractionsBulk, addParameterMethod, addParameterMethodsBulk, updateParameterMethod, removeParameterMethod, removeInteraction, findParam, toast]);
 
