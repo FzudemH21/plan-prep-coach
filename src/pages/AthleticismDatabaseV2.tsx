@@ -325,67 +325,111 @@ export default function AthleticismDatabaseV2() {
     }
   }, [data, addParameter, addParametersBulk, addInteraction, addInteractionsBulk, addParameterMethod, addParameterMethodsBulk, updateParameterMethod, removeParameterMethod, removeInteraction, findParam, toast]);
 
-  // Batch apply — computes all interaction mutations into a single saveData call so
-  // stale-closure overwrites don't happen when mixing adds and removes in one response.
+  // Batch apply — builds the complete final state in one pass then writes once.
+  // This avoids stale-closure overwrites AND lets step N+1 see changes made in step N
+  // (e.g. a newly added parameter is immediately visible to the following interaction step).
   const handleAIApplyAll = useCallback(async (actions: import('@/components/wizard/WizardAIAssistant').ApplySuggestion[]) => {
-    const interactionTypes = new Set(['add_interaction', 'add_interactions_bulk', 'remove_interaction', 'remove_interactions_bulk']);
-    const allInteractionMutations = actions.every(a => interactionTypes.has(a.type));
+    if (!data) { for (const a of actions) await handleAIApply(a); return; }
 
-    if (!allInteractionMutations || !data) {
-      // Mixed or unknown types — fall back to sequential individual handlers
-      for (const action of actions) await handleAIApply(action);
+    const batchable = new Set([
+      'add_parameter', 'add_parameters_bulk',
+      'add_interaction', 'add_interactions_bulk',
+      'remove_interaction', 'remove_interactions_bulk',
+      'add_parameter_method', 'add_parameter_methods_bulk',
+    ]);
+    if (!actions.every(a => batchable.has(a.type))) {
+      // Contains action types we can't safely batch — fall back to sequential individual handlers
+      for (const a of actions) await handleAIApply(a);
       return;
     }
 
-    // Build final interactions array in one pass, no intermediate saves
+    // Working copies — mutated in place, written once at the end
+    let parameters = [...data.parameters];
     let interactions = [...data.interactions];
-    let added = 0, removed = 0;
+    let parameterMethods = [...data.parameterMethods];
+    let paramsAdded = 0, interactionsAdded = 0, interactionsRemoved = 0, methodsAdded = 0;
+
+    // Looks up in the WORKING parameters array so newly added params are found immediately
+    const findWorking = (name: string) => {
+      const n = name.trim();
+      const nl = n.toLowerCase();
+      return (
+        parameters.find(p => p.name === n) ??
+        parameters.find(p => p.name.trim().toLowerCase() === nl) ??
+        parameters.find(p => p.name.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase() === nl.replace(/\s*\([^)]*\)\s*$/, '').trim())
+      );
+    };
 
     for (const action of actions) {
-      if (action.type === 'remove_interaction') {
-        const src = findParam(action.sourceParameterName);
-        const tgt = findParam(action.targetParameterName);
+      if (action.type === 'add_parameter') {
+        if (!findWorking(action.name)) {
+          parameters.push({ id: `${Date.now()}_p${paramsAdded}`, name: action.name, category: action.category, unit: action.unit, applicableSports: action.applicableSports, createdAt: new Date().toISOString() });
+          paramsAdded++;
+        }
+      } else if (action.type === 'add_parameters_bulk') {
+        for (const p of action.parameters) {
+          if (!findWorking(p.name)) {
+            parameters.push({ id: `${Date.now()}_p${paramsAdded}`, name: p.name, category: p.category, unit: p.unit, applicableSports: p.applicableSports, createdAt: new Date().toISOString() });
+            paramsAdded++;
+          }
+        }
+      } else if (action.type === 'add_interaction') {
+        const src = findWorking(action.sourceParameterName);
+        const tgt = findWorking(action.targetParameterName);
+        if (!src || !tgt) continue;
+        if (interactions.some(i => i.sourceParameterId === src.id && i.targetParameterId === tgt.id)) continue;
+        interactions.push({ id: `${Date.now()}_i${interactionsAdded}`, sourceParameterId: src.id, targetParameterId: tgt.id, direction: action.direction, strength: action.strength ?? 'moderate' });
+        interactionsAdded++;
+      } else if (action.type === 'add_interactions_bulk') {
+        for (const item of action.interactions) {
+          const src = findWorking(item.sourceParameterName);
+          const tgt = findWorking(item.targetParameterName);
+          if (!src || !tgt) continue;
+          if (interactions.some(i => i.sourceParameterId === src.id && i.targetParameterId === tgt.id)) continue;
+          interactions.push({ id: `${Date.now()}_i${interactionsAdded}`, sourceParameterId: src.id, targetParameterId: tgt.id, direction: item.direction, strength: item.strength ?? 'moderate' });
+          interactionsAdded++;
+        }
+      } else if (action.type === 'remove_interaction') {
+        const src = findWorking(action.sourceParameterName);
+        const tgt = findWorking(action.targetParameterName);
         if (!src || !tgt) continue;
         const before = interactions.length;
         interactions = interactions.filter(i => !(i.sourceParameterId === src.id && i.targetParameterId === tgt.id));
-        removed += before - interactions.length;
-
+        interactionsRemoved += before - interactions.length;
       } else if (action.type === 'remove_interactions_bulk') {
         for (const item of action.interactions) {
-          const src = findParam(item.sourceParameterName);
-          const tgt = findParam(item.targetParameterName);
+          const src = findWorking(item.sourceParameterName);
+          const tgt = findWorking(item.targetParameterName);
           if (!src || !tgt) continue;
           const before = interactions.length;
           interactions = interactions.filter(i => !(i.sourceParameterId === src.id && i.targetParameterId === tgt.id));
-          removed += before - interactions.length;
+          interactionsRemoved += before - interactions.length;
         }
-
-      } else if (action.type === 'add_interaction') {
-        const src = findParam(action.sourceParameterName);
-        const tgt = findParam(action.targetParameterName);
-        if (!src || !tgt) continue;
-        if (interactions.some(i => i.sourceParameterId === src.id && i.targetParameterId === tgt.id)) continue;
-        interactions.push({ id: `${Date.now()}_${added}`, sourceParameterId: src.id, targetParameterId: tgt.id, direction: action.direction, strength: action.strength ?? 'moderate' });
-        added++;
-
-      } else if (action.type === 'add_interactions_bulk') {
-        for (const item of action.interactions) {
-          const src = findParam(item.sourceParameterName);
-          const tgt = findParam(item.targetParameterName);
-          if (!src || !tgt) continue;
-          if (interactions.some(i => i.sourceParameterId === src.id && i.targetParameterId === tgt.id)) continue;
-          interactions.push({ id: `${Date.now()}_${added}`, sourceParameterId: src.id, targetParameterId: tgt.id, direction: item.direction, strength: item.strength ?? 'moderate' });
-          added++;
+      } else if (action.type === 'add_parameter_method') {
+        const param = findWorking(action.parameterName);
+        if (!param) continue;
+        if (parameterMethods.some(m => m.parameterId === param.id && m.methodId === action.methodId)) continue;
+        parameterMethods.push({ id: `${Date.now()}_m${methodsAdded}`, parameterId: param.id, methodId: action.methodId, rationale: action.rationale, evidence: action.evidence });
+        methodsAdded++;
+      } else if (action.type === 'add_parameter_methods_bulk') {
+        for (const link of action.links) {
+          const param = findWorking(link.parameterName);
+          if (!param) continue;
+          if (parameterMethods.some(m => m.parameterId === param.id && m.methodId === link.methodId)) continue;
+          parameterMethods.push({ id: `${Date.now()}_m${methodsAdded}`, parameterId: param.id, methodId: link.methodId, rationale: link.rationale, evidence: link.evidence });
+          methodsAdded++;
         }
       }
     }
 
-    await saveData({ ...data, interactions });
+    await saveData({ ...data, parameters, interactions, parameterMethods });
     const parts: string[] = [];
-    if (removed > 0) parts.push(`${removed} removed`);
-    if (added > 0) parts.push(`${added} added`);
-    if (parts.length > 0) toast({ title: `Interactions updated: ${parts.join(', ')}` });
-  }, [data, findParam, saveData, handleAIApply, toast]);
+    if (paramsAdded > 0) parts.push(`${paramsAdded} parameter${paramsAdded !== 1 ? 's' : ''} added`);
+    if (interactionsAdded > 0) parts.push(`${interactionsAdded} interaction${interactionsAdded !== 1 ? 's' : ''} added`);
+    if (interactionsRemoved > 0) parts.push(`${interactionsRemoved} interaction${interactionsRemoved !== 1 ? 's' : ''} removed`);
+    if (methodsAdded > 0) parts.push(`${methodsAdded} method link${methodsAdded !== 1 ? 's' : ''} added`);
+    if (parts.length > 0) toast({ title: parts.join(', ') });
+  }, [data, saveData, handleAIApply, toast]);
 
   // Sorting state
   const [sortColumn, setSortColumn] = useState<SortColumn>('parameter');
