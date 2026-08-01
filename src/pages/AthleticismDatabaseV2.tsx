@@ -325,6 +325,68 @@ export default function AthleticismDatabaseV2() {
     }
   }, [data, addParameter, addParametersBulk, addInteraction, addInteractionsBulk, addParameterMethod, addParameterMethodsBulk, updateParameterMethod, removeParameterMethod, removeInteraction, findParam, toast]);
 
+  // Batch apply — computes all interaction mutations into a single saveData call so
+  // stale-closure overwrites don't happen when mixing adds and removes in one response.
+  const handleAIApplyAll = useCallback(async (actions: import('@/components/wizard/WizardAIAssistant').ApplySuggestion[]) => {
+    const interactionTypes = new Set(['add_interaction', 'add_interactions_bulk', 'remove_interaction', 'remove_interactions_bulk']);
+    const allInteractionMutations = actions.every(a => interactionTypes.has(a.type));
+
+    if (!allInteractionMutations || !data) {
+      // Mixed or unknown types — fall back to sequential individual handlers
+      for (const action of actions) await handleAIApply(action);
+      return;
+    }
+
+    // Build final interactions array in one pass, no intermediate saves
+    let interactions = [...data.interactions];
+    let added = 0, removed = 0;
+
+    for (const action of actions) {
+      if (action.type === 'remove_interaction') {
+        const src = findParam(action.sourceParameterName);
+        const tgt = findParam(action.targetParameterName);
+        if (!src || !tgt) continue;
+        const before = interactions.length;
+        interactions = interactions.filter(i => !(i.sourceParameterId === src.id && i.targetParameterId === tgt.id));
+        removed += before - interactions.length;
+
+      } else if (action.type === 'remove_interactions_bulk') {
+        for (const item of action.interactions) {
+          const src = findParam(item.sourceParameterName);
+          const tgt = findParam(item.targetParameterName);
+          if (!src || !tgt) continue;
+          const before = interactions.length;
+          interactions = interactions.filter(i => !(i.sourceParameterId === src.id && i.targetParameterId === tgt.id));
+          removed += before - interactions.length;
+        }
+
+      } else if (action.type === 'add_interaction') {
+        const src = findParam(action.sourceParameterName);
+        const tgt = findParam(action.targetParameterName);
+        if (!src || !tgt) continue;
+        if (interactions.some(i => i.sourceParameterId === src.id && i.targetParameterId === tgt.id)) continue;
+        interactions.push({ id: `${Date.now()}_${added}`, sourceParameterId: src.id, targetParameterId: tgt.id, direction: action.direction, strength: action.strength ?? 'moderate' });
+        added++;
+
+      } else if (action.type === 'add_interactions_bulk') {
+        for (const item of action.interactions) {
+          const src = findParam(item.sourceParameterName);
+          const tgt = findParam(item.targetParameterName);
+          if (!src || !tgt) continue;
+          if (interactions.some(i => i.sourceParameterId === src.id && i.targetParameterId === tgt.id)) continue;
+          interactions.push({ id: `${Date.now()}_${added}`, sourceParameterId: src.id, targetParameterId: tgt.id, direction: item.direction, strength: item.strength ?? 'moderate' });
+          added++;
+        }
+      }
+    }
+
+    await saveData({ ...data, interactions });
+    const parts: string[] = [];
+    if (removed > 0) parts.push(`${removed} removed`);
+    if (added > 0) parts.push(`${added} added`);
+    if (parts.length > 0) toast({ title: `Interactions updated: ${parts.join(', ')}` });
+  }, [data, findParam, saveData, handleAIApply, toast]);
+
   // Sorting state
   const [sortColumn, setSortColumn] = useState<SortColumn>('parameter');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -760,6 +822,7 @@ export default function AthleticismDatabaseV2() {
         ragContext={ragContext}
         globalContext={globalAIContext}
         onApplySuggestion={handleAIApply}
+        onApplyAll={handleAIApplyAll}
         assistantRole="Answer sports science questions and help the coach define and structure their parameter database. This is a general template database — it is NOT tied to any specific athlete, training phase, or mesocycle. Parameters already in the database are examples or templates, not athlete-specific data. Do NOT ask about the coach's athlete, training phase, season context, or testing infrastructure unless the coach explicitly brings it up. When suggesting or filling parameters, use general scientific specifications (e.g. 'Ground contact time at maximum velocity, 30–60m phase') without assuming any particular athlete context. Suggest relevant parameters, categories, units, and evidence-based rationale. When asked, suggest interactions between parameters or links to training methods. Do not make unsolicited judgments about parameters the coach has already added.
 
 Training Toolbox awareness (critical): The global context contains the coach's full Training Toolbox — every method with its parameters and, where the coach has written one, a Description field explaining what the method means in their context. Before suggesting any parameter-method link, read ALL method descriptions in the Training Toolbox section of the global context. Use the descriptions to reason about which parameters each method actually develops, at what intensities and volumes, and through which physiological pathways. A method description might reveal a specific focus (e.g. 'high-velocity maximal strength') that makes some parameter links strong (peak power, RFD, velocity at 1RM) and others weak (aerobic capacity, flexibility). Always reference the description when writing the rationale for a link — quote it briefly if relevant. If a method has no description yet, fall back to the method name and its configured parameters to infer the link. Never suggest a parameter-method link without first checking whether the method description provides direct evidence for or against it."
