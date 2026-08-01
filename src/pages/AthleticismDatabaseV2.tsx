@@ -116,18 +116,25 @@ export default function AthleticismDatabaseV2() {
         }).filter(Boolean).join('\n')
       : 'No method links defined yet.';
 
-    const interactionsList = data?.interactions?.length
-      ? data.interactions.map((i) => {
-          const src = data.parameters.find((p) => p.id === i.sourceParameterId);
-          const tgt = data.parameters.find((p) => p.id === i.targetParameterId);
-          if (!src || !tgt) return null;
-          return `- "${src.name}" → "${tgt.name}" (${i.direction}${i.strength ? `, ${i.strength}` : ''})`;
-        }).filter(Boolean).join('\n')
-      : 'No interactions defined yet.';
+    const interactionsList = (() => {
+      if (!data?.interactions?.length) return 'No interactions defined yet.';
+      // Group by source parameter so the AI can look up per-parameter targets exactly
+      const bySource = new Map<string, string[]>();
+      for (const i of data.interactions) {
+        const src = data.parameters.find((p) => p.id === i.sourceParameterId);
+        const tgt = data.parameters.find((p) => p.id === i.targetParameterId);
+        if (!src || !tgt) continue;
+        if (!bySource.has(src.name)) bySource.set(src.name, []);
+        bySource.get(src.name)!.push(`"${tgt.name}"${i.strength ? ` (${i.strength})` : ''}`);
+      }
+      return Array.from(bySource.entries())
+        .map(([src, targets]) => `"${src}" → ${targets.join(', ')}`)
+        .join('\n');
+    })();
 
     return [
       `Parameters (${data?.parameters?.length ?? 0} total):\n${paramList}`,
-      `Existing interactions (${data?.interactions?.length ?? 0} total — do NOT add these again, only add genuinely missing ones):\n${interactionsList}`,
+      `Interactions already defined — grouped by source parameter (${data?.interactions?.length ?? 0} total).\nTo check if a pair exists: find the source parameter's row and look for that exact target. Only skip that exact source→target pair. Having other interactions does NOT block adding new ones for that parameter:\n${interactionsList}`,
       `Existing method links (${data?.parameterMethods?.length ?? 0} total — use these exact parameterName and methodId values when updating or removing):\n${methodLinksList}`,
       `Available training methods — use the exact methodId string shown when applying:\n${methodList}`,
     ].join('\n\n');
@@ -190,15 +197,21 @@ export default function AthleticismDatabaseV2() {
 
     } else if (action.type === 'add_interactions_bulk') {
       const failed: string[] = [];
+      const skipped: string[] = [];
       const resolved: Array<{ sourceParameterId: string; targetParameterId: string; direction: 'contributes_to' | 'improved_by'; strength: 'strong' | 'moderate' | 'weak' }> = [];
       for (const i of action.interactions) {
         const source = findParam(i.sourceParameterName);
         const target = findParam(i.targetParameterName);
         if (!source || !target) { failed.push(`${i.sourceParameterName} → ${i.targetParameterName}`); continue; }
+        const alreadyExists = (data?.interactions ?? []).some(
+          (ex) => ex.sourceParameterId === source.id && ex.targetParameterId === target.id
+        );
+        if (alreadyExists) { skipped.push(`${i.sourceParameterName} → ${i.targetParameterName}`); continue; }
         resolved.push({ sourceParameterId: source.id, targetParameterId: target.id, direction: i.direction, strength: i.strength ?? 'moderate' });
       }
       if (resolved.length > 0) await addInteractionsBulk(resolved);
       if (resolved.length > 0) toast({ title: `${resolved.length} interaction${resolved.length !== 1 ? 's' : ''} added` });
+      if (skipped.length > 0) toast({ title: `${skipped.length} already existed — skipped` });
       if (failed.length > 0) {
         toast({
           title: `${failed.length} interaction${failed.length !== 1 ? 's' : ''} skipped — parameter not found`,
