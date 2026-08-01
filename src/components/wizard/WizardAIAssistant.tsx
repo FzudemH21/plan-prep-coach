@@ -340,6 +340,7 @@ Available types and their fields:
   direction "contributes_to" means sourceParameter positively influences targetParameter. Use exact parameter names as listed in the wizard context.
 - add_interactions_bulk: {"type":"add_interactions_bulk","interactions":[{"sourceParameterName":"<exact name>","targetParameterName":"<exact name>","direction":"contributes_to","strength":"<strong|moderate|weak>"},{"sourceParameterName":"<exact name>","targetParameterName":"<exact name>","direction":"contributes_to","strength":"<strong|moderate|weak>"}]}
   Use this when adding multiple interactions at once. Preferred over add_interaction when adding 2 or more interactions.
+  IMPORTANT: Check the "Existing interactions" list in context first — do NOT include pairs that already appear there. Only include genuinely missing interactions.
 - add_parameter_method: {"type":"add_parameter_method","parameterName":"<exact name of existing parameter>","methodId":"<exact method ID from wizard context>","rationale":"<optional: why this method improves this parameter>","evidence":"<optional: research citations or supporting evidence>"}
   Only use method IDs as listed in the wizard context. Do not invent method IDs.
   IMPORTANT: Before emitting this, check the "Existing method links" section of the context. If a link between this parameterName and methodId ALREADY EXISTS, use update_parameter_method instead — do NOT emit add_parameter_method for an existing link.

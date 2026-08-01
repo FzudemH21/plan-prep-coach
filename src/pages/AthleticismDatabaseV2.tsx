@@ -116,9 +116,18 @@ export default function AthleticismDatabaseV2() {
         }).filter(Boolean).join('\n')
       : 'No method links defined yet.';
 
+    const interactionsList = data?.interactions?.length
+      ? data.interactions.map((i) => {
+          const src = data.parameters.find((p) => p.id === i.sourceParameterId);
+          const tgt = data.parameters.find((p) => p.id === i.targetParameterId);
+          if (!src || !tgt) return null;
+          return `- "${src.name}" → "${tgt.name}" (${i.direction}${i.strength ? `, ${i.strength}` : ''})`;
+        }).filter(Boolean).join('\n')
+      : 'No interactions defined yet.';
+
     return [
       `Parameters (${data?.parameters?.length ?? 0} total):\n${paramList}`,
-      `Interactions defined: ${data?.interactions?.length ?? 0}`,
+      `Existing interactions (${data?.interactions?.length ?? 0} total — do NOT add these again, only add genuinely missing ones):\n${interactionsList}`,
       `Existing method links (${data?.parameterMethods?.length ?? 0} total — use these exact parameterName and methodId values when updating or removing):\n${methodLinksList}`,
       `Available training methods — use the exact methodId string shown when applying:\n${methodList}`,
     ].join('\n\n');
