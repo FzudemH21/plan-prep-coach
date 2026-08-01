@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Plus, X, ArrowUp, ArrowRight, ChevronDown } from 'lucide-react';
+import { Plus, X, ChevronDown } from 'lucide-react';
 import { ParameterV2, ParameterInteraction, ParameterMethodV2, PARAMETER_CATEGORIES, INTERACTION_STRENGTHS, InteractionDirection, InteractionStrength } from '@/types/parametersV2';
 import { ToolboxEntry } from '@/types/toolbox';
 import {
@@ -319,18 +319,11 @@ export function EditParameterDialogV2({
   };
 
   const getStrengthIcon = (strength?: InteractionStrength) => {
-    const strengthInfo = INTERACTION_STRENGTHS.find((s) => s.value === strength);
-    if (!strengthInfo) return <ArrowUp className="h-3 w-3" />;
-    
     switch (strength) {
-      case 'strong':
-        return <span className="text-xs font-bold">↑↑</span>;
-      case 'moderate':
-        return <ArrowUp className="h-3 w-3" />;
-      case 'weak':
-        return <ArrowRight className="h-3 w-3" />;
-      default:
-        return <ArrowUp className="h-3 w-3" />;
+      case 'strong':   return <span className="text-xs font-bold leading-none">↑↑↑</span>;
+      case 'moderate': return <span className="text-xs font-bold leading-none">↑↑</span>;
+      case 'weak':     return <span className="text-xs font-bold leading-none">↑</span>;
+      default:         return <span className="text-xs font-bold leading-none">↑↑</span>;
     }
   };
 
@@ -577,14 +570,14 @@ export function EditParameterDialogV2({
                         variant="secondary"
                         className="flex items-center gap-1 py-1 pr-1"
                       >
-                        <span className="mr-1">{getStrengthIcon(interaction.strength)}</span>
-                        {targetParameter.name}
                         <Select
                           value={interaction.strength || 'moderate'}
                           onValueChange={(v) => onUpdateInteraction(interaction.id, { strength: v as InteractionStrength })}
                         >
-                          <SelectTrigger className="h-5 w-5 border-0 bg-transparent p-0 [&>svg]:hidden">
-                            <ChevronDown className="h-3 w-3 opacity-50" />
+                          <SelectTrigger className="h-auto border-0 bg-transparent p-0 gap-1 font-normal text-sm [&>svg]:hidden hover:opacity-80 focus:ring-0 focus:ring-offset-0">
+                            {getStrengthIcon(interaction.strength)}
+                            <span>{targetParameter.name}</span>
+                            <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                           </SelectTrigger>
                           <SelectContent>
                             {INTERACTION_STRENGTHS.map((s) => (
@@ -686,14 +679,14 @@ export function EditParameterDialogV2({
                         variant="outline"
                         className="flex items-center gap-1 py-1 pr-1 bg-primary/5"
                       >
-                        <span className="mr-1">{getStrengthIcon(interaction.strength)}</span>
-                        {sourceParameter.name}
                         <Select
                           value={interaction.strength || 'moderate'}
                           onValueChange={(v) => onUpdateInteraction(interaction.id, { strength: v as InteractionStrength })}
                         >
-                          <SelectTrigger className="h-5 w-5 border-0 bg-transparent p-0 [&>svg]:hidden">
-                            <ChevronDown className="h-3 w-3 opacity-50" />
+                          <SelectTrigger className="h-auto border-0 bg-transparent p-0 gap-1 font-normal text-sm [&>svg]:hidden hover:opacity-80 focus:ring-0 focus:ring-offset-0">
+                            {getStrengthIcon(interaction.strength)}
+                            <span>{sourceParameter.name}</span>
+                            <ChevronDown className="h-3 w-3 opacity-40 shrink-0" />
                           </SelectTrigger>
                           <SelectContent>
                             {INTERACTION_STRENGTHS.map((s) => (

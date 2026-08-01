@@ -51,7 +51,7 @@ export const PARAMETER_CATEGORIES: { value: ParameterCategory; label: string }[]
 ];
 
 export const INTERACTION_STRENGTHS: { value: InteractionStrength; label: string; icon: string }[] = [
-  { value: 'strong', label: 'Strong', icon: '↑↑' },
-  { value: 'moderate', label: 'Moderate', icon: '↑' },
-  { value: 'weak', label: 'Weak', icon: '→' },
+  { value: 'strong', label: 'Strong', icon: '↑↑↑' },
+  { value: 'moderate', label: 'Moderate', icon: '↑↑' },
+  { value: 'weak', label: 'Weak', icon: '↑' },
 ];
