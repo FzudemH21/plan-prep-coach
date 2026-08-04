@@ -276,6 +276,24 @@ export default function AthleticismDatabaseV2() {
       await updateParameterMethod(link.id, updates);
       toast({ title: `Method link updated for "${action.parameterName}"` });
 
+    } else if (action.type === 'update_parameter_methods_bulk') {
+      const failed: string[] = [];
+      let updated = 0;
+      for (const u of action.updates) {
+        const param = findParam(u.parameterName);
+        if (!param) { failed.push(u.parameterName); continue; }
+        const link = data?.parameterMethods?.find(m => m.parameterId === param.id && m.methodId === u.methodId);
+        if (!link) { failed.push(`${u.methodId} → ${u.parameterName}`); continue; }
+        const upd: { rationale?: string; evidence?: string; evidenceQuality?: string } = {};
+        if (u.rationale !== undefined) upd.rationale = u.rationale;
+        if (u.evidence !== undefined) upd.evidence = u.evidence;
+        if (u.evidenceQuality !== undefined) upd.evidenceQuality = u.evidenceQuality;
+        await updateParameterMethod(link.id, upd);
+        updated++;
+      }
+      if (updated > 0) toast({ title: `${updated} method link${updated !== 1 ? 's' : ''} updated` });
+      if (failed.length > 0) toast({ title: `${failed.length} not found — skipped`, description: failed.slice(0, 3).join(' | '), variant: 'destructive' });
+
     } else if (action.type === 'remove_parameter_method') {
       const param = findParam(action.parameterName);
       if (!param) {
@@ -345,6 +363,7 @@ export default function AthleticismDatabaseV2() {
       'add_interaction', 'add_interactions_bulk',
       'remove_interaction', 'remove_interactions_bulk',
       'add_parameter_method', 'add_parameter_methods_bulk',
+      'update_parameter_method', 'update_parameter_methods_bulk',
     ]);
     if (!actions.every(a => batchable.has(a.type))) {
       // Contains action types we can't safely batch — fall back to sequential individual handlers
@@ -356,7 +375,7 @@ export default function AthleticismDatabaseV2() {
     let parameters = [...data.parameters];
     let interactions = [...data.interactions];
     let parameterMethods = [...data.parameterMethods];
-    let paramsAdded = 0, paramsRemoved = 0, interactionsAdded = 0, interactionsRemoved = 0, methodsAdded = 0;
+    let paramsAdded = 0, paramsRemoved = 0, interactionsAdded = 0, interactionsRemoved = 0, methodsAdded = 0, methodsUpdated = 0;
 
     // Looks up in the WORKING parameters array so newly added params are found immediately
     const findWorking = (name: string) => {
@@ -435,6 +454,34 @@ export default function AthleticismDatabaseV2() {
           parameterMethods.push({ id: `${Date.now()}_m${methodsAdded}`, parameterId: param.id, methodId: link.methodId, rationale: link.rationale, evidence: link.evidence });
           methodsAdded++;
         }
+      } else if (action.type === 'update_parameter_method') {
+        const param = findWorking(action.parameterName);
+        if (!param) continue;
+        parameterMethods = parameterMethods.map(m => {
+          if (m.parameterId !== param.id || m.methodId !== action.methodId) return m;
+          return {
+            ...m,
+            ...(action.rationale !== undefined && { rationale: action.rationale }),
+            ...(action.evidence !== undefined && { evidence: action.evidence }),
+            ...(action.evidenceQuality !== undefined && { evidenceQuality: action.evidenceQuality }),
+          };
+        });
+        methodsUpdated++;
+      } else if (action.type === 'update_parameter_methods_bulk') {
+        for (const u of action.updates) {
+          const param = findWorking(u.parameterName);
+          if (!param) continue;
+          parameterMethods = parameterMethods.map(m => {
+            if (m.parameterId !== param.id || m.methodId !== u.methodId) return m;
+            return {
+              ...m,
+              ...(u.rationale !== undefined && { rationale: u.rationale }),
+              ...(u.evidence !== undefined && { evidence: u.evidence }),
+              ...(u.evidenceQuality !== undefined && { evidenceQuality: u.evidenceQuality }),
+            };
+          });
+          methodsUpdated++;
+        }
       }
     }
 
@@ -445,6 +492,7 @@ export default function AthleticismDatabaseV2() {
     if (interactionsAdded > 0) parts.push(`${interactionsAdded} interaction${interactionsAdded !== 1 ? 's' : ''} added`);
     if (interactionsRemoved > 0) parts.push(`${interactionsRemoved} interaction${interactionsRemoved !== 1 ? 's' : ''} removed`);
     if (methodsAdded > 0) parts.push(`${methodsAdded} method link${methodsAdded !== 1 ? 's' : ''} added`);
+    if (methodsUpdated > 0) parts.push(`${methodsUpdated} method link${methodsUpdated !== 1 ? 's' : ''} updated`);
     if (parts.length > 0) toast({ title: parts.join(', ') });
   }, [data, saveData, handleAIApply, toast]);
 

@@ -114,6 +114,8 @@ export type ApplySuggestion =
   | { type: "add_parameter_methods_bulk"; links: Array<{ parameterName: string; methodId: string; rationale?: string; evidence?: string }> }
   /** Parameter Database — update rationale/evidence on an existing method link */
   | { type: "update_parameter_method"; parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string }
+  /** Parameter Database — update multiple method links at once */
+  | { type: "update_parameter_methods_bulk"; updates: Array<{ parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string }> }
   /** Parameter Database — remove a training method link from a parameter */
   | { type: "remove_parameter_method"; parameterName: string; methodId: string }
   /** Parameter Database — remove an interaction between two parameters */
@@ -358,6 +360,8 @@ Available types and their fields:
 - update_parameter_method: {"type":"update_parameter_method","parameterName":"<exact parameter name>","methodId":"<exact method ID>","rationale":"<new rationale text>","evidence":"<optional: new evidence>","evidenceQuality":"<optional: strong|moderate|preliminary|expert_opinion>"}
   ALWAYS use this when the coach wants to edit, change, improve, or rewrite the rationale, evidence, or evidence quality for a method that is already linked to a parameter. Do NOT use add_parameter_method for existing links.
   Use ONLY parameterNames and methodIds listed in the "Existing method links" section of the wizard context. Supply only the fields you want to change; omit fields you want to leave as-is. To clear a field, set it to an empty string. GRADE-inspired evidenceQuality values: strong = systematic review/meta-analysis; moderate = RCT/well-controlled study; preliminary = observational/cohort evidence; expert_opinion = case reports/coaching practice.
+- update_parameter_methods_bulk: {"type":"update_parameter_methods_bulk","updates":[{"parameterName":"<exact parameter name>","methodId":"<exact method ID>","evidenceQuality":"<strong|moderate|preliminary|expert_opinion>"},{"parameterName":"<exact parameter name>","methodId":"<exact method ID>","rationale":"<new rationale>"}]}
+  Use when updating rationale, evidence, or evidenceQuality for 2 or more existing method links in one action. Preferred over multiple update_parameter_method blocks. Supply only the fields to change per entry; omit fields to leave unchanged.
 - remove_parameter_method: {"type":"remove_parameter_method","parameterName":"<exact parameter name>","methodId":"<exact method ID>"}
   Removes a training method link from a parameter entirely. Always confirm with the coach before emitting — this is irreversible. Use exact parameterName and methodId as shown in the "Existing method links" section of the wizard context.
 - remove_interaction: {"type":"remove_interaction","sourceParameterName":"<exact parameter name>","targetParameterName":"<exact parameter name>"}
@@ -675,6 +679,8 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return `Link ${action.links.length} method${action.links.length !== 1 ? "s" : ""} to parameters: ${action.links.map((l) => `${l.methodId} → ${l.parameterName}`).join(", ")}`;
     case "update_parameter_method":
       return `Update method link: ${action.methodId} → ${action.parameterName}`;
+    case "update_parameter_methods_bulk":
+      return `Update ${action.updates.length} method link${action.updates.length !== 1 ? "s" : ""}: ${action.updates.map((u) => `${u.methodId} → ${u.parameterName}`).join(", ")}`;
     case "remove_parameter_method":
       return `Remove method link: ${action.methodId} from ${action.parameterName}`;
     case "remove_interaction":
