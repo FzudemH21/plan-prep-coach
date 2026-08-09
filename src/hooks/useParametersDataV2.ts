@@ -205,16 +205,16 @@ export function useParametersDataV2() {
 
   // ── Parameter Method CRUD ─────────────────────────────────────────────────
 
-  const addParameterMethod = useCallback(async (parameterId: string, methodId: string, rationale?: string, evidence?: string) => {
+  const addParameterMethod = useCallback(async (parameterId: string, methodId: string, rationale?: string, evidence?: string, evidenceQuality?: string) => {
     const exists = data.parameterMethods.some(m => m.parameterId === parameterId && m.methodId === methodId);
     if (exists) return;
-    const newMethod: ParameterMethodV2 = { id: Date.now().toString(), parameterId, methodId, rationale, evidence };
+    const newMethod: ParameterMethodV2 = { id: Date.now().toString(), parameterId, methodId, rationale, evidence, evidenceQuality };
     await saveData({ ...data, parameterMethods: [...data.parameterMethods, newMethod] });
   }, [data, saveData]);
 
   /** Add multiple parameter-method links in a single save — avoids stale-closure overwrites. */
   const addParameterMethodsBulk = useCallback(async (
-    entries: Array<{ parameterId: string; methodId: string; rationale?: string; evidence?: string }>,
+    entries: Array<{ parameterId: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string }>,
   ) => {
     const existing = new Set(
       data.parameterMethods.map((m) => `${m.parameterId}|${m.methodId}`),
@@ -227,6 +227,7 @@ export function useParametersDataV2() {
         methodId: e.methodId,
         rationale: e.rationale,
         evidence: e.evidence,
+        evidenceQuality: e.evidenceQuality,
       }));
     if (newMethods.length === 0) return;
     await saveData({ ...data, parameterMethods: [...data.parameterMethods, ...newMethods] });

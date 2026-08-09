@@ -109,9 +109,9 @@ export type ApplySuggestion =
   /** Parameter Database — add multiple interactions at once */
   | { type: "add_interactions_bulk"; interactions: Array<{ sourceParameterName: string; targetParameterName: string; direction: "contributes_to" | "improved_by"; strength?: "strong" | "moderate" | "weak" }> }
   /** Parameter Database — link a training method to a parameter */
-  | { type: "add_parameter_method"; parameterName: string; methodId: string; rationale?: string; evidence?: string }
+  | { type: "add_parameter_method"; parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string }
   /** Parameter Database — link multiple training methods to parameters at once */
-  | { type: "add_parameter_methods_bulk"; links: Array<{ parameterName: string; methodId: string; rationale?: string; evidence?: string }> }
+  | { type: "add_parameter_methods_bulk"; links: Array<{ parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string }> }
   /** Parameter Database — update rationale/evidence on an existing method link */
   | { type: "update_parameter_method"; parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string }
   /** Parameter Database — update multiple method links at once */
@@ -351,11 +351,13 @@ Available types and their fields:
 - add_interactions_bulk: {"type":"add_interactions_bulk","interactions":[{"sourceParameterName":"<exact name>","targetParameterName":"<exact name>","direction":"contributes_to","strength":"<strong|moderate|weak>"},{"sourceParameterName":"<exact name>","targetParameterName":"<exact name>","direction":"contributes_to","strength":"<strong|moderate|weak>"}]}
   Use this when adding multiple interactions at once. Preferred over add_interaction when adding 2 or more interactions.
   IMPORTANT: Before adding a pair, look up the SOURCE parameter's row in the "Interactions already defined" index in context and check if that exact target already appears in its list. Skip only that exact source→target pair. Do NOT skip a pair just because either parameter appears elsewhere in the index — each parameter is evaluated independently.
-- add_parameter_method: {"type":"add_parameter_method","parameterName":"<exact name of existing parameter>","methodId":"<exact method ID from wizard context>","rationale":"<optional: why this method improves this parameter>","evidence":"<optional: research citations or supporting evidence>"}
+- add_parameter_method: {"type":"add_parameter_method","parameterName":"<exact name of existing parameter>","methodId":"<exact method ID from wizard context>","rationale":"<optional: why this method improves this parameter>","evidence":"<optional: research citations or supporting evidence>","evidenceQuality":"<optional: strong|moderate|preliminary|expert_opinion>"}
   Only use method IDs as listed in the wizard context. Do not invent method IDs.
+  evidenceQuality rates the strength of the evidence using GRADE-inspired levels (see update_parameter_method below for definitions). Whenever you provide evidence for a new link, also include evidenceQuality in the SAME action — do not leave it for a follow-up update.
   IMPORTANT: Before emitting this, check the "Existing method links" section of the context. If a link between this parameterName and methodId ALREADY EXISTS, use update_parameter_method instead — do NOT emit add_parameter_method for an existing link.
-- add_parameter_methods_bulk: {"type":"add_parameter_methods_bulk","links":[{"parameterName":"<exact parameter name>","methodId":"<exact method ID from wizard context>","rationale":"<optional>","evidence":"<optional: research citations>"},{"parameterName":"<exact parameter name>","methodId":"<exact method ID from wizard context>"}]}
+- add_parameter_methods_bulk: {"type":"add_parameter_methods_bulk","links":[{"parameterName":"<exact parameter name>","methodId":"<exact method ID from wizard context>","rationale":"<optional>","evidence":"<optional: research citations>","evidenceQuality":"<optional: strong|moderate|preliminary|expert_opinion>"},{"parameterName":"<exact parameter name>","methodId":"<exact method ID from wizard context>"}]}
   Use this when linking multiple training methods to parameters at once. Preferred over add_parameter_method when adding 2 or more links.
+  evidenceQuality rates the strength of the evidence using GRADE-inspired levels (see update_parameter_method below for definitions). Whenever you provide evidence for a new link, also include evidenceQuality on that same entry — do not leave it for a follow-up update.
   IMPORTANT: For any link where parameterName+methodId already appears in "Existing method links", emit update_parameter_method for that pair instead of including it here.
 - update_parameter_method: {"type":"update_parameter_method","parameterName":"<exact parameter name>","methodId":"<exact method ID>","rationale":"<new rationale text>","evidence":"<optional: new evidence>","evidenceQuality":"<optional: strong|moderate|preliminary|expert_opinion>"}
   ALWAYS use this when the coach wants to edit, change, improve, or rewrite the rationale, evidence, or evidence quality for a method that is already linked to a parameter. Do NOT use add_parameter_method for existing links.

@@ -42,6 +42,17 @@ import { EditParameterDialogV2 } from '@/components/goals/EditParameterDialogV2'
 type SortColumn = 'category' | 'parameter';
 type SortDirection = 'asc' | 'desc';
 
+const VALID_EVIDENCE_QUALITY = new Set(['strong', 'moderate', 'preliminary', 'expert_opinion']);
+function normalizeEvidenceQuality(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const lower = raw.toLowerCase().trim();
+  if (VALID_EVIDENCE_QUALITY.has(lower)) return lower;
+  // Handle "expert opinion" → "expert_opinion", etc.
+  const underscored = lower.replace(/[\s-]+/g, '_');
+  if (VALID_EVIDENCE_QUALITY.has(underscored)) return underscored;
+  return undefined;
+}
+
 export default function AthleticismDatabaseV2() {
   const { toast } = useToast();
   const {
@@ -115,6 +126,10 @@ export default function AthleticismDatabaseV2() {
             (link.evidenceQuality ? ` | evidenceQuality: "${link.evidenceQuality}"` : '');
         }).filter(Boolean).join('\n')
       : 'No method links defined yet.';
+
+    console.log('[PARAM-CONTEXT-DEBUG] raw data.parameterMethods count:', data?.parameterMethods?.length ?? 0);
+    console.log('[PARAM-CONTEXT-DEBUG] raw data.parameterMethods (id/methodId/evidenceQuality):', JSON.stringify((data?.parameterMethods ?? []).map(m => ({ id: m.id, parameterId: m.parameterId, methodId: m.methodId, evidenceQuality: m.evidenceQuality }))));
+    console.log('[PARAM-CONTEXT-DEBUG] methodLinksList string sent to AI:\n' + methodLinksList);
 
     const interactionsList = (() => {
       if (!data?.interactions?.length) return 'No interactions defined yet.';
@@ -235,16 +250,16 @@ export default function AthleticismDatabaseV2() {
         toast({ title: 'Parameter not found', description: `"${action.parameterName}" does not exist yet.`, variant: 'destructive' });
         return;
       }
-      await addParameterMethod(param.id, action.methodId, action.rationale, action.evidence);
+      await addParameterMethod(param.id, action.methodId, action.rationale, action.evidence, normalizeEvidenceQuality(action.evidenceQuality));
       toast({ title: `Method linked to "${action.parameterName}"` });
 
     } else if (action.type === 'add_parameter_methods_bulk') {
       const failed: string[] = [];
-      const resolved: Array<{ parameterId: string; methodId: string; rationale?: string; evidence?: string }> = [];
+      const resolved: Array<{ parameterId: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string }> = [];
       for (const link of action.links) {
         const param = findParam(link.parameterName);
         if (!param) { failed.push(link.parameterName); continue; }
-        resolved.push({ parameterId: param.id, methodId: link.methodId, rationale: link.rationale, evidence: link.evidence });
+        resolved.push({ parameterId: param.id, methodId: link.methodId, rationale: link.rationale, evidence: link.evidence, evidenceQuality: normalizeEvidenceQuality(link.evidenceQuality) });
       }
       if (resolved.length > 0) await addParameterMethodsBulk(resolved);
       if (resolved.length > 0) toast({ title: `${resolved.length} method link${resolved.length !== 1 ? 's' : ''} added` });
@@ -272,7 +287,10 @@ export default function AthleticismDatabaseV2() {
       const updates: { rationale?: string; evidence?: string; evidenceQuality?: string } = {};
       if (action.rationale !== undefined) updates.rationale = action.rationale;
       if (action.evidence !== undefined) updates.evidence = action.evidence;
-      if (action.evidenceQuality !== undefined) updates.evidenceQuality = action.evidenceQuality;
+      if (action.evidenceQuality !== undefined) {
+        const eq = normalizeEvidenceQuality(action.evidenceQuality);
+        if (eq !== undefined) updates.evidenceQuality = eq;
+      }
       await updateParameterMethod(link.id, updates);
       toast({ title: `Method link updated for "${action.parameterName}"` });
 
@@ -287,7 +305,10 @@ export default function AthleticismDatabaseV2() {
         const upd: { rationale?: string; evidence?: string; evidenceQuality?: string } = {};
         if (u.rationale !== undefined) upd.rationale = u.rationale;
         if (u.evidence !== undefined) upd.evidence = u.evidence;
-        if (u.evidenceQuality !== undefined) upd.evidenceQuality = u.evidenceQuality;
+        if (u.evidenceQuality !== undefined) {
+          const eq = normalizeEvidenceQuality(u.evidenceQuality);
+          if (eq !== undefined) upd.evidenceQuality = eq;
+        }
         await updateParameterMethod(link.id, upd);
         updated++;
       }
@@ -441,46 +462,54 @@ export default function AthleticismDatabaseV2() {
           interactionsRemoved += before - interactions.length;
         }
       } else if (action.type === 'add_parameter_method') {
+        console.log('[AI-ADD-EQ-DEBUG] add_parameter_method — raw action:', JSON.stringify(action));
         const param = findWorking(action.parameterName);
         if (!param) continue;
         if (parameterMethods.some(m => m.parameterId === param.id && m.methodId === action.methodId)) continue;
-        parameterMethods.push({ id: `${Date.now()}_m${methodsAdded}`, parameterId: param.id, methodId: action.methodId, rationale: action.rationale, evidence: action.evidence });
+        parameterMethods.push({ id: `${Date.now()}_m${methodsAdded}`, parameterId: param.id, methodId: action.methodId, rationale: action.rationale, evidence: action.evidence, evidenceQuality: normalizeEvidenceQuality(action.evidenceQuality) });
         methodsAdded++;
       } else if (action.type === 'add_parameter_methods_bulk') {
+        console.log('[AI-ADD-EQ-DEBUG] add_parameter_methods_bulk — raw action:', JSON.stringify(action));
         for (const link of action.links) {
           const param = findWorking(link.parameterName);
           if (!param) continue;
           if (parameterMethods.some(m => m.parameterId === param.id && m.methodId === link.methodId)) continue;
-          parameterMethods.push({ id: `${Date.now()}_m${methodsAdded}`, parameterId: param.id, methodId: link.methodId, rationale: link.rationale, evidence: link.evidence });
+          parameterMethods.push({ id: `${Date.now()}_m${methodsAdded}`, parameterId: param.id, methodId: link.methodId, rationale: link.rationale, evidence: link.evidence, evidenceQuality: normalizeEvidenceQuality(link.evidenceQuality) });
           methodsAdded++;
         }
       } else if (action.type === 'update_parameter_method') {
         const param = findWorking(action.parameterName);
         if (!param) continue;
+        const eqSingle = normalizeEvidenceQuality(action.evidenceQuality);
+        let matchedSingle = false;
         parameterMethods = parameterMethods.map(m => {
           if (m.parameterId !== param.id || m.methodId !== action.methodId) return m;
+          matchedSingle = true;
           return {
             ...m,
             ...(action.rationale !== undefined && { rationale: action.rationale }),
             ...(action.evidence !== undefined && { evidence: action.evidence }),
-            ...(action.evidenceQuality !== undefined && { evidenceQuality: action.evidenceQuality }),
+            ...(eqSingle !== undefined && { evidenceQuality: eqSingle }),
           };
         });
-        methodsUpdated++;
+        if (matchedSingle) methodsUpdated++;
       } else if (action.type === 'update_parameter_methods_bulk') {
         for (const u of action.updates) {
           const param = findWorking(u.parameterName);
           if (!param) continue;
+          const eqBulk = normalizeEvidenceQuality(u.evidenceQuality);
+          let matchedBulk = false;
           parameterMethods = parameterMethods.map(m => {
             if (m.parameterId !== param.id || m.methodId !== u.methodId) return m;
+            matchedBulk = true;
             return {
               ...m,
               ...(u.rationale !== undefined && { rationale: u.rationale }),
               ...(u.evidence !== undefined && { evidence: u.evidence }),
-              ...(u.evidenceQuality !== undefined && { evidenceQuality: u.evidenceQuality }),
+              ...(eqBulk !== undefined && { evidenceQuality: eqBulk }),
             };
           });
-          methodsUpdated++;
+          if (matchedBulk) methodsUpdated++;
         }
       }
     }
