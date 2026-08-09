@@ -127,10 +127,6 @@ export default function AthleticismDatabaseV2() {
         }).filter(Boolean).join('\n')
       : 'No method links defined yet.';
 
-    console.log('[PARAM-CONTEXT-DEBUG] raw data.parameterMethods count:', data?.parameterMethods?.length ?? 0);
-    console.log('[PARAM-CONTEXT-DEBUG] raw data.parameterMethods (id/methodId/evidenceQuality):', JSON.stringify((data?.parameterMethods ?? []).map(m => ({ id: m.id, parameterId: m.parameterId, methodId: m.methodId, evidenceQuality: m.evidenceQuality }))));
-    console.log('[PARAM-CONTEXT-DEBUG] methodLinksList string sent to AI:\n' + methodLinksList);
-
     const interactionsList = (() => {
       if (!data?.interactions?.length) return 'No interactions defined yet.';
       // Group by source parameter so the AI can look up per-parameter targets exactly
@@ -462,14 +458,12 @@ export default function AthleticismDatabaseV2() {
           interactionsRemoved += before - interactions.length;
         }
       } else if (action.type === 'add_parameter_method') {
-        console.log('[AI-ADD-EQ-DEBUG] add_parameter_method — raw action:', JSON.stringify(action));
         const param = findWorking(action.parameterName);
         if (!param) continue;
         if (parameterMethods.some(m => m.parameterId === param.id && m.methodId === action.methodId)) continue;
         parameterMethods.push({ id: `${Date.now()}_m${methodsAdded}`, parameterId: param.id, methodId: action.methodId, rationale: action.rationale, evidence: action.evidence, evidenceQuality: normalizeEvidenceQuality(action.evidenceQuality) });
         methodsAdded++;
       } else if (action.type === 'add_parameter_methods_bulk') {
-        console.log('[AI-ADD-EQ-DEBUG] add_parameter_methods_bulk — raw action:', JSON.stringify(action));
         for (const link of action.links) {
           const param = findWorking(link.parameterName);
           if (!param) continue;
