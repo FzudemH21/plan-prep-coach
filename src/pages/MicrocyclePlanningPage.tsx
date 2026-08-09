@@ -90,6 +90,10 @@ export default function MicrocyclePlanningPage() {
   const [ragContext, setRagContext] = useState('');
   const globalAIContext = useGlobalAIContext(currentStep === 2);
   const { coachMemoryContext, saveToMemory } = useCoachMemory({ currentMethods: macrocycleData?.selectedMethods ?? [] });
+  // Resolve athlete name from selectedAthleteId
+  const selectedAthleteId = macrocycleData?.selectedAthleteId;
+  const selectedAthlete = athletes.find(a => a.id === selectedAthleteId);
+  const athleteName = selectedAthlete ? getAthleteDisplayName(selectedAthlete) : undefined;
   const anamnesisAIContext = useAnamnesisAIContext(selectedAthleteId ?? null);
   const { user } = useAuth();
   const [accumulatedDialogOpen, setAccumulatedDialogOpen] = useState(false);
@@ -108,11 +112,6 @@ export default function MicrocyclePlanningPage() {
   const handleSaveToLibrary = (dayDate: string, sessionIndex: number) => {
     setSaveLibTarget({ dayDate, sessionIndex });
   };
-
-  // Resolve athlete name from selectedAthleteId
-  const selectedAthleteId = macrocycleData?.selectedAthleteId;
-  const selectedAthlete = athletes.find(a => a.id === selectedAthleteId);
-  const athleteName = selectedAthlete ? getAthleteDisplayName(selectedAthlete) : undefined;
 
   // Athlete connection — used for exercise history in AI context
   const { getConnectionForAthlete } = useAthleteConnections();
