@@ -103,6 +103,10 @@ export function useDailyCheckin(connectionId: string | null) {
   const { user } = useAuth();
   const [todayCheckin, setTodayCheckin] = useState<DailyCheckin | null | undefined>(undefined);
   const [recentCheckins, setRecentCheckins] = useState<DailyCheckin[]>([]);
+  // Custom-metric values saved today (parameter_id → latest value). Kept separate from
+  // DailyCheckin.customMetricValues (always null there — those live in athlete_test_results,
+  // not the checkin row) so the check-in sheet can prefill on re-open/edit.
+  const [todayCustomMetricValues, setTodayCustomMetricValues] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   const _todayD = new Date();
@@ -120,6 +124,27 @@ export function useDailyCheckin(connectionId: string | null) {
         .maybeSingle();
 
       setTodayCheckin(todayRow ? fromDb(todayRow as DbRow) : null);
+
+      // Custom metrics are inserted (not upserted) per save, so pick the most
+      // recent row per parameter_id within today's local-day window.
+      const dayStart = new Date(_todayD.getFullYear(), _todayD.getMonth(), _todayD.getDate());
+      const dayEnd = new Date(_todayD.getFullYear(), _todayD.getMonth(), _todayD.getDate() + 1);
+      const { data: todayResults } = await supabase
+        .from('athlete_test_results')
+        .select('parameter_id, value, recorded_at')
+        .eq('athlete_connection_id', athleteId)
+        .gte('recorded_at', dayStart.toISOString())
+        .lt('recorded_at', dayEnd.toISOString())
+        .order('recorded_at', { ascending: false });
+
+      const latestByParam: Record<string, number> = {};
+      for (const row of (todayResults ?? []) as { parameter_id: string; value: string }[]) {
+        if (!(row.parameter_id in latestByParam)) {
+          const n = Number(row.value);
+          if (!Number.isNaN(n)) latestByParam[row.parameter_id] = n;
+        }
+      }
+      setTodayCustomMetricValues(latestByParam);
 
       const ninetyDaysAgo = new Date();
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
@@ -202,5 +227,5 @@ export function useDailyCheckin(connectionId: string | null) {
     return true;
   }, [athleteId, user, load]);
 
-  return { todayCheckin, recentCheckins, loading, saveCheckin, reload: load };
+  return { todayCheckin, todayCustomMetricValues, recentCheckins, loading, saveCheckin, reload: load };
 }

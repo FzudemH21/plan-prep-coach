@@ -129,7 +129,7 @@ export function AthleteAppLayout() {
   const location = useLocation();
   const { t } = useTranslation();
   const { connection, loading } = useAthleteApp();
-  const { todayCheckin, saveCheckin } = useDailyCheckin(connection?.id ?? null);
+  const { todayCheckin, todayCustomMetricValues, saveCheckin } = useDailyCheckin(connection?.id ?? null);
   const [checkinOpen, setCheckinOpen] = useState(false);
 
   // Open check-in sheet once per day if not yet completed and monitoring is enabled —
@@ -205,6 +205,8 @@ export function AthleteAppLayout() {
         onSave={saveCheckin}
         athleteName={connection?.athleteName}
         monitoringConfig={connection?.profileData?.monitoringConfig ?? undefined}
+        existingCheckin={todayCheckin ?? null}
+        existingCustomMetricValues={todayCustomMetricValues}
       />
 
       {/* Status bar */}

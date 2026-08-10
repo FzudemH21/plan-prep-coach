@@ -9,10 +9,11 @@ import {
   nrsSeverityColor,
   nrsSeverityStroke,
   svgRegionKey,
+  svgRegionKeyLegacy,
   getRegionKeyLabel,
   regionKeyView,
 } from '@/lib/bodyMapData';
-import type { DailyCheckinInput } from '@/hooks/useDailyCheckin';
+import type { DailyCheckinInput, DailyCheckin, PainArea } from '@/hooks/useDailyCheckin';
 import type { MonitoringConfig, MonitoringBlock } from '@/types/athlete';
 import { DEFAULT_MONITORING_CONFIG } from '@/types/athlete';
 
@@ -187,6 +188,22 @@ type BodySide = 'front' | 'back';
 // Dot positions stored alongside NRS: regionKey → { nrs, cx, cy }
 export interface PainDot { nrs: number; cx: number; cy: number }
 
+// Saved PainArea rows only carry regionKey/severity, not the SVG cx/cy — look
+// up the matching region shape to reconstruct dot positions for prefill.
+// svgRegionKeyLegacy also matches un-suffixed keys from before front/back views
+// were tracked separately.
+function reconstructPainDots(painAreas: PainArea[]): Map<string, PainDot> {
+  const dots = new Map<string, PainDot>();
+  for (const area of painAreas) {
+    const region = [...FRONT_REGIONS, ...BACK_REGIONS].find(
+      (r) => svgRegionKey(r) === area.regionKey || svgRegionKeyLegacy(r) === area.regionKey
+    );
+    if (!region) continue;
+    dots.set(area.regionKey, { nrs: area.severity, cx: region.x + region.w / 2, cy: region.y + region.h / 2 });
+  }
+  return dots;
+}
+
 function BodyMap({
   painDots,
   pendingKey,
@@ -307,6 +324,10 @@ interface Props {
   onSave: (input: DailyCheckinInput) => Promise<boolean>;
   athleteName?: string;
   monitoringConfig?: MonitoringConfig;
+  /** Today's already-saved check-in, if any — prefills the sheet on re-open/edit instead of starting blank. */
+  existingCheckin?: DailyCheckin | null;
+  /** Today's already-saved custom metric values (parameterId → value), fetched separately from athlete_test_results. */
+  existingCustomMetricValues?: Record<string, number>;
 }
 
 // ── Navigation helpers (config-aware) ─────────────────────────────────────────
@@ -345,7 +366,7 @@ function prevOfMainStep(currentMain: string, config?: MonitoringConfig): string 
   return prev === 'wellness' ? 'wellness_confirm' : prev;
 }
 
-export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitoringConfig }: Props) {
+export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitoringConfig, existingCheckin, existingCustomMetricValues }: Props) {
   const _now = new Date();
   const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
 
@@ -379,23 +400,44 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
   const [saveError, setSaveError] = useState(false);
 
   // ── Reset on open ──────────────────────────────────────────────────────────
+  // If today's check-in already exists (re-opened via the "Edit check-in" pill),
+  // prefill every field from it instead of starting blank — otherwise changing
+  // one answer means re-entering the whole check-in from scratch.
   const wasOpen = useRef(false);
   if (open && !wasOpen.current) {
     wasOpen.current = true;
     setStep(initialStep(monitoringConfig));
     setWellnessIdx(0);
-    setWellness({ fatigue: null, sleep: null, soreness: null, stress: null, mood: null });
-    setHasPain(null);
-    setHasIllness(null);
-    setPainDots(new Map());
+    if (existingCheckin) {
+      setWellness({
+        fatigue: existingCheckin.wellnessFatigue,
+        sleep: existingCheckin.wellnessSleep,
+        soreness: existingCheckin.wellnessSoreness,
+        stress: existingCheckin.wellnessStress,
+        mood: existingCheckin.wellnessMood,
+      });
+      setHasPain(existingCheckin.hasPain);
+      setHasIllness(existingCheckin.hasIllness);
+      setPainDots(reconstructPainDots(existingCheckin.painAreas));
+      setIllnessSymptoms(new Set(existingCheckin.illnessSymptoms));
+      setIllnessOther(existingCheckin.illnessSymptomOther ?? '');
+      setIllnessNrs(existingCheckin.illnessNrs ?? 0);
+      setNotes(existingCheckin.notes ?? '');
+      setCustomMetricValues(existingCustomMetricValues ?? {});
+    } else {
+      setWellness({ fatigue: null, sleep: null, soreness: null, stress: null, mood: null });
+      setHasPain(null);
+      setHasIllness(null);
+      setPainDots(new Map());
+      setIllnessSymptoms(new Set());
+      setIllnessOther('');
+      setIllnessNrs(0);
+      setNotes('');
+      setCustomMetricValues({});
+    }
     setPendingKey(null);
     setPendingDot(null);
     setPendingNrs(5);
-    setIllnessSymptoms(new Set());
-    setIllnessOther('');
-    setIllnessNrs(0);
-    setNotes('');
-    setCustomMetricValues({});
     setSaving(false);
     setSaveError(false);
   }
