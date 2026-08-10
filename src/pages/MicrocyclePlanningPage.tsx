@@ -3538,6 +3538,9 @@ export default function MicrocyclePlanningPage() {
     const goalStr = macrocycleData?.smartGoals?.[0]?.description
       ? `Primary goal: ${macrocycleData.smartGoals[0].description}`
       : "";
+    const notesStr = macrocycleData?.planNotes?.trim()
+      ? `Coach's Notes & Brainstorming (freeform — read for context on intent, constraints, and ideas the coach has jotted down):\n${macrocycleData.planNotes.trim()}`
+      : "";
     const mesoCount = mesocycles.length;
     const mesoStr = mesoCount > 0
       ? `Mesocycles: ${mesoCount} (${mesocycles.map((m: { name: string }) => m.name).join(", ")})`
@@ -3839,6 +3842,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
       athleteStr,
       planStr,
       goalStr,
+      notesStr,
       mesoStr,
       currentMesoStr,
       currentMicroStr,

@@ -2866,6 +2866,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     const methodsStr = selectedMethodList.length
       ? `Selected methods:\n${selectedMethodList.map((m) => `- ${m}`).join("\n")}`
       : "";
+    const notesStr = planNotes?.trim()
+      ? `Coach's Notes & Brainstorming (freeform — read for context on intent, constraints, and ideas the coach has jotted down):\n${planNotes.trim()}`
+      : "";
     let actionHints = "";
     if (currentStep === 1) {
       actionHints = "Available AI actions: set_plan_name, set_plan_duration, add_goal, remove_goal, schedule_tests, create_event, remove_event";
@@ -2906,11 +2909,12 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       goalsStr,
       eventsStr,
       methodsStr,
+      notesStr,
       actionHints,
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, subGoals, derivedSubGoals, events, selectedMethods, manuallyAddedMethods, macroStepLabel, parametersDataV2, toolboxData]);
+  }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, subGoals, derivedSubGoals, events, selectedMethods, manuallyAddedMethods, macroStepLabel, parametersDataV2, toolboxData, planNotes]);
 
   const handleAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
     switch (action.type) {

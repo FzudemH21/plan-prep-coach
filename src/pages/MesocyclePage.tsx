@@ -5099,6 +5099,9 @@ export default function MesocyclePage() {
     const durationStr = planStartDate && planEndDate && planEndDate > planStartDate
       ? `Plan duration: ${format(planStartDate, 'yyyy-MM-dd')} → ${format(planEndDate, 'yyyy-MM-dd')} (${totalWeeks} weeks / ${expectedTotalDays} days total)\nMesocycle days planned: ${totalMesocycleDays}${daysMismatch ? ` ⚠️ MISMATCH — mesocycles cover ${totalMesocycleDays} days but plan is ${expectedTotalDays} days` : " ✓ matches plan"}`
       : totalWeeks > 0 ? `Plan duration: ${totalWeeks} weeks` : "";
+    const notesStr = macrocycleData?.planNotes?.trim()
+      ? `Coach's Notes & Brainstorming (freeform — read for context on intent, constraints, and ideas the coach has jotted down):\n${macrocycleData.planNotes.trim()}`
+      : "";
     const mesoCount = mesocycles.length;
     const mesoStr = mesoCount > 0
       ? `Mesocycles (${mesoCount}):\n${mesocycles.map((m) => {
@@ -5236,6 +5239,7 @@ export default function MesocyclePage() {
       durationStr,
       mesoStr,
       methodsStr,
+      notesStr,
       templatesStr,
       parameterTableStr,
       exerciseLibraryStr,
