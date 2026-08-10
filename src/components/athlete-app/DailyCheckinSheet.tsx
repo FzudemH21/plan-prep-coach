@@ -10,6 +10,7 @@ import {
   nrsSeverityStroke,
   svgRegionKey,
   getRegionKeyLabel,
+  regionKeyView,
 } from '@/lib/bodyMapData';
 import type { DailyCheckinInput } from '@/hooks/useDailyCheckin';
 import type { MonitoringConfig, MonitoringBlock } from '@/types/athlete';
@@ -251,8 +252,14 @@ function BodyMap({
               );
             })}
 
-            {/* Confirmed dots */}
-            {Array.from(painDots.entries()).map(([key, dot]) => (
+            {/* Confirmed dots — only show dots that belong to this view (or have
+                no view restriction, e.g. legacy records / midline regions) */}
+            {Array.from(painDots.entries())
+              .filter(([key]) => {
+                const v = regionKeyView(key);
+                return !v || v === side;
+              })
+              .map(([key, dot]) => (
               <g key={key} style={{ pointerEvents: 'none' }}>
                 <circle cx={dot.cx} cy={dot.cy} r={7}
                   fill={nrsSeverityColor(dot.nrs) || 'rgba(234,179,8,0.55)'}

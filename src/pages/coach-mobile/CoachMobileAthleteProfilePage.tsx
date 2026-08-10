@@ -25,7 +25,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useAthleteCheckins, wellnessComposite, type AthleteCheckin } from '@/hooks/useAthleteCheckins';
 import { DEFAULT_MONITORING_CONFIG, type AthleteNote } from '@/types/athlete';
-import { FRONT_REGIONS, BACK_REGIONS, nrsSeverityColor, nrsSeverityStroke, svgRegionKey } from '@/lib/bodyMapData';
+import { FRONT_REGIONS, BACK_REGIONS, nrsSeverityColor, nrsSeverityStroke, svgRegionKey, svgRegionKeyLegacy } from '@/lib/bodyMapData';
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { useSessionLibrary } from '@/hooks/useSessionLibrary';
 import type { SessionLibraryEntry } from '@/types/sessionLibrary';
@@ -99,11 +99,13 @@ function buildMobilePainDots(painAreas: AthleteCheckin['painAreas']): PainDotInf
   const dots: PainDotInfo[] = [];
   for (const area of painAreas) {
     const key = area.regionKey ?? String(area.areaId);
+    // svgRegionKeyLegacy also matches un-migrated pre-view-split records, so
+    // old data still renders (on both views, as it always did).
     for (const r of FRONT_REGIONS) {
-      if (svgRegionKey(r) === key) { dots.push({ cx: r.x + r.w / 2, cy: r.y + r.h / 2, view: 'front', nrs: area.severity }); break; }
+      if (svgRegionKey(r) === key || svgRegionKeyLegacy(r) === key) { dots.push({ cx: r.x + r.w / 2, cy: r.y + r.h / 2, view: 'front', nrs: area.severity }); break; }
     }
     for (const r of BACK_REGIONS) {
-      if (svgRegionKey(r) === key) { dots.push({ cx: r.x + r.w / 2, cy: r.y + r.h / 2, view: 'back',  nrs: area.severity }); break; }
+      if (svgRegionKey(r) === key || svgRegionKeyLegacy(r) === key) { dots.push({ cx: r.x + r.w / 2, cy: r.y + r.h / 2, view: 'back',  nrs: area.severity }); break; }
     }
   }
   return dots;

@@ -30,21 +30,51 @@ export const BODY_REGIONS: BodyRegion[] = [
 ];
 
 // ── Region key helpers ────────────────────────────────────────────────────────
-// regionKey format: "${areaId}-L", "${areaId}-R", or "${areaId}" for midline
+// regionKey format: "${areaId}", "${areaId}-L", "${areaId}-R", or — for limb
+// regions where front/back are anatomically distinct structures (e.g. thigh:
+// quad vs. hamstring) — "${areaId}-L-F" / "${areaId}-R-B" etc. Legacy records
+// saved before the view suffix existed have no trailing -F/-B; they are still
+// parsed correctly and treated as "visible on both views" for backward compat.
 
-export function getRegionKey(areaId: number, side?: 'L' | 'R'): string {
-  return side ? `${areaId}-${side}` : String(areaId);
-}
+// Areas where front and back represent genuinely different anatomy, so a mark
+// on one view must NOT also show on the other.
+const VIEW_SPECIFIC_AREA_IDS = new Set([3, 4, 5, 6, 7, 8, 15, 16, 17, 18, 19]);
+// Shoulder, Upper Arm, Elbow, Forearm, Wrist, Hand/Fingers, Thigh, Knee,
+// Lower Leg, Ankle, Foot/Toes.
 
-export function getRegionKeyLabel(regionKey: string): string {
-  const base = BODY_REGIONS.find((r) => r.id === regionKeyId(regionKey))?.label ?? 'Unknown';
-  if (regionKey.endsWith('-L')) return `Left ${base}`;
-  if (regionKey.endsWith('-R')) return `Right ${base}`;
+export function getRegionKey(areaId: number, side?: 'L' | 'R', view?: 'front' | 'back'): string {
+  const base = side ? `${areaId}-${side}` : String(areaId);
+  if (view && VIEW_SPECIFIC_AREA_IDS.has(areaId)) {
+    return `${base}-${view === 'front' ? 'F' : 'B'}`;
+  }
   return base;
 }
 
+function parseRegionKey(regionKey: string): { areaId: number; side?: 'L' | 'R'; view?: 'F' | 'B' } {
+  const m = regionKey.match(/^(\d+)(?:-([LR]))?(?:-([FB]))?$/);
+  if (!m) return { areaId: NaN };
+  return { areaId: parseInt(m[1], 10), side: m[2] as 'L' | 'R' | undefined, view: m[3] as 'F' | 'B' | undefined };
+}
+
+export function getRegionKeyLabel(regionKey: string): string {
+  const { areaId, side, view } = parseRegionKey(regionKey);
+  const base = BODY_REGIONS.find((r) => r.id === areaId)?.label ?? 'Unknown';
+  let label = base;
+  if (side === 'L') label = `Left ${label}`;
+  if (side === 'R') label = `Right ${label}`;
+  if (view === 'F') label += ' (Front)';
+  if (view === 'B') label += ' (Back)';
+  return label;
+}
+
 function regionKeyId(regionKey: string): number {
-  return parseInt(regionKey.replace(/-[LR]$/, ''));
+  return parseRegionKey(regionKey).areaId;
+}
+
+/** Which view a regionKey is restricted to, or undefined if visible on both (midline / legacy). */
+export function regionKeyView(regionKey: string): 'front' | 'back' | undefined {
+  const { view } = parseRegionKey(regionKey);
+  return view === 'F' ? 'front' : view === 'B' ? 'back' : undefined;
 }
 
 // ── NRS severity → color (Farrar et al. 2001 cut-offs) ───────────────────────
@@ -76,11 +106,21 @@ export interface SvgRegion {
   uid: string;
   areaId: number;
   side?: 'L' | 'R'; // undefined = midline / bilateral
+  view: 'front' | 'back';
   x: number; y: number; w: number; h: number;
 }
 
-// Derived key for use as Map key
+// Derived key for use as Map key — view-qualified for regions where front/back
+// are anatomically distinct (see VIEW_SPECIFIC_AREA_IDS above).
 export function svgRegionKey(r: SvgRegion): string {
+  return getRegionKey(r.areaId, r.side, r.view);
+}
+
+// Un-qualified key (no view suffix, even for view-specific regions) — used only
+// to match legacy records saved before front/back were tracked separately, so
+// old pain markers keep rendering (on both views, as they always did) instead
+// of silently disappearing after this change.
+export function svgRegionKeyLegacy(r: SvgRegion): string {
   return getRegionKey(r.areaId, r.side);
 }
 
@@ -90,7 +130,9 @@ export function svgRegionKey(r: SvgRegion): string {
 //   athlete's LEFT  = viewer's RIGHT = higher x in this image
 // Front image width=193, anatomical midline ≈ x=96
 
-export const FRONT_REGIONS: SvgRegion[] = [
+type RawSvgRegion = Omit<SvgRegion, 'view'>;
+
+const FRONT_REGIONS_RAW: RawSvgRegion[] = [
   // Head / Neck — midline
   { uid:'f1',   areaId:1,  x:74,  y:5,   w:44, h:47 },
   { uid:'f2',   areaId:2,  x:75,  y:52,  w:42, h:7  },
@@ -144,13 +186,15 @@ export const FRONT_REGIONS: SvgRegion[] = [
   { uid:'f19b', areaId:19, side:'L', x:97,  y:284, w:30, h:16 },
 ];
 
+export const FRONT_REGIONS: SvgRegion[] = FRONT_REGIONS_RAW.map((r) => ({ ...r, view: 'front' as const }));
+
 // ── Back view regions — viewBox 0 0 211 317 ──────────────────────────────────
 // Back-view perspective: the figure faces AWAY from the viewer, so the
 // patient's RIGHT side is on the viewer's RIGHT (higher x) and the patient's
 // LEFT side is on the viewer's LEFT (lower x).
 // This is the OPPOSITE of the front view: L = lower x, R = higher x.
 
-export const BACK_REGIONS: SvgRegion[] = [
+const BACK_REGIONS_RAW: RawSvgRegion[] = [
   // Head / Neck — midline
   { uid:'b1',   areaId:1,  x:86,  y:7,   w:35, h:24 },
   { uid:'b2a',  areaId:2,  x:91,  y:31,  w:26, h:13 },
@@ -200,3 +244,5 @@ export const BACK_REGIONS: SvgRegion[] = [
   { uid:'b19a', areaId:19, side:'L', x:78,  y:275, w:23, h:33 },
   { uid:'b19b', areaId:19, side:'R', x:106, y:274, w:25, h:35 },
 ];
+
+export const BACK_REGIONS: SvgRegion[] = BACK_REGIONS_RAW.map((r) => ({ ...r, view: 'back' as const }));

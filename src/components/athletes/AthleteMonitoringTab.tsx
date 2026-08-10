@@ -16,7 +16,7 @@ import {
 import {
   FRONT_REGIONS, BACK_REGIONS,
   nrsSeverityColor, nrsSeverityStroke,
-  svgRegionKey,
+  svgRegionKey, svgRegionKeyLegacy,
 } from '@/lib/bodyMapData';
 import {
   useAthleteCheckins,
@@ -213,15 +213,17 @@ function buildPainDots(painAreas: AthleteCheckin['painAreas']): PainDotInfo[] {
   const dots: PainDotInfo[] = [];
   for (const area of painAreas) {
     const key = area.regionKey ?? String(area.areaId);
-    // Find first matching region in front, then back
+    // Find first matching region in front, then back. svgRegionKeyLegacy also
+    // matches un-migrated pre-view-split records, so old data still renders
+    // (on both views, as it always did) instead of disappearing.
     for (const r of FRONT_REGIONS) {
-      if (svgRegionKey(r) === key) {
+      if (svgRegionKey(r) === key || svgRegionKeyLegacy(r) === key) {
         dots.push({ cx: r.x + r.w / 2, cy: r.y + r.h / 2, view: 'front', nrs: area.severity, label: area.areaLabel });
         break;
       }
     }
     for (const r of BACK_REGIONS) {
-      if (svgRegionKey(r) === key) {
+      if (svgRegionKey(r) === key || svgRegionKeyLegacy(r) === key) {
         dots.push({ cx: r.x + r.w / 2, cy: r.y + r.h / 2, view: 'back', nrs: area.severity, label: area.areaLabel });
         break;
       }
