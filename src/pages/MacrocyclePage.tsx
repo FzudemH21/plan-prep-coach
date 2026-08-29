@@ -1034,7 +1034,10 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       setSelectionPhase('end');
     } else if (selectionPhase === 'end') {
       if (selectedDate >= planDuration.startDate) {
-        const totalDays = Math.ceil((selectedDate.getTime() - planDuration.startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        // differenceInDays (not raw ms / 86400000) — a DST transition inside the
+        // range adds/removes an hour, which Math.ceil on raw ms rounds up into an
+        // extra day (e.g. was showing 85 days for a 31.08–22.11 range that's really 84).
+        const totalDays = differenceInDays(selectedDate, planDuration.startDate) + 1;
         const totalWeeks = Math.ceil(totalDays / 7);
         
         setPlanDuration({
@@ -2915,7 +2918,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         const end = action.endDate
           ? new Date(action.endDate + 'T12:00:00')
           : (() => { const d = new Date(start); d.setDate(d.getDate() + (action.weeks ?? 0) * 7); return d; })();
-        const totalDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        const totalDays = differenceInDays(end, start) + 1;
         const totalWeeks = Math.round(totalDays / 7);
         setPlanDuration({ startDate: start, endDate: end, totalDays, totalWeeks });
         break;
