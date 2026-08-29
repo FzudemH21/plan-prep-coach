@@ -5514,8 +5514,8 @@ export default function MesocyclePage() {
 
   return (
     <div className="w-full max-w-none space-y-6 min-w-0">
-      {/* Progress Header */}
-      <div className="space-y-4">
+      {/* Progress Header — sticky so it stays visible while the step content below scrolls */}
+      <div className="sticky top-0 z-30 space-y-4 bg-background pb-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Mesocycle Planning</h1>
           <div className="flex items-center gap-2">

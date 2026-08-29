@@ -4851,28 +4851,31 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
 
   return (
     <div className="mx-auto py-6 space-y-6 px-4 w-full max-w-[98vw]">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-3xl font-bold">Microcycle Planning</h1>
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => {
-              saveCurrentSession();
-              navigate("/templates/programs");
-            }}
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Library
-          </Button>
-          <AutoSaveIndicator status={autoSaveStatus} />
-          <SaveProgramButton />
-          <ResourcesButton />
-          <PlanningNavigationMenu currentPage="microcycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
+      {/* Header + top nav — sticky so it stays visible while the step content below scrolls */}
+      <div className="sticky top-0 z-30 space-y-4 bg-background pb-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold">Microcycle Planning</h1>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                saveCurrentSession();
+                navigate("/templates/programs");
+              }}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Library
+            </Button>
+            <AutoSaveIndicator status={autoSaveStatus} />
+            <SaveProgramButton />
+            <ResourcesButton />
+            <PlanningNavigationMenu currentPage="microcycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
+          </div>
         </div>
-      </div>
 
-      <NavigationButtons />
+        <NavigationButtons />
+      </div>
 
       {renderTrainingPlanOverview()}
       
