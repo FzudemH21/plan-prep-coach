@@ -930,11 +930,24 @@ export function WizardAIAssistant({
   const { profile } = useCoachProfile();
   const { retrieve } = useRAGRetrieval();
   const [isOpen, setIsOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Open the panel whenever forceOpen counter increments
   useEffect(() => {
     if (forceOpen && forceOpen > 0) setIsOpen(true);
   }, [forceOpen]);
+
+  // Close on click outside the panel (desktop — mobile already has its own tap-to-close backdrop).
+  useEffect(() => {
+    if (!isOpen) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [isOpen]);
 
   // Chat history lives in session-level context so it survives page navigation.
   const resolvedChatId = chatId ?? stepLabel;
@@ -1088,6 +1101,7 @@ export function WizardAIAssistant({
 
           {/* Panel */}
           <div
+            ref={panelRef}
             data-ai-assistant
             onPointerDownCapture={(e) => e.stopPropagation()}
             className={cn(

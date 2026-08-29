@@ -2788,10 +2788,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             <AutoSaveIndicator status={autoSaveStatus} />
             <SaveProgramButton />
             <ResourcesButton />
-            <Button variant="outline" size="sm">
-              <Bot className="h-4 w-4 mr-2" />
-              Ask AI for Help
-            </Button>
             <PlanningNavigationMenu currentPage="macrocycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
           </div>
         </div>
@@ -3108,10 +3104,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             <AutoSaveIndicator status={autoSaveStatus} />
             <SaveProgramButton />
             <ResourcesButton />
-            <Button variant="outline" size="sm">
-              <Bot className="h-4 w-4 mr-2" />
-              Ask AI for Help
-            </Button>
             <PlanningNavigationMenu currentPage="macrocycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
           </div>
         </div>

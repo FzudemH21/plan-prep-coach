@@ -57,13 +57,37 @@ CommandInput.displayName = CommandPrimitive.Input.displayName
 const CommandList = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.List>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.List>
->(({ className, ...props }, ref) => (
-  <CommandPrimitive.List
-    ref={ref}
-    className={cn("max-h-[300px] overflow-y-auto overflow-x-hidden", className)}
-    {...props}
-  />
-))
+>(({ className, ...props }, ref) => {
+  const innerRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    const el = innerRef.current;
+    if (!el) return;
+    // A Command nested inside a Popover that's itself inside a Dialog (e.g.
+    // parameter/unit/category pickers in the goal + parameter dialogs) can have
+    // its wheel scrolling silently swallowed by the Dialog's own Radix scroll
+    // lock. React's onWheel is passive by default so preventDefault() there is
+    // a no-op — attach a real listener and scroll the list manually instead.
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      el.scrollTop += e.deltaY;
+    };
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, []);
+
+  return (
+    <CommandPrimitive.List
+      ref={(node) => {
+        innerRef.current = node;
+        if (typeof ref === "function") ref(node);
+        else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      }}
+      className={cn("max-h-[300px] overflow-y-auto overflow-x-hidden", className)}
+      {...props}
+    />
+  );
+})
 
 CommandList.displayName = CommandPrimitive.List.displayName
 
