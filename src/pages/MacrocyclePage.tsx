@@ -1148,6 +1148,24 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         </CardContent>
       </Card>
 
+      {/* Notes / Brainstorming — step 1 only; shown at the top of the page for steps 2 and 3 */}
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center space-x-2">
+            <FileText className="h-5 w-5" />
+            <span>Notes & Brainstorming</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            value={planNotes}
+            onChange={(e) => setPlanNotes(e.target.value)}
+            placeholder="Notizen, Überlegungen, Ideen zum Plan..."
+            className="min-h-[180px] resize-y"
+          />
+        </CardContent>
+      </Card>
+
       {/* Two Column Layout: SMART Goals (left) + Plan Duration (right) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: SMART Goals List */}
@@ -3213,23 +3231,26 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         </div>
       </div>
 
-      {/* Notes / Brainstorming — persistent across all 3 macrocycle steps, shown at the top */}
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="flex items-center space-x-2">
-            <FileText className="h-5 w-5" />
-            <span>Notes & Brainstorming</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Textarea
-            value={planNotes}
-            onChange={(e) => setPlanNotes(e.target.value)}
-            placeholder="Notizen, Überlegungen, Ideen zum Plan..."
-            className="min-h-[180px] resize-y"
-          />
-        </CardContent>
-      </Card>
+      {/* Notes / Brainstorming — top of page for steps 2 and 3. Step 1 has its own
+          copy further down, positioned after the Plan & Athlete card instead. */}
+      {currentStep !== 1 && (
+        <Card>
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center space-x-2">
+              <FileText className="h-5 w-5" />
+              <span>Notes & Brainstorming</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              value={planNotes}
+              onChange={(e) => setPlanNotes(e.target.value)}
+              placeholder="Notizen, Überlegungen, Ideen zum Plan..."
+              className="min-h-[180px] resize-y"
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Step Content */}
       <div className="space-y-6">

@@ -114,26 +114,33 @@ export function AddSmartGoalDialog({
     }
   }, [open, defaultParameterId, editGoal, athleticismParameters, athletePerformanceParams]);
 
-  // Get athlete's performance parameters with their details
+  // Get athlete's performance parameters with their details. Filters out
+  // entries whose underlying parameter has been deleted from the database —
+  // without this, a deleted parameter kept showing up here as "Unknown"
+  // instead of disappearing.
   const athleteParamsWithDetails = useMemo((): ParameterOptionItem[] => {
-    return athletePerformanceParams.map((pp) => {
-      const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
-      const latestValue = pp.values.length > 0 
-        ? pp.values.reduce((latest, v) => 
-            new Date(v.recordedAt) > new Date(latest.recordedAt) ? v : latest
-          ).value 
-        : null;
-      
-      return {
-        id: pp.id,
-        athleticismParameterId: pp.athleticismParameterId,
-        name: param?.name || "Unknown",
-        unit: param?.unit || "",
-        category: param?.category,
-        latestValue,
-        isFromAthlete: true,
-      };
-    }).sort((a, b) => a.name.localeCompare(b.name));
+    return athletePerformanceParams
+      .map((pp) => {
+        const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
+        if (!param) return null;
+        const latestValue = pp.values.length > 0
+          ? pp.values.reduce((latest, v) =>
+              new Date(v.recordedAt) > new Date(latest.recordedAt) ? v : latest
+            ).value
+          : null;
+
+        return {
+          id: pp.id,
+          athleticismParameterId: pp.athleticismParameterId,
+          name: param.name,
+          unit: param.unit || "",
+          category: param.category,
+          latestValue,
+          isFromAthlete: true,
+        };
+      })
+      .filter((p): p is ParameterOptionItem => p !== null)
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [athletePerformanceParams, athleticismParameters]);
 
   // Get all OTHER athleticism parameters (not assigned to this athlete)

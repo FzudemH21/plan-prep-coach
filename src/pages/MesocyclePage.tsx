@@ -2293,7 +2293,13 @@ export default function MesocyclePage() {
   // Helper function to calculate grid template for dynamic widths using global calculation
   const calculateGridTemplate = useCallback((methodName: string, visibleMesos?: ExtendedMesocycle[]) => {
     const mesosToUse = visibleMesos || mesocycles;
-    const widths = ['300px']; // Fixed left column
+    // Left column sized to fit the full method name (was a fixed 300px, which
+    // truncated any name longer than roughly 25 characters) plus room for the
+    // chevron/info icon on the left and the split/template/delete/edit icon
+    // tray on the right. Clamped so pathologically long names still truncate
+    // (with a title tooltip) rather than blowing out the table width.
+    const leftColumnWidth = Math.max(280, Math.min(600, methodName.length * 6.5 + 220));
+    const widths = [`${Math.round(leftColumnWidth)}px`];
     mesosToUse.forEach((meso) => {
       // Add gap column if there's a gap before this mesocycle
       if (hasMesocycleGap(meso.id)) {
