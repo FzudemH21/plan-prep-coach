@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { SmartGoal, SubGoal, TrainableQuality, Event, PlanDuration } from "@/types/training";
-import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText, Check, ChevronsUpDown, ChevronDown, Pencil, Link, Link2, CheckSquare } from "lucide-react";
+import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText, Check, ChevronsUpDown, ChevronDown, ChevronRight, Pencil, Link, CheckSquare } from "lucide-react";
 import { ResourcesButton } from "@/components/programs/ResourcesButton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -119,6 +119,10 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const [editingMethodRationale, setEditingMethodRationale] = useState<string | null>(null);
   const [editingRationaleValue, setEditingRationaleValue] = useState("");
   const [showMissingRationaleWarning, setShowMissingRationaleWarning] = useState(false);
+  // Hierarchical method selector (Step 3): which categories/methods are expanded to
+  // progressively reveal rationale/goals/evidence instead of showing everything at once.
+  const [expandedMethodCategories, setExpandedMethodCategories] = useState<Set<string>>(new Set());
+  const [expandedMethodDetails, setExpandedMethodDetails] = useState<Set<string>>(new Set());
 
   // Derive sub-goals from SMART goal parameter relationships
   const derivedSubGoals = useMemo(() => {
@@ -2295,15 +2299,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const renderTrainingMethodsForm = () => {
     const allMethods = getAllMethodsWithAssociations();
     const hasAnyMethods = allMethods.length > 0;
-    
-    // Separate methods into primary-goal-linked and other methods
-    const primaryMethods = allMethods.filter(m => 
-      m.associations.some(a => a.isPrimaryGoal)
-    );
-    const otherMethods = allMethods.filter(m => 
-      !m.associations.some(a => a.isPrimaryGoal)
-    );
-    
+
+
     return (
       <Card>
         <CardHeader>
@@ -2313,7 +2310,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           </CardTitle>
           <CardDescription>
             Select the methods to include in your training plan. Methods linked to primary goals are selected by default.
-            Each method shows the parameters it's linked to and the rationale for each.
+            Methods are grouped by category — click a category to see its methods, then "Details" on a method to see the goals it contributes to and its rationale.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -2342,121 +2339,140 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                 </div>
               </div>
 
-              {/* Primary Goal Methods */}
-              {primaryMethods.length > 0 && (
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium flex items-center gap-2">
-                    <Target className="h-4 w-4 text-primary" />
-                    Methods Linked to Primary Goals
-                  </Label>
-                  <div className="space-y-2">
-                    {primaryMethods.map(method => (
-                      <div 
-                        key={method.methodId} 
-                        className={cn(
-                          "flex items-start gap-3 p-4 border rounded-lg transition-colors",
-                          selectedMethods.has(method.methodId) 
-                            ? "bg-primary/5 border-primary/30" 
-                            : "bg-background hover:bg-muted/50"
-                        )}
-                      >
-                        <Checkbox 
-                          id={method.methodId}
-                          checked={selectedMethods.has(method.methodId)}
-                          onCheckedChange={(checked) => toggleMethodSelection(method.methodId, !!checked)}
-                          className="mt-1"
-                        />
-                        <div className="flex-1 space-y-2">
-                          <label 
-                            htmlFor={method.methodId}
-                            className="font-medium text-sm cursor-pointer"
-                          >
-                            {method.methodId}
-                          </label>
-                          <div className="space-y-1.5">
-                            {method.associations.map((assoc, idx) => (
-                              <div key={idx} className="flex items-start gap-2 text-sm">
-                                <Badge 
-                                  variant={assoc.isPrimaryGoal ? "default" : "outline"}
-                                  className={cn(
-                                    "shrink-0",
-                                    !assoc.isPrimaryGoal && "bg-muted text-foreground border-black"
-                                  )}
-                                >
-                                  {assoc.parameterName}
-                                  {assoc.isPrimaryGoal && " (Primary)"}
-                                </Badge>
-                                {assoc.rationale && (
-                                  <span className="text-muted-foreground italic">
-                                    "{assoc.rationale}"
-                                  </span>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Goal-linked methods — grouped by Category, progressively disclosed:
+                  click a category to see its methods, click a method to see the
+                  rationale/goals/evidence for it. Replaces the old flat list that
+                  showed every method's full rationale at once. */}
+              {allMethods.length > 0 && (() => {
+                const categoryGroups = new Map<string, MethodWithAssociations[]>();
+                allMethods.forEach(m => {
+                  const category = m.methodId.includes(' - ') ? m.methodId.split(' - ')[0] : m.methodId;
+                  if (!categoryGroups.has(category)) categoryGroups.set(category, []);
+                  categoryGroups.get(category)!.push(m);
+                });
+                const sortedCategories = Array.from(categoryGroups.entries()).sort(([a], [b]) => a.localeCompare(b));
 
-              {/* Other Methods (Sub-goal linked) */}
-              {otherMethods.length > 0 && (
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium flex items-center gap-2">
-                    <Link2 className="h-4 w-4 text-muted-foreground" />
-                    Methods Linked to Sub-Goals
-                  </Label>
-                  <div className="space-y-2">
-                    {otherMethods.map(method => (
-                      <div 
-                        key={method.methodId} 
-                        className={cn(
-                          "flex items-start gap-3 p-4 border rounded-lg transition-colors",
-                          selectedMethods.has(method.methodId) 
-                            ? "bg-secondary/20 border-secondary/50" 
-                            : "bg-background hover:bg-muted/50"
-                        )}
-                      >
-                        <Checkbox 
-                          id={method.methodId}
-                          checked={selectedMethods.has(method.methodId)}
-                          onCheckedChange={(checked) => toggleMethodSelection(method.methodId, !!checked)}
-                          className="mt-1"
-                        />
-                        <div className="flex-1 space-y-2">
-                          <label 
-                            htmlFor={method.methodId}
-                            className="font-medium text-sm cursor-pointer"
-                          >
-                            {method.methodId}
-                          </label>
-                          <div className="space-y-1.5">
-                            {method.associations.map((assoc, idx) => (
-                              <div key={idx} className="flex items-start gap-2 text-sm">
-                                <Badge variant="outline" className="shrink-0 bg-muted text-foreground border-black">
-                                  {assoc.parameterName}
-                                </Badge>
-                                {assoc.goalDescription && (
-                                  <span className="text-xs text-muted-foreground">
-                                    → contributes to {assoc.goalDescription}
-                                  </span>
-                                )}
-                                {assoc.rationale && (
-                                  <span className="text-muted-foreground italic ml-1">
-                                    "{assoc.rationale}"
-                                  </span>
-                                )}
+                const toggleCategory = (category: string) => {
+                  setExpandedMethodCategories(prev => {
+                    const next = new Set(prev);
+                    if (next.has(category)) next.delete(category); else next.add(category);
+                    return next;
+                  });
+                };
+                const toggleMethodDetail = (methodId: string) => {
+                  setExpandedMethodDetails(prev => {
+                    const next = new Set(prev);
+                    if (next.has(methodId)) next.delete(methodId); else next.add(methodId);
+                    return next;
+                  });
+                };
+
+                return (
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <Target className="h-4 w-4 text-primary" />
+                      Goal-Linked Methods
+                    </Label>
+                    <div className="border rounded-lg divide-y overflow-hidden">
+                      {sortedCategories.map(([category, methods]) => {
+                        const categorySelectedCount = methods.filter(m => selectedMethods.has(m.methodId)).length;
+                        const categoryExpanded = expandedMethodCategories.has(category);
+                        const sortedMethods = [...methods].sort((a, b) => {
+                          const aPrimary = a.associations.some(x => x.isPrimaryGoal);
+                          const bPrimary = b.associations.some(x => x.isPrimaryGoal);
+                          if (aPrimary !== bPrimary) return aPrimary ? -1 : 1;
+                          return a.methodId.localeCompare(b.methodId);
+                        });
+                        return (
+                          <div key={category}>
+                            <button
+                              type="button"
+                              onClick={() => toggleCategory(category)}
+                              className="w-full flex items-center justify-between gap-2 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
+                            >
+                              <span className="flex items-center gap-2 font-medium text-sm">
+                                <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform shrink-0", categoryExpanded && "rotate-90")} />
+                                {category}
+                              </span>
+                              <span className="text-xs text-muted-foreground shrink-0">
+                                {categorySelectedCount}/{methods.length} selected
+                              </span>
+                            </button>
+                            {categoryExpanded && (
+                              <div className="divide-y border-t bg-muted/10">
+                                {sortedMethods.map(method => {
+                                  const subCategory = method.methodId.includes(' - ')
+                                    ? method.methodId.slice(method.methodId.indexOf(' - ') + 3)
+                                    : method.methodId;
+                                  const hasPrimary = method.associations.some(a => a.isPrimaryGoal);
+                                  const detailExpanded = expandedMethodDetails.has(method.methodId);
+                                  return (
+                                    <div key={method.methodId} className="pl-4">
+                                      <div
+                                        className={cn(
+                                          "flex items-center gap-3 py-2.5 pr-4 transition-colors",
+                                          selectedMethods.has(method.methodId) && "bg-primary/5"
+                                        )}
+                                      >
+                                        <Checkbox
+                                          id={method.methodId}
+                                          checked={selectedMethods.has(method.methodId)}
+                                          onCheckedChange={(checked) => toggleMethodSelection(method.methodId, !!checked)}
+                                        />
+                                        <label htmlFor={method.methodId} className="text-sm cursor-pointer flex-1 flex items-center gap-2 min-w-0">
+                                          <span className="truncate">{subCategory}</span>
+                                          <Badge variant={hasPrimary ? "default" : "outline"} className={cn("shrink-0 text-[10px] px-1.5 py-0", !hasPrimary && "bg-muted text-foreground border-black")}>
+                                            {hasPrimary ? "Primary Goal" : "Sub-Goal"}
+                                          </Badge>
+                                        </label>
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleMethodDetail(method.methodId)}
+                                          className="shrink-0 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                                        >
+                                          {detailExpanded ? "Hide details" : "Details"}
+                                          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", detailExpanded && "rotate-180")} />
+                                        </button>
+                                      </div>
+                                      {detailExpanded && (
+                                        <div className="pl-9 pb-3 pr-4 space-y-1.5">
+                                          {method.associations.map((assoc, idx) => (
+                                            <div key={idx} className="flex items-start gap-2 text-sm border-l-2 border-muted pl-2.5">
+                                              <div className="space-y-0.5">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                  <Badge
+                                                    variant={assoc.isPrimaryGoal ? "default" : "outline"}
+                                                    className={cn("shrink-0", !assoc.isPrimaryGoal && "bg-muted text-foreground border-black")}
+                                                  >
+                                                    {assoc.parameterName}
+                                                    {assoc.isPrimaryGoal && " (Primary)"}
+                                                  </Badge>
+                                                  {assoc.goalDescription && !assoc.isPrimaryGoal && (
+                                                    <span className="text-xs text-muted-foreground">
+                                                      → contributes to {assoc.goalDescription}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                {assoc.rationale && (
+                                                  <p className="text-muted-foreground italic">"{assoc.rationale}"</p>
+                                                )}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
-                            ))}
+                            )}
                           </div>
-                        </div>
-                      </div>
-                    ))}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Additional Training Methods Section */}
               <div className="space-y-3">
