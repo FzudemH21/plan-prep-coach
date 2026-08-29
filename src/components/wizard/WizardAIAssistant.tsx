@@ -98,6 +98,8 @@ export type ApplySuggestion =
   | { type: "copy_week"; sourceMicrocycleName: string; targetMicrocycleName: string }
   /** MicrocyclePlanningPage Steps 2 & 3 — clear all exercises, sections, and sessions from a microcycle (by name) */
   | { type: "clear_week"; microcycleName: string }
+  /** All wizard pages, all steps — edit the plan's Notes & Brainstorming field */
+  | { type: "set_plan_notes"; notes: string; mode?: "append" | "replace" }
   /** Parameter Database — add a new parameter */
   | { type: "add_parameter"; name: string; category?: string; unit?: string; applicableSports?: string[] }
   /** Parameter Database — remove a parameter and all its linked interactions and method links */
@@ -239,6 +241,13 @@ Specific triggers — emit the relevant action block even without an explicit re
 
 Exception: always confirm before emitting destructive actions (delete_session, remove_methods, remove_goal, remove_event).
 
+## Batch size discipline (critical)
+Large bulk actions (roughly 10+ entries in one array, e.g. add_parameter_methods_bulk, update_parameter_methods_bulk, add_interactions_bulk, configure_mesocycles with many microcycles, set_periodization with many entries) are where you are most likely to silently drop a required field on later entries or lose track of what you already covered. When a request would produce a very large single action:
+- Tell the coach you'll split it into smaller batches (e.g. "I'll do this in 3 batches of ~8 so nothing gets dropped — starting with the first one now") and propose a sensible split (by mesocycle, by category, by the first N items, etc.).
+- Emit ONLY the first batch's action block in that message. Wait for the coach to click Apply (or confirm) before proposing the next batch, unless they explicitly ask for everything at once.
+- If the coach explicitly insists on one single action despite the size, comply, but re-verify every entry individually before emitting (per the per-entry check rules above) rather than skipping the discipline.
+This is about YOUR reliability on large lists, not the coach's preference — smaller batches you can actually get right beat one large action with silent gaps.
+
 Available types and their fields:
 - set_plan_name: {"type":"set_plan_name","name":"<plan name>"}
 - set_plan_duration: {"type":"set_plan_duration","startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","weeks":<total weeks>}
@@ -340,6 +349,9 @@ Available types and their fields:
   Copies ALL sessions, exercises, sections, and supersets from one microcycle to another. Target week's existing content is replaced. Use exact microcycle names from context. Confirm with the coach before emitting — destructive to target week.
 - clear_week: {"type":"clear_week","microcycleName":"<exact microcycle name>"}
   Removes ALL exercises, sections, and sessions from a microcycle. Always confirm with the coach first — irreversible. Use exact microcycle name from context.
+- set_plan_notes: {"type":"set_plan_notes","notes":"<text to add or the full replacement text>","mode":"append"}
+  Available on EVERY wizard step (Macrocycle, Mesocycle, Microcycle Planning) — the Notes & Brainstorming field is shared across the whole plan regardless of which step you're on. Use this whenever the coach asks you to jot something down, add an idea, or write/update a note — do not just say it in chat, actually apply it here too.
+  mode "append" (default) adds your text as a new line after whatever is already there — use this for adding an idea without erasing existing notes. mode "replace" overwrites the entire field — only use this when the coach explicitly asks to rewrite, clean up, or clear the notes (clearing means notes:"" with mode "replace"). When appending, do not repeat content that is already in the current Notes & Brainstorming context.
 - add_parameter: {"type":"add_parameter","name":"<parameter name>","category":"<one of: strength|speed|power|endurance|mobility|technique|body_composition|other>","unit":"<unit e.g. kg, s, cm — omit if not applicable>","applicableSports":["<sport>","<sport>"]}
   applicableSports is optional — include when the parameter is sport-specific (e.g. ["Soccer","Rugby"]). Omit for universal parameters.
 - add_parameters_bulk: {"type":"add_parameters_bulk","parameters":[{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>","applicableSports":["<sport>"]},{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>"}]}
@@ -395,7 +407,7 @@ const DEFAULT_ROLE = `## Your role
 - Be objective and direct. If the current plan has weaknesses, gaps, or contradicts evidence — say so clearly and constructively.
 - Do not default to agreement or validation. A good sports scientist pushes back when warranted.
 - Give concrete, actionable suggestions relevant to the current planning step.
-- Keep responses concise (2-4 sentences). If helpful, ask one focused follow-up question.
+- Match response length to the question, don't default to long. A yes/no question, a quick confirmation, or a simple lookup gets 1-3 sentences — do not pad it with unrequested background or restate what the coach already said. Reserve longer, structured answers (with headers/tables/bullet lists) for requests that genuinely need depth: full periodization rationale, comparing several methods, multi-factor risk analysis, or anything the coach explicitly asks you to explain "in detail" or "why." When in doubt, answer the direct question first in 1-2 sentences, then ask if they want you to go deeper — don't front-load depth nobody asked for. If helpful, ask one focused follow-up question.
 - Understand the coach's philosophy and methods — but do not let it override scientific evidence. If their approach conflicts with consensus, flag it respectfully and explain why.
 - When citing research from the References section, mention the source document name.
 - Always refer to the athlete named in "Current Context" — never reference athletes mentioned in the Coach Background section.
@@ -794,18 +806,74 @@ function SuggestionGroupCard({
 
 // ─── Markdown renderer + apply-block parser ───────────────────────────────────
 
+// Renders **bold** spans and converts single newlines within a block to <br/>
+// (so bullet/numbered lists the AI writes with single line breaks don't run
+// together into one unbroken line).
+function renderInline(text: string, keyPrefix: string) {
+  return text.split("\n").map((line, li) => (
+    <span key={`${keyPrefix}-l${li}`}>
+      {li > 0 && <br />}
+      {line.split(/\*\*(.+?)\*\*/g).map((chunk, ci) =>
+        ci % 2 === 1 ? <strong key={ci}>{chunk}</strong> : chunk
+      )}
+    </span>
+  ));
+}
+
+// A GFM-style pipe table: a header row, a separator row of only -/:/| chars,
+// then 1+ body rows — each with at least one "|".
+function parseTableBlock(block: string): { header: string[]; rows: string[][] } | null {
+  const lines = block.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 2 || !lines[0].includes("|") || !/^[\s:|-]+$/.test(lines[1])) return null;
+  const splitRow = (line: string) =>
+    line.replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+  const header = splitRow(lines[0]);
+  const rows = lines.slice(2).map(splitRow);
+  if (rows.length === 0) return null;
+  return { header, rows };
+}
+
+function ChatTable({ header, rows }: { header: string[]; rows: string[][] }) {
+  return (
+    <div className="overflow-x-auto rounded-md border">
+      <table className="w-full text-xs border-collapse">
+        <thead>
+          <tr className="bg-muted/50">
+            {header.map((h, i) => (
+              <th key={i} className="text-left font-semibold px-2 py-1.5 border-b whitespace-nowrap">
+                {renderInline(h, `h${i}`)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, ri) => (
+            <tr key={ri} className={ri % 2 === 1 ? "bg-muted/20" : undefined}>
+              {row.map((cell, ci) => (
+                <td key={ci} className="px-2 py-1.5 border-b border-border/50 align-top">
+                  {renderInline(cell, `r${ri}c${ci}`)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function ChatMarkdown({ text }: { text: string }) {
-  const paragraphs = text.split(/\n{2,}/);
+  const blocks = text.split(/\n{2,}/);
   return (
     <span>
-      {paragraphs.map((para, pi) => (
-        <span key={pi}>
-          {pi > 0 && <br />}
-          {para.split(/\*\*(.+?)\*\*/g).map((chunk, ci) =>
-            ci % 2 === 1 ? <strong key={ci}>{chunk}</strong> : chunk
-          )}
-        </span>
-      ))}
+      {blocks.map((block, bi) => {
+        const table = parseTableBlock(block);
+        return (
+          <span key={bi} className={cn("block", bi > 0 && "mt-2")}>
+            {table ? <ChatTable header={table.header} rows={table.rows} /> : renderInline(block, `b${bi}`)}
+          </span>
+        );
+      })}
     </span>
   );
 }
@@ -1024,7 +1092,7 @@ export function WizardAIAssistant({
             onPointerDownCapture={(e) => e.stopPropagation()}
             className={cn(
               "fixed right-0 top-0 bottom-0 z-[200]",
-              "w-full md:w-[400px]",
+              "w-full md:w-[480px] xl:w-[600px]",
               "bg-card border-l shadow-2xl",
               "flex flex-col overflow-x-hidden"
             )}

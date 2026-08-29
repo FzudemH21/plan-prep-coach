@@ -3863,6 +3863,12 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
   }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, currentMicrocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData, exerciseDistribution, sessionSections, libraries, parameterValues, athleteExerciseHistoryStr]);
 
   const handleMicroAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
+    if (action.type === "set_plan_notes") {
+      const prevNotes = macrocycleData?.planNotes ?? "";
+      const nextNotes = action.mode === "replace" ? action.notes : [prevNotes, action.notes].filter(Boolean).join("\n");
+      setMacrocycleData({ ...macrocycleData, planNotes: nextNotes });
+      return;
+    }
     if (action.type === "assign_methods_to_days") {
       const dayNameMap: Record<string, number> = {
         Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,

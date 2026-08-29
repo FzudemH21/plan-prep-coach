@@ -1147,24 +1147,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         </CardContent>
       </Card>
 
-      {/* Notes / Brainstorming */}
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="flex items-center space-x-2">
-            <FileText className="h-5 w-5" />
-            <span>Notes & Brainstorming</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Textarea
-            value={planNotes}
-            onChange={(e) => setPlanNotes(e.target.value)}
-            placeholder="Notizen, Überlegungen, Ideen zum Plan..."
-            className="min-h-[120px] resize-y"
-          />
-        </CardContent>
-      </Card>
-
       {/* Two Column Layout: SMART Goals (left) + Plan Duration (right) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: SMART Goals List */}
@@ -2921,6 +2903,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       case "set_plan_name":
         setPlanName(action.name);
         break;
+      case "set_plan_notes":
+        setPlanNotes((prev) =>
+          action.mode === "replace" ? action.notes : [prev, action.notes].filter(Boolean).join("\n")
+        );
+        break;
       case "set_plan_duration": {
         const start = action.startDate
           ? new Date(action.startDate + 'T12:00:00')
@@ -3150,6 +3137,24 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         {currentStep === 2 && renderSubGoalsForm()}
         {currentStep === 3 && renderTrainingMethodsForm()}
       </div>
+
+      {/* Notes / Brainstorming — persistent across all 3 macrocycle steps */}
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center space-x-2">
+            <FileText className="h-5 w-5" />
+            <span>Notes & Brainstorming</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            value={planNotes}
+            onChange={(e) => setPlanNotes(e.target.value)}
+            placeholder="Notizen, Überlegungen, Ideen zum Plan..."
+            className="min-h-[180px] resize-y"
+          />
+        </CardContent>
+      </Card>
 
       {/* Navigation */}
       <div className="flex justify-between pt-6">

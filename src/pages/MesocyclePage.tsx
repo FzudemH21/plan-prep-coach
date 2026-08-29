@@ -3533,20 +3533,20 @@ export default function MesocyclePage() {
                                               }}>
                                               <div className="sticky left-0 z-50 p-3 border-r bg-background rounded-tl shadow-md">
                                                 <div className="flex items-center justify-between group pr-16 relative">
-                                                   <div className="flex items-center gap-2 flex-wrap">
-                                                    <button 
+                                                   <div className="flex items-center gap-2 min-w-0">
+                                                    <button
                                                       onClick={(e) => { e.stopPropagation(); toggleMethodCollapse(fullMethodName); }}
-                                                      className="p-0.5 hover:bg-muted-foreground/20 rounded"
+                                                      className="p-0.5 hover:bg-muted-foreground/20 rounded flex-shrink-0"
                                                     >
-                                                      <ChevronDown 
+                                                      <ChevronDown
                                                         className={cn(
                                                           "h-4 w-4 transition-transform text-muted-foreground",
                                                           (collapsedMethods.has(fullMethodName) || (categoryName && collapsedMethods.has(method))) && "-rotate-90"
-                                                        )} 
+                                                        )}
                                                       />
                                                     </button>
-                                                    {categoryName && <span className="text-xs text-muted-foreground">↳</span>}
-                                    <div className="line-clamp-3 text-md font-medium text-foreground" title={fullMethodName}>
+                                                    {categoryName && <span className="text-xs text-muted-foreground flex-shrink-0">↳</span>}
+                                    <div className="truncate text-md font-medium text-foreground min-w-0" title={fullMethodName}>
                                       {categoryName ? `${subCategory}-${categoryName}` : subCategory}
                                     </div>
                                     {!categoryName && toolboxData?.methodDescriptions?.[`${category}|||${subCategory}`] && (
@@ -3565,7 +3565,7 @@ export default function MesocyclePage() {
                                                     {!hasValidFrequencyParameter(baseMethodName) && (
                                                       <TooltipProvider>
                                                         <Tooltip>
-                                                          <TooltipTrigger>
+                                                          <TooltipTrigger className="flex-shrink-0">
                                                             <Badge variant="destructive" className="ml-2 text-[10px] px-1.5 py-0">
                                                               ⚠
                                                             </Badge>
@@ -5110,6 +5110,25 @@ export default function MesocyclePage() {
           return `  - ${m.name}: ${Math.ceil(mesoDays / 7)} weeks (${mesoDays}d)${micros ? "\n" + micros : ""}`;
         }).join("\n")}`
       : "No mesocycles configured yet";
+    // Step 2 only: per-day intensity breakdown so the AI can see (and edit via
+    // set_daily_intensities) each individual day's current value, not just the
+    // microcycle-level summary in mesoStr above.
+    let dailyIntensityStr = '';
+    if (currentStep === 2) {
+      const lines: string[] = ['Daily intensities (use set_daily_intensities to change any of these — microcycleIndex is 1-based per mesocycle, days array must be in calendar order):'];
+      mesocycles.forEach((meso) => {
+        (meso.microcycles ?? []).forEach((mc, mcIdx) => {
+          const days = trainingDays
+            .filter((d) => d.microcycleId === mc.id)
+            .sort((a, b) => a.date.localeCompare(b.date));
+          if (days.length === 0) return;
+          const dayStr = days.map((d) => `${d.dayName} ${d.date}: ${d.intensity}`).join(', ');
+          lines.push(`  ${meso.name} / microcycleIndex ${mcIdx + 1} ("${mc.name}"): ${dayStr}`);
+        });
+      });
+      if (lines.length > 1) dailyIntensityStr = lines.join('\n');
+    }
+
     const allocatedMethods = Object.keys(methodAllocations).filter(
       (m) => methodAllocations[m]?.length > 0
     );
@@ -5238,6 +5257,7 @@ export default function MesocyclePage() {
       goalStr,
       durationStr,
       mesoStr,
+      dailyIntensityStr,
       methodsStr,
       notesStr,
       templatesStr,
@@ -5246,11 +5266,17 @@ export default function MesocyclePage() {
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, planStartDate, planEndDate, totalWeeks, expectedTotalDays, totalMesocycleDays, daysMismatch, mesocycles, methodAllocations, mesoStepLabel, exerciseLibraries, exerciseCellData, parameterValues, templates, getTemplatesForWizardMethod, toolboxData]);
+  }, [currentStep, athleteName, macrocycleData, planStartDate, planEndDate, totalWeeks, expectedTotalDays, totalMesocycleDays, daysMismatch, mesocycles, trainingDays, methodAllocations, mesoStepLabel, exerciseLibraries, exerciseCellData, parameterValues, templates, getTemplatesForWizardMethod, toolboxData]);
 
   // ── AI Apply handler ──────────────────────────────────────────────────────
   const handleMesoAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
     switch (action.type) {
+      case "set_plan_notes": {
+        const prevNotes = macrocycleData?.planNotes ?? "";
+        const nextNotes = action.mode === "replace" ? action.notes : [prevNotes, action.notes].filter(Boolean).join("\n");
+        setMacrocycleData({ ...macrocycleData, planNotes: nextNotes });
+        break;
+      }
       case "set_mesocycle_config": {
         const count = Math.max(1, Math.min(12, action.count));
         const weeksEach = Math.max(1, action.weeksDuration);

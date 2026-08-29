@@ -219,7 +219,7 @@ export function TrainingPlanOverview({
                     value={notes || ''}
                     onChange={(e) => onNotesChange(e.target.value)}
                     placeholder="Notizen, Überlegungen, Ideen zum Plan..."
-                    className="mt-1 min-h-[80px] resize-y text-sm"
+                    className="mt-1 min-h-[140px] resize-y text-sm"
                     onClick={(e) => e.stopPropagation()}
                   />
                 ) : notes ? (
