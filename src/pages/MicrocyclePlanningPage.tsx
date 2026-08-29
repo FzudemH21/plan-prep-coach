@@ -4966,7 +4966,9 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
         </>
       )}
 
-      <NavigationButtons />
+      <div className="sticky bottom-0 z-30 bg-background py-4 border-t">
+        <NavigationButtons />
+      </div>
 
       {/* Clear Mesocycle Confirmation Dialog */}
       <AlertDialog open={clearMesocycleDialogOpen} onOpenChange={setClearMesocycleDialogOpen}>

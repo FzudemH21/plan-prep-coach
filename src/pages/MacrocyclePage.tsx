@@ -3166,16 +3166,16 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         {currentStep === 3 && renderTrainingMethodsForm()}
       </div>
 
-      {/* Navigation */}
-      <div className="flex justify-between pt-6">
-        <Button 
-          variant="outline" 
+      {/* Navigation — sticky to the bottom so it stays visible without scrolling all the way down */}
+      <div className="sticky bottom-0 z-30 flex justify-between bg-background py-4 border-t">
+        <Button
+          variant="outline"
           onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
           disabled={currentStep === 1}
         >
           Previous
         </Button>
-        
+
         <Button onClick={handleNext}>
           {currentStep === totalSteps ? "Move on to Mesocycle" : "Next"}
         </Button>

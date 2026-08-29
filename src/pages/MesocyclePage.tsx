@@ -5549,10 +5549,10 @@ export default function MesocyclePage() {
           </div>
           <Progress value={progress} className="h-2" />
         </div>
-      </div>
 
         <NavigationButtons />
-        
+      </div>
+
         <div className="space-y-8">
           {renderTrainingPlanOverview()}
           {currentStep === 1 && renderMesocycleSetup()}
@@ -5562,8 +5562,10 @@ export default function MesocyclePage() {
           {currentStep === 5 && renderExerciseSelection()}
         </div>
 
-        <NavigationButtons />
-        
+        <div className="sticky bottom-0 z-30 bg-background py-4 border-t">
+          <NavigationButtons />
+        </div>
+
         {/* Keyboard Shortcuts Panel - only show on Method Periodization step */}
         {currentStep === 4 && <KeyboardShortcutsPanel />}
         
