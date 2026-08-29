@@ -801,7 +801,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const [shouldReopenSubGoalDialog, setShouldReopenSubGoalDialog] = useState(false);
 
   // Handler for creating a new parameter from the goal dialog
-  const handleCreateParameter = (paramData: {
+  const handleCreateParameter = async (paramData: {
     name: string;
     unit?: string;
     category?: string;
@@ -809,7 +809,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     methods: any[];
   }) => {
     // Add parameter to Athleticism Database
-    const newParam = addAthleticismParameter({
+    const newParam = await addAthleticismParameter({
       name: paramData.name,
       unit: paramData.unit,
       category: paramData.category,
@@ -944,11 +944,12 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     setCreateParameterForGoalId(parentGoalId || null);
     setAddSubGoalForParent(parentGoalId); // Remember the parent for re-opening
     setShouldReopenSubGoalDialog(true);
-    setIsCreateParameterDialogOpen(true);
+    // Deferred — see comment on the goal-dialog equivalent above.
+    setTimeout(() => setIsCreateParameterDialogOpen(true), 0);
   };
 
   // Handler for when a new parameter is created via the parameter dialog
-  const handleParameterCreatedAsSubGoal = (paramData: {
+  const handleParameterCreatedAsSubGoal = async (paramData: {
     name: string;
     unit?: string;
     category?: string;
@@ -957,7 +958,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     methods?: Array<{ methodId: string; rationale?: string }>;
   }) => {
     // Create the parameter in the database
-    const newParam = addAthleticismParameter({
+    const newParam = await addAthleticismParameter({
       name: paramData.name,
       unit: paramData.unit,
       category: paramData.category,
@@ -1359,7 +1360,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         onOpenCreateParameter={() => {
           setPendingGoalAfterParameterCreation(true);
           setIsAddGoalDialogOpen(false);
-          setIsCreateParameterDialogOpen(true);
+          // Defer to the next tick so the closing dialog's scroll-lock fully
+          // releases before the new one mounts and claims its own — opening
+          // both in the same tick can leave the new dialog unable to scroll
+          // (a known Radix Dialog + scroll-lock timing quirk).
+          setTimeout(() => setIsCreateParameterDialogOpen(true), 0);
         }}
       />
       

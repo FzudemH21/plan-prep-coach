@@ -188,6 +188,20 @@ export function AddParameterDialogV2({
     'kg/bw', '%1RM', 'W', 'W/kg', 'bpm', 'kcal', 'RPE', 'RiR'
   ];
 
+  // Custom units/categories a coach has typed on other parameters — without this,
+  // a custom unit or category (e.g. "pain" for a rehab context) only ever lived on
+  // the parameter it was typed for and vanished from the picker the next time.
+  const availableUnits = useMemo(() => {
+    const used = allParameters.map((p) => p.unit).filter((u): u is string => !!u);
+    return Array.from(new Set([...COMMON_UNITS, ...used]));
+  }, [allParameters]);
+
+  const customCategoriesInUse = useMemo(() => {
+    const predefined = new Set(PARAMETER_CATEGORIES.map((c) => c.value as string));
+    const used = allParameters.map((p) => p.category).filter((c): c is string => !!c && !predefined.has(c));
+    return Array.from(new Set(used));
+  }, [allParameters]);
+
   // Get available parameters for "Contributes To"
   const contributesToTargetIds = pendingContributesTo.map((i) => i.targetParameterId);
   const availableContributesToParameters = allParameters.filter(
@@ -369,10 +383,10 @@ export function AddParameterDialogV2({
                   </PopoverTrigger>
                   <PopoverContent className="w-48 p-0 bg-popover" align="start">
                     <Command>
-                      <CommandInput 
-                        placeholder="Search or type..." 
+                      <CommandInput
+                        placeholder="Search or type..."
                         onValueChange={(search) => {
-                          if (search && !COMMON_UNITS.includes(search)) {
+                          if (search && !availableUnits.includes(search)) {
                             setUnit(search);
                           }
                         }}
@@ -387,7 +401,7 @@ export function AddParameterDialogV2({
                           </button>
                         </CommandEmpty>
                         <CommandGroup>
-                          {COMMON_UNITS.map((u) => (
+                          {availableUnits.map((u) => (
                             <CommandItem
                               key={u}
                               onSelect={() => {
@@ -455,6 +469,21 @@ export function AddParameterDialogV2({
                             </CommandItem>
                           ))}
                         </CommandGroup>
+                        {customCategoriesInUse.length > 0 && (
+                          <CommandGroup heading="Custom">
+                            {customCategoriesInUse.map((cat) => (
+                              <CommandItem
+                                key={cat}
+                                onSelect={() => {
+                                  setCategory(cat);
+                                  setCategorySearchOpen(false);
+                                }}
+                              >
+                                {cat}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        )}
                       </CommandList>
                     </Command>
                   </PopoverContent>
