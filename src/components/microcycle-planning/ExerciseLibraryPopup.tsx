@@ -3,7 +3,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Dialog, DialogPortal, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -368,11 +368,10 @@ export function ExerciseLibraryPopup({
           <div className="space-y-4 flex flex-col overflow-hidden">
             {/* Library Tabs */}
             <div className="space-y-3 flex-1 flex flex-col overflow-hidden">
-              <div className="flex items-center justify-between shrink-0">
+              <div className="space-y-2 shrink-0">
                 <h3 className="text-sm font-medium text-muted-foreground">Exercise Libraries</h3>
-                {/* Searchable jump-to-library dropdown — the tag row below gets
-                    hard to scan once there are many libraries, so this is the
-                    fast path: type a few letters and pick it straight away. */}
+                {/* Searchable library picker — replaces the old tag row, which got
+                    hard to scan once there are more than a few libraries. */}
                 <Popover open={libraryPickerOpen} onOpenChange={setLibraryPickerOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -383,12 +382,12 @@ export function ExerciseLibraryPopup({
                       className="w-64 justify-between font-normal"
                     >
                       <span className="truncate">
-                        {activeTab && allLibraries[activeTab] ? allLibraries[activeTab].name : "Jump to library..."}
+                        {activeTab && allLibraries[activeTab] ? allLibraries[activeTab].name : "Select library..."}
                       </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-64 p-0 bg-popover" align="end">
+                  <PopoverContent className="w-64 p-0 bg-popover" align="start">
                     <Command>
                       <CommandInput placeholder="Search libraries..." />
                       <CommandList>
@@ -414,19 +413,7 @@ export function ExerciseLibraryPopup({
                 </Popover>
               </div>
               <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value)} className="flex-1 flex flex-col overflow-hidden">
-                <TabsList className="flex flex-wrap h-auto gap-1.5 shrink-0 justify-start bg-transparent p-0">
-                  {Object.entries(allLibraries).sort(([, a], [, b]) => a.name.localeCompare(b.name)).map(([key, library]) => (
-                    <TabsTrigger
-                      key={key}
-                      value={key}
-                      className="shrink-0 border border-border rounded-md px-3 py-1.5 text-xs font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary data-[state=inactive]:bg-background data-[state=inactive]:text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
-                    >
-                      {library.name} ({library.data.length})
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-
-                {/* Search + filter controls — below the library tabs */}
+                {/* Search + filter controls */}
                 <div className="flex items-center justify-between gap-4 shrink-0 mt-3">
                   <div className="flex items-center gap-3">
                     <div className="relative px-1">
