@@ -2299,7 +2299,14 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const renderTrainingMethodsForm = () => {
     const allMethods = getAllMethodsWithAssociations();
     const hasAnyMethods = allMethods.length > 0;
-
+    // All selectable method IDs — goal-linked + manually-added, deduplicated —
+    // used by the Selection Summary bar so its count matches what the
+    // hierarchical tree below actually shows (which includes manual methods too).
+    const linkedMethodIds = new Set(allMethods.map(m => m.methodId));
+    const allSelectableMethodIds = [
+      ...allMethods.map(m => m.methodId),
+      ...manuallyAddedMethods.filter(mm => !linkedMethodIds.has(mm.methodId)).map(mm => mm.methodId),
+    ];
 
     return (
       <Card>
@@ -2319,13 +2326,13 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
               {/* Selection Summary */}
               <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                 <span className="text-sm text-muted-foreground">
-                  {selectedMethods.size} of {allMethods.length} methods selected
+                  {selectedMethods.size} of {allSelectableMethodIds.length} methods selected
                 </span>
                 <div className="flex gap-2">
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setSelectedMethods(new Set(allMethods.map(m => m.methodId)))}
+                    onClick={() => setSelectedMethods(new Set(allSelectableMethodIds))}
                   >
                     Select All
                   </Button>
@@ -2339,13 +2346,37 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                 </div>
               </div>
 
-              {/* Goal-linked methods — grouped by Category, progressively disclosed:
-                  click a category to see its methods, click a method to see the
-                  rationale/goals/evidence for it. Replaces the old flat list that
-                  showed every method's full rationale at once. */}
-              {allMethods.length > 0 && (() => {
-                const categoryGroups = new Map<string, MethodWithAssociations[]>();
-                allMethods.forEach(m => {
+              {/* All methods (goal-linked + manually-added) — grouped by Category,
+                  progressively disclosed: click a category to see its methods,
+                  click "Details" on a method to see the rationale/goals/evidence
+                  for it. Replaces the old flat list that showed everything at once. */}
+              {(() => {
+                type DisplayMethod = {
+                  methodId: string;
+                  isManual: boolean;
+                  associations: MethodAssociation[];
+                  manualRationale?: string;
+                  manualEvidence?: string;
+                  manualEvidenceQuality?: string;
+                };
+                const linkedIds = new Set(allMethods.map(m => m.methodId));
+                const displayMethods: DisplayMethod[] = [
+                  ...allMethods.map(m => ({ methodId: m.methodId, isManual: false, associations: m.associations })),
+                  ...manuallyAddedMethods
+                    .filter(mm => !linkedIds.has(mm.methodId))
+                    .map(mm => ({
+                      methodId: mm.methodId,
+                      isManual: true,
+                      associations: [] as MethodAssociation[],
+                      manualRationale: mm.rationale,
+                      manualEvidence: mm.evidence,
+                      manualEvidenceQuality: mm.evidenceQuality,
+                    })),
+                ];
+                if (displayMethods.length === 0) return null;
+
+                const categoryGroups = new Map<string, DisplayMethod[]>();
+                displayMethods.forEach(m => {
                   const category = m.methodId.includes(' - ') ? m.methodId.split(' - ')[0] : m.methodId;
                   if (!categoryGroups.has(category)) categoryGroups.set(category, []);
                   categoryGroups.get(category)!.push(m);
@@ -2366,17 +2397,26 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                     return next;
                   });
                 };
+                const toggleCategorySelection = (methods: DisplayMethod[], selectAll: boolean) => {
+                  setSelectedMethods(prev => {
+                    const next = new Set(prev);
+                    methods.forEach(m => selectAll ? next.add(m.methodId) : next.delete(m.methodId));
+                    return next;
+                  });
+                };
 
                 return (
                   <div className="space-y-3">
                     <Label className="text-sm font-medium flex items-center gap-2">
                       <Target className="h-4 w-4 text-primary" />
-                      Goal-Linked Methods
+                      Training Methods
                     </Label>
                     <div className="border rounded-lg divide-y overflow-hidden">
                       {sortedCategories.map(([category, methods]) => {
                         const categorySelectedCount = methods.filter(m => selectedMethods.has(m.methodId)).length;
                         const categoryExpanded = expandedMethodCategories.has(category);
+                        const categoryChecked: boolean | "indeterminate" =
+                          categorySelectedCount === 0 ? false : categorySelectedCount === methods.length ? true : "indeterminate";
                         const sortedMethods = [...methods].sort((a, b) => {
                           const aPrimary = a.associations.some(x => x.isPrimaryGoal);
                           const bPrimary = b.associations.some(x => x.isPrimaryGoal);
@@ -2385,32 +2425,42 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                         });
                         return (
                           <div key={category}>
-                            <button
-                              type="button"
-                              onClick={() => toggleCategory(category)}
-                              className="w-full flex items-center justify-between gap-2 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
-                            >
-                              <span className="flex items-center gap-2 font-medium text-sm">
-                                <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform shrink-0", categoryExpanded && "rotate-90")} />
-                                {category}
-                              </span>
-                              <span className="text-xs text-muted-foreground shrink-0">
-                                {categorySelectedCount}/{methods.length} selected
-                              </span>
-                            </button>
+                            <div className="w-full flex items-center gap-2 px-4 py-3 hover:bg-muted/40 transition-colors">
+                              <Checkbox
+                                checked={categoryChecked}
+                                onCheckedChange={(checked) => toggleCategorySelection(methods, !!checked)}
+                                onClick={(e) => e.stopPropagation()}
+                                title="Select/deselect all methods in this category"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => toggleCategory(category)}
+                                className="flex-1 flex items-center justify-between gap-2 text-left min-w-0"
+                              >
+                                <span className="flex items-center gap-2 font-medium text-sm min-w-0">
+                                  <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform shrink-0", categoryExpanded && "rotate-90")} />
+                                  <span className="truncate">{category}</span>
+                                </span>
+                                <span className="text-xs text-muted-foreground shrink-0">
+                                  {categorySelectedCount}/{methods.length} selected
+                                </span>
+                              </button>
+                            </div>
                             {categoryExpanded && (
                               <div className="divide-y border-t bg-muted/10">
                                 {sortedMethods.map(method => {
                                   const subCategory = method.methodId.includes(' - ')
                                     ? method.methodId.slice(method.methodId.indexOf(' - ') + 3)
                                     : method.methodId;
-                                  const hasPrimary = method.associations.some(a => a.isPrimaryGoal);
                                   const detailExpanded = expandedMethodDetails.has(method.methodId);
+                                  const hasDetails = method.isManual
+                                    ? !!(method.manualRationale || method.manualEvidence)
+                                    : method.associations.length > 0;
                                   return (
                                     <div key={method.methodId} className="pl-4">
                                       <div
                                         className={cn(
-                                          "flex items-center gap-3 py-2.5 pr-4 transition-colors",
+                                          "flex items-center gap-2 py-2.5 pr-4 transition-colors",
                                           selectedMethods.has(method.methodId) && "bg-primary/5"
                                         )}
                                       >
@@ -2419,46 +2469,60 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                           checked={selectedMethods.has(method.methodId)}
                                           onCheckedChange={(checked) => toggleMethodSelection(method.methodId, !!checked)}
                                         />
-                                        <label htmlFor={method.methodId} className="text-sm cursor-pointer flex-1 flex items-center gap-2 min-w-0">
-                                          <span className="truncate">{subCategory}</span>
-                                          <Badge variant={hasPrimary ? "default" : "outline"} className={cn("shrink-0 text-[10px] px-1.5 py-0", !hasPrimary && "bg-muted text-foreground border-black")}>
-                                            {hasPrimary ? "Primary Goal" : "Sub-Goal"}
-                                          </Badge>
+                                        <label htmlFor={method.methodId} className="text-sm cursor-pointer truncate max-w-[55%]">
+                                          {subCategory}
                                         </label>
-                                        <button
-                                          type="button"
-                                          onClick={() => toggleMethodDetail(method.methodId)}
-                                          className="shrink-0 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                                        >
-                                          {detailExpanded ? "Hide details" : "Details"}
-                                          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", detailExpanded && "rotate-180")} />
-                                        </button>
+                                        {hasDetails && (
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleMethodDetail(method.methodId)}
+                                            className="shrink-0 text-xs text-muted-foreground hover:text-foreground flex items-center gap-0.5"
+                                          >
+                                            Details
+                                            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", detailExpanded && "rotate-180")} />
+                                          </button>
+                                        )}
+                                        {method.isManual && (
+                                          <Badge variant="outline" className="ml-auto shrink-0 text-[10px] px-1.5 py-0 bg-muted text-foreground">
+                                            Manually Added
+                                          </Badge>
+                                        )}
                                       </div>
                                       {detailExpanded && (
                                         <div className="pl-9 pb-3 pr-4 space-y-1.5">
-                                          {method.associations.map((assoc, idx) => (
-                                            <div key={idx} className="flex items-start gap-2 text-sm border-l-2 border-muted pl-2.5">
-                                              <div className="space-y-0.5">
-                                                <div className="flex items-center gap-1.5 flex-wrap">
-                                                  <Badge
-                                                    variant={assoc.isPrimaryGoal ? "default" : "outline"}
-                                                    className={cn("shrink-0", !assoc.isPrimaryGoal && "bg-muted text-foreground border-black")}
-                                                  >
-                                                    {assoc.parameterName}
-                                                    {assoc.isPrimaryGoal && " (Primary)"}
-                                                  </Badge>
-                                                  {assoc.goalDescription && !assoc.isPrimaryGoal && (
-                                                    <span className="text-xs text-muted-foreground">
-                                                      → contributes to {assoc.goalDescription}
-                                                    </span>
+                                          {method.isManual ? (
+                                            <div className="text-sm border-l-2 border-muted pl-2.5 space-y-0.5">
+                                              {method.manualRationale && <p className="text-muted-foreground italic">"{method.manualRationale}"</p>}
+                                              {method.manualEvidence && <p className="text-xs text-muted-foreground">{method.manualEvidence}</p>}
+                                              <p className="text-xs text-muted-foreground">
+                                                Edit or remove this method under "Additional Training Methods" below.
+                                              </p>
+                                            </div>
+                                          ) : (
+                                            method.associations.map((assoc, idx) => (
+                                              <div key={idx} className="flex items-start gap-2 text-sm border-l-2 border-muted pl-2.5">
+                                                <div className="space-y-0.5">
+                                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <Badge
+                                                      variant={assoc.isPrimaryGoal ? "default" : "outline"}
+                                                      className={cn("shrink-0", !assoc.isPrimaryGoal && "bg-muted text-foreground border-black")}
+                                                    >
+                                                      {assoc.parameterName}
+                                                      {assoc.isPrimaryGoal && " (Primary)"}
+                                                    </Badge>
+                                                    {assoc.goalDescription && !assoc.isPrimaryGoal && (
+                                                      <span className="text-xs text-muted-foreground">
+                                                        → contributes to {assoc.goalDescription}
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                  {assoc.rationale && (
+                                                    <p className="text-muted-foreground italic">"{assoc.rationale}"</p>
                                                   )}
                                                 </div>
-                                                {assoc.rationale && (
-                                                  <p className="text-muted-foreground italic">"{assoc.rationale}"</p>
-                                                )}
                                               </div>
-                                            </div>
-                                          ))}
+                                            ))
+                                          )}
                                         </div>
                                       )}
                                     </div>
