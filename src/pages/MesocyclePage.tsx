@@ -3537,7 +3537,7 @@ export default function MesocyclePage() {
                                                 gridTemplateColumns: calculateGridTemplate(baseMethodName, getVisibleMesocyclesForPeriodization())
                                               }}>
                                               <div className="sticky left-0 z-50 p-3 border-r bg-background rounded-tl shadow-md">
-                                                <div className="flex items-center justify-between group pr-16 relative">
+                                                <div className="flex items-center justify-between group pr-28 relative">
                                                    <div className="flex items-center gap-2 min-w-0">
                                                     <button
                                                       onClick={(e) => { e.stopPropagation(); toggleMethodCollapse(fullMethodName); }}
