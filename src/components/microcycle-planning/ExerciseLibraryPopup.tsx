@@ -6,7 +6,20 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Search, Plus, ChevronUp, ChevronDown, X, Recycle } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { Search, Plus, ChevronUp, ChevronDown, ChevronsUpDown, X, Recycle } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { ExerciseSelection, ExerciseLibraryType } from '@/types/microcycle-planning';
 import { FilterState } from '@/types/exercises';
@@ -46,6 +59,7 @@ export function ExerciseLibraryPopup({
 }: ExerciseLibraryPopupProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<string>('');
+  const [libraryPickerOpen, setLibraryPickerOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [filterState, setFilterState] = useState<FilterState>({
     search: '',
@@ -354,7 +368,51 @@ export function ExerciseLibraryPopup({
           <div className="space-y-4 flex flex-col overflow-hidden">
             {/* Library Tabs */}
             <div className="space-y-3 flex-1 flex flex-col overflow-hidden">
-              <h3 className="text-sm font-medium text-muted-foreground shrink-0">Exercise Libraries</h3>
+              <div className="flex items-center justify-between shrink-0">
+                <h3 className="text-sm font-medium text-muted-foreground">Exercise Libraries</h3>
+                {/* Searchable jump-to-library dropdown — the tag row below gets
+                    hard to scan once there are many libraries, so this is the
+                    fast path: type a few letters and pick it straight away. */}
+                <Popover open={libraryPickerOpen} onOpenChange={setLibraryPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={libraryPickerOpen}
+                      size="sm"
+                      className="w-64 justify-between font-normal"
+                    >
+                      <span className="truncate">
+                        {activeTab && allLibraries[activeTab] ? allLibraries[activeTab].name : "Jump to library..."}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-0 bg-popover" align="end">
+                    <Command>
+                      <CommandInput placeholder="Search libraries..." />
+                      <CommandList>
+                        <CommandEmpty>No library found.</CommandEmpty>
+                        <CommandGroup>
+                          {Object.entries(allLibraries).sort(([, a], [, b]) => a.name.localeCompare(b.name)).map(([key, library]) => (
+                            <CommandItem
+                              key={key}
+                              value={library.name}
+                              onSelect={() => {
+                                setActiveTab(key);
+                                setLibraryPickerOpen(false);
+                              }}
+                            >
+                              {library.name}
+                              <span className="ml-auto text-xs text-muted-foreground">{library.data.length}</span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
               <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value)} className="flex-1 flex flex-col overflow-hidden">
                 <TabsList className="flex flex-wrap h-auto gap-1.5 shrink-0 justify-start bg-transparent p-0">
                   {Object.entries(allLibraries).sort(([, a], [, b]) => a.name.localeCompare(b.name)).map(([key, library]) => (
