@@ -20,8 +20,14 @@ import { useAuth } from '@/hooks/useAuth';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-/** Minimum cosine similarity score to include a chunk (0–1). */
-const MATCH_THRESHOLD = 0.30;
+/**
+ * Minimum cosine similarity score to include a chunk (0–1).
+ * text-embedding-3-small runs "hot" — even unrelated prose commonly scores
+ * 0.25-0.35, so a 0.30 floor let loosely-related chunks from a completely
+ * different protocol document (e.g. patella tendon rehab bleeding into a
+ * hamstring tendinopathy answer) through as if they were relevant context.
+ */
+const MATCH_THRESHOLD = 0.45;
 
 /** Maximum number of chunks to inject per query. */
 const MATCH_COUNT = 15;
@@ -75,9 +81,12 @@ export function useRAGRetrieval() {
         const chunks = (data as ChunkRow[] | null) ?? [];
         if (chunks.length === 0) return '';
 
-        // 3. Format chunks into an injectable string block
+        // 3. Format chunks into an injectable string block. The "=== SOURCE DOCUMENT"
+        // header is deliberately loud and repeated per chunk (even for consecutive
+        // chunks from the same document) so document boundaries stay unmistakable
+        // when several different protocols are retrieved for the same query.
         const formatted = chunks
-          .map((chunk) => `Source: ${chunk.document_name}\n${chunk.content}`)
+          .map((chunk) => `=== SOURCE DOCUMENT: "${chunk.document_name}" ===\n${chunk.content}`)
           .join('\n\n---\n\n');
 
         return formatted;
