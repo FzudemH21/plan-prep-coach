@@ -2761,6 +2761,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
       setContextMacrocycleData(macrocycleData);
       setShowMissingRationaleWarning(false);
+      // mesocycleStep persists globally (not scoped per-program) and MesocyclePage
+      // resumes from it unconditionally on mount — without this, "Move on to
+      // Mesocycle" can land on whatever step was last viewed in a completely
+      // unrelated program instead of starting this one at step 1.
+      localStorage.removeItem('mesocycleStep');
       navigate('/mesocycle');
     } else {
       setCurrentStep(Math.min(totalSteps, currentStep + 1));
@@ -3136,14 +3141,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         </div>
       </div>
 
-      {/* Step Content */}
-      <div className="space-y-6">
-        {currentStep === 1 && renderPlanAndGoalSetup()}
-        {currentStep === 2 && renderSubGoalsForm()}
-        {currentStep === 3 && renderTrainingMethodsForm()}
-      </div>
-
-      {/* Notes / Brainstorming — persistent across all 3 macrocycle steps */}
+      {/* Notes / Brainstorming — persistent across all 3 macrocycle steps, shown at the top */}
       <Card>
         <CardHeader className="pb-4">
           <CardTitle className="flex items-center space-x-2">
@@ -3160,6 +3158,13 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           />
         </CardContent>
       </Card>
+
+      {/* Step Content */}
+      <div className="space-y-6">
+        {currentStep === 1 && renderPlanAndGoalSetup()}
+        {currentStep === 2 && renderSubGoalsForm()}
+        {currentStep === 3 && renderTrainingMethodsForm()}
+      </div>
 
       {/* Navigation */}
       <div className="flex justify-between pt-6">

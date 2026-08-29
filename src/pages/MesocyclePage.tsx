@@ -242,6 +242,11 @@ export default function MesocyclePage() {
             if (Object.keys(parameterValues).length > 0) {
               localStorage.setItem('parameterValues', JSON.stringify(parameterValues));
             }
+            // microcycleStep persists globally (not scoped per-program) and is read
+            // unconditionally on mount — reset it so this forward transition always
+            // starts Microcycle planning at step 1 instead of wherever it was last
+            // left in a possibly unrelated program.
+            localStorage.removeItem('microcycleStep');
             navigate('/microcycle');
           } else {
             setCurrentStep(Math.min(totalSteps, currentStep + 1));
