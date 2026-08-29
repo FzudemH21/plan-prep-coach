@@ -69,7 +69,7 @@ export default function MacrocyclePage() {
   const { getEventsForDate } = useCalendarEvents();
   const { data: parametersDataV2, addParameter: addAthleticismParameter, addInteraction: addParameterInteraction } = useParametersDataV2();
   const { data: toolboxData } = useToolboxData();
-  const { athletes, groups, getAthletePerformanceParameters, addPerformanceParameter, getAthleteBiometrics, biometricDefinitions, getAthleteCalendarAssignments } = useAthletes();
+  const { athletes, groups, getAthletePerformanceParameters, getAthleteBiometrics, biometricDefinitions, getAthleteCalendarAssignments } = useAthletes();
   const { retrieve: ragRetrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
   const globalAIContext = useGlobalAIContext();
@@ -792,6 +792,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const [isCreateParameterDialogOpen, setIsCreateParameterDialogOpen] = useState(false);
   const [pendingGoalAfterParameterCreation, setPendingGoalAfterParameterCreation] = useState(false);
   const [shouldReopenSubGoalDialog, setShouldReopenSubGoalDialog] = useState(false);
+  const [newlyCreatedParameterId, setNewlyCreatedParameterId] = useState<string | null>(null);
 
   // Handler for creating a new parameter from the goal dialog
   const handleCreateParameter = async (paramData: {
@@ -816,23 +817,26 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     paramData.methods.forEach(method => {
       // Would need to call addParameterMethod but keeping it simple for now
     });
-    
-    // Automatically add this parameter to the athlete's performance parameters
-    if (selectedAthleteId && newParamId) {
-      addPerformanceParameter(selectedAthleteId, newParamId);
-    }
-    
+
+    // NOTE: intentionally NOT auto-adding this parameter to the athlete's
+    // performance parameters here — that's a separate decision (start tracking
+    // measured values for this athlete over time) from creating a database
+    // entry to use as a goal. Auto-linking used to make a freshly-created
+    // parameter show up under "Athlete Parameters" instead of "All Parameters"
+    // in the goal picker, which was confusing.
+
     setIsCreateParameterDialogOpen(false);
-    
+    setNewlyCreatedParameterId(newParamId ?? null);
+
     // Reopen the goal dialog so user can select the newly created parameter
     if (pendingGoalAfterParameterCreation) {
       setPendingGoalAfterParameterCreation(false);
       setTimeout(() => setIsAddGoalDialogOpen(true), 100);
     }
-    
-    toast({ 
-      title: 'Parameter Created', 
-      description: `Created "${paramData.name}" and added to athlete's performance parameters.` 
+
+    toast({
+      title: 'Parameter Created',
+      description: `Created "${paramData.name}".`
     });
   };
 
@@ -1343,13 +1347,17 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         open={isAddGoalDialogOpen}
         onOpenChange={(open) => {
           setIsAddGoalDialogOpen(open);
-          if (!open) setEditingGoal(null);
+          if (!open) {
+            setEditingGoal(null);
+            setNewlyCreatedParameterId(null);
+          }
         }}
         onAddGoal={handleAddGoal}
         onEditGoal={handleEditGoal}
         editGoal={editingGoal}
         athletePerformanceParams={athletePerformanceParams}
         athleticismParameters={athleticismParameters}
+        defaultParameterId={newlyCreatedParameterId}
         onOpenCreateParameter={() => {
           setPendingGoalAfterParameterCreation(true);
           setIsAddGoalDialogOpen(false);
