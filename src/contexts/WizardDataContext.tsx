@@ -67,6 +67,8 @@ interface WizardDataContextValue {
   setMesocycleData: (data: any) => void;
   /** Call when a program is loaded into the session (replaces all wizard state at once) */
   loadWizardSession: () => void;
+  /** Call when starting a brand-new program — clears in-memory wizard state, not just localStorage */
+  resetWizardSession: () => void;
 }
 
 const WizardDataContext = createContext<WizardDataContextValue>({
@@ -79,6 +81,7 @@ const WizardDataContext = createContext<WizardDataContextValue>({
   mesocycleData: null,
   setMesocycleData: () => {},
   loadWizardSession: () => {},
+  resetWizardSession: () => {},
 });
 
 export function WizardDataProvider({ children }: { children: React.ReactNode }) {
@@ -137,6 +140,19 @@ export function WizardDataProvider({ children }: { children: React.ReactNode }) 
     _setMesocycleData(loadFromLS<any>('mesocycleData', null));
   }, []);
 
+  // resetWizardSession: blank out in-memory state for a brand-new program.
+  // This context lives above the router and is never unmounted between page
+  // navigations, so clearing localStorage alone (clearSession) is not enough —
+  // without this, a coach who jumps between wizard phases via the nav menu (or
+  // reaches Meso/Micro before Macrocycle's own "Continue" push) sees whatever
+  // macrocycleData/trainingDays/etc. were left over from the PREVIOUS program.
+  const resetWizardSession = useCallback(() => {
+    _setMacrocycleData(null);
+    _setTrainingDays([]);
+    _setDailyIntensityData([]);
+    _setMesocycleData(null);
+  }, []);
+
   return (
     <WizardDataContext.Provider value={{
       macrocycleData, setMacrocycleData,
@@ -144,6 +160,7 @@ export function WizardDataProvider({ children }: { children: React.ReactNode }) 
       dailyIntensityData, setDailyIntensityData,
       mesocycleData, setMesocycleData,
       loadWizardSession,
+      resetWizardSession,
     }}>
       {children}
     </WizardDataContext.Provider>

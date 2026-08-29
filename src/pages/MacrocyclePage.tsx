@@ -349,18 +349,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const athleteExistingTestsAndEvents = useMemo(() => {
     if (!selectedAthleteId) return { tests: [], events: [] };
     const assignments = getAthleteCalendarAssignments(selectedAthleteId);
-    console.log('[athleteExistingTestsAndEvents] athleteId:', selectedAthleteId);
-    console.log('[athleteExistingTestsAndEvents] assignments:', assignments.length, assignments.map(a => ({
-      id: a.id,
-      programName: a.programName,
-      reviewedSubGoals: a.reviewedSubGoals?.length ?? 'undefined',
-      reviewedEvents: a.reviewedEvents?.length ?? 'undefined',
-    })));
     const tests: Array<{ testMethod: string; testDates: string[] }> = [];
     const events: Array<{ name: string; eventDates: string[] }> = [];
     assignments.forEach(assignment => {
-      console.log('[athleteExistingTestsAndEvents] assignment object:', JSON.parse(JSON.stringify(assignment)));
-
       if (assignment.reviewedSubGoals !== undefined || assignment.reviewedEvents !== undefined) {
         // Primary path: assignment was created with reviewedSubGoals/reviewedEvents
         (assignment.reviewedSubGoals || []).forEach(sg => {
@@ -378,7 +369,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         // read directly from the program's macrocycleData and apply date offset
         const program = getProgram(assignment.programId);
         const macro = program?.macrocycleData;
-        console.log('[athleteExistingTestsAndEvents] fallback → program:', program?.name, 'macro subGoals:', macro?.subGoals?.length ?? 0, 'events:', macro?.events?.length ?? 0);
         if (macro) {
           const originalStart = assignment.originalStartDate ? new Date(assignment.originalStartDate) : null;
           const assignedStart = new Date(assignment.startDate);
@@ -399,7 +389,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         }
       }
     });
-    console.log('[athleteExistingTestsAndEvents] result → tests:', tests, 'events:', events);
     return { tests, events };
   }, [selectedAthleteId, getAthleteCalendarAssignments, getProgram]);
 

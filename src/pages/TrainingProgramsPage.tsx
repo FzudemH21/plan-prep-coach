@@ -56,7 +56,7 @@ export default function TrainingProgramsPage() {
   const { toast } = useToast();
   const { programs, isLoading, copyProgram, deleteProgram, loadProgramIntoSession, clearSession } = useTrainingPrograms();
   const { athletes } = useAthletes();
-  const { loadWizardSession } = useWizardData();
+  const { loadWizardSession, resetWizardSession } = useWizardData();
   const aiChat = useAIChatContext();
   
   const [searchQuery, setSearchQuery] = useState("");
@@ -108,6 +108,11 @@ export default function TrainingProgramsPage() {
 
   const handleCreateNew = () => {
     clearSession();
+    // clearSession only clears localStorage — WizardDataContext lives above the
+    // router and keeps its in-memory state across navigation, so without this a
+    // new program could still show methods/events/etc. left over from whatever
+    // program was open before (see ghost-data bug reports).
+    resetWizardSession();
     navigate('/macrocycle');
   };
 
