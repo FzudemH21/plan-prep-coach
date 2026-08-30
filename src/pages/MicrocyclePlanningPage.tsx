@@ -4852,7 +4852,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
   return (
     <div className="mx-auto py-6 space-y-6 px-4 w-full max-w-[98vw]">
       {/* Header + top nav — sticky so it stays visible while the step content below scrolls */}
-      <div className="sticky top-0 z-30 space-y-4 bg-background pb-4">
+      <div className="sticky -top-4 sm:-top-6 lg:-top-8 z-30 space-y-4 bg-background pt-4 sm:pt-6 lg:pt-8 pb-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Microcycle Planning</h1>
           <div className="flex items-center gap-2">
@@ -4966,9 +4966,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
         </>
       )}
 
-      <div className="sticky bottom-0 z-30 bg-background py-4 border-t">
-        <NavigationButtons />
-      </div>
+      <NavigationButtons />
 
       {/* Clear Mesocycle Confirmation Dialog */}
       <AlertDialog open={clearMesocycleDialogOpen} onOpenChange={setClearMesocycleDialogOpen}>

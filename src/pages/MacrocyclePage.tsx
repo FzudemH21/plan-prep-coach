@@ -3181,7 +3181,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     
     <div className="w-full max-w-none space-y-6">
       {/* Progress Header — sticky so it stays visible while the step content below scrolls */}
-      <div className="sticky top-0 z-30 space-y-4 bg-background pb-4">
+      <div className="sticky -top-4 sm:-top-6 lg:-top-8 z-30 space-y-4 bg-background pt-4 sm:pt-6 lg:pt-8 pb-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Macrocycle Planning</h1>
           <div className="flex items-center gap-2">
@@ -3259,8 +3259,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         {currentStep === 3 && renderTrainingMethodsForm()}
       </div>
 
-      {/* Navigation — sticky to the bottom so it stays visible without scrolling all the way down */}
-      <div className="sticky bottom-0 z-30 flex justify-between bg-background py-4 border-t">
+      {/* Navigation */}
+      <div className="flex justify-between pt-6">
         <Button
           variant="outline"
           onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
