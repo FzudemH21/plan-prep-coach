@@ -3260,7 +3260,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       </div>
 
       {/* Navigation */}
-      <div className="flex justify-between pt-6">
+      <div className="flex justify-between pt-6 pb-24">
         <Button
           variant="outline"
           onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}

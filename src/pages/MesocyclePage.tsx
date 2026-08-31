@@ -30,7 +30,6 @@ import { useDragFill } from '@/hooks/useDragFill';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { QuantitativeParameterInput, QualitativeParameterInput } from '@/components/ui/parameter-input';
 import { DebouncedTextInput } from '@/components/ui/debounced-input';
-import { KeyboardShortcutsPanel } from '@/components/ui/keyboard-shortcuts-panel';
 import { ParameterContextMenu } from '@/components/ui/parameter-context-menu';
 import { ParameterFillControl } from '@/components/ui/parameter-fill-control';
 import { Label } from "@/components/ui/label";
@@ -3147,7 +3146,7 @@ export default function MesocyclePage() {
       .flatMap(subCategories => Object.values(subCategories))
       .flat()
       .reduce((longest, name) => (name.length > longest.length ? name : longest), '');
-    const periodizationLeftColumnWidth = Math.max(280, Math.min(600, widestMethodName.length * 6.5 + 220));
+    const periodizationLeftColumnWidth = Math.max(220, Math.min(300, widestMethodName.length * 4.5 + 130));
 
     // Helper function to get mesocycle overview data
     const getMesocycleOverview = (mesocycle: ExtendedMesocycle) => {
@@ -5573,11 +5572,10 @@ export default function MesocyclePage() {
           {currentStep === 5 && renderExerciseSelection()}
         </div>
 
-        <NavigationButtons />
+        <div className="pb-24">
+          <NavigationButtons />
+        </div>
 
-        {/* Keyboard Shortcuts Panel - only show on Method Periodization step */}
-        {currentStep === 4 && <KeyboardShortcutsPanel />}
-        
         {/* Delete Method Dialog */}
         <MethodDeleteDialog
           isOpen={isDeleteDialogOpen}
