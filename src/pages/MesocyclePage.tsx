@@ -5231,6 +5231,35 @@ export default function MesocyclePage() {
       if (allocatedMethods.length > 0) templatesStr = templateLines.join('\n');
     }
 
+    // Step 4: exact configurable parameter names per method, so the AI uses the real
+    // extraParams keys (e.g. "Rep Distance", "Inter-Rep Rest Duration") instead of
+    // guessing a plausible-sounding name that silently fails to match on apply.
+    let methodParametersStr = '';
+    if (currentStep === 4 && allocatedMethods.length > 0) {
+      const paramLines: string[] = [
+        'Configurable parameters per method (Frequency, Sets, Reps, Intensity are set via their own set_periodization fields — everything else below MUST go in extraParams using this EXACT name as the key, do not rename, abbreviate, or add units to the key):',
+      ];
+      allocatedMethods.forEach(method => {
+        const params = (methodParametersMap[method] ?? []).filter(
+          p => !['Frequency', 'Sets', 'Reps', 'Intensity'].includes(p.name)
+        );
+        if (params.length === 0) return;
+        const paramDescs = params.map(p => {
+          if (p.isQuantitative) {
+            const unit = p.options?.[0] ? ` (unit: ${p.options[0]})` : '';
+            return `"${p.name}"${unit} [number]`;
+          }
+          if (p.isQualitative) {
+            const opts = p.options?.length ? ` — options: ${p.options.join(', ')}` : '';
+            return `"${p.name}" [pick one]${opts}`;
+          }
+          return `"${p.name}"`;
+        });
+        paramLines.push(`  ${method}: ${paramDescs.join('; ')}`);
+      });
+      if (paramLines.length > 1) methodParametersStr = paramLines.join('\n');
+    }
+
     // Periodization table params — always included once any values exist
     let parameterTableStr = '';
     if (Object.keys(parameterValues).length > 0) {
@@ -5276,12 +5305,13 @@ export default function MesocyclePage() {
       methodsStr,
       notesStr,
       templatesStr,
+      methodParametersStr,
       parameterTableStr,
       exerciseLibraryStr,
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, planStartDate, planEndDate, totalWeeks, expectedTotalDays, totalMesocycleDays, daysMismatch, mesocycles, trainingDays, methodAllocations, mesoStepLabel, exerciseLibraries, exerciseCellData, parameterValues, templates, getTemplatesForWizardMethod, toolboxData]);
+  }, [currentStep, athleteName, macrocycleData, planStartDate, planEndDate, totalWeeks, expectedTotalDays, totalMesocycleDays, daysMismatch, mesocycles, trainingDays, methodAllocations, mesoStepLabel, exerciseLibraries, exerciseCellData, parameterValues, templates, getTemplatesForWizardMethod, toolboxData, methodParametersMap]);
 
   // ── AI Apply handler ──────────────────────────────────────────────────────
   const handleMesoAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
