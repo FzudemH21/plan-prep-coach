@@ -3181,7 +3181,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     
     <div className="w-full max-w-none space-y-6">
       {/* Progress Header — sticky so it stays visible while the step content below scrolls */}
-      <div className="sticky -top-4 sm:-top-6 lg:-top-8 z-30 space-y-4 bg-background pt-4 sm:pt-6 lg:pt-8 pb-4">
+      <div className="sticky -top-4 sm:-top-6 lg:-top-8 z-[100] space-y-4 bg-background pt-4 sm:pt-6 lg:pt-8 pb-4">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Macrocycle Planning</h1>
           <div className="flex items-center gap-2">
