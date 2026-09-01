@@ -5486,10 +5486,19 @@ export default function MesocyclePage() {
               if (!next[meso.id][mcIdx][entry.methodName]) next[meso.id][mcIdx][entry.methodName] = {};
               if (!next[meso.id][mcIdx][entry.methodName][0]) next[meso.id][mcIdx][entry.methodName][0] = {};
               const cell = next[meso.id][mcIdx][entry.methodName][0];
+              // Reps/Intensity render in a plain <input type="number">, which silently shows
+              // blank for anything the AI writes that isn't a bare number (a range like "3-5" or
+              // a compound string like "80-85% 1RM") — pull out the first number as a safety net
+              // even though the prompt now tells the AI to send a bare number directly.
+              const extractNumber = (raw: string | number): string => {
+                if (typeof raw === 'number') return String(raw);
+                const match = raw.match(/-?\d+(\.\d+)?/);
+                return match ? match[0] : raw;
+              };
               if (entry.frequency != null) cell['Frequency'] = entry.frequency;
               if (entry.sets != null) cell['Sets'] = entry.sets;
-              if (entry.reps != null) cell['Reps'] = entry.reps;
-              if (entry.intensity != null) cell['Intensity'] = entry.intensity;
+              if (entry.reps != null) cell['Reps'] = extractNumber(entry.reps);
+              if (entry.intensity != null) cell['Intensity'] = extractNumber(entry.intensity);
               if (entry.extraParams) Object.assign(cell, entry.extraParams);
             });
           });
