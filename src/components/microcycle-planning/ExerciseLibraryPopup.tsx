@@ -36,6 +36,8 @@ interface PopupTableColumn {
   options?: string[];
 }
 
+const LAST_LIBRARY_KEY = 'exerciseLibraryPicker.lastLibraryId';
+
 interface ExerciseLibraryPopupProps {
   isOpen: boolean;
   onClose: () => void;
@@ -73,14 +75,22 @@ export function ExerciseLibraryPopup({
 
   const { libraries } = useCustomLibraries();
 
-  // When the popup opens, jump to the default library; fall back to first library
+  // When the popup opens: the caller's default library if given, otherwise the library the
+  // coach last had open in this picker (remembered per browser), otherwise the first one.
   useEffect(() => {
     if (!isOpen || libraries.length === 0) return;
-    const target = defaultLibraryId && libraries.find(lib => lib.id === defaultLibraryId)
-      ? defaultLibraryId
-      : libraries[0].id;
+    let lastUsed: string | null = null;
+    try { lastUsed = localStorage.getItem(LAST_LIBRARY_KEY); } catch { /* unavailable */ }
+    const exists = (id: string | null | undefined): id is string => !!id && libraries.some(lib => lib.id === id);
+    const target = exists(defaultLibraryId) ? defaultLibraryId : exists(lastUsed) ? lastUsed : libraries[0].id;
     setActiveTab(target);
   }, [isOpen, defaultLibraryId, libraries]);
+
+  // Remember the library in use so "Add exercises" reopens it next time
+  useEffect(() => {
+    if (!isOpen || !activeTab) return;
+    try { localStorage.setItem(LAST_LIBRARY_KEY, activeTab); } catch { /* unavailable */ }
+  }, [isOpen, activeTab]);
 
   // Prepare data for all libraries using CustomLibrariesContext
   const allLibraries = useMemo(() => {
@@ -140,14 +150,13 @@ export function ExerciseLibraryPopup({
       );
     }
 
-    // Apply column filters
+    // Apply column filters — exact match on the (trimmed) cell value, the same way the
+    // filter options are built. A substring match made "Extension" also match "Anti-Extension".
     Object.entries(filterState.columnFilters).forEach(([columnKey, values]) => {
       if (values.length > 0) {
         filtered = filtered.filter(exercise => {
           const exerciseValue = exercise[columnKey];
-          return exerciseValue && values.some(value => 
-            exerciseValue.toString().toLowerCase().includes(value.toLowerCase())
-          );
+          return exerciseValue != null && values.includes(exerciseValue.toString().trim());
         });
       }
     });

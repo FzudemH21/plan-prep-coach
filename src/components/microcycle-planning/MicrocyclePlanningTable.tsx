@@ -42,9 +42,14 @@ interface MicrocyclePlanningTableProps {
   getParametersForCell?: (mesocycleId: string, microcycleId: string | undefined, methodId: string, categoryName: string | undefined) => string;
   /** methodName → array of mesocycleIds the method is assigned to */
   methodAllocations?: Record<string, string[]>;
+  /**
+   * Method ids ("Category - SubCategory") in the order to display them — the periodization
+   * table's order. Categories follow their first method; anything not listed falls back to A–Z.
+   */
+  methodOrder?: string[];
 }
 
-export const MicrocyclePlanningTable = forwardRef<MicrocyclePlanningTableHandle, MicrocyclePlanningTableProps>(function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], parameterValues = {}, methodParametersMap = {}, onExerciseSelectionChange, getParametersForCell, methodAllocations = {} }: MicrocyclePlanningTableProps, ref) {
+export const MicrocyclePlanningTable = forwardRef<MicrocyclePlanningTableHandle, MicrocyclePlanningTableProps>(function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], parameterValues = {}, methodParametersMap = {}, onExerciseSelectionChange, getParametersForCell, methodAllocations = {}, methodOrder }: MicrocyclePlanningTableProps, ref) {
   const { data: toolboxData } = useToolboxData();
   const { toast } = useToast();
   const [planningState, setPlanningState] = useState<MicrocyclePlanningState>({
@@ -357,17 +362,21 @@ export const MicrocyclePlanningTable = forwardRef<MicrocyclePlanningTableHandle,
       categoryGroups.get(mainCategory)!.methods.push(method);
     });
     
-    // Sort categories and methods within categories
-    const sortedCategories = Array.from(categoryGroups.values()).sort((a, b) => 
-      a.categoryName.localeCompare(b.categoryName)
-    );
-    
-    sortedCategories.forEach(category => {
-      category.methods.sort((a, b) => a.name.localeCompare(b.name));
+    // Sort categories and methods in the periodization order (methodOrder), A–Z as fallback
+    const orderIndex = new Map((methodOrder ?? []).map((id, i) => [id, i]));
+    const indexOf = (id: string) => orderIndex.get(id) ?? Number.MAX_SAFE_INTEGER;
+
+    categoryGroups.forEach(category => {
+      category.methods.sort((a, b) => indexOf(a.id) - indexOf(b.id) || a.name.localeCompare(b.name));
     });
-    
+
+    const firstIndex = (category: MethodCategory) => Math.min(...category.methods.map(m => indexOf(m.id)));
+    const sortedCategories = Array.from(categoryGroups.values()).sort((a, b) =>
+      firstIndex(a) - firstIndex(b) || a.categoryName.localeCompare(b.categoryName)
+    );
+
     return sortedCategories;
-  }, [toolboxData, selectedMethods]);
+  }, [toolboxData, selectedMethods, methodOrder]);
 
   // Initialize expanded categories with all categories expanded
   React.useEffect(() => {

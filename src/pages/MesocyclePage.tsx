@@ -1355,6 +1355,14 @@ export default function MesocyclePage() {
     return grouped;
   }, [groupMethodsByToolboxCategory, methodCategoryOrder]);
 
+  // Flat method order exactly as the periodization table shows it (categories in the order set
+  // in Mesocycle setup, methods in their order within each category) — Exercise Selection
+  // (step 5) uses it so both steps list methods identically.
+  const periodizationMethodOrder = useMemo(
+    () => Object.values(orderedGroupedMethods).flatMap(subCategories => Object.values(subCategories).flat()),
+    [orderedGroupedMethods]
+  );
+
   // Save method category order to localStorage
   useEffect(() => {
     if (methodCategoryOrder.length > 0) {
@@ -4109,6 +4117,7 @@ export default function MesocyclePage() {
             key={mpTableKey}
             mesocycles={mesocycles}
             selectedMethods={getAllocatedMethods()}
+            methodOrder={periodizationMethodOrder}
             parameterValues={parameterValues}
             methodParametersMap={methodParametersMap}
             onExerciseSelectionChange={(cellData) => {
