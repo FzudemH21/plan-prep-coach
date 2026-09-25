@@ -872,6 +872,24 @@ export default function MicrocyclePlanningPage() {
     return result;
   }, [toolboxData]);
 
+  // Step 1 only offers exercise categories that actually have exercises assigned in Exercise
+  // Selection (Mesocycle step 5) for the current mesocycle — e.g. no "Knee Flexors" card unless
+  // an exercise was picked for it. A method with none left falls back to its plain (unsplit) card.
+  const methodCategoriesWithExercises = useMemo((): Record<string, string[]> => {
+    const assigned = new Set<string>();
+    Object.values(exerciseSelectionData).forEach(cell => {
+      if (!cell.categoryName || !(cell.exercises?.length > 0)) return;
+      if (currentMesocycle && cell.mesocycleId !== currentMesocycle.id) return;
+      assigned.add(`${cell.methodId}::${cell.categoryName}`);
+    });
+    return Object.fromEntries(
+      Object.entries(methodExerciseCategories).map(([methodId, cats]) => [
+        methodId,
+        cats.filter(cat => assigned.has(`${methodId}::${cat}`)),
+      ])
+    );
+  }, [methodExerciseCategories, exerciseSelectionData, currentMesocycle]);
+
   // Resolved method allocations: normalise split keys AND supplement from parameterValues.
   // This guarantees the left panel shows base method names (e.g. "Strength") even when the
   // periodization table is in split mode (where parameterValues stores "Strength::Squat" etc.).
@@ -3563,7 +3581,8 @@ export default function MicrocyclePlanningPage() {
     );
     const methodsStr = availableMethods.length
       ? `Training methods in this plan (use these EXACT names in assign_methods_to_days):\n${availableMethods.map((m) => {
-          const cats = methodExerciseCategories[m];
+          // Same categories step 1 offers: only those with exercises assigned in Exercise Selection
+          const cats = methodCategoriesWithExercises[m];
           if (cats && cats.length > 0) {
             return `- ${m} [split into categories: ${cats.join(', ')}] → assign each as "${m}::CategoryName" (e.g. "${m}::${cats[0]}")`;
           }
@@ -3861,7 +3880,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, currentMicrocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData, exerciseDistribution, sessionSections, libraries, parameterValues, athleteExerciseHistoryStr]);
+  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, currentMicrocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData, exerciseDistribution, sessionSections, libraries, parameterValues, athleteExerciseHistoryStr, methodCategoriesWithExercises]);
 
   const handleMicroAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
     if (action.type === "set_plan_notes") {
@@ -4890,7 +4909,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
             allMesocycles={mesocycles}
             trainingDays={trainingDays}
             methodAllocations={resolvedMethodAllocations}
-            methodExerciseCategories={methodExerciseCategories}
+            methodExerciseCategories={methodCategoriesWithExercises}
             dayMethodAssignments={dayMethodAssignments}
             onDayMethodAssignmentsChange={setDayMethodAssignments}
             sessionSections={sessionSections}
