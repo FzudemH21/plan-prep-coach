@@ -72,6 +72,7 @@ import { SportTagInput } from './SportTagInput';
 interface AthleteProfileViewProps {
   athlete: Athlete;
   onUpdateAthlete: (updates: Partial<Omit<Athlete, 'id' | 'createdAt'>>) => void;
+  /** Opens the shared delete confirmation (owned by the page) — never deletes directly. */
   onDeleteAthlete: () => void;
   groups: AthleteGroup[];
   athleteData: ReturnType<typeof useAthletes>;
@@ -99,7 +100,6 @@ export function AthleteProfileView({
   defaultCalendarSessionName,
 }: AthleteProfileViewProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editedAthlete, setEditedAthlete] = useState<Partial<Athlete>>({});
 
   // Controlled tab state — Radix unmounts inactive panels so flex-1 layout is unaffected
@@ -359,7 +359,7 @@ export function AthleteProfileView({
                     variant="outline"
                     size="sm"
                     className="text-destructive hover:text-destructive"
-                    onClick={() => setShowDeleteConfirm(true)}
+                    onClick={onDeleteAthlete}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -754,27 +754,6 @@ export function AthleteProfileView({
           </CardContent>
         </Card>
 
-        {/* Delete Confirmation */}
-        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete Athlete</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to delete {displayName}? This action
-                cannot be undone and will remove all associated data.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={onDeleteAthlete}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
             </div>
         </TabsContent>
 

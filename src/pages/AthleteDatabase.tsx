@@ -7,6 +7,7 @@ import type { AthleteProfileData } from '@/hooks/useAthleteConnections';
 import { AthleteGroupSidebar } from '@/components/athletes/AthleteGroupSidebar';
 import { AthleteProfileView } from '@/components/athletes/AthleteProfileView';
 import { AddAthleteDialog, type NewAthleteData } from '@/components/athletes/AddAthleteDialog';
+import { DeleteAthleteDialog } from '@/components/athletes/DeleteAthleteDialog';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import type { Athlete } from '@/types/athlete';
@@ -155,6 +156,23 @@ export default function AthleteDatabase() {
     handleCreateAthlete(groupId);
   };
 
+  // Every delete path (sidebar menu, archive list, profile tab) goes through this
+  // confirmation — deleting an athlete can't be undone.
+  const [athleteIdPendingDelete, setAthleteIdPendingDelete] = useState<string | null>(null);
+  const athletePendingDelete = athleteIdPendingDelete ? athleteData.getAthlete(athleteIdPendingDelete) ?? null : null;
+
+  const confirmDeleteAthlete = (athleteId: string) => {
+    athleteData.deleteAthlete(athleteId);
+    deleteEventsForAthlete(athleteId);
+    if (selectedAthleteId === athleteId) setSelectedAthleteId(null);
+    setAthleteIdPendingDelete(null);
+  };
+
+  const handleArchiveAthlete = (athleteId: string) => {
+    athleteData.archiveAthlete(athleteId);
+    if (selectedAthleteId === athleteId) setSelectedAthleteId(null);
+  };
+
   const handleAssignAthleteToGroup = (athleteId: string, groupId: string) => {
     const athlete = athleteData.getAthlete(athleteId);
     if (athlete) {
@@ -183,19 +201,8 @@ export default function AthleteDatabase() {
           getAthletesByGroup={athleteData.getAthletesByGroup}
           getAthletesWithoutGroup={athleteData.getAthletesWithoutGroup}
           onCreateAthlete={() => handleCreateAthlete()}
-          onDeleteAthlete={(athleteId) => {
-            athleteData.deleteAthlete(athleteId);
-            deleteEventsForAthlete(athleteId);
-            if (selectedAthleteId === athleteId) {
-              setSelectedAthleteId(null);
-            }
-          }}
-          onArchiveAthlete={(athleteId) => {
-            athleteData.archiveAthlete(athleteId);
-            if (selectedAthleteId === athleteId) {
-              setSelectedAthleteId(null);
-            }
-          }}
+          onDeleteAthlete={setAthleteIdPendingDelete}
+          onArchiveAthlete={handleArchiveAthlete}
           onUnarchiveAthlete={(athleteId) => {
             athleteData.unarchiveAthlete(athleteId);
           }}
@@ -211,11 +218,7 @@ export default function AthleteDatabase() {
           <AthleteProfileView
             athlete={selectedAthlete}
             onUpdateAthlete={(updates) => handleUpdateAthlete(selectedAthlete, updates)}
-            onDeleteAthlete={() => {
-              athleteData.deleteAthlete(selectedAthlete.id);
-              deleteEventsForAthlete(selectedAthlete.id);
-              setSelectedAthleteId(null);
-            }}
+            onDeleteAthlete={() => setAthleteIdPendingDelete(selectedAthlete.id)}
             groups={athleteData.groups}
             athleteData={athleteData}
             openNewAnamnesis={pendingAnamnesisAthleteId === selectedAthlete.id}
@@ -246,6 +249,16 @@ export default function AthleteDatabase() {
         }}
         groupId={groupForNewAthlete}
         onSubmit={handleSubmitNewAthlete}
+      />
+
+      <DeleteAthleteDialog
+        athlete={athletePendingDelete}
+        onCancel={() => setAthleteIdPendingDelete(null)}
+        onConfirm={confirmDeleteAthlete}
+        onArchive={(athleteId) => {
+          handleArchiveAthlete(athleteId);
+          setAthleteIdPendingDelete(null);
+        }}
       />
     </div>
   );
