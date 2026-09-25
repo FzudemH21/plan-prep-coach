@@ -23,7 +23,6 @@ import HomePage from "./pages/HomePage";
 import MacrocyclePage from "./pages/MacrocyclePage";
 import MesocyclePage from "./pages/MesocyclePage";
 import MicrocyclePlanningPage from "./pages/MicrocyclePlanningPage";
-import TemplatesPage from "./pages/TemplatesPage";
 import TrainingProgramsPage from "./pages/TrainingProgramsPage";
 import AthleticismDatabaseV2 from "./pages/AthleticismDatabaseV2";
 import ToolboxDatabase from "./pages/ToolboxDatabase";
@@ -166,7 +165,8 @@ function AppRoutes() {
                   <Route path="/mesocycle" element={<MesocyclePage />} />
                   <Route path="/microcycle" element={<MicrocyclePlanningPage />} />
                   <Route path="/athletes" element={<AthleteDatabase />} />
-                  <Route path="/templates" element={<TemplatesPage />} />
+                  {/* The old "Templates & Libraries" overview is gone from the menu — its pages are sidebar entries now */}
+                  <Route path="/templates" element={<Navigate to="/" replace />} />
                   <Route path="/templates/programs" element={<TrainingProgramsPage />} />
                   <Route path="/templates/athleticism" element={<AthleticismDatabaseV2 />} />
                   <Route path="/templates/athleticism-v2" element={<Navigate to="/templates/athleticism" replace />} />

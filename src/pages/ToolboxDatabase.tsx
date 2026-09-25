@@ -432,15 +432,6 @@ export default function ToolboxDatabase() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => navigate("/templates")}
-            className="flex items-center space-x-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Back to Templates</span>
-          </Button>
           <div>
             <h1 className="text-3xl font-bold">Training Toolbox Database</h1>
             <p className="text-muted-foreground">Comprehensive database of training method parameters</p>
