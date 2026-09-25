@@ -4048,10 +4048,10 @@ export default function MesocyclePage() {
   };
 
   // Get allocated methods for exercise selection
-  const getAllocatedMethods = () => {
-    // Return all methods from allocated sub-goals
-    return getMethodsForAllocatedSubGoals;
-  };
+  // Exercise Selection only shows methods assigned to at least one mesocycle (Step 3) — the
+  // same methods the Method Periodization table shows.
+  const getAllocatedMethods = () =>
+    getMethodsForAllocatedSubGoals.filter(method => (methodAllocations[method] ?? []).length > 0);
 
   const renderExerciseSelection = () => (
     <>

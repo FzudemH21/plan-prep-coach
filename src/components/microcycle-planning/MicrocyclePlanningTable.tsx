@@ -12,6 +12,10 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import { useToast } from '@/hooks/use-toast';
 import { ExerciseSelectionCell } from './ExerciseSelectionCell';
 import { MesocycleVisibilityToggles } from '@/components/mesocycle/MesocycleVisibilityToggles';
+
+/** Same normalization MesocyclePage uses to match methods to toolbox entries. */
+const normalizeMethodKey = (str: string): string =>
+  str.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, 'and').replace(/[^a-z0-9]/g, '');
 import { ExerciseCopyDialog } from './ExerciseCopyDialog';
 import { 
   TrainingMethodWithCategories,
@@ -314,18 +318,14 @@ export const MicrocyclePlanningTable = forwardRef<MicrocyclePlanningTableHandle,
     toolboxData.entries.forEach(entry => {
       const methodName = `${entry.category} - ${entry.subCategory}`;
       
-      // Check if this toolbox method matches any of the selected methods
-      const isMethodSelected = selectedMethods.some(selectedMethod => {
-        // Try exact match first
-        if (selectedMethod === methodName) return true;
-        
-        // Try partial matches for cases where naming might differ
-        const selectedNormalized = selectedMethod.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const methodNormalized = methodName.toLowerCase().replace(/[^a-z0-9]/g, '');
-        
-        return selectedNormalized.includes(methodNormalized) || 
-               methodNormalized.includes(selectedNormalized);
-      });
+      // Check if this toolbox method is one of the selected methods. Same rule as the
+      // periodization table (MesocyclePage): normalized equality, with just the category as
+      // the key when there's no sub-category. The old "contains" match could pull in
+      // look-alikes that were never assigned (e.g. "Isometrics - RSIST" → "RSIST-Hip").
+      const entryKey = entry.subCategory ? `${entry.category} - ${entry.subCategory}` : entry.category;
+      const isMethodSelected = selectedMethods.some(selectedMethod =>
+        selectedMethod === methodName || normalizeMethodKey(selectedMethod) === normalizeMethodKey(entryKey)
+      );
       
       if (!isMethodSelected) return;
       
