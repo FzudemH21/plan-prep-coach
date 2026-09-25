@@ -11,6 +11,7 @@ import { ExtendedMesocycle } from '@/features/planner/types';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useToast } from '@/hooks/use-toast';
 import { ExerciseSelectionCell } from './ExerciseSelectionCell';
+import { MesocycleVisibilityToggles } from '@/components/mesocycle/MesocycleVisibilityToggles';
 import { ExerciseCopyDialog } from './ExerciseCopyDialog';
 import { 
   TrainingMethodWithCategories,
@@ -47,9 +48,13 @@ interface MicrocyclePlanningTableProps {
    * table's order. Categories follow their first method; anything not listed falls back to A–Z.
    */
   methodOrder?: string[];
+  /** Mesocycles to show side by side — shared with Method Periodization (step 4). */
+  visibleMesocycleIds: Set<string>;
+  onToggleMesocycle: (mesocycleId: string) => void;
+  onShowAllMesocycles: () => void;
 }
 
-export const MicrocyclePlanningTable = forwardRef<MicrocyclePlanningTableHandle, MicrocyclePlanningTableProps>(function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], parameterValues = {}, methodParametersMap = {}, onExerciseSelectionChange, getParametersForCell, methodAllocations = {}, methodOrder }: MicrocyclePlanningTableProps, ref) {
+export const MicrocyclePlanningTable = forwardRef<MicrocyclePlanningTableHandle, MicrocyclePlanningTableProps>(function MicrocyclePlanningTable({ mesocycles, selectedMethods = [], parameterValues = {}, methodParametersMap = {}, onExerciseSelectionChange, getParametersForCell, methodAllocations = {}, methodOrder, visibleMesocycleIds, onToggleMesocycle, onShowAllMesocycles }: MicrocyclePlanningTableProps, ref) {
   const { data: toolboxData } = useToolboxData();
   const { toast } = useToast();
   const [planningState, setPlanningState] = useState<MicrocyclePlanningState>({
@@ -97,8 +102,6 @@ export const MicrocyclePlanningTable = forwardRef<MicrocyclePlanningTableHandle,
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   
   // Mesocycle navigation state for single + comparison view
-  const [currentMesocycleIndex, setCurrentMesocycleIndex] = useState(0);
-  const [showComparison, setShowComparison] = useState(false);
   
   const [copyDialogState, setCopyDialogState] = useState<{
     isOpen: boolean;
@@ -397,24 +400,12 @@ export const MicrocyclePlanningTable = forwardRef<MicrocyclePlanningTableHandle,
   };
 
   // Filter mesocycles based on navigation state
+  // Mesocycles shown side by side, in plan order — the selection is shared with step 4.
+  // Falls back to the first mesocycle if the selection is (still) empty.
   const visibleMesocycles = useMemo(() => {
-    if (mesocycles.length === 0) return [];
-    
-    const startIndex = Math.min(currentMesocycleIndex, mesocycles.length - 1);
-    
-    if (showComparison && startIndex < mesocycles.length - 1) {
-      return [mesocycles[startIndex], mesocycles[startIndex + 1]];
-    }
-    
-    return [mesocycles[startIndex]];
-  }, [mesocycles, currentMesocycleIndex, showComparison]);
-
-  // Navigation helpers
-  const canNavigatePrevious = currentMesocycleIndex > 0;
-  const canNavigateNext = showComparison 
-    ? currentMesocycleIndex < mesocycles.length - 2 
-    : currentMesocycleIndex < mesocycles.length - 1;
-  const hasNextMesocycle = currentMesocycleIndex < mesocycles.length - 1;
+    const selected = mesocycles.filter(m => visibleMesocycleIds.has(m.id));
+    return selected.length > 0 ? selected : mesocycles.slice(0, 1);
+  }, [mesocycles, visibleMesocycleIds]);
 
   // Generate column structure for table headers
   const columnStructure = useMemo(() => {
@@ -1142,50 +1133,13 @@ const updateCellData = (
         <CardHeader className="space-y-4">
           <CardTitle>Microcycle Exercise Planning</CardTitle>
           
-          {/* Mesocycle Navigation - Separate Row for Centering */}
-          <div className="relative flex items-center justify-center">
-            {/* Scrollable container for mesocycle buttons */}
-            <div className="overflow-x-auto scrollbar-thin max-w-[calc(100%-220px)] flex items-center justify-center">
-              <div className="flex items-center gap-2 px-2">
-                {mesocycles.map((meso, index) => {
-                  const isSelected = index === currentMesocycleIndex;
-                  const isComparedWith = showComparison && index === currentMesocycleIndex + 1;
-                  const isDisabledForComparison = showComparison && index === mesocycles.length - 1;
-                  
-                  return (
-                    <Button
-                      key={meso.id}
-                      variant={isSelected ? "default" : isComparedWith ? "secondary" : "outline"}
-                      size="sm"
-                      onClick={() => setCurrentMesocycleIndex(index)}
-                      disabled={isDisabledForComparison}
-                      className={cn(
-                        "min-w-[100px] shrink-0",
-                        isComparedWith && "ring-2 ring-primary/30"
-                      )}
-                    >
-                      {meso.name}
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-            
-            {/* Comparison Toggle - Positioned on right */}
-            {hasNextMesocycle && (
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-2 bg-card pl-4">
-                <Switch
-                  id="comparison-toggle"
-                  checked={showComparison}
-                  onCheckedChange={setShowComparison}
-                />
-                <Label htmlFor="comparison-toggle" className="text-sm flex items-center gap-1">
-                  <Columns className="h-4 w-4" />
-                  Compare with next
-                </Label>
-              </div>
-            )}
-          </div>
+          {/* Mesocycle selection — any combination side by side, shared with Method Periodization */}
+          <MesocycleVisibilityToggles
+            mesocycles={mesocycles}
+            visibleIds={visibleMesocycleIds}
+            onToggle={onToggleMesocycle}
+            onShowAll={onShowAllMesocycles}
+          />
         </CardHeader>
         <CardContent>
             <Table className="min-w-[1200px]" containerClassName="relative isolate overflow-x-auto">

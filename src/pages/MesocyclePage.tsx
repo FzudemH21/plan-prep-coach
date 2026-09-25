@@ -1,6 +1,7 @@
 import { MicrocyclePlanningTable, type MicrocyclePlanningTableHandle } from '@/components/microcycle-planning';
 import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
 import { WIZARD_CHAT_ID } from '@/contexts/AIChatContext';
+import { MesocycleVisibilityToggles } from '@/components/mesocycle/MesocycleVisibilityToggles';
 import { cn } from '@/lib/utils';
 import { evaluateFormula } from '@/utils/formulaEvaluator';
 import React, { useState, useEffect, useMemo, useCallback, useTransition } from 'react';
@@ -2267,15 +2268,15 @@ export default function MesocyclePage() {
   // Initialize visible mesocycles when mesocycles change
   useEffect(() => {
     if (mesocycles.length > 0 && visibleMesocycleIds.size === 0) {
-      // Default: first 2 mesocycles visible (or just 1 if only 1 exists)
-      setVisibleMesocycleIds(new Set(mesocycles.slice(0, 2).map(m => m.id)));
+      // Default: all mesocycles (steps 4 and 5 scroll sideways rather than hide phases)
+      setVisibleMesocycleIds(new Set(mesocycles.map(m => m.id)));
     } else if (mesocycles.length > 0) {
       // Clean up any IDs that no longer exist
       const validIds = new Set(
         Array.from(visibleMesocycleIds).filter(id => mesocycles.some(m => m.id === id))
       );
       if (validIds.size === 0) {
-        setVisibleMesocycleIds(new Set(mesocycles.slice(0, 2).map(m => m.id)));
+        setVisibleMesocycleIds(new Set(mesocycles.map(m => m.id)));
       } else if (validIds.size !== visibleMesocycleIds.size) {
         setVisibleMesocycleIds(validIds);
       }
@@ -3256,48 +3257,14 @@ export default function MesocyclePage() {
               <div className="space-y-3">
                <h3 className="text-lg font-semibold">Method Periodization</h3>
                
-               {/* Mesocycle Toggle Bar */}
-               {mesocycles.length > 1 && (
-                  <div className="flex items-center gap-3 mb-2 flex-wrap">
-                    <span className="text-sm text-muted-foreground shrink-0">Show:</span>
-                    
-                    {/* All button first */}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={selectAllMesocycles}
-                      disabled={visibleMesocycleIds.size === mesocycles.length}
-                      className="h-7 px-3 text-xs shrink-0"
-                    >
-                      All
-                    </Button>
-                    
-                    {/* Separator */}
-                    <div className="h-6 w-px bg-border shrink-0" />
-                    
-                    {/* Individual mesocycle toggles */}
-                    <div className="flex-1 flex items-center gap-2 overflow-x-auto py-1 pl-1">
-                      {mesocycles.map((meso) => {
-                        const isVisible = visibleMesocycleIds.has(meso.id);
-                        
-                        return (
-                          <Button
-                            key={meso.id}
-                            variant={isVisible ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => toggleMesocycleVisibility(meso.id)}
-                            className={cn(
-                              "min-w-[80px] shrink-0 transition-all",
-                              isVisible ? "ring-2 ring-primary shadow-sm" : "opacity-60 hover:opacity-100"
-                            )}
-                          >
-                            {meso.name}
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  </div>
-               )}
+               {/* Mesocycle Toggle Bar — shared selection with Exercise Selection (step 5) */}
+               <MesocycleVisibilityToggles
+                 mesocycles={mesocycles}
+                 visibleIds={visibleMesocycleIds}
+                 onToggle={toggleMesocycleVisibility}
+                 onShowAll={selectAllMesocycles}
+                 className="mb-2"
+               />
                
                  <div className="w-full border rounded-lg overflow-auto" style={{height: 'calc(100vh - 340px)', scrollbarWidth: 'thin'}}>
                    <div className="w-fit relative">
@@ -4120,6 +4087,9 @@ export default function MesocyclePage() {
             mesocycles={mesocycles}
             selectedMethods={getAllocatedMethods()}
             methodOrder={periodizationMethodOrder}
+            visibleMesocycleIds={visibleMesocycleIds}
+            onToggleMesocycle={toggleMesocycleVisibility}
+            onShowAllMesocycles={selectAllMesocycles}
             parameterValues={parameterValues}
             methodParametersMap={methodParametersMap}
             onExerciseSelectionChange={(cellData) => {

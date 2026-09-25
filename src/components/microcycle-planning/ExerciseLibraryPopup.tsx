@@ -37,6 +37,17 @@ interface PopupTableColumn {
 }
 
 const LAST_LIBRARY_KEY = 'exerciseLibraryPicker.lastLibraryId';
+const FILTERS_KEY = 'exerciseLibraryPicker.filtersByLibrary';
+
+type SavedLibraryFilters = Record<string, {
+  columnFilters: Record<string, string[]>;
+  sortColumn: string | null;
+  sortDirection: 'asc' | 'desc';
+}>;
+
+const readSavedFilters = (): SavedLibraryFilters => {
+  try { return JSON.parse(localStorage.getItem(FILTERS_KEY) || '{}') as SavedLibraryFilters; } catch { return {}; }
+};
 
 interface ExerciseLibraryPopupProps {
   isOpen: boolean;
@@ -223,14 +234,37 @@ export function ExerciseLibraryPopup({
     }
   };
 
+  // Column filters + sort are remembered per library (not the free-text search), and saved
+  // right where they change — so switching libraries can never write one library's filters
+  // into another's.
+  const persistFilters = (libraryId: string, next: FilterState) => {
+    if (!libraryId) return;
+    const all = readSavedFilters();
+    all[libraryId] = { columnFilters: next.columnFilters, sortColumn: next.sortColumn, sortDirection: next.sortDirection };
+    try { localStorage.setItem(FILTERS_KEY, JSON.stringify(all)); } catch { /* unavailable */ }
+  };
+
+  const updateFilters = (next: FilterState) => {
+    setFilterState(next);
+    persistFilters(activeTab, next);
+  };
+
+  // Restore the library's saved filters whenever the picker opens or the library changes
+  useEffect(() => {
+    if (!isOpen || !activeTab) return;
+    const saved = readSavedFilters()[activeTab];
+    setFilterState({
+      search: '',
+      columnFilters: saved?.columnFilters ?? {},
+      sortColumn: saved?.sortColumn ?? null,
+      sortDirection: saved?.sortDirection ?? 'asc',
+    });
+  }, [isOpen, activeTab]);
+
   // Handle sorting
   const handleSort = (columnKey: string) => {
     const newDirection = filterState.sortColumn === columnKey && filterState.sortDirection === 'asc' ? 'desc' : 'asc';
-    setFilterState(prev => ({
-      ...prev,
-      sortColumn: columnKey,
-      sortDirection: newDirection
-    }));
+    updateFilters({ ...filterState, sortColumn: columnKey, sortDirection: newDirection });
   };
 
   // Handle column filtering
@@ -241,15 +275,12 @@ export function ExerciseLibraryPopup({
     } else {
       newColumnFilters[columnKey] = values;
     }
-    setFilterState(prev => ({
-      ...prev,
-      columnFilters: newColumnFilters
-    }));
+    updateFilters({ ...filterState, columnFilters: newColumnFilters });
   };
 
-  // Clear all filters
+  // Clear all filters (also forgets this library's saved filters)
   const clearAllFilters = () => {
-    setFilterState({
+    updateFilters({
       search: '',
       columnFilters: {},
       sortColumn: null,
@@ -321,12 +352,8 @@ export function ExerciseLibraryPopup({
 
   const handleClose = () => {
     setSelectedItems(new Set());
-    setFilterState({
-      search: '',
-      columnFilters: {},
-      sortColumn: null,
-      sortDirection: 'asc'
-    });
+    // Filters are deliberately kept — they're restored per library on the next open
+    setFilterState(prev => ({ ...prev, search: '' }));
     setNewExerciseName('');
     setIsNewExerciseDialogOpen(false);
     if (searchTimeout) {
