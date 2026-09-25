@@ -12,6 +12,13 @@ interface AIChatContextValue {
   setMessages: (chatId: string, messages: Message[]) => void;
   /** Re-hydrate the context from localStorage after a program is loaded. */
   initChatsFromLocalStorage: () => void;
+  /**
+   * Drop every conversation, in memory and in localStorage. Must be called when a
+   * new program is started — this provider lives above the router, so its state
+   * otherwise survives clearSession() and the next message would write the previous
+   * program's chats back to localStorage, where auto-save stores them in the new program.
+   */
+  resetChats: () => void;
 }
 
 const AIChatContext = createContext<AIChatContextValue | null>(null);
@@ -52,8 +59,13 @@ export function AIChatProvider({ children }: { children: ReactNode }) {
     setChats(readFromLS());
   }, []);
 
+  const resetChats = useCallback(() => {
+    try { localStorage.removeItem(LS_KEY); } catch { /* unavailable — ignore */ }
+    setChats({});
+  }, []);
+
   return (
-    <AIChatContext.Provider value={{ chats, setMessages, initChatsFromLocalStorage }}>
+    <AIChatContext.Provider value={{ chats, setMessages, initChatsFromLocalStorage, resetChats }}>
       {children}
     </AIChatContext.Provider>
   );

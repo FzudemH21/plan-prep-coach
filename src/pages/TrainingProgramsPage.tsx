@@ -113,6 +113,9 @@ export default function TrainingProgramsPage() {
     // new program could still show methods/events/etc. left over from whatever
     // program was open before (see ghost-data bug reports).
     resetWizardSession();
+    // Same for the AI chats: without this the previous program's conversations stay
+    // in memory and get auto-saved into the new program.
+    aiChat?.resetChats();
     navigate('/macrocycle');
   };
 

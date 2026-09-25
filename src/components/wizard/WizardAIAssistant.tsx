@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, X, Send, Mic, MicOff, Loader2, ChevronRight, CheckCircle2, Sparkles } from "lucide-react";
+import { Bot, X, Send, Mic, MicOff, Loader2, ChevronRight, CheckCircle2, Sparkles, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { sendMessage, type Message, type SystemBlock } from "@/utils/anthropicApi";
 import { compressConversation, COMPRESSION_THRESHOLD } from "@/utils/compressConversation";
@@ -470,7 +470,7 @@ function buildSystemPrompt(
   anamnesisContext?: string,
 ): SystemBlock[] {
   const memoryBlock = coachMemoryContext
-    ? `\n\n## Coach's Past Plans (most recent first — defer to newer patterns when in doubt)\n${coachMemoryContext}`
+    ? `\n\n## Coach's Past Plans (reference only — NOT the plan being built now)\nThese are other, earlier plans by this coach, most recent first; defer to newer patterns when in doubt. Use them only to recognise the coach's habits and preferences. Never treat their athlete, goals, dates, methods, notes or values as belonging to the current plan — the current plan is described only in the "Current Context" section below. If the coach asks about "this plan", answer from the current wizard state, not from here.\n${coachMemoryContext}`
     : "";
   const ragBlock = ragContext
     ? `\n\n## Relevant Research & References (retrieved from the coach's uploaded documents)\n${ragContext}\n\n## Research Integration Instructions\n- These chunks were retrieved by semantic similarity and can include content from MULTIPLE different source documents, marked by "=== SOURCE DOCUMENT: ..." headers. A chunk being retrieved does NOT guarantee it is actually about the same specific topic as the coach's question — similarity search can surface a structurally-similar but substantively different protocol (e.g. a different tendon, joint, or condition than the one being asked about).\n- Before using a chunk's content, check it is actually about the SAME specific condition/body part/protocol as the current question — not just a superficially similar document type (e.g. two different tendinopathy rehab protocols for two different tendons are NOT interchangeable; do not blend their phase structures, loading parameters, or timelines together).\n- If a retrieved chunk is from a document about a different condition than what's being discussed, silently ignore it rather than incorporating it — do not mention irrelevant retrieved documents to the coach.\n- Cite the source document name when referencing uploaded research.\n- Cross-reference the uploaded content against your own sports science knowledge (textbooks, peer-reviewed literature, established guidelines e.g. NSCA, ACSM).\n- If an uploaded source aligns with scientific consensus, note that briefly.\n- If an uploaded source contradicts or challenges consensus, explicitly flag it: explain both positions and let the coach decide — do not silently blend conflicting views.\n- If sources within the uploaded documents contradict each other, surface that tension clearly.\n- Never fabricate citations. Only cite documents that appear in the References section above.\n\n## Evidence Hierarchy (apply when evaluating any source — uploaded or from your own knowledge)\nWeight evidence by study design, from strongest to weakest:\n1. Meta-analysis / Systematic review — highest confidence; synthesizes multiple studies; flag if heterogeneity is high (I² > 75%) as pooled conclusions may be unreliable\n2. Randomised Controlled Trial (RCT) — strong causal inference; note sample size, blinding quality, and whether the population matches the athlete\n3. Controlled trial without randomisation — moderate confidence; confounding risk higher\n4. Prospective cohort study — useful for dose-response and long-term outcomes; observational only\n5. Case-control study — good for rare outcomes; susceptible to recall and selection bias\n6. Cross-sectional study — snapshot only; cannot establish causality\n7. Case series / Case report — hypothesis-generating; very low generalisability\n8. Expert opinion / Consensus statement — useful when evidence is sparse; weight by the credibility of the body issuing it (e.g. NSCA, ACSM, IOC)\nWhen citing or evaluating a source, briefly indicate its level (e.g. "RCT, n=24" or "systematic review of 12 RCTs"). When a recommendation rests only on lower-level evidence, say so explicitly rather than presenting it with the same confidence as meta-analytic findings.`
@@ -961,6 +961,20 @@ export function WizardAIAssistant({
   const messagesRef = useRef<Message[]>([]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
+  // Clear this step's conversation. Two clicks (the first arms it for 3 s) instead of a
+  // confirm dialog: a dialog portals outside the panel, and the panel closes on outside clicks.
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  useEffect(() => {
+    if (!confirmingClear) return;
+    const t = setTimeout(() => setConfirmingClear(false), 3000);
+    return () => clearTimeout(t);
+  }, [confirmingClear]);
+  const handleClearChat = () => {
+    if (!confirmingClear) { setConfirmingClear(true); return; }
+    setChatMessages?.(resolvedChatId, []);
+    setConfirmingClear(false);
+  };
+
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -1127,6 +1141,22 @@ export function WizardAIAssistant({
                   <Sparkles className="h-2.5 w-2.5" />
                   Can fill wizard
                 </div>
+              )}
+              {messages.length > 0 && (
+                <button
+                  onClick={handleClearChat}
+                  disabled={isLoading}
+                  title={confirmingClear ? "Click again to clear this conversation" : "Clear conversation"}
+                  className={cn(
+                    "flex items-center gap-1 rounded-md text-xs transition-colors disabled:opacity-50",
+                    confirmingClear
+                      ? "bg-destructive/10 text-destructive px-2 py-1"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {confirmingClear && "Clear chat?"}
+                </button>
               )}
               <button
                 onClick={() => setIsOpen(false)}
