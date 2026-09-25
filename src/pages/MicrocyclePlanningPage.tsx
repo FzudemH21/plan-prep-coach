@@ -35,6 +35,7 @@ import { useTrainingPrograms, TrainingProgram } from '@/hooks/useTrainingProgram
 import { ExportPDFButton } from '@/components/pdf/ExportPDFButton';
 import { useWizardData } from '@/contexts/WizardDataContext';
 import { WizardAIAssistant, FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
+import { WIZARD_CHAT_ID } from '@/contexts/AIChatContext';
 import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
 import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
 import { useCoachMemory } from '@/hooks/useCoachMemory';
@@ -5079,6 +5080,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
       {/* AI Assistant */}
       <WizardAIAssistant
         stepLabel={microStepLabel}
+        chatId={WIZARD_CHAT_ID}
         wizardContext={microWizardContext}
         onApplySuggestion={handleMicroAIApply}
         ragContext={ragContext}

@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useSupabaseStore } from './useSupabaseStore';
 import { useAuth } from './useAuth';
 import { savePlanMemory } from '@/lib/planMemory';
+import { isProgramChatId } from '@/contexts/AIChatContext';
 import { PlanDuration, SmartGoal, SubGoal, Event, TrainableQuality, IntensityLevel } from '@/types/training';
 
 // Interface for manually added methods
@@ -91,6 +92,16 @@ const readExtraSessionState = (): Record<string, string> => {
 };
 
 const removeExtraSessionKeys = () => EXTRA_SESSION_KEYS.forEach(key => localStorage.removeItem(key));
+
+type ChatMap = Record<string, import('@/utils/anthropicApi').Message[]>;
+
+const readChatsFromLS = (): ChatMap => {
+  try { return JSON.parse(localStorage.getItem('aiConversations') ?? '{}') as ChatMap; } catch { return {}; }
+};
+
+/** Keep only program chats (isProgramChatId === keep) or only global chats (=== !keep). */
+const filterChats = (chats: ChatMap | null | undefined, keepProgramChats: boolean): ChatMap =>
+  Object.fromEntries(Object.entries(chats ?? {}).filter(([id]) => isProgramChatId(id) === keepProgramChats));
 
 interface TrainingProgramsData {
   version: number;
@@ -258,12 +269,13 @@ export function useTrainingPrograms() {
 
     localStorage.setItem('activeProgramId', id);
 
-    // Restore AI conversations so initChatsFromLocalStorage() picks them up
-    if (program.aiConversations) {
-      localStorage.setItem('aiConversations', JSON.stringify(program.aiConversations));
-    } else {
-      localStorage.removeItem('aiConversations');
-    }
+    // Restore this program's AI conversation so initChatsFromLocalStorage() picks it up.
+    // Global chats (Parameter Database, Toolbox, …) stay as they are — older programs also
+    // saved copies of those, which are ignored here.
+    localStorage.setItem('aiConversations', JSON.stringify({
+      ...filterChats(readChatsFromLS(), false),
+      ...filterChats(program.aiConversations, true),
+    }));
 
     return true;
   }, [data.programs, flushExtraStateToActiveProgram]);
@@ -312,7 +324,7 @@ export function useTrainingPrograms() {
       sessionSections: get('sessionSections'),
       supersets: get('supersets'),
       methodAllocations: get('methodAllocations'),
-      aiConversations: get('aiConversations'),
+      aiConversations: filterChats(readChatsFromLS(), true),
       extraSessionState: readExtraSessionState(),
     };
   }, []);
@@ -342,9 +354,10 @@ export function useTrainingPrograms() {
       'macrocycleData', 'mesocycleData', 'trainingDays', 'exerciseDistribution',
       'parameterValues', 'dailyIntensityData', 'daySplitStates', 'sessionSections',
       'supersets', 'methodAllocations', 'macrocycleStep', 'mesocycleStep', 'microcycleStep', 'activeProgramId',
-      'aiConversations',
     ];
     staticKeys.forEach(key => localStorage.removeItem(key));
+    // Drop the program's AI conversation but keep global chats (Parameter Database, Toolbox, …)
+    localStorage.setItem('aiConversations', JSON.stringify(filterChats(readChatsFromLS(), false)));
 
     const dynamicPrefixes = [
       'workoutSections_', 'workoutSessions_', 'sessionIntensities_', 'sessionNames_', 'exercises_',

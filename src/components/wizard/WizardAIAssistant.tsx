@@ -9,7 +9,7 @@ import { sendMessage, type Message, type SystemBlock } from "@/utils/anthropicAp
 import { compressConversation, COMPRESSION_THRESHOLD } from "@/utils/compressConversation";
 import { useCoachProfile } from "@/hooks/useCoachProfile";
 import { useSpeechInput } from "@/hooks/useSpeechInput";
-import { useAIChatContext } from "@/contexts/AIChatContext";
+import { useAIChatContext, WIZARD_CHAT_ID } from "@/contexts/AIChatContext";
 import { useRAGRetrieval } from "@/hooks/useRAGRetrieval";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1053,7 +1053,13 @@ export function WizardAIAssistant({
 
       const reply = await sendMessage(
         newMessages,
-        buildSystemPrompt(coachContext, wizardContext, !!onApplySuggestion, coachMemoryContext, effectiveRagContext, assistantRole, globalContext, focusedSessionContext, anamnesisContext),
+        buildSystemPrompt(
+          coachContext,
+          resolvedChatId === WIZARD_CHAT_ID
+            ? `This conversation continues across all wizard steps of this training program, so earlier messages may have been written on a different step (a message starting with "[Step title]" marks where an older per-step chat began). The coach is now on: ${stepLabel}. Treat decisions from earlier steps as still valid unless the current state below shows otherwise.\n\n${wizardContext}`
+            : wizardContext,
+          !!onApplySuggestion, coachMemoryContext, effectiveRagContext, assistantRole, globalContext, focusedSessionContext, anamnesisContext,
+        ),
         "claude-sonnet-4-5",
         8192
       );

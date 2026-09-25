@@ -40,6 +40,7 @@ import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
 import { AutoSaveIndicator } from "@/components/programs/AutoSaveIndicator";
 import { useWizardAutoSave } from "@/hooks/useWizardAutoSave";
 import { WizardAIAssistant } from "@/components/wizard/WizardAIAssistant";
+import { WIZARD_CHAT_ID } from "@/contexts/AIChatContext";
 import { useRAGRetrieval } from "@/hooks/useRAGRetrieval";
 import { useGlobalAIContext } from "@/hooks/useGlobalAIContext";
 import { useAnamnesisAIContext } from "@/hooks/useAnamnesisAIContext";
@@ -3278,6 +3279,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       {/* AI Assistant */}
       <WizardAIAssistant
         stepLabel={macroStepLabel}
+        chatId={WIZARD_CHAT_ID}
         wizardContext={wizardContext}
         onApplySuggestion={handleAIApply}
         ragContext={ragContext}

@@ -1,5 +1,6 @@
 import { MicrocyclePlanningTable, type MicrocyclePlanningTableHandle } from '@/components/microcycle-planning';
 import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
+import { WIZARD_CHAT_ID } from '@/contexts/AIChatContext';
 import { cn } from '@/lib/utils';
 import { evaluateFormula } from '@/utils/formulaEvaluator';
 import React, { useState, useEffect, useMemo, useCallback, useTransition } from 'react';
@@ -983,14 +984,13 @@ export default function MesocyclePage() {
                                 setMesocycles(updated);
                               }}
                             >
-                              <SelectTrigger 
-                                className="w-36"
+                              {/* Wide enough for the longest label ("1 – Very, Very Easy") on one line.
+                                  SelectValue renders the selected item, colour square included. */}
+                              <SelectTrigger
+                                className="w-52 whitespace-nowrap overflow-hidden"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <div className="flex items-center space-x-2">
-                                  <div className="w-3 h-3 rounded" style={{ backgroundColor: getBorgBg(migrateLegacyIntensity(meso.intensity)) }}></div>
-                                  <SelectValue />
-                                </div>
+                                <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
                                 {BORG_LEVELS.map((level) => (
@@ -5696,7 +5696,7 @@ export default function MesocyclePage() {
         />
 
       {/* AI Assistant */}
-      <WizardAIAssistant stepLabel={mesoStepLabel} wizardContext={mesoWizardContext} onApplySuggestion={handleMesoAIApply} ragContext={ragContext} globalContext={globalAIContext} coachMemoryContext={coachMemoryContext} anamnesisContext={anamnesisAIContext || undefined} />
+      <WizardAIAssistant stepLabel={mesoStepLabel} chatId={WIZARD_CHAT_ID} wizardContext={mesoWizardContext} onApplySuggestion={handleMesoAIApply} ragContext={ragContext} globalContext={globalAIContext} coachMemoryContext={coachMemoryContext} anamnesisContext={anamnesisAIContext || undefined} />
     </div>
   );
 };
