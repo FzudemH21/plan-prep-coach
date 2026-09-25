@@ -92,7 +92,37 @@ export interface Athlete {
   notes?: string;
   notesHistory?: AthleteNote[];
   settings?: AthleteSettings;
+  /** Optional — absent on athletes created before billing addresses existed. */
+  billingAddress?: BillingAddress | null;
 }
+
+export interface BillingAddress {
+  street: string;
+  postalCode: string;
+  city: string;
+  country: string;
+}
+
+export const EMPTY_BILLING_ADDRESS: BillingAddress = { street: '', postalCode: '', city: '', country: '' };
+
+/** Null when every part is blank, so an untouched address form doesn't store an empty object. */
+export const normalizeBillingAddress = (address: BillingAddress | null | undefined): BillingAddress | null => {
+  if (!address) return null;
+  const trimmed: BillingAddress = {
+    street: address.street.trim(),
+    postalCode: address.postalCode.trim(),
+    city: address.city.trim(),
+    country: address.country.trim(),
+  };
+  return Object.values(trimmed).some(Boolean) ? trimmed : null;
+};
+
+/** One-line display, e.g. "Main St 1, 10115 Berlin, Germany". Empty string when not set. */
+export const formatBillingAddress = (address: BillingAddress | null | undefined): string => {
+  if (!address) return '';
+  const cityLine = [address.postalCode, address.city].filter(Boolean).join(' ');
+  return [address.street, cityLine, address.country].filter(Boolean).join(', ');
+};
 
 // Helper to get display name
 export const getAthleteDisplayName = (athlete: Athlete): string => {

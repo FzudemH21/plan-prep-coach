@@ -6,6 +6,7 @@ import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import type { AthleteProfileData } from '@/hooks/useAthleteConnections';
 import { AthleteGroupSidebar } from '@/components/athletes/AthleteGroupSidebar';
 import { AthleteProfileView } from '@/components/athletes/AthleteProfileView';
+import { AddAthleteDialog, type NewAthleteData } from '@/components/athletes/AddAthleteDialog';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import type { Athlete } from '@/types/athlete';
@@ -120,8 +121,10 @@ export default function AthleteDatabase() {
     }
   }, [athleteData, getConnectionForAthlete, syncProfileToConnection]);
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(navState.openAthleteId ?? null);
-  const [isNewAthlete, setIsNewAthlete] = useState(false);
-  const [selectedGroupForNew, setSelectedGroupForNew] = useState<string | null>(null);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [groupForNewAthlete, setGroupForNewAthlete] = useState<string | null>(null);
+  /** Set right after "Continue with anamnesis" — the profile jumps to the Anamnesis tab and opens a new record. */
+  const [pendingAnamnesisAthleteId, setPendingAnamnesisAthleteId] = useState<string | null>(null);
   const [squadViewMode, setSquadViewMode] = useState<'list' | 'card'>('card');
   /** Which group the squad dashboard is filtering to. null = all athletes. */
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -131,27 +134,21 @@ export default function AthleteDatabase() {
     : null;
 
   const handleCreateAthlete = (groupId?: string) => {
-    const athlete = athleteData.createAthlete({
-      firstName: '',
-      middleName: null,
-      lastName: '',
-      birthday: null,
-      sex: null,
-      sport: null,
-      team: null,
-      occupation: null,
-      dailyActivityLevel: null,
-      groupIds: groupId ? [groupId] : [],
-      isArchived: false,
-    });
+    setGroupForNewAthlete(groupId ?? null);
+    setAddDialogOpen(true);
+  };
+
+  const handleSubmitNewAthlete = async (data: NewAthleteData, continueWithAnamnesis: boolean) => {
+    const athlete = await athleteData.createAthlete(data);
+    setAddDialogOpen(false);
+    setGroupForNewAthlete(null);
     setSelectedAthleteId(athlete.id);
-    setIsNewAthlete(true);
-    setSelectedGroupForNew(null);
+    setPendingAnamnesisAthleteId(continueWithAnamnesis ? athlete.id : null);
   };
 
   const handleSelectAthlete = (athleteId: string) => {
     setSelectedAthleteId(athleteId);
-    setIsNewAthlete(false);
+    setPendingAnamnesisAthleteId(null);
   };
 
   const handleAddAthleteToGroup = (groupId: string) => {
@@ -166,19 +163,6 @@ export default function AthleteDatabase() {
         athleteData.updateAthlete(athleteId, { groupIds: [...currentGroups, groupId] });
       }
     }
-  };
-
-  const handleCancelNewAthlete = () => {
-    // Delete the unsaved new athlete
-    if (selectedAthleteId && isNewAthlete) {
-      athleteData.deleteAthlete(selectedAthleteId);
-    }
-    setSelectedAthleteId(null);
-    setIsNewAthlete(false);
-  };
-
-  const handleSaveNewAthlete = () => {
-    setIsNewAthlete(false);
   };
 
   return (
@@ -204,14 +188,12 @@ export default function AthleteDatabase() {
             deleteEventsForAthlete(athleteId);
             if (selectedAthleteId === athleteId) {
               setSelectedAthleteId(null);
-              setIsNewAthlete(false);
             }
           }}
           onArchiveAthlete={(athleteId) => {
             athleteData.archiveAthlete(athleteId);
             if (selectedAthleteId === athleteId) {
               setSelectedAthleteId(null);
-              setIsNewAthlete(false);
             }
           }}
           onUnarchiveAthlete={(athleteId) => {
@@ -233,13 +215,11 @@ export default function AthleteDatabase() {
               athleteData.deleteAthlete(selectedAthlete.id);
               deleteEventsForAthlete(selectedAthlete.id);
               setSelectedAthleteId(null);
-              setIsNewAthlete(false);
             }}
             groups={athleteData.groups}
             athleteData={athleteData}
-            isNewAthlete={isNewAthlete}
-            onCancelNew={handleCancelNewAthlete}
-            onSaveNew={handleSaveNewAthlete}
+            openNewAnamnesis={pendingAnamnesisAthleteId === selectedAthlete.id}
+            onNewAnamnesisOpened={() => setPendingAnamnesisAthleteId(null)}
             defaultTab={navState.defaultTab}
             defaultCalendarDate={navState.defaultCalendarDate}
             defaultCalendarSessionName={navState.defaultCalendarSessionName}
@@ -257,6 +237,16 @@ export default function AthleteDatabase() {
           />
         )}
       </div>
+
+      <AddAthleteDialog
+        open={addDialogOpen}
+        onOpenChange={(open) => {
+          setAddDialogOpen(open);
+          if (!open) setGroupForNewAthlete(null);
+        }}
+        groupId={groupForNewAthlete}
+        onSubmit={handleSubmitNewAthlete}
+      />
     </div>
   );
 }

@@ -15,6 +15,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -39,7 +40,7 @@ import { TemplateEditorDialog } from '@/components/anamnesis/AnamnesisTemplateEd
 import { sendMessage } from '@/utils/anthropicApi';
 import { uploadAnamnesisFile, deleteFile, getSignedUrl } from '@/lib/storage';
 import { useAuth } from '@/hooks/useAuth';
-import type { Athlete } from '@/types/athlete';
+import { SEX_LABELS, type Athlete } from '@/types/athlete';
 import type {
   AthleteAnamnesis, AnamnesisField, AnamnesisFieldType, AnamnesisSection, AnamnesisAttachment,
 } from '@/types/anamnesis';
@@ -906,13 +907,35 @@ function RecordCard({
 
 // ── Main tab component ────────────────────────────────────────────────────────
 
-export function AthleteAnamnesisTab({ athlete }: { athlete: Athlete }) {
+interface AthleteAnamnesisTabProps {
+  athlete: Athlete;
+  /** Open the "New Anamnesis" dialog immediately (hand-off from the Add Athlete dialog). */
+  autoOpenNew?: boolean;
+  onAutoOpenHandled?: () => void;
+}
+
+export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHandled }: AthleteAnamnesisTabProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const { anamneses, loading, createAnamnesis, updateAnamnesis, deleteAnamnesis } =
     useAthleteAnamneses(athlete.id);
 
   const athleteName = [athlete.firstName, athlete.lastName].filter(Boolean).join(' ') || 'Athlete';
+
+  // Basic profile info shown above the form so the coach has context without re-entering it
+  const athleteInfoLine = useMemo(() => {
+    const age = athlete.birthday
+      ? Math.floor((Date.now() - new Date(athlete.birthday + 'T12:00:00').getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+      : null;
+    const sports = athlete.sports?.length ? athlete.sports : athlete.sport ? [athlete.sport] : [];
+    return [
+      athleteName,
+      age !== null ? `${age} years` : null,
+      athlete.sex ? SEX_LABELS[athlete.sex] : null,
+      sports.length ? sports.join(', ') : null,
+      athlete.occupation,
+    ].filter(Boolean).join(' · ');
+  }, [athlete, athleteName]);
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<AthleteAnamnesis | null>(null);
@@ -923,6 +946,14 @@ export function AthleteAnamnesisTab({ athlete }: { athlete: Athlete }) {
     setSelectedRecord(null);
     setSheetOpen(true);
   };
+
+  useEffect(() => {
+    if (autoOpenNew) {
+      openNew();
+      onAutoOpenHandled?.();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenNew]);
 
   const openRecord = (record: AthleteAnamnesis) => {
     setSelectedRecord(record);
@@ -1027,6 +1058,7 @@ export function AthleteAnamnesisTab({ athlete }: { athlete: Athlete }) {
                   })()}`
                 : 'New Anamnesis'}
             </DialogTitle>
+            <DialogDescription>{athleteInfoLine}</DialogDescription>
           </DialogHeader>
           <RecordForm
             initial={selectedRecord

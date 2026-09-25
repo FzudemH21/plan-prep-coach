@@ -58,26 +58,13 @@ export const DEFAULT_ANAMNESIS_TEMPLATE: Omit<AnamnesisTemplate, 'id' | 'coachUs
   name: 'General Anamnesis',
   sections: [
     {
+      // Name, date of birth, sex, occupation and activity level live on the athlete
+      // profile (entered once in the Add Athlete dialog) — not asked again here.
       id: 'sec-basic',
-      title: 'Basic Information',
+      title: 'Current Status & History',
       fields: [
-        { id: 'f-name', label: 'Name', fieldType: 'text' },
-        { id: 'f-dob', label: 'Date of Birth', fieldType: 'text', placeholder: 'e.g. 1995-04-12' },
-        {
-          id: 'f-sex',
-          label: 'Sex / Gender',
-          fieldType: 'select',
-          options: ['Male', 'Female', 'Other', 'Prefer not to say'],
-        },
-        { id: 'f-profession', label: 'Profession', fieldType: 'text' },
         { id: 'f-complaint', label: 'Main Complaint / Current Status', fieldType: 'textarea' },
         { id: 'f-injury-history', label: 'Injury / Surgery History', fieldType: 'textarea' },
-        {
-          id: 'f-activity',
-          label: 'Previous Activity Level',
-          fieldType: 'select',
-          options: ['Sedentary', 'Lightly Active', 'Moderately Active', 'Very Active', 'Competitive Athlete'],
-        },
         { id: 'f-prev-therapy', label: 'Previous Therapy / Treatment', fieldType: 'textarea' },
       ],
     },

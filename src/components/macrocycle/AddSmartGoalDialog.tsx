@@ -120,7 +120,7 @@ export function AddSmartGoalDialog({
   // instead of disappearing.
   const athleteParamsWithDetails = useMemo((): ParameterOptionItem[] => {
     return athletePerformanceParams
-      .map((pp) => {
+      .map((pp): ParameterOptionItem | null => {
         const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
         if (!param) return null;
         const latestValue = pp.values.length > 0

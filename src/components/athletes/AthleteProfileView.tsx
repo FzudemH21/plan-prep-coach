@@ -41,6 +41,10 @@ import {
   Sex,
   ACTIVITY_LEVEL_LABELS,
   SEX_LABELS,
+  BillingAddress,
+  EMPTY_BILLING_ADDRESS,
+  formatBillingAddress,
+  normalizeBillingAddress,
   getAthleteDisplayName,
 } from '@/types/athlete';
 import { AthleteCalendarView } from './AthleteCalendarView';
@@ -61,47 +65,7 @@ import { uploadChatFile } from '@/lib/storage';
 import { ChatAttachmentDisplay } from '@/components/chat/ChatAttachmentDisplay';
 import { parseISO, isToday, isYesterday } from 'date-fns';
 import { useRef, useLayoutEffect } from 'react';
-
-// ── Sport tag input ───────────────────────────────────────────────────────────
-
-function SportTagInput({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
-  const [inputVal, setInputVal] = useState('');
-
-  const addSport = (raw: string) => {
-    const trimmed = raw.trim();
-    if (!trimmed || value.includes(trimmed)) { setInputVal(''); return; }
-    onChange([...value, trimmed]);
-    setInputVal('');
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addSport(inputVal); }
-    if (e.key === 'Backspace' && !inputVal && value.length > 0) {
-      onChange(value.slice(0, -1));
-    }
-  };
-
-  return (
-    <div className="flex flex-wrap gap-1 border rounded-md px-2 py-1.5 min-h-9 bg-background focus-within:ring-1 focus-within:ring-ring">
-      {value.map((sport) => (
-        <Badge key={sport} variant="secondary" className="text-xs gap-1 pr-1">
-          {sport}
-          <button type="button" onClick={() => onChange(value.filter((s) => s !== sport))} className="hover:text-destructive">
-            <X className="h-3 w-3" />
-          </button>
-        </Badge>
-      ))}
-      <input
-        value={inputVal}
-        onChange={(e) => setInputVal(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onBlur={() => addSport(inputVal)}
-        placeholder={value.length === 0 ? 'Type sport and press Enter…' : ''}
-        className="flex-1 min-w-20 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
-      />
-    </div>
-  );
-}
+import { SportTagInput } from './SportTagInput';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -111,9 +75,9 @@ interface AthleteProfileViewProps {
   onDeleteAthlete: () => void;
   groups: AthleteGroup[];
   athleteData: ReturnType<typeof useAthletes>;
-  isNewAthlete?: boolean;
-  onCancelNew?: () => void;
-  onSaveNew?: () => void;
+  /** True right after "Continue with anamnesis" in the Add Athlete dialog. */
+  openNewAnamnesis?: boolean;
+  onNewAnamnesisOpened?: () => void;
   /** Open the profile on a specific tab immediately (e.g. 'calendar'). */
   defaultTab?: string;
   /** Jump the calendar to this date's week immediately (yyyy-MM-dd). */
@@ -128,14 +92,13 @@ export function AthleteProfileView({
   onDeleteAthlete,
   groups,
   athleteData,
-  isNewAthlete = false,
-  onCancelNew,
-  onSaveNew,
+  openNewAnamnesis = false,
+  onNewAnamnesisOpened,
   defaultTab,
   defaultCalendarDate,
   defaultCalendarSessionName,
 }: AthleteProfileViewProps) {
-  const [isEditing, setIsEditing] = useState(isNewAthlete);
+  const [isEditing, setIsEditing] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editedAthlete, setEditedAthlete] = useState<Partial<Athlete>>({});
 
@@ -251,13 +214,15 @@ export function AthleteProfileView({
     });
   };
 
-  // Start in edit mode if it's a new athlete
+  // "Continue with anamnesis" from the Add Athlete dialog: jump to the Anamnesis tab,
+  // where AthleteAnamnesisTab opens its "New Anamnesis" dialog on mount.
   useEffect(() => {
-    if (isNewAthlete) {
-      setEditedAthlete({ ...athlete });
-      setIsEditing(true);
+    if (openNewAnamnesis) {
+      setIsEditing(false);
+      setEditedAthlete({});
+      setActiveTab('anamnesis');
     }
-  }, [isNewAthlete, athlete.id]);
+  }, [openNewAnamnesis, athlete.id]);
 
   const startEditing = () => {
     setEditedAthlete({ ...athlete });
@@ -265,21 +230,28 @@ export function AthleteProfileView({
   };
 
   const cancelEditing = () => {
-    if (isNewAthlete && onCancelNew) {
-      onCancelNew();
-    } else {
-      setEditedAthlete({});
-      setIsEditing(false);
-    }
+    setEditedAthlete({});
+    setIsEditing(false);
   };
 
   const saveChanges = () => {
-    onUpdateAthlete(editedAthlete);
+    const updates = 'billingAddress' in editedAthlete
+      ? { ...editedAthlete, billingAddress: normalizeBillingAddress(editedAthlete.billingAddress) }
+      : editedAthlete;
+    onUpdateAthlete(updates);
     setIsEditing(false);
     setEditedAthlete({});
-    if (isNewAthlete && onSaveNew) {
-      onSaveNew();
-    }
+  };
+
+  const editedBillingAddress: BillingAddress =
+    (editedAthlete.billingAddress !== undefined ? editedAthlete.billingAddress : athlete.billingAddress)
+    ?? EMPTY_BILLING_ADDRESS;
+
+  const updateBillingAddress = (key: keyof BillingAddress, value: string) => {
+    setEditedAthlete((prev) => ({
+      ...prev,
+      billingAddress: { ...editedBillingAddress, [key]: value },
+    }));
   };
 
   const updateField = <K extends keyof Athlete>(field: K, value: Athlete[K]) => {
@@ -593,6 +565,42 @@ export function AthleteProfileView({
                 </p>
               )}
             </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label>Billing Address</Label>
+              {isEditing ? (
+                <div className="space-y-2">
+                  <Input
+                    value={editedBillingAddress.street}
+                    onChange={(e) => updateBillingAddress('street', e.target.value)}
+                    placeholder="Street & Number"
+                  />
+                  <div className="grid grid-cols-[1fr_2fr_2fr] gap-2">
+                    <Input
+                      value={editedBillingAddress.postalCode}
+                      onChange={(e) => updateBillingAddress('postalCode', e.target.value)}
+                      placeholder="Postal Code"
+                    />
+                    <Input
+                      value={editedBillingAddress.city}
+                      onChange={(e) => updateBillingAddress('city', e.target.value)}
+                      placeholder="City"
+                    />
+                    <Input
+                      value={editedBillingAddress.country}
+                      onChange={(e) => updateBillingAddress('country', e.target.value)}
+                      placeholder="Country"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm">
+                  {formatBillingAddress(athlete.billingAddress) || (
+                    <span className="text-muted-foreground">Not set</span>
+                  )}
+                </p>
+              )}
+            </div>
             </div>
 
             {/* Notes */}
@@ -792,7 +800,11 @@ export function AthleteProfileView({
         </TabsContent>
 
         <TabsContent value="anamnesis" className="flex-1 mt-0 min-h-0 flex flex-col p-1 pr-4">
-          <AthleteAnamnesisTab athlete={athlete} />
+          <AthleteAnamnesisTab
+            athlete={athlete}
+            autoOpenNew={openNewAnamnesis}
+            onAutoOpenHandled={onNewAnamnesisOpened}
+          />
         </TabsContent>
 
         <TabsContent value="analysis" forceMount className="flex-1 mt-0 min-h-0 data-[state=inactive]:hidden">
