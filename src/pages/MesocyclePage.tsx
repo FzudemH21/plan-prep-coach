@@ -423,6 +423,7 @@ export default function MesocyclePage() {
   useEffect(() => {
     if (Object.keys(categorySplitStates).length > 0) {
       localStorage.setItem('categorySplitStates', JSON.stringify(categorySplitStates));
+      markDirty(); // saved with the program (extraSessionState)
     }
   }, [categorySplitStates]);
 
@@ -492,6 +493,7 @@ export default function MesocyclePage() {
   useEffect(() => {
     if (Object.keys(mesocycleNotes).length > 0) {
       localStorage.setItem('mesocycleNotes', JSON.stringify(mesocycleNotes));
+      markDirty(); // saved with the program (extraSessionState)
     }
   }, [mesocycleNotes]);
 
@@ -4123,6 +4125,9 @@ export default function MesocyclePage() {
             onExerciseSelectionChange={(cellData) => {
               localStorage.setItem('exerciseSelectionData', JSON.stringify(cellData));
               setExerciseCellData(cellData);
+              // Saved with the program (extraSessionState) — without this, adding/removing
+              // exercises here never triggered auto-save and the saved program went stale.
+              markDirty();
             }}
             getParametersForCell={getParametersForCell}
             methodAllocations={methodAllocations}
