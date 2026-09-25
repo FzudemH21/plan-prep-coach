@@ -58,6 +58,27 @@ export function ExerciseLibraryPanel({
     return dist.filter(ex => ex.exerciseId === exerciseId).length;
   };
 
+  // Method / category progress: green dot when every exercise in it is placed at least once in
+  // the viewed microcycle (same count as the per-exercise dots), otherwise "placed/total".
+  const renderPlacedIndicator = (exercises: Array<{ exerciseId: string }>) => {
+    const ids = [...new Set(exercises.map(ex => ex.exerciseId))];
+    if (ids.length === 0) return null;
+    const placed = ids.filter(id => getExerciseAllocationCount(id) > 0).length;
+    if (placed === ids.length) {
+      return (
+        <span
+          className="ml-auto inline-block rounded-full w-2 h-2 bg-emerald-500 flex-shrink-0"
+          title={`All ${ids.length} exercise${ids.length === 1 ? '' : 's'} placed in this microcycle`}
+        />
+      );
+    }
+    return (
+      <span className="ml-auto text-[10px] text-muted-foreground tabular-nums flex-shrink-0" title="Exercises placed in this microcycle">
+        {placed}/{ids.length}
+      </span>
+    );
+  };
+
   // Apply search + allocated-only filters
   const filteredExercises = useMemo(() => {
     let filtered = { ...exercisesByMethod };
@@ -224,6 +245,7 @@ export function ExerciseLibraryPanel({
                                 ? <ChevronDown className="mr-2 h-3 w-3 shrink-0" />
                                 : <ChevronRight className="mr-2 h-3 w-3 shrink-0" />}
                               <span className="truncate">{subCategory}</span>
+                              {renderPlacedIndicator(categoryEntries.flatMap(([, exs]) => exs))}
                             </Button>
                           </CollapsibleTrigger>
 
@@ -267,6 +289,7 @@ export function ExerciseLibraryPanel({
                                           ? <ChevronDown className="mr-2 h-3 w-3 shrink-0" />
                                           : <ChevronRight className="mr-2 h-3 w-3 shrink-0" />}
                                         <span className="truncate">{categoryName}</span>
+                                        {renderPlacedIndicator(exercises)}
                                       </Button>
                                     </CollapsibleTrigger>
 

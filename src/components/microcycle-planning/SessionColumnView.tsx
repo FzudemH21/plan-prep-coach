@@ -402,7 +402,8 @@ export function SessionColumnView({
   return (
     <>
       <div className={cn(
-        "w-80 flex-shrink-0 flex flex-col h-[600px] rounded-lg border bg-muted text-card-foreground shadow-sm transition-all duration-150",
+        // Tall enough to drag exercises into comfortably (was a fixed 600px)
+        "w-80 flex-shrink-0 flex flex-col h-[78vh] min-h-[640px] rounded-lg border bg-muted text-card-foreground shadow-sm transition-all duration-150",
         methodMatchState === 'match' && "ring-2 ring-green-500/60 bg-green-500/5",
         methodMatchState === 'no-match' && "opacity-50"
       )}>
@@ -588,23 +589,18 @@ export function SessionColumnView({
               )}
               <span className="text-xs text-muted-foreground">
                 {exercises.length} {exercises.length === 1 ? 'exercise' : 'exercises'}
+                {/* Methods from Step 1 as a compact hover hint instead of a row of pills — the
+                    green highlight while dragging already shows where an exercise can go. */}
+                {assignedMethods && assignedMethods.length > 0 && (
+                  <span
+                    className="cursor-help underline decoration-dotted underline-offset-2"
+                    title={assignedMethods.map(m => displayMethodLabel(m)).join('\n')}
+                  >
+                    {' · '}{assignedMethods.length} {assignedMethods.length === 1 ? 'method' : 'methods'}
+                  </span>
+                )}
               </span>
             </div>
-
-            {/* Assigned methods from Step 1 — read-only context */}
-            {assignedMethods && assignedMethods.length > 0 && (
-              <div className="flex flex-wrap gap-1 pt-1">
-                {assignedMethods.map(m => (
-                  <span
-                    key={m}
-                    className="inline-flex items-center rounded-md bg-muted/60 border border-border/50 px-2 py-0.5 text-[10px] text-muted-foreground font-medium"
-                    title={m}
-                  >
-                    {displayMethodLabel(m)}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
         </CardHeader>
 
