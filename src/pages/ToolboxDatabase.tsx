@@ -22,14 +22,6 @@ import { useGlobalAIContext } from "@/hooks/useGlobalAIContext";
 import { useCoachMemory } from "@/hooks/useCoachMemory";
 import { useRAGRetrieval } from "@/hooks/useRAGRetrieval";
 
-type SortOrder = 'asc' | 'desc';
-type SortColumn = 'category' | 'subCategory';
-
-interface ColumnSort {
-  column: SortColumn;
-  order: SortOrder;
-}
-
 interface SubCategoryData {
   category: string;
   subCategory: string;
@@ -47,10 +39,6 @@ export default function ToolboxDatabase() {
   const [ragContext, setRagContext] = useState('');
   
   const [searchTerm, setSearchTerm] = useState("");
-  const [columnSorts, setColumnSorts] = useState<Record<SortColumn, ColumnSort | null>>({
-    category: null,
-    subCategory: null
-  });
   const [filterState, setFilterState] = useState<{
     columnFilters: {
       category: string[];
@@ -73,19 +61,6 @@ export default function ToolboxDatabase() {
     setNewEntry({ category: "", subCategory: "" });
   };
 
-  // Handle column sorting
-  const handleColumnSort = (column: SortColumn) => {
-    setColumnSorts(prev => {
-      const currentSort = prev[column];
-      const newOrder = currentSort?.order === 'asc' ? 'desc' : 'asc';
-      
-      return {
-        ...prev,
-        [column]: { column, order: newOrder }
-      };
-    });
-  };
-
   // Handle column filtering
   const handleColumnFilter = (columnKey: 'category' | 'subCategory', values: string[]) => {
     setFilterState(prev => ({
@@ -94,14 +69,6 @@ export default function ToolboxDatabase() {
         ...prev.columnFilters,
         [columnKey]: values
       }
-    }));
-  };
-
-  // Handle column sort from filter
-  const handleColumnSortFromFilter = (columnKey: 'category' | 'subCategory', direction: 'asc' | 'desc') => {
-    setColumnSorts(prev => ({
-      ...prev,
-      [columnKey]: { column: columnKey, order: direction }
     }));
   };
 
@@ -152,38 +119,14 @@ export default function ToolboxDatabase() {
       result = result.filter(item => columnFilters.subCategory.includes(item.subCategory));
     }
 
-    // Apply sorting based on column sorts
-    const categorySorter = columnSorts.category;
-    const subCategorySorter = columnSorts.subCategory;
-    
-    if (categorySorter || subCategorySorter) {
-      result.sort((a, b) => {
-        // Apply category sorting if it exists
-        if (categorySorter) {
-          const categoryCompare = a.category.localeCompare(b.category);
-          if (categoryCompare !== 0) {
-            return categorySorter.order === 'asc' ? categoryCompare : -categoryCompare;
-          }
-        }
-        
-        // Apply sub-category sorting if it exists
-        if (subCategorySorter) {
-          const subCategoryCompare = a.subCategory.localeCompare(b.subCategory);
-          if (subCategoryCompare !== 0) {
-            return subCategorySorter.order === 'asc' ? subCategoryCompare : -subCategoryCompare;
-          }
-        }
-        
-        // Default fallback - maintain consistent ordering
-        const fallbackCategoryCompare = a.category.localeCompare(b.category);
-        if (fallbackCategoryCompare !== 0) return fallbackCategoryCompare;
-        
-        return a.subCategory.localeCompare(b.subCategory);
-      });
-    }
+    // Always alphabetical: category, then sub-category (A–Z)
+    result.sort((a, b) =>
+      a.category.localeCompare(b.category, undefined, { sensitivity: 'base' }) ||
+      a.subCategory.localeCompare(b.subCategory, undefined, { sensitivity: 'base' })
+    );
 
     return result;
-  }, [data.entries, searchTerm, columnSorts, filterState]);
+  }, [data.entries, searchTerm, filterState]);
 
   // Generate unique categories list for dropdown
   const existingCategories = useMemo(() => {
@@ -596,43 +539,25 @@ export default function ToolboxDatabase() {
               <TableRow>
                 <TableHead className="w-1/4 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">
                   <div className="flex items-center justify-between">
-                    <Button 
-                      variant="ghost" 
-                      className="flex items-center gap-1 p-0 h-auto font-semibold justify-start"
-                      onClick={() => handleColumnSort('category')}
-                    >
-                      Category
-                      {columnSorts.category?.order === 'asc' && <ChevronUp className="h-4 w-4" />}
-                      {columnSorts.category?.order === 'desc' && <ChevronDown className="h-4 w-4" />}
-                    </Button>
+                    <span className="font-semibold">Category</span>
                     <ToolboxColumnFilter
                       columnKey="category"
                       columnLabel="Category"
                       allData={subCategoryData}
                       selectedValues={filterState.columnFilters.category}
                       onSelectionChange={(values) => handleColumnFilter('category', values)}
-                      onSortChange={handleColumnSortFromFilter}
                     />
                   </div>
                 </TableHead>
                 <TableHead className="w-1/4 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">
                   <div className="flex items-center justify-between">
-                    <Button 
-                      variant="ghost" 
-                      className="flex items-center gap-1 p-0 h-auto font-semibold justify-start"
-                      onClick={() => handleColumnSort('subCategory')}
-                    >
-                      Sub-Category
-                      {columnSorts.subCategory?.order === 'asc' && <ChevronUp className="h-4 w-4" />}
-                      {columnSorts.subCategory?.order === 'desc' && <ChevronDown className="h-4 w-4" />}
-                    </Button>
+                    <span className="font-semibold">Sub-Category</span>
                     <ToolboxColumnFilter
                       columnKey="subCategory"
                       columnLabel="Sub-Category"
                       allData={subCategoryData}
                       selectedValues={filterState.columnFilters.subCategory}
                       onSelectionChange={(values) => handleColumnFilter('subCategory', values)}
-                      onSortChange={handleColumnSortFromFilter}
                     />
                   </div>
                 </TableHead>
