@@ -58,7 +58,39 @@ export interface TrainingProgram {
   sessionSections: Record<string, any[]> | null;
   supersets: Record<string, Record<string, string>> | null;
   methodAllocations: Record<string, string[]> | null;
+
+  /**
+   * Raw localStorage values of the EXTRA_SESSION_KEYS below, keyed by storage key.
+   * Optional: programs saved before 2026-09-25 don't have it.
+   */
+  extraSessionState?: Record<string, string> | null;
 }
+
+/**
+ * Wizard state that belongs to one program but has no TrainingProgram field of its own.
+ * These used to live only in global localStorage — never saved with the program and
+ * never cleared — so they showed up in every other program (e.g. day→method assignments
+ * appearing as ghost methods in a new program). Now saved, restored and cleared per program.
+ */
+const EXTRA_SESSION_KEYS = [
+  'dayMethodAssignments',     // Microcycle step 1: which methods sit on which day
+  'microcyclePlanningState',  // Microcycle planning table cell data
+  'exerciseSelectionData',    // Mesocycle step 5: exercises per method × mesocycle
+  'mesocycleNotes',           // Mesocycle descriptions
+  'categorySplitStates',      // Methods split by exercise category in the periodization table
+  'manuallyAddedMethods',     // Legacy Mesocycle-level manual methods
+] as const;
+
+const readExtraSessionState = (): Record<string, string> => {
+  const state: Record<string, string> = {};
+  EXTRA_SESSION_KEYS.forEach(key => {
+    const value = localStorage.getItem(key);
+    if (value !== null) state[key] = value;
+  });
+  return state;
+};
+
+const removeExtraSessionKeys = () => EXTRA_SESSION_KEYS.forEach(key => localStorage.removeItem(key));
 
 interface TrainingProgramsData {
   version: number;
@@ -135,6 +167,7 @@ export function useTrainingPrograms() {
       supersets: program.supersets || null,
       methodAllocations: program.methodAllocations || null,
       aiConversations: program.aiConversations || null,
+      extraSessionState: program.extraSessionState || null,
     };
 
     await saveData({ ...data, programs: [...data.programs, newProgram] });
@@ -172,10 +205,29 @@ export function useTrainingPrograms() {
     return true;
   }, [data, saveData]);
 
+  /**
+   * Before the session is replaced, write the open program's extra wizard state into it.
+   * Normally auto-save already has it, but programs saved before extraSessionState existed
+   * only get it on their next edit — without this, switching away first would lose it.
+   * Skipped when nothing changed, so it doesn't bump lastModifiedAt needlessly.
+   */
+  const flushExtraStateToActiveProgram = useCallback((exceptId?: string) => {
+    const activeId = localStorage.getItem('activeProgramId');
+    if (!activeId || activeId === exceptId) return;
+    const active = data.programs.find(p => p.id === activeId);
+    if (!active) return;
+    const snapshot = readExtraSessionState();
+    if (JSON.stringify(active.extraSessionState ?? {}) === JSON.stringify(snapshot)) return;
+    saveProgram({ id: activeId, extraSessionState: snapshot }).catch(() => {});
+  }, [data.programs, saveProgram]);
+
   // Load program data into the active session (localStorage keys used by wizard)
   const loadProgramIntoSession = useCallback((id: string): boolean => {
     const program = data.programs.find(p => p.id === id);
     if (!program) return false;
+
+    const reopeningActiveProgram = localStorage.getItem('activeProgramId') === id;
+    flushExtraStateToActiveProgram(id);
 
     const keysToCheck = [
       'macrocycleData', 'mesocycleData', 'trainingDays', 'exerciseDistribution',
@@ -194,6 +246,16 @@ export function useTrainingPrograms() {
     if (program.sessionSections) localStorage.setItem('sessionSections', JSON.stringify(program.sessionSections));
     if (program.supersets) localStorage.setItem('supersets', JSON.stringify(program.supersets));
     if (program.methodAllocations) localStorage.setItem('methodAllocations', JSON.stringify(program.methodAllocations));
+
+    // Extra wizard state: restore this program's own copy. When reopening the program that
+    // is already open, localStorage is the live (newest) state, so leave it untouched.
+    if (!reopeningActiveProgram) {
+      removeExtraSessionKeys();
+      Object.entries(program.extraSessionState ?? {}).forEach(([key, value]) => {
+        if ((EXTRA_SESSION_KEYS as readonly string[]).includes(key)) localStorage.setItem(key, value);
+      });
+    }
+
     localStorage.setItem('activeProgramId', id);
 
     // Restore AI conversations so initChatsFromLocalStorage() picks them up
@@ -204,7 +266,7 @@ export function useTrainingPrograms() {
     }
 
     return true;
-  }, [data.programs]);
+  }, [data.programs, flushExtraStateToActiveProgram]);
 
   // Collect current session data to save as a program
   const collectSessionData = useCallback((): Partial<TrainingProgram> => {
@@ -251,6 +313,7 @@ export function useTrainingPrograms() {
       supersets: get('supersets'),
       methodAllocations: get('methodAllocations'),
       aiConversations: get('aiConversations'),
+      extraSessionState: readExtraSessionState(),
     };
   }, []);
 
@@ -272,6 +335,9 @@ export function useTrainingPrograms() {
 
   // Clear session and start fresh
   const clearSession = useCallback(() => {
+    flushExtraStateToActiveProgram();
+    removeExtraSessionKeys();
+
     const staticKeys = [
       'macrocycleData', 'mesocycleData', 'trainingDays', 'exerciseDistribution',
       'parameterValues', 'dailyIntensityData', 'daySplitStates', 'sessionSections',
@@ -289,7 +355,7 @@ export function useTrainingPrograms() {
       if (key && dynamicPrefixes.some(p => key.startsWith(p))) keysToRemove.push(key);
     }
     keysToRemove.forEach(key => localStorage.removeItem(key));
-  }, []);
+  }, [flushExtraStateToActiveProgram]);
 
   // Update program status
   const updateProgramStatus = useCallback(async (id: string, status: TrainingProgram['status']): Promise<boolean> => {
