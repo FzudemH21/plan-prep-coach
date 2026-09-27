@@ -120,7 +120,9 @@ interface MasterPlannerColumnProps {
     methodId: string,
     categoryName: string,
     parameterName: string,
-    value: string | number
+    value: string | number,
+    /** Distribution id of the exercise (edits are stored as its per-exercise overrides) */
+    exerciseId?: string
   ) => void;
   // New props for Phase 1
   sessionSections?: SessionSection[];
@@ -229,7 +231,9 @@ interface EditableParamInputProps {
     methodId: string,
     categoryName: string,
     parameterName: string,
-    value: string | number
+    value: string | number,
+    /** Distribution id of the exercise (edits are stored as its per-exercise overrides) */
+    exerciseId?: string
   ) => void;
 }
 
@@ -270,9 +274,10 @@ const EditableParamInput = memo(({
       exercise.methodId,
       exercise.categoryName,
       actualParamName,
-      finalValue
+      finalValue,
+      exercise.id || exercise.exerciseId
     );
-  }, [dayDateString, exercise.sessionIndex, exercise.methodId, exercise.categoryName, actualParamName, paramType, localValue, currentValue, onParameterChange]);
+  }, [dayDateString, exercise.sessionIndex, exercise.methodId, exercise.categoryName, exercise.id, exercise.exerciseId, actualParamName, paramType, localValue, currentValue, onParameterChange]);
 
   const handleSelectChange = useCallback((value: string) => {
     setLocalValue(value);
@@ -283,9 +288,10 @@ const EditableParamInput = memo(({
       exercise.methodId,
       exercise.categoryName,
       actualParamName,
-      value
+      value,
+      exercise.id || exercise.exerciseId
     );
-  }, [dayDateString, exercise.sessionIndex, exercise.methodId, exercise.categoryName, actualParamName, onParameterChange]);
+  }, [dayDateString, exercise.sessionIndex, exercise.methodId, exercise.categoryName, exercise.id, exercise.exerciseId, actualParamName, onParameterChange]);
 
   // Render Select dropdown for select type with options
   if (paramType === 'select' && options && options.length > 0) {
@@ -744,6 +750,8 @@ export function MasterPlannerColumn({
       ...(microcycleParams?.[normalizedMethodId]?.[chronologicalSessionIndex] || {}),
       ...(microcycleParams?.[fullMethodKey]?.[chronologicalSessionIndex] || {}),
       ...(microcycleParams?.[normalizedFullMethodKey]?.[chronologicalSessionIndex] || {}),
+      // This exercise's own edits (session sheet / inline) win over the Periodization Table
+      ...(exercise.parameterOverrides || {}),
     } as Record<string, string | number>;
 
     const methodParts = (exercise.methodId || '').split(' - ');
@@ -1080,7 +1088,8 @@ export function MasterPlannerColumn({
                                       exercise.methodId,
                                       exercise.categoryName,
                                       overrideKey,
-                                      computed!
+                                      computed!,
+                                      exercise.id || exercise.exerciseId
                                     );
                                   }}
                                 >

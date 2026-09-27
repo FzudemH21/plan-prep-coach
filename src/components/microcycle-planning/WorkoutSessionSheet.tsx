@@ -1945,19 +1945,24 @@ export function WorkoutSessionSheet({
       onIntensityChange(dayDate, sessionIntensity);
     }
 
-    // Save all parameter changes
-    workoutSections.forEach(section => {
-      section.exercises.forEach(exercise => {
-        onSaveParameters(
-          mesocycleId,
-          microcycleIndex,
-          exercise.methodId,
-          sessionIndex,
-          exercise.exerciseId,
-          exercise.parameters
-        );
+    // Parameter edits made here belong to the exercise on this day only: they're stored as
+    // per-exercise parameterOverrides on its distribution entry (below) — never written into the
+    // Periodization Table, whose session slots are the method's Nth session of the week, not this
+    // day's session index. Without a distribution callback (legacy callers) keep the old write.
+    if (!(onDistributionChange && allExerciseDistribution)) {
+      workoutSections.forEach(section => {
+        section.exercises.forEach(exercise => {
+          onSaveParameters(
+            mesocycleId,
+            microcycleIndex,
+            exercise.methodId,
+            sessionIndex,
+            exercise.exerciseId,
+            exercise.parameters
+          );
+        });
       });
-    });
+    }
 
     // Sync section assignments back to allExerciseDistribution so the athlete-schedule
     // sync can correctly attach sectionId to each exercise in Supabase.
@@ -1965,6 +1970,28 @@ export function WorkoutSessionSheet({
     // without this step, exercises keep sectionId: undefined and the athlete app shows
     // every exercise in a single "Workout" fallback bucket.
     if (onDistributionChange && allExerciseDistribution) {
+      // What the Periodization Table alone gives each exercise of this session (no overrides) —
+      // the per-exercise overrides are whatever differs from it
+      const baselineById = new Map<string, Record<string, string | number>>();
+      try {
+        const sessionEntries = allExerciseDistribution
+          .filter(e => e.dayDate === dayDate && e.sessionIndex === sessionIndex)
+          .map(e => ({ ...e, parameterOverrides: undefined }));
+        buildSectionsFromExercises(sessionEntries, parameterValues).forEach(section =>
+          section.exercises.forEach(ex => { if (ex.id) baselineById.set(ex.id, ex.parameters); })
+        );
+      } catch { /* no baseline → no overrides written */ }
+      const overridesFor = (exId: string, params: Record<string, string | number>) => {
+        const base = baselineById.get(exId);
+        if (!base) return undefined;
+        const diff: Record<string, string | number> = {};
+        Object.entries(params).forEach(([k, v]) => {
+          const b = base[k];
+          if (String(v ?? '') !== String(b ?? '')) diff[k] = v;
+        });
+        return Object.keys(diff).length > 0 ? diff : undefined;
+      };
+
       // Map each exercise id → { sectionId, parameters } from the current workoutSections state.
       // workoutSections is the source of truth for both section membership and per-exercise
       // parameter values (including any edits the coach made inside the session dialog).
@@ -1991,6 +2018,11 @@ export function WorkoutSessionSheet({
         // and flow through to the athlete app via athleteScheduleSync.
         if (updated.parameterSource === 'toolbox') {
           updated = { ...updated, adhocPlannedParams: info.parameters };
+        } else if (baselineById.has(exId)) {
+          const overrides = overridesFor(exId, info.parameters);
+          if (JSON.stringify(overrides ?? null) !== JSON.stringify(updated.parameterOverrides ?? null)) {
+            updated = { ...updated, parameterOverrides: overrides };
+          }
         }
         return updated;
       });

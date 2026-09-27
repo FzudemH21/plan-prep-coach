@@ -13,8 +13,8 @@ interface ExerciseForSessionIndex {
 
 /**
  * Calculate the chronological session index for an exercise within its method
- * across a microcycle. The first occurrence of a method's exercise gets index 0,
- * the second gets index 1, etc.
+ * across a microcycle. Exercises in the first training session containing the method
+ * get index 0, those in the second session index 1, etc.
  * 
  * This is used to match exercises with split method parameters - when a method
  * has frequency > 1 and different parameters for each session, exercises are
@@ -54,30 +54,18 @@ export function getMethodSessionIndex(
     return 0;
   }
 
-  // Sort by chronological order: dayDate ASC, sessionIndex ASC, order ASC
-  const sorted = [...sameMethodExercises].sort((a, b) => {
-    // First sort by date
-    const dateCompare = a.dayDate.localeCompare(b.dayDate);
-    if (dateCompare !== 0) return dateCompare;
-    
-    // Then by session index within the day
-    const sessionCompare = a.sessionIndex - b.sessionIndex;
-    if (sessionCompare !== 0) return sessionCompare;
-    
-    // Finally by order within the session
-    return (a.order ?? 0) - (b.order ?? 0);
-  });
+  // The method's Nth session of the microcycle = the Nth distinct training session (day +
+  // session index, chronological) containing the method. All exercises of the method within the
+  // same session share that session's parameters — counting exercises instead would give the 2nd
+  // exercise of a session the next session's values.
+  const slotKey = (ex: { dayDate: string; sessionIndex: number }) => `${ex.dayDate}#${ex.sessionIndex}`;
+  const slots = [...new Set(
+    [...sameMethodExercises]
+      .sort((a, b) => a.dayDate.localeCompare(b.dayDate) || a.sessionIndex - b.sessionIndex)
+      .map(slotKey)
+  )];
 
-  // Find this exercise's position using id OR exerciseId (since id may be undefined)
-  const exerciseLookupId = exercise.id || exercise.exerciseId;
-  const position = sorted.findIndex(ex => {
-    const exLookupId = ex.id || ex.exerciseId;
-    return exLookupId === exerciseLookupId && 
-           ex.dayDate === exercise.dayDate && 
-           ex.sessionIndex === exercise.sessionIndex;
-  });
-  
-  return Math.max(0, position);
+  return Math.max(0, slots.indexOf(slotKey(exercise)));
 }
 
 /**

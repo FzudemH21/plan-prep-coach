@@ -376,6 +376,29 @@ export async function syncAthleteSchedule(
     return idx !== -1 ? methodKey.slice(0, idx) : methodKey;
   }
 
+  // Method session slots per microcycle: "mesoId|mcIdx|method|category" → chronological
+  // "date#sessionIndex" list. The method's Nth session of the week (Periodization Table session N)
+  // is the Nth distinct training session containing it — same rule as the session sheet and the
+  // Master Planner (getMethodSessionIndex).
+  const methodSlotKey = (ex: ExerciseEntry) => {
+    const m = mesoByDate.get(ex.dayDate);
+    return m ? `${m.mesocycleId}|${m.microcycleIndex}|${ex.methodId ?? ''}|${ex.categoryName ?? ''}` : '';
+  };
+  const methodSlots = new Map<string, string[]>();
+  for (const e of exercises) {
+    const key = methodSlotKey(e);
+    if (!key) continue;
+    const slot = `${e.dayDate}#${e.sessionIndex ?? 0}`;
+    const list = methodSlots.get(key) ?? [];
+    if (!list.includes(slot)) list.push(slot);
+    methodSlots.set(key, list);
+  }
+  methodSlots.forEach(list => list.sort());
+  const methodSessionIndexOf = (ex: ExerciseEntry): number => {
+    const list = methodSlots.get(methodSlotKey(ex)) ?? [];
+    return Math.max(0, list.indexOf(`${ex.dayDate}#${ex.sessionIndex ?? 0}`));
+  };
+
   // Helper: get planned params for an exercise
   function getPlannedParams(ex: ExerciseEntry): {
     plannedSets: number | undefined;
@@ -436,15 +459,25 @@ export async function syncAthleteSchedule(
       ? `${methodKeyBase}::${ex.categoryName}`
       : methodKeyBase;
 
-    const sessionIdx = ex.sessionIndex ?? 0;
+    // The method's session of the week this exercise sits in (modulo the sessions defined)
+    const mcParams = paramValues?.[mesocycleId]?.[microcycleIndex];
+    const methodEntry = mcParams?.[methodKeyFull] ?? mcParams?.[methodKeyBase] ?? {};
+    const definedSessions = Object.keys(methodEntry).filter(k => !isNaN(Number(k))).length;
+    const rawSessionIdx = methodSessionIndexOf(ex);
+    const sessionIdx = definedSessions > 0 ? rawSessionIdx % definedSessions : rawSessionIdx;
 
-    const storedParams: Record<string, string | number> =
-      (paramValues?.[mesocycleId]?.[microcycleIndex]?.[methodKeyFull]?.[sessionIdx] as Record<string, string | number>) ||
-      (paramValues?.[mesocycleId]?.[microcycleIndex]?.[methodKeyBase]?.[sessionIdx] as Record<string, string | number>) ||
-      // Fall back to session 0 (periodization-table baseline) if no session-specific data yet
-      (paramValues?.[mesocycleId]?.[microcycleIndex]?.[methodKeyFull]?.[0] as Record<string, string | number>) ||
-      (paramValues?.[mesocycleId]?.[microcycleIndex]?.[methodKeyBase]?.[0] as Record<string, string | number>) ||
-      {};
+    // Same merge as the session sheet / Master Planner: session-0 baseline, then this session,
+    // then the exercise's own edits (parameterOverrides)
+    const overrides = (ex.parameterOverrides && typeof ex.parameterOverrides === 'object')
+      ? ex.parameterOverrides as Record<string, string | number>
+      : {};
+    const storedParams: Record<string, string | number> = {
+      ...((mcParams?.[methodKeyBase]?.[0] as Record<string, string | number>) || {}),
+      ...((mcParams?.[methodKeyFull]?.[0] as Record<string, string | number>) || {}),
+      ...((mcParams?.[methodKeyBase]?.[sessionIdx] as Record<string, string | number>) || {}),
+      ...((mcParams?.[methodKeyFull]?.[sessionIdx] as Record<string, string | number>) || {}),
+      ...overrides,
+    };
 
     if (Object.keys(storedParams).length === 0) {
       return { plannedSets: undefined, plannedParams: undefined, formulaComputedParams: undefined, visibleParams: undefined, restParamName: undefined };

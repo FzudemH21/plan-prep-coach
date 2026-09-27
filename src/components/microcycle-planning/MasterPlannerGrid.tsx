@@ -58,7 +58,9 @@ interface MasterPlannerGridProps {
     methodId: string,
     categoryName: string,
     parameterName: string,
-    value: string | number
+    value: string | number,
+    /** Distribution id of the exercise (edits are stored as its per-exercise overrides) */
+    exerciseId?: string
   ) => void;
   // New props for Phase 1
   sessionSections?: SessionSection[];

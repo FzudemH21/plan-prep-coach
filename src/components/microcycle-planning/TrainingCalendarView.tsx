@@ -42,6 +42,8 @@ interface ExerciseDistribution {
   supersetId?: string;
   notes?: string;
   eachSide?: boolean;
+  /** Per-exercise parameter edits (session sheet / Master Planner) on top of the Periodization Table */
+  parameterOverrides?: Record<string, string | number>;
 }
 
 interface TrainingCalendarViewProps {
@@ -708,7 +710,19 @@ export function TrainingCalendarView({
               toolboxData={toolboxData}
               weeksToDisplay={masterWeeksToDisplay}
               onWeeksToDisplayChange={setMasterWeeksToDisplay}
-              onParameterChange={onSaveParameters ? (dayDate, sessionIndex, methodId, categoryName, paramName, value) => {
+              onParameterChange={(onSaveParameters || onDistributionChange) ? (dayDate, sessionIndex, methodId, categoryName, paramName, value, exerciseId) => {
+                // An edit here belongs to this exercise on this day only → per-exercise override
+                // (the Periodization Table stays the source for everything else)
+                if (exerciseId && onDistributionChange) {
+                  let found = false;
+                  const updated = exerciseDistribution.map(ex => {
+                    if (ex.dayDate !== dayDate || ex.sessionIndex !== sessionIndex || (ex.id || ex.exerciseId) !== exerciseId) return ex;
+                    found = true;
+                    return { ...ex, parameterOverrides: { ...(ex.parameterOverrides ?? {}), [paramName]: value } };
+                  });
+                  if (found) { onDistributionChange(updated); return; }
+                }
+                if (!onSaveParameters) return;
                 const trainingDay = planDays.find(td => td.date === dayDate);
                 const microcycleId = trainingDay?.microcycleId;
                 const dayMeso = mesocycleForDate(dayDate);
