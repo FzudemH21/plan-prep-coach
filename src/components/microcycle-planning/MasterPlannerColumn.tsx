@@ -21,7 +21,7 @@ import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useExerciseMetrics } from '@/hooks/useExerciseMetrics';
 import { evaluateFormula, parseNumeric } from '@/utils/formulaEvaluator';
-import { isParameterVisible, type ParameterVisibilityOverrides } from './ParameterVisibilityPopover';
+import { isParameterVisible, ParameterVisibilityPopover, type ParameterVisibilityOverrides } from './ParameterVisibilityPopover';
 import { AthletePerformanceParameter } from '@/types/athlete';
 import {
   Table,
@@ -567,13 +567,28 @@ export function MasterPlannerColumn({
     return (microcycleId && mesocycles?.find(m => m.microcycles?.some(mc => mc.id === microcycleId))) || viewedMesocycle;
   }, [trainingDays, day.dateString, mesocycles, viewedMesocycle]);
 
-  // Parameter show/hide choices made in the Workout Session Sheet for a session
+  // Parameter show/hide choices of a session — shared with the Workout Session Sheet (same storage)
+  const [, setVisibilityVersion] = useState(0);
   const getSessionParamVisibility = useCallback((sessionIndex: number): ParameterVisibilityOverrides => {
     if (!currentMesocycle) return {};
     try {
       const stored = localStorage.getItem(`workoutSessions_${currentMesocycle.id}_${day.dateString}_${sessionIndex}`);
       return (stored && JSON.parse(stored)?.parameterVisibility) || {};
     } catch { return {}; }
+  }, [currentMesocycle, day.dateString]);
+  const updateSessionParamVisibility = useCallback((
+    sessionIndex: number,
+    update: (prev: ParameterVisibilityOverrides) => ParameterVisibilityOverrides,
+  ) => {
+    if (!currentMesocycle) return;
+    const key = `workoutSessions_${currentMesocycle.id}_${day.dateString}_${sessionIndex}`;
+    try {
+      const stored = localStorage.getItem(key);
+      const parsed = stored ? JSON.parse(stored) : {};
+      parsed.parameterVisibility = update(parsed.parameterVisibility || {});
+      localStorage.setItem(key, JSON.stringify(parsed));
+    } catch { /* ignore */ }
+    setVisibilityVersion(v => v + 1);
   }, [currentMesocycle, day.dateString]);
 
   const currentIntensity: IntensityLevel = migrateLegacyIntensity(dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || '5') as IntensityLevel;
@@ -821,14 +836,23 @@ export function MasterPlannerColumn({
     const methodParts2 = (exercise.methodId || '').split(' - ');
     const methodMain2 = methodParts2[0] || '';
     const methodSub2 = methodParts2[1] || '';
-    const calcEntries = toolboxData
+    const allCalcEntries = toolboxData
       ? toolboxData.entries.filter(tp => {
           const catMatch = methodSub2
             ? tp.category === methodMain2 && tp.subCategory === methodSub2
             : tp.category === methodMain2 && (!tp.subCategory || tp.subCategory === '');
           return catMatch && tp.isCalculated && !!tp.formula;
-        }).filter(tp => isParameterVisible(tp.parameterName, tp.showInGridByDefault ?? true, visibility))
+        })
       : [];
+    const calcEntries = allCalcEntries.filter(tp => isParameterVisible(tp.parameterName, tp.showInGridByDefault ?? true, visibility));
+
+    // Parameters offered in the visibility picker (same list as the session sheet: regular + calculated)
+    const pickerParams = [
+      ...displayableParams.map(p => ({ name: p.name, showInGridByDefault: p.showInGridByDefault ?? true })),
+      ...allCalcEntries
+        .filter(tp => !displayableParams.some(p => p.name === tp.parameterName))
+        .map(tp => ({ name: tp.parameterName, showInGridByDefault: tp.showInGridByDefault ?? true })),
+    ];
 
     const PCT_UNITS_LOCAL = new Set(['%', '%1RM', '%BW', '%maxV', '%maxHR']);
     const computeCalcValue = (ce: (typeof calcEntries)[0], setNumber: number): number | null => {
@@ -932,6 +956,30 @@ export function MasterPlannerColumn({
 
     return (
       <>
+        {/* Parameter visibility — per session, shared with the Workout Session Sheet */}
+        {pickerParams.length > 0 && (
+          <div className="flex justify-end mt-1" onClick={(e) => e.stopPropagation()}>
+            <ParameterVisibilityPopover
+              parameters={pickerParams}
+              note="Applies to this session, here and in the session sheet"
+              visibilityOverrides={visibility}
+              onVisibilityChange={(name, visible) =>
+                updateSessionParamVisibility(exercise.sessionIndex, prev => ({ ...prev, [name]: visible }))}
+              onShowAll={() =>
+                updateSessionParamVisibility(exercise.sessionIndex, prev => ({
+                  ...prev,
+                  ...Object.fromEntries(pickerParams.map(p => [p.name, true])),
+                }))}
+              onResetToDefaults={() =>
+                updateSessionParamVisibility(exercise.sessionIndex, prev => {
+                  const next = { ...prev };
+                  pickerParams.forEach(p => { delete next[p.name]; });
+                  return next;
+                })}
+            />
+          </div>
+        )}
+
         {/* Hidden parameter badges */}
         {hiddenParams.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1">

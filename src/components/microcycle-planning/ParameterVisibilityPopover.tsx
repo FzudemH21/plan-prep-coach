@@ -20,6 +20,8 @@ interface ParameterVisibilityPopoverProps {
   onVisibilityChange: (paramName: string, visible: boolean) => void;
   onShowAll: () => void;
   onResetToDefaults: () => void;
+  /** Footer hint (defaults to the session sheet's "saved when you save the session") */
+  note?: string;
 }
 
 export function ParameterVisibilityPopover({
@@ -28,6 +30,7 @@ export function ParameterVisibilityPopover({
   onVisibilityChange,
   onShowAll,
   onResetToDefaults,
+  note = 'Visibility is saved when you save the session',
 }: ParameterVisibilityPopoverProps) {
   // Count how many parameters are currently visible
   const visibleCount = parameters.filter(p => {
@@ -120,7 +123,7 @@ export function ParameterVisibilityPopover({
           </div>
 
           <p className="text-[10px] text-muted-foreground">
-            Visibility is saved when you save the session
+            {note}
           </p>
         </div>
       </PopoverContent>

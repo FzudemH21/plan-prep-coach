@@ -47,6 +47,8 @@ interface ExerciseDistribution {
 interface TrainingCalendarViewProps {
   exerciseDistribution: ExerciseDistribution[];
   trainingDays: TrainingDay[];
+  /** Training days of the whole plan (Master Planner spans all mesocycles); defaults to trainingDays */
+  allTrainingDays?: TrainingDay[];
   currentMesocycle: ExtendedMesocycle;
   mesocycles: ExtendedMesocycle[];
   onSessionDragEnd?: (result: DropResult) => void;
@@ -129,6 +131,7 @@ type ViewMode = '1week' | '2week' | '4week' | 'master';
 export function TrainingCalendarView({
   exerciseDistribution,
   trainingDays,
+  allTrainingDays,
   currentMesocycle,
   mesocycles,
   onSessionDragEnd,
@@ -246,6 +249,8 @@ export function TrainingCalendarView({
   };
 
   // Get the currently viewed mesocycle (for Master Planner view)
+  // Follow the page's mesocycle when it changes
+  React.useEffect(() => { setViewedMesocycleId(currentMesocycle.id); }, [currentMesocycle.id]);
   const viewedMesocycle = useMemo(() => {
     return mesocycles.find(m => m.id === viewedMesocycleId) || currentMesocycle;
   }, [mesocycles, viewedMesocycleId, currentMesocycle]);
@@ -357,11 +362,12 @@ export function TrainingCalendarView({
   // Group days into weeks
   const weeks = useMemo(() => groupDaysIntoWeeks(calendarDays), [calendarDays]);
 
+  const planDays = allTrainingDays ?? trainingDays;
   // The mesocycle a date belongs to (via its microcycle) — the Master Planner spans all mesocycles
   const mesocycleForDate = useCallback((dateString: string): ExtendedMesocycle => {
-    const microcycleId = trainingDays.find(td => td.date === dateString)?.microcycleId;
+    const microcycleId = planDays.find(td => td.date === dateString)?.microcycleId;
     return (microcycleId && mesocycles.find(m => m.microcycles.some(mc => mc.id === microcycleId))) || viewedMesocycle;
-  }, [trainingDays, mesocycles, viewedMesocycle]);
+  }, [planDays, mesocycles, viewedMesocycle]);
   const mesoIdForDate = useCallback((dateString: string) => mesocycleForDate(dateString).id, [mesocycleForDate]);
 
   // Calculate all days across ALL mesocycles for Master Planner view
@@ -384,7 +390,7 @@ export function TrainingCalendarView({
     return days.map(date => {
       const dateString = format(date, 'yyyy-MM-dd');
       const exercises = exercisesByDate[dateString] || [];
-      const trainingDay = trainingDays.find(td => td.date === dateString);
+      const trainingDay = planDays.find(td => td.date === dateString);
 
       // Group exercises by session
       const sessionMap: Record<number, ExerciseDistribution[]> = {};
@@ -438,7 +444,7 @@ export function TrainingCalendarView({
         totalExercises: exercises.length,
       };
     });
-  }, [viewMode, mesocycles, viewedMesocycle, exercisesByDate, trainingDays, dailyIntensityData, daySplitStates, mesoIdForDate]);
+  }, [viewMode, mesocycles, viewedMesocycle, exercisesByDate, planDays, dailyIntensityData, daySplitStates, mesoIdForDate]);
 
   const handlePrevious = () => {
     setCurrentDate(prev => subWeeks(prev, 1));
@@ -474,11 +480,11 @@ export function TrainingCalendarView({
   // Get microcycle index for the add exercise context
   const addExerciseMicrocycleIndex = useMemo(() => {
     if (!addExerciseContext) return 0;
-    const trainingDay = trainingDays.find(td => td.date === addExerciseContext.dayDate);
+    const trainingDay = planDays.find(td => td.date === addExerciseContext.dayDate);
     if (!trainingDay) return 0;
     const idx = mesocycleForDate(addExerciseContext.dayDate).microcycles.findIndex(mc => mc.id === trainingDay.microcycleId);
     return idx >= 0 ? idx : 0;
-  }, [addExerciseContext, trainingDays, mesocycleForDate]);
+  }, [addExerciseContext, planDays, mesocycleForDate]);
   const addExerciseMesocycleId = addExerciseContext ? mesoIdForDate(addExerciseContext.dayDate) : viewedMesocycle.id;
 
   // Compute available methods for the add exercise flow (same logic as WorkoutSessionSheet)
@@ -698,12 +704,12 @@ export function TrainingCalendarView({
               parameterValues={parameterValues}
               currentMesocycle={viewedMesocycle}
               mesocycles={mesocycles}
-              trainingDays={trainingDays}
+              trainingDays={planDays}
               toolboxData={toolboxData}
               weeksToDisplay={masterWeeksToDisplay}
               onWeeksToDisplayChange={setMasterWeeksToDisplay}
               onParameterChange={onSaveParameters ? (dayDate, sessionIndex, methodId, categoryName, paramName, value) => {
-                const trainingDay = trainingDays.find(td => td.date === dayDate);
+                const trainingDay = planDays.find(td => td.date === dayDate);
                 const microcycleId = trainingDay?.microcycleId;
                 const dayMeso = mesocycleForDate(dayDate);
                 const microcycleIndex = Math.max(0, dayMeso.microcycles?.findIndex(m => m.id === microcycleId) ?? 0);
@@ -1156,7 +1162,7 @@ export function TrainingCalendarView({
 
       {/* Workout Session Sheet */}
       {selectedSession && (() => {
-        const sessionTd = trainingDays.find(td => td.date === selectedSession.dayDate);
+        const sessionTd = planDays.find(td => td.date === selectedSession.dayDate);
         const sessionMeso = sessionTd
           ? (mesocycles.find(m => m.microcycles.some(mc => mc.id === sessionTd.microcycleId)) ?? currentMesocycle)
           : currentMesocycle;
@@ -1181,9 +1187,7 @@ export function TrainingCalendarView({
           onIntensityChange={onIntensityChange}
           onSessionIntensityChange={onSessionIntensityChange}
           totalSessionsOnDay={selectedSession.totalSessions}
-          trainingDay={
-            calendarDays.find(d => d.dateString === selectedSession.dayDate)?.trainingDay
-          }
+          trainingDay={sessionTd}
           availableTests={availableTests}
           availableEvents={availableEvents}
           onAddTestEvent={onAddTestEvent}
@@ -1200,18 +1204,15 @@ export function TrainingCalendarView({
           supersets={supersets}
           onSectionsChange={onSectionsChange}
           onSupersetsChange={onSupersetsChange}
-          sessionNameFromState={
-            calendarDays.find(d => d.dateString === selectedSession.dayDate)?.trainingDay?.sessionNames?.[selectedSession.sessionIndex]
-          }
+          sessionNameFromState={sessionTd?.sessionNames?.[selectedSession.sessionIndex]}
           onRenameSession={onRenameSession}
           toolboxData={toolboxData}
           allExerciseDistribution={exerciseDistribution}
           onDistributionChange={onDistributionChange}
           microcycleDates={(() => {
-            const trainingDay = trainingDays.find(td => td.date === selectedSession.dayDate);
-            if (!trainingDay?.microcycleId) return [];
-            return trainingDays
-              .filter(td => td.microcycleId === trainingDay.microcycleId)
+            if (!sessionTd?.microcycleId) return [];
+            return planDays
+              .filter(td => td.microcycleId === sessionTd.microcycleId)
               .map(td => td.date);
           })()}
           selectedAthleteId={selectedAthleteId}

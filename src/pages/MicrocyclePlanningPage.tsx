@@ -5033,6 +5033,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
           <TrainingCalendarView
               exerciseDistribution={exerciseDistribution}
               trainingDays={currentMesocycleDays}
+              allTrainingDays={trainingDays}
               currentMesocycle={currentMesocycle}
               mesocycles={mesocycles}
               onSessionDragEnd={handleSessionDragEnd}
