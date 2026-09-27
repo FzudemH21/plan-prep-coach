@@ -32,10 +32,13 @@ export interface WorkoutSessionContextValue {
 
   // Parameter visibility
   toolboxData?: ToolboxDatabase;
+  /** Session-wide overrides (fallback for exercises without their own) */
   visibilityOverrides?: ParameterVisibilityOverrides;
-  onVisibilityChange: (paramName: string, visible: boolean) => void;
-  onShowAllParams: () => void;
-  onResetParamsToDefaults: () => void;
+  /** Effective overrides of one exercise — exercises are independent */
+  getVisibilityOverrides?: (exerciseId: string) => ParameterVisibilityOverrides;
+  onVisibilityChange: (paramName: string, visible: boolean, exerciseId?: string) => void;
+  onShowAllParams: (exerciseId?: string, paramNames?: string[]) => void;
+  onResetParamsToDefaults: (exerciseId?: string) => void;
 
   // Resolves exactly the IDs listed in a formula's athleteDataRefs to a token-name → value map.
   // 'e1RM'         → most recent e1RM from Exercise Metrics (param-tags based Epley)

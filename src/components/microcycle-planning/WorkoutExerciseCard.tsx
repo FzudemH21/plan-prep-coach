@@ -44,7 +44,7 @@ interface WorkoutExerciseCardProps {
   toolboxParams?: ToolboxEntry[];
   visibilityOverrides?: ParameterVisibilityOverrides;
   onVisibilityChange?: (paramName: string, visible: boolean) => void;
-  onShowAllParams?: () => void;
+  onShowAllParams?: (paramNames?: string[]) => void;
   onResetParamsToDefaults?: () => void;
   // Collapse state
   isCollapsed?: boolean;
@@ -422,7 +422,7 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                   }))}
                   visibilityOverrides={visibilityOverrides}
                   onVisibilityChange={onVisibilityChange}
-                  onShowAll={onShowAllParams || (() => {})}
+                  onShowAll={() => onShowAllParams?.(displayableParams.map(p => p.name))}
                   onResetToDefaults={onResetParamsToDefaults || (() => {})}
                 />
               )}

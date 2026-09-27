@@ -48,6 +48,7 @@ import { PrintSessionView } from '@/components/print/PrintSessionView';
 import { useExerciseMetrics } from '@/hooks/useExerciseMetrics';
 import { useCoachProfile } from '@/hooks/useCoachProfile';
 import { onExerciseRenamed, renameExerciseInValue } from '@/utils/exerciseRename';
+import { readSessionMeta } from '@/utils/parameterVisibility';
 
 interface SessionSectionProp {
   id: string;
@@ -459,6 +460,16 @@ export function WorkoutSessionSheet({
     } catch {}
     return {};
   });
+  // Per-exercise visibility (exerciseId → overrides) — takes precedence over the session-wide map,
+  // so toggling a parameter on one exercise doesn't change the others
+  const [exerciseVisibilityOverrides, setExerciseVisibilityOverrides] = useState<Record<string, ParameterVisibilityOverrides>>(
+    () => readSessionMeta(mesocycleId, dayDate, sessionIndex).parameterVisibilityByExercise ?? {}
+  );
+  const getVisibilityOverrides = React.useCallback(
+    (exerciseId: string): ParameterVisibilityOverrides =>
+      exerciseVisibilityOverrides[exerciseId] ?? parameterVisibilityOverrides,
+    [exerciseVisibilityOverrides, parameterVisibilityOverrides]
+  );
 
   // Helper function to build sections from exercises - accepts parameterValues explicitly to avoid stale closure
   const buildSectionsFromExercises = (
@@ -715,7 +726,11 @@ export function WorkoutSessionSheet({
                 
                 const parameters: Record<string, string | number> = {};
                 methodParams.forEach(param => {
-                  if (param.unit) {
+                  // Unit chosen in the Periodization Table for this session (or the exercise's own override)
+                  const chosenUnit = exerciseParams[`${param.name}_unit`];
+                  if (typeof chosenUnit === 'string' && chosenUnit !== '') {
+                    parameters[`${param.name}_unit`] = chosenUnit;
+                  } else if (param.unit) {
                     parameters[`${param.name}_unit`] = param.unit;
                   }
                   
@@ -993,7 +1008,11 @@ export function WorkoutSessionSheet({
       
       const parameters: Record<string, string | number> = {};
       methodParams.forEach(param => {
-        if (param.unit) {
+        // Unit chosen in the Periodization Table for this session (or the exercise's own override)
+        const chosenUnit = exerciseParams[`${param.name}_unit`];
+        if (typeof chosenUnit === 'string' && chosenUnit !== '') {
+          parameters[`${param.name}_unit`] = chosenUnit;
+        } else if (param.unit) {
           parameters[`${param.name}_unit`] = param.unit;
         }
         
@@ -1929,7 +1948,8 @@ export function WorkoutSessionSheet({
     const metadataKey = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
     localStorage.setItem(metadataKey, JSON.stringify({
       comments: sessionComments,
-      parameterVisibility: parameterVisibilityOverrides
+      parameterVisibility: parameterVisibilityOverrides,
+      parameterVisibilityByExercise: exerciseVisibilityOverrides,
     }));
 
     // Save session intensity
@@ -2204,10 +2224,14 @@ export function WorkoutSessionSheet({
 
       const parameters: Record<string, string | number> = {};
       methodParams.forEach(param => {
-        if (param.unit) {
+        // Unit chosen in the Periodization Table for this session
+        const chosenUnit = storedParams[`${param.name}_unit`];
+        if (typeof chosenUnit === 'string' && chosenUnit !== '') {
+          parameters[`${param.name}_unit`] = chosenUnit;
+        } else if (param.unit) {
           parameters[`${param.name}_unit`] = param.unit;
         }
-        
+
         if (param.name === setParamName) {
           // Store the set count
           parameters[param.name] = Number(storedParams[param.name] ?? param.defaultValue ?? 0);
@@ -2823,14 +2847,31 @@ export function WorkoutSessionSheet({
   };
 
   // Stable callbacks for visibility overrides (used in context value)
-  const handleVisibilityChange = React.useCallback((paramName: string, visible: boolean) => {
+  const handleVisibilityChange = React.useCallback((paramName: string, visible: boolean, exerciseId?: string) => {
+    if (exerciseId) {
+      setExerciseVisibilityOverrides(prev => ({
+        ...prev,
+        [exerciseId]: { ...(prev[exerciseId] ?? parameterVisibilityOverrides), [paramName]: visible },
+      }));
+      return;
+    }
     setParameterVisibilityOverrides(prev => ({
       ...prev,
       [paramName]: visible
     }));
-  }, []);
+  }, [parameterVisibilityOverrides]);
 
-  const handleShowAllParams = React.useCallback(() => {
+  const handleShowAllParams = React.useCallback((exerciseId?: string, paramNames?: string[]) => {
+    if (exerciseId) {
+      setExerciseVisibilityOverrides(prev => ({
+        ...prev,
+        [exerciseId]: {
+          ...(prev[exerciseId] ?? parameterVisibilityOverrides),
+          ...Object.fromEntries((paramNames ?? []).map(name => [name, true])),
+        },
+      }));
+      return;
+    }
     const allParamNames = new Set<string>();
     workoutSections.forEach(s => {
       s.exercises.forEach(ex => {
@@ -2844,9 +2885,14 @@ export function WorkoutSessionSheet({
     const allVisible: ParameterVisibilityOverrides = {};
     allParamNames.forEach(name => { allVisible[name] = true; });
     setParameterVisibilityOverrides(allVisible);
-  }, [workoutSections]);
+  }, [workoutSections, parameterVisibilityOverrides]);
 
-  const handleResetParamsToDefaults = React.useCallback(() => {
+  const handleResetParamsToDefaults = React.useCallback((exerciseId?: string) => {
+    if (exerciseId) {
+      // Own empty entry = toolbox defaults for this exercise only
+      setExerciseVisibilityOverrides(prev => ({ ...prev, [exerciseId]: {} }));
+      return;
+    }
     setParameterVisibilityOverrides({});
   }, []);
 
@@ -3199,6 +3245,7 @@ export function WorkoutSessionSheet({
     onSectionCommentsChange: handleSectionCommentsChange,
     toolboxData: toolboxData,
     visibilityOverrides: parameterVisibilityOverrides,
+    getVisibilityOverrides,
     onVisibilityChange: handleVisibilityChange,
     onShowAllParams: handleShowAllParams,
     onResetParamsToDefaults: handleResetParamsToDefaults,
@@ -3221,6 +3268,7 @@ export function WorkoutSessionSheet({
     handleSectionCommentsChange,
     toolboxData,
     parameterVisibilityOverrides,
+    getVisibilityOverrides,
     handleVisibilityChange,
     handleShowAllParams,
     handleResetParamsToDefaults,
@@ -3973,6 +4021,7 @@ export function WorkoutSessionSheet({
         toolboxData={toolboxData}
         getSupersetLabel={getSupersetLabel}
         visibilityOverrides={parameterVisibilityOverrides}
+        getVisibilityOverrides={getVisibilityOverrides}
         resolveAthleteDataRefs={resolveAthleteDataRefs}
         coachLogo={coachProfile?.branding?.logoBase64}
         accentColor={coachProfile?.branding?.primaryColor}

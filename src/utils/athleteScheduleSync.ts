@@ -6,6 +6,7 @@
  * localStorage, so the athlete app can read sessions directly from Supabase.
  */
 import { supabase } from '@/lib/supabase';
+import { getExerciseVisibility, type SessionVisibilityData } from '@/utils/parameterVisibility';
 import { AthleteCalendarAssignment } from '@/types/athlete';
 import type { ToolboxEntry } from '@/types/toolbox';
 import type { CalendarEvent } from '@/hooks/useCalendarEvents';
@@ -507,8 +508,9 @@ export async function syncAthleteSchedule(
       const visKey = `workoutSessions_${mesocycleId}_${ex.dayDate}_${ex.sessionIndex}`;
       const storedVis = localStorage.getItem(visKey);
       if (storedVis) {
-        const parsed = JSON.parse(storedVis) as { parameterVisibility?: Record<string, boolean> };
-        const { parameterVisibility } = parsed;
+        const parsed = JSON.parse(storedVis) as SessionVisibilityData;
+        // Per exercise (falls back to the legacy session-wide map)
+        const parameterVisibility = getExerciseVisibility(parsed, ex.id || ex.exerciseId);
         if (parameterVisibility && typeof parameterVisibility === 'object' && Object.keys(parameterVisibility).length > 0) {
           // Start with toolbox defaults as mutable base
           let base: string[] = visibleParams ? [...visibleParams] : [];

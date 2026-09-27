@@ -45,6 +45,7 @@ export function WorkoutSectionCard({
     onSectionCommentsChange,
     toolboxData,
     visibilityOverrides,
+    getVisibilityOverrides,
     onVisibilityChange,
     onShowAllParams,
     onResetParamsToDefaults,
@@ -281,10 +282,10 @@ export function WorkoutSectionCard({
                                             eachSide={exercise.eachSide}
                                             onEachSideChange={(value) => onExerciseEachSideChange?.(exercise.id, value)}
                                             toolboxParams={getToolboxParamsForExercise(exercise)}
-                                            visibilityOverrides={visibilityOverrides}
-                                            onVisibilityChange={onVisibilityChange}
-                                            onShowAllParams={onShowAllParams}
-                                            onResetParamsToDefaults={onResetParamsToDefaults}
+                                            visibilityOverrides={getVisibilityOverrides ? getVisibilityOverrides(exercise.id) : visibilityOverrides}
+                                            onVisibilityChange={(name, visible) => onVisibilityChange(name, visible, exercise.id)}
+                                            onShowAllParams={(names) => onShowAllParams(exercise.id, names)}
+                                            onResetParamsToDefaults={() => onResetParamsToDefaults(exercise.id)}
                                             isCollapsed={collapsedExercises[exercise.id] || false}
                                             onToggleCollapse={() => toggleExerciseCollapse(exercise.id)}
                                             onOpenDetail={() => onOpenExerciseDetail?.(exercise)}
@@ -363,10 +364,10 @@ export function WorkoutSectionCard({
                                     eachSide={exercise.eachSide}
                                     onEachSideChange={(value) => onExerciseEachSideChange?.(exercise.id, value)}
                                     toolboxParams={getToolboxParamsForExercise(exercise)}
-                                    visibilityOverrides={visibilityOverrides}
-                                    onVisibilityChange={onVisibilityChange}
-                                    onShowAllParams={onShowAllParams}
-                                    onResetParamsToDefaults={onResetParamsToDefaults}
+                                    visibilityOverrides={getVisibilityOverrides ? getVisibilityOverrides(exercise.id) : visibilityOverrides}
+                                    onVisibilityChange={(name, visible) => onVisibilityChange(name, visible, exercise.id)}
+                                    onShowAllParams={(names) => onShowAllParams(exercise.id, names)}
+                                    onResetParamsToDefaults={() => onResetParamsToDefaults(exercise.id)}
                                     isCollapsed={collapsedExercises[exercise.id] || false}
                                     onToggleCollapse={() => toggleExerciseCollapse(exercise.id)}
                                     onOpenDetail={() => onOpenExerciseDetail?.(exercise)}

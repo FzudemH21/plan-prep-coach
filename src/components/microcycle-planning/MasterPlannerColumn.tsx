@@ -22,6 +22,7 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import { useExerciseMetrics } from '@/hooks/useExerciseMetrics';
 import { evaluateFormula, parseNumeric } from '@/utils/formulaEvaluator';
 import { isParameterVisible, ParameterVisibilityPopover, type ParameterVisibilityOverrides } from './ParameterVisibilityPopover';
+import { getExerciseVisibility, readSessionMeta, updateExerciseVisibility, writeSessionMeta } from '@/utils/parameterVisibility';
 import { AthletePerformanceParameter } from '@/types/athlete';
 import {
   Table,
@@ -573,27 +574,20 @@ export function MasterPlannerColumn({
     return (microcycleId && mesocycles?.find(m => m.microcycles?.some(mc => mc.id === microcycleId))) || viewedMesocycle;
   }, [trainingDays, day.dateString, mesocycles, viewedMesocycle]);
 
-  // Parameter show/hide choices of a session — shared with the Workout Session Sheet (same storage)
+  // Parameter show/hide choices per exercise — shared with the Workout Session Sheet (same storage)
   const [, setVisibilityVersion] = useState(0);
-  const getSessionParamVisibility = useCallback((sessionIndex: number): ParameterVisibilityOverrides => {
+  const getExerciseParamVisibility = useCallback((sessionIndex: number, exerciseId: string): ParameterVisibilityOverrides => {
     if (!currentMesocycle) return {};
-    try {
-      const stored = localStorage.getItem(`workoutSessions_${currentMesocycle.id}_${day.dateString}_${sessionIndex}`);
-      return (stored && JSON.parse(stored)?.parameterVisibility) || {};
-    } catch { return {}; }
+    return getExerciseVisibility(readSessionMeta(currentMesocycle.id, day.dateString, sessionIndex), exerciseId);
   }, [currentMesocycle, day.dateString]);
-  const updateSessionParamVisibility = useCallback((
+  const updateExerciseParamVisibility = useCallback((
     sessionIndex: number,
+    exerciseId: string,
     update: (prev: ParameterVisibilityOverrides) => ParameterVisibilityOverrides,
   ) => {
     if (!currentMesocycle) return;
-    const key = `workoutSessions_${currentMesocycle.id}_${day.dateString}_${sessionIndex}`;
-    try {
-      const stored = localStorage.getItem(key);
-      const parsed = stored ? JSON.parse(stored) : {};
-      parsed.parameterVisibility = update(parsed.parameterVisibility || {});
-      localStorage.setItem(key, JSON.stringify(parsed));
-    } catch { /* ignore */ }
+    const meta = readSessionMeta(currentMesocycle.id, day.dateString, sessionIndex);
+    writeSessionMeta(currentMesocycle.id, day.dateString, sessionIndex, updateExerciseVisibility(meta, exerciseId, update));
     setVisibilityVersion(v => v + 1);
   }, [currentMesocycle, day.dateString]);
 
@@ -777,9 +771,14 @@ export function MasterPlannerColumn({
       
       const isQualitative = toolboxEntry?.parameterType === 'qualitative';
       const hasOptions = toolboxEntry?.options && toolboxEntry.options.length > 0;
-      const unit = toolboxEntry?.parameterType === 'quantitative' && toolboxEntry.options?.[0]
-        ? toolboxEntry.options[0]
-        : undefined;
+      // Unit chosen in the Periodization Table for this session (or the exercise's own override),
+      // else the toolbox default
+      const chosenUnit = storedParams[`${paramName}_unit`];
+      const unit = typeof chosenUnit === 'string' && chosenUnit !== ''
+        ? chosenUnit
+        : toolboxEntry?.parameterType === 'quantitative' && toolboxEntry.options?.[0]
+          ? toolboxEntry.options[0]
+          : undefined;
       
       return {
         name: paramName,
@@ -824,7 +823,8 @@ export function MasterPlannerColumn({
 
     // Split params into visible (grid) and hidden (badges) — same rules as the Workout Session
     // Sheet: toolbox "show in grid" default + the session's show/hide choices
-    const visibility = getSessionParamVisibility(exercise.sessionIndex);
+    const visibilityExerciseId = exercise.id || exercise.exerciseId;
+    const visibility = getExerciseParamVisibility(exercise.sessionIndex, visibilityExerciseId);
     const displayableParams = methodParams.filter(p =>
       !p.isSetParameter &&
       !p.isFrequencyParameter &&
@@ -969,21 +969,17 @@ export function MasterPlannerColumn({
           <div className="flex justify-end mt-1" onClick={(e) => e.stopPropagation()}>
             <ParameterVisibilityPopover
               parameters={pickerParams}
-              note="Applies to this session, here and in the session sheet"
+              note="Applies to this exercise, here and in the session sheet"
               visibilityOverrides={visibility}
               onVisibilityChange={(name, visible) =>
-                updateSessionParamVisibility(exercise.sessionIndex, prev => ({ ...prev, [name]: visible }))}
+                updateExerciseParamVisibility(exercise.sessionIndex, visibilityExerciseId, prev => ({ ...prev, [name]: visible }))}
               onShowAll={() =>
-                updateSessionParamVisibility(exercise.sessionIndex, prev => ({
+                updateExerciseParamVisibility(exercise.sessionIndex, visibilityExerciseId, prev => ({
                   ...prev,
                   ...Object.fromEntries(pickerParams.map(p => [p.name, true])),
                 }))}
               onResetToDefaults={() =>
-                updateSessionParamVisibility(exercise.sessionIndex, prev => {
-                  const next = { ...prev };
-                  pickerParams.forEach(p => { delete next[p.name]; });
-                  return next;
-                })}
+                updateExerciseParamVisibility(exercise.sessionIndex, visibilityExerciseId, () => ({}))}
             />
           </div>
         )}

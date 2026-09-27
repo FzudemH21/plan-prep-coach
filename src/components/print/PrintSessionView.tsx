@@ -16,6 +16,8 @@ export interface PrintSessionViewProps {
   toolboxData?: ToolboxDatabase;
   getSupersetLabel: (exerciseId: string) => string | undefined;
   visibilityOverrides?: ParameterVisibilityOverrides;
+  /** Per-exercise overrides (take precedence over visibilityOverrides) */
+  getVisibilityOverrides?: (exerciseId: string) => ParameterVisibilityOverrides;
   /** Mirror of WorkoutSessionSheet's resolveAthleteDataRefs — needed for e1RM / biometric formulas */
   resolveAthleteDataRefs?: (refs: string[], exerciseName: string) => Record<string, number | undefined>;
   /** Coach logo URL — rendered top-right of the print header */
@@ -372,6 +374,7 @@ export function PrintSessionView({
   toolboxData,
   getSupersetLabel,
   visibilityOverrides = {},
+  getVisibilityOverrides,
   resolveAthleteDataRefs,
   coachLogo,
   accentColor,
@@ -421,7 +424,7 @@ export function PrintSessionView({
                       toolboxData={toolboxData}
                       getSupersetLabel={() => undefined}
                       supersetIndex={index}
-                      visibilityOverrides={visibilityOverrides}
+                      visibilityOverrides={getVisibilityOverrides ? getVisibilityOverrides(ex.id) : visibilityOverrides}
                       resolveAthleteDataRefs={resolveAthleteDataRefs}
                     />
                   ))}
@@ -434,7 +437,7 @@ export function PrintSessionView({
                 exercise={group.exercise}
                 toolboxData={toolboxData}
                 getSupersetLabel={getSupersetLabel}
-                visibilityOverrides={visibilityOverrides}
+                visibilityOverrides={getVisibilityOverrides ? getVisibilityOverrides(group.exercise.id) : visibilityOverrides}
                 resolveAthleteDataRefs={resolveAthleteDataRefs}
               />
             );
