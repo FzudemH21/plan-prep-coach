@@ -3,7 +3,6 @@ import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown, ChevronRight, GripVertical, Search } from 'lucide-react';
 import { ExtendedMesocycle } from '@/features/planner/types';
@@ -189,8 +188,10 @@ export function ExerciseLibraryPanel({
         </div>
       </CardHeader>
 
-      <CardContent className="flex-1 overflow-hidden p-0">
-        <ScrollArea className="h-full px-4">
+      {/* Native scrolling on the flex item itself (flex-1 min-h-0 overflow-y-auto) — a Radix
+          ScrollArea with h-full inside a flex column clips instead of scrolling (see CLAUDE.md).
+          Also lets drag-and-drop auto-scroll this list. */}
+      <CardContent className="flex-1 min-h-0 overflow-y-auto px-4 py-0">
           <div className="space-y-1 pb-4">
 
             {/* Level 1: Top category */}
@@ -325,7 +326,6 @@ export function ExerciseLibraryPanel({
               );
             })}
           </div>
-        </ScrollArea>
       </CardContent>
     </Card>
   );

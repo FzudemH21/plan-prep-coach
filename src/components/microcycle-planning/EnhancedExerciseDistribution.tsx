@@ -2312,7 +2312,8 @@ export function EnhancedExerciseDistribution({
 
       <DragDropContext onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
       <div className="flex h-full w-full">
-        <div className="w-[15%] shrink-0 border-r">
+        {/* Definite height (same as the session columns) so the panel scrolls on its own */}
+        <div className="w-[15%] shrink-0 border-r h-[78vh] min-h-[640px]">
           <ExerciseLibraryPanel
             exercisesByMethod={exercisesByMethod}
             exerciseDistribution={exerciseDistribution}
