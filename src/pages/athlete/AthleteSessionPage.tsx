@@ -1302,7 +1302,7 @@ export default function AthleteSessionPage() {
                                       className="min-w-0 text-sm truncate text-left hover:text-primary active:opacity-60 transition-colors"
                                     >{ex.name}</button>
                                   )}
-                                  {/* Comment button */
+                                  {/* Comment button */}
                                   <button
                                     onClick={() => {
                                       setCommentTarget({ exerciseName: ex.name, sectionName: sec.name });
