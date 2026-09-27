@@ -270,6 +270,19 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
       }
     }
 
+    // Columns in the method's Training Toolbox order (same order as the Periodization Table);
+    // parameters no longer in the toolbox go last, keeping their relative order
+    if (toolboxParams && toolboxParams.length > 0) {
+      const toolboxIndex = (name: string) => {
+        const i = toolboxParams.findIndex(tp => tp.parameterName === name);
+        return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+      };
+      params = params
+        .map((p, i) => ({ p, i }))
+        .sort((a, b) => (toolboxIndex(a.p.name) - toolboxIndex(b.p.name)) || (a.i - b.i))
+        .map(({ p }) => p);
+    }
+
     return params;
   })();
 

@@ -762,8 +762,16 @@ export function MasterPlannerColumn({
 
     // Build methodParams from storedParams keys ONLY (no toolbox fallback)
     // This ensures Master Planner shows exactly the same params as Workout Session Card
+    // In the method's Training Toolbox order (parameters no longer in the toolbox last)
+    const tbIndex = (name: string) => {
+      const i = toolboxEntries.findIndex(entry => entry.parameterName === name);
+      return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+    };
     const storedParamKeys = Object.keys(storedParams)
-      .filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k));
+      .filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k))
+      .map((k, i) => ({ k, i }))
+      .sort((a, b) => (tbIndex(a.k) - tbIndex(b.k)) || (a.i - b.i))
+      .map(({ k }) => k);
 
     const methodParams: MethodParameter[] = storedParamKeys.map(paramName => {
       // Find matching toolbox entry for metadata
@@ -853,6 +861,78 @@ export function MasterPlannerColumn({
         })
       : [];
     const calcEntries = allCalcEntries.filter(tp => isParameterVisible(tp.parameterName, tp.showInGridByDefault ?? true, visibility));
+
+    // Grid columns — regular and calculated parameters together, in the method's Training Toolbox
+    // order (same order as the Periodization Table and the session sheet)
+    const methodToolboxNames = (toolboxData?.entries ?? [])
+      .filter(tp => methodSub2
+        ? tp.category === methodMain2 && tp.subCategory === methodSub2
+        : tp.category === methodMain2 && (!tp.subCategory || tp.subCategory === ''))
+      .map(tp => tp.parameterName);
+    const toolboxIndex = (name: string) => {
+      const i = methodToolboxNames.indexOf(name);
+      return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+    };
+    type GridColumn =
+      | { kind: 'param'; name: string; param: MethodParameter }
+      | { kind: 'calc'; name: string; entry: (typeof calcEntries)[number] };
+    const gridColumns: GridColumn[] = [
+      ...visibleParams
+        .filter(p => !calcEntries.some(ce => ce.parameterName === p.name))
+        .map(p => ({ kind: 'param' as const, name: p.name, param: p })),
+      ...calcEntries.map(ce => ({ kind: 'calc' as const, name: ce.parameterName, entry: ce })),
+    ]
+      .map((col, i) => ({ col, i }))
+      .sort((a, b) => (toolboxIndex(a.col.name) - toolboxIndex(b.col.name)) || (a.i - b.i))
+      .map(({ col }) => col);
+
+    const renderCalcCell = (ce: (typeof calcEntries)[number], setNumber: number) => {
+      const computed = computeCalcValue(ce, setNumber);
+      const overrideKey = `${ce.parameterName}_set${setNumber}`;
+      const storedOverride = storedParams[overrideKey] ?? storedParams[ce.parameterName];
+      const hasOverride = computed !== null &&
+        storedOverride !== undefined &&
+        storedOverride !== '' &&
+        String(storedOverride) !== String(computed);
+      const displayValue = (storedOverride !== undefined && storedOverride !== '')
+        ? storedOverride
+        : (computed !== null ? computed : undefined);
+      return (
+        <TableCell key={ce.parameterName} className="py-0 px-1 min-w-[70px]">
+          <div className="flex items-center gap-0.5">
+            <EditableParamInput
+              dayDateString={day.dateString}
+              exercise={exercise}
+              paramName={ce.parameterName}
+              paramType="number"
+              currentValue={displayValue}
+              setIndex={setNumber}
+              onParameterChange={onParameterChange}
+            />
+            {hasOverride && (
+              <button
+                className="shrink-0 text-primary hover:text-primary/70 p-0.5 rounded"
+                title={`Restore calculated value (${computed})`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onParameterChange?.(
+                    day.dateString,
+                    exercise.sessionIndex,
+                    exercise.methodId,
+                    exercise.categoryName,
+                    overrideKey,
+                    computed!,
+                    exercise.id || exercise.exerciseId
+                  );
+                }}
+              >
+                <RefreshCw className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        </TableCell>
+      );
+    };
 
     // Parameters offered in the visibility picker (same list as the session sheet: regular + calculated)
     const pickerParams = [
@@ -1006,22 +1086,32 @@ export function MasterPlannerColumn({
               <TableHeader>
                 <TableRow className="h-6 border-b">
                   <TableHead className="py-0.5 px-1 font-medium h-6 min-w-[40px] w-[40px] text-center whitespace-nowrap">{setParam?.name || 'Set'}</TableHead>
-                  {visibleParams.map(p => (
-                    <TableHead key={p.name} className="py-0.5 px-1 font-medium h-6 min-w-[80px] whitespace-nowrap">
-                      {formatParamName(p.displayName || p.name)}
-                      {p.unit && (
-                        <span className="text-muted-foreground ml-0.5 font-normal">[{p.unit}]</span>
-                      )}
-                    </TableHead>
-                  ))}
-                  {calcEntries.map(ce => (
-                    <TableHead key={ce.parameterName} className="py-0.5 px-1 font-medium h-6 min-w-[70px] whitespace-nowrap text-primary">
-                      <div className="flex items-center gap-0.5">
-                        <Calculator className="h-3 w-3" />
-                        <span>{ce.parameterName}{ce.parameterType === 'quantitative' && ce.options?.[0] ? ` [${ce.options[0]}]` : ''}</span>
-                      </div>
-                    </TableHead>
-                  ))}
+                  {gridColumns.map(col => {
+                    if (col.kind === 'param') {
+                      const p = col.param;
+                      return (
+                        <TableHead key={p.name} className="py-0.5 px-1 font-medium h-6 min-w-[80px] whitespace-nowrap">
+                          {formatParamName(p.displayName || p.name)}
+                          {p.unit && (
+                            <span className="text-muted-foreground ml-0.5 font-normal">[{p.unit}]</span>
+                          )}
+                        </TableHead>
+                      );
+                    }
+                    const ce = col.entry;
+                    const chosenUnit = storedParams[`${ce.parameterName}_unit`];
+                    const calcUnit = typeof chosenUnit === 'string' && chosenUnit !== ''
+                      ? chosenUnit
+                      : ce.parameterType === 'quantitative' ? ce.options?.[0] : undefined;
+                    return (
+                      <TableHead key={ce.parameterName} className="py-0.5 px-1 font-medium h-6 min-w-[70px] whitespace-nowrap text-primary">
+                        <div className="flex items-center gap-0.5">
+                          <Calculator className="h-3 w-3" />
+                          <span>{ce.parameterName}{calcUnit ? ` [${calcUnit}]` : ''}</span>
+                        </div>
+                      </TableHead>
+                    );
+                  })}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1030,7 +1120,9 @@ export function MasterPlannerColumn({
                   return (
                     <TableRow key={idx} className="h-7 border-0">
                       <TableCell className="py-0 px-1 text-center text-muted-foreground min-w-[40px] w-[40px]">{setNumber}</TableCell>
-                      {visibleParams.map(p => {
+                      {gridColumns.map(col => {
+                        if (col.kind === 'calc') return renderCalcCell(col.entry, setNumber);
+                        const p = col.param;
                         const perSetKey = `${p.name}_set${setNumber}`;
                         const currentValue = storedParams[perSetKey] ?? storedParams[p.name];
                         return (
@@ -1046,53 +1138,6 @@ export function MasterPlannerColumn({
                               setIndex={setNumber}
                               onParameterChange={onParameterChange}
                             />
-                          </TableCell>
-                        );
-                      })}
-                      {calcEntries.map(ce => {
-                        const computed = computeCalcValue(ce, setNumber);
-                        const overrideKey = `${ce.parameterName}_set${setNumber}`;
-                        const storedOverride = storedParams[overrideKey] ?? storedParams[ce.parameterName];
-                        const hasOverride = computed !== null &&
-                          storedOverride !== undefined &&
-                          storedOverride !== '' &&
-                          String(storedOverride) !== String(computed);
-                        const displayValue = (storedOverride !== undefined && storedOverride !== '')
-                          ? storedOverride
-                          : (computed !== null ? computed : undefined);
-                        return (
-                          <TableCell key={ce.parameterName} className="py-0 px-1 min-w-[70px]">
-                            <div className="flex items-center gap-0.5">
-                              <EditableParamInput
-                                dayDateString={day.dateString}
-                                exercise={exercise}
-                                paramName={ce.parameterName}
-                                paramType="number"
-                                currentValue={displayValue}
-                                setIndex={setNumber}
-                                onParameterChange={onParameterChange}
-                              />
-                              {hasOverride && (
-                                <button
-                                  className="shrink-0 text-primary hover:text-primary/70 p-0.5 rounded"
-                                  title={`Restore calculated value (${computed})`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onParameterChange?.(
-                                      day.dateString,
-                                      exercise.sessionIndex,
-                                      exercise.methodId,
-                                      exercise.categoryName,
-                                      overrideKey,
-                                      computed!,
-                                      exercise.id || exercise.exerciseId
-                                    );
-                                  }}
-                                >
-                                  <RefreshCw className="h-3 w-3" />
-                                </button>
-                              )}
-                            </div>
                           </TableCell>
                         );
                       })}
