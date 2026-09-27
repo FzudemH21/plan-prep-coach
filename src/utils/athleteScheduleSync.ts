@@ -313,6 +313,37 @@ export async function syncAthleteSchedule(
     }
   }
 
+  // Fallback for training days outside the assignment's recorded mesocycles (e.g. sessions
+  // pasted into or extended past the assignment in the athlete calendar): use the day's own
+  // mesocycle/microcycle ids. A mesocycle's microcycles are numbered in calendar order, so the
+  // microcycle index matches the periodization values (parameterValues[meso][mcIdx]).
+  {
+    const microcycleOrder = new Map<string, string[]>();
+    [...trainingDays]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .forEach(td => {
+        if (!td.mesocycleId || !td.microcycleId) return;
+        const list = microcycleOrder.get(td.mesocycleId) ?? [];
+        if (!list.includes(td.microcycleId)) list.push(td.microcycleId);
+        microcycleOrder.set(td.mesocycleId, list);
+      });
+    for (const td of trainingDays) {
+      if (mesoByDate.has(td.date) || !td.mesocycleId || !td.microcycleId) continue;
+      const recorded = assignment.assignedMesocycles.find(m => m.id === td.mesocycleId);
+      const recordedIdx = recorded?.microcycles?.findIndex(mc => mc.id === td.microcycleId) ?? -1;
+      const microcycleIndex = recordedIdx >= 0
+        ? recordedIdx
+        : Math.max(0, (microcycleOrder.get(td.mesocycleId) ?? []).indexOf(td.microcycleId));
+      const mesoNumber = td.mesocycleId.match(/(\d+)$/)?.[1];
+      mesoByDate.set(td.date, {
+        mesoName: recorded?.name ?? (mesoNumber ? `Mesocycle ${mesoNumber}` : td.mesocycleId),
+        microName: recorded?.microcycles?.[microcycleIndex]?.name ?? null,
+        mesocycleId: td.mesocycleId,
+        microcycleIndex,
+      });
+    }
+  }
+
   // Build section lookup: "dayDate-sessionIndex-sectionId" → { name, order, notes }
   const sectionLookup = new Map<string, { name: string; order: number; notes?: string }>();
   if (sessionSections) {
