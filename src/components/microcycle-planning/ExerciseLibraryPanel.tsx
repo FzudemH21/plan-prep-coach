@@ -49,20 +49,30 @@ export function ExerciseLibraryPanel({
     setFn(next);
   };
 
-  // Count how many times an exercise is placed in the currently viewed microcycle
-  const getExerciseAllocationCount = (exerciseId: string) => {
+  // Count how many times an exercise is placed in the currently viewed microcycle. Without a
+  // method this counts across all methods (the per-exercise dots — so an exercise shared by
+  // Strength and Hypertrophy shows it's already placed elsewhere); with a method (and optionally
+  // category) only placements made from that method count.
+  const getExerciseAllocationCount = (exerciseId: string, methodId?: string, categoryName?: string) => {
     const dist = currentMicrocycleDates && currentMicrocycleDates.length > 0
       ? exerciseDistribution.filter(ex => currentMicrocycleDates.includes(ex.dayDate))
       : exerciseDistribution;
-    return dist.filter(ex => ex.exerciseId === exerciseId).length;
+    return dist.filter(ex => {
+      if (ex.exerciseId !== exerciseId) return false;
+      // Older placements may store "Method::Category" in methodId with an empty categoryName
+      const [exBase, exCatFromId = ''] = (ex.methodId ?? '').split('::');
+      const exCat = ex.categoryName || exCatFromId;
+      return (methodId === undefined || exBase === methodId) &&
+        (categoryName === undefined || exCat === categoryName);
+    }).length;
   };
 
-  // Method / category progress: green dot when every exercise in it is placed at least once in
-  // the viewed microcycle (same count as the per-exercise dots), otherwise "placed/total".
-  const renderPlacedIndicator = (exercises: Array<{ exerciseId: string }>) => {
+  // Method / category progress: green dot when every exercise in it has been placed at least once
+  // from this method (and category) in the viewed microcycle, otherwise "placed/total".
+  const renderPlacedIndicator = (exercises: Array<{ exerciseId: string }>, methodId: string, categoryName?: string) => {
     const ids = [...new Set(exercises.map(ex => ex.exerciseId))];
     if (ids.length === 0) return null;
-    const placed = ids.filter(id => getExerciseAllocationCount(id) > 0).length;
+    const placed = ids.filter(id => getExerciseAllocationCount(id, methodId, categoryName) > 0).length;
     if (placed === ids.length) {
       return (
         <span
@@ -250,7 +260,7 @@ export function ExerciseLibraryPanel({
                                 ? <ChevronDown className="mr-2 h-3 w-3 shrink-0" />
                                 : <ChevronRight className="mr-2 h-3 w-3 shrink-0" />}
                               <span className="truncate">{subCategory}</span>
-                              {renderPlacedIndicator(categoryEntries.flatMap(([, exs]) => exs))}
+                              {renderPlacedIndicator(categoryEntries.flatMap(([, exs]) => exs), methodId)}
                             </Button>
                           </CollapsibleTrigger>
 
@@ -294,7 +304,7 @@ export function ExerciseLibraryPanel({
                                           ? <ChevronDown className="mr-2 h-3 w-3 shrink-0" />
                                           : <ChevronRight className="mr-2 h-3 w-3 shrink-0" />}
                                         <span className="truncate">{categoryName}</span>
-                                        {renderPlacedIndicator(exercises)}
+                                        {renderPlacedIndicator(exercises, methodId, categoryName)}
                                       </Button>
                                     </CollapsibleTrigger>
 

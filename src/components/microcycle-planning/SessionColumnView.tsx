@@ -32,7 +32,14 @@ import { format } from 'date-fns';
 import { parseDateStr } from '@/utils/dateUtils';
 import { cn } from '@/lib/utils';
 import { ExerciseDistribution, SessionSection } from '@/types/microcycle-planning';
-import { displayMethodLabel } from './methodLabelUtils';
+import { displayMethodLabel, methodColorClasses } from './methodLabelUtils';
+
+/** A method (+ exercise category) of the current mesocycle that contains a given exercise */
+export interface ExerciseMethodOption {
+  methodId: string;
+  categoryName: string;
+  subCategory?: string;
+}
 
 interface SessionColumnViewProps {
   day: TrainingDay;
@@ -74,6 +81,10 @@ interface SessionColumnViewProps {
   onEditCircuit?: (exerciseDistributionId: string) => void;
   /** Save this session to the Session Library */
   onSaveToLibrary?: (dayDate: string, sessionIndex: number) => void;
+  /** exerciseId → methods of this mesocycle that contain it (2+ → the card's method can be switched) */
+  methodOptionsByExercise?: Record<string, ExerciseMethodOption[]>;
+  /** Switch which method (and so which periodization values) a placed exercise uses */
+  onChangeExerciseMethod?: (distributionId: string, option: ExerciseMethodOption) => void;
 }
 
 export function SessionColumnView({
@@ -110,6 +121,8 @@ export function SessionColumnView({
   onAddCircuitInline,
   onEditCircuit,
   onSaveToLibrary,
+  methodOptionsByExercise,
+  onChangeExerciseMethod,
 }: SessionColumnViewProps) {
   const { t } = useTranslation();
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
@@ -312,9 +325,56 @@ export function SessionColumnView({
 
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{exercise.exerciseName}</div>
-                    <div className="text-muted-foreground truncate text-[10px]">
-                      {displayMethodLabel(exercise.methodId)}
-                    </div>
+                    {/* Method tag — its periodization values are the ones this exercise uses.
+                        Exercises that belong to several methods can be switched here. */}
+                    {(() => {
+                      const options = methodOptionsByExercise?.[exercise.exerciseId] ?? [];
+                      const canSwitch = options.length > 1 && !!onChangeExerciseMethod;
+                      const tag = (
+                        <span
+                          className={cn(
+                            'mt-0.5 inline-flex max-w-full items-center gap-0.5 rounded border px-1.5 text-[10px] font-medium',
+                            methodColorClasses(exercise.methodId),
+                            canSwitch && 'cursor-pointer hover:opacity-80'
+                          )}
+                          title={canSwitch
+                            ? `${exercise.methodId} — uses this method's periodization values. Click to switch method.`
+                            : `${exercise.methodId} — uses this method's periodization values`}
+                        >
+                          <span className="truncate">{displayMethodLabel(exercise.methodId)}</span>
+                          {canSwitch && <ChevronDown className="h-2.5 w-2.5 shrink-0" />}
+                        </span>
+                      );
+                      if (!canSwitch) return tag;
+                      const optionKey = (o: { methodId: string; categoryName: string }) =>
+                        o.categoryName ? `${o.methodId}::${o.categoryName}` : o.methodId;
+                      return (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button type="button" className="max-w-full text-left">{tag}</button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="text-xs">
+                            <div className="px-2 py-1 text-[10px] text-muted-foreground">Use periodization values of</div>
+                            {options.map(option => {
+                              // Older placements may store "Method::Category" in methodId
+                              const [exBase, exCatFromId = ''] = (exercise.methodId ?? '').split('::');
+                              const isCurrent = option.methodId === exBase && option.categoryName === (exercise.categoryName || exCatFromId);
+                              return (
+                                <DropdownMenuItem
+                                  key={optionKey(option)}
+                                  className="text-xs gap-2"
+                                  onClick={() => !isCurrent && onChangeExerciseMethod!(exercise.id, option)}
+                                >
+                                  <span className={cn('inline-block h-2 w-2 rounded-full border', methodColorClasses(option.methodId))} />
+                                  <span className="flex-1">{displayMethodLabel(optionKey(option))}</span>
+                                  {isCurrent && <Check className="h-3 w-3" />}
+                                </DropdownMenuItem>
+                              );
+                            })}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      );
+                    })()}
                     {supersetId && (
                       <Badge variant="default" className="text-[10px] mt-1 px-1.5 font-semibold">
                         {getSupersetLabel(supersetId)}

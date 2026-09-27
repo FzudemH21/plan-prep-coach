@@ -3560,7 +3560,7 @@ export default function MicrocyclePlanningPage() {
           }}
           selectedMicrocycleIndex={currentMicrocycleIndex}
           onSelectedMicrocycleIndexChange={setCurrentMicrocycleIndex}
-          methodAllocations={methodAllocations}
+          methodAllocations={resolvedMethodAllocations}
           methodExerciseCategories={methodExerciseCategories}
           sessionCommentsRefreshKey={sessionCommentsRefreshKey}
           onSaveToLibrary={handleSaveToLibrary}

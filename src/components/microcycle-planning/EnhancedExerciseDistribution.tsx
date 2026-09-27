@@ -7,7 +7,7 @@ import { CellData, ExerciseDistribution, ExerciseSelection, SessionSection, Supe
 import { IntensityLevel } from '@/types/training';
 import { ExerciseLibraryPanel } from './ExerciseLibraryPanel';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
-import { SessionColumnView } from './SessionColumnView';
+import { SessionColumnView, type ExerciseMethodOption } from './SessionColumnView';
 import { DayHeader } from './DayHeader';
 import { displayMethodLabel } from './methodLabelUtils';
 import { useToast } from '@/hooks/use-toast';
@@ -316,9 +316,16 @@ export function EnhancedExerciseDistribution({
       }
     };
 
+    // Only methods assigned to this mesocycle — stored selections for other methods (e.g. leftovers
+    // from another program) must not appear. Skipped if no assignment data is available at all.
+    const hasAllocations = Object.keys(methodAllocations).length > 0;
+    const isAllocatedHere = (methodId: string) =>
+      !hasAllocations || (methodAllocations[methodId.split('::')[0]] ?? []).includes(mesocycle.id);
+
     // 1. Add exercises from exerciseSelectionData (Step 0)
     Object.entries(exerciseSelectionData).forEach(([key, cellData]) => {
       if (cellData.mesocycleId !== mesocycle.id) return;
+      if (!isAllocatedHere(cellData.methodId)) return;
       const methodId = cellData.methodId;
       const categoryName = isValidCategoryName(cellData.categoryName) ? cellData.categoryName! : '';
       cellData.exercises.forEach(ex => {
@@ -350,7 +357,33 @@ export function EnhancedExerciseDistribution({
     });
 
     return grouped;
-  }, [exerciseSelectionData, exerciseDistribution, mesocycle.id]);
+  }, [exerciseSelectionData, exerciseDistribution, mesocycle.id, methodAllocations]);
+
+  // exerciseId → every method (+ category) of this mesocycle that contains it. Exercises in two or
+  // more (e.g. squats as Strength bleed-in within Hypertrophy) get a method switch on their card.
+  const methodOptionsByExercise = useMemo(() => {
+    const map: Record<string, ExerciseMethodOption[]> = {};
+    Object.entries(exercisesByMethod).forEach(([methodId, categories]) => {
+      Object.entries(categories).forEach(([categoryName, exercises]) => {
+        exercises.forEach(ex => {
+          const list = map[ex.exerciseId] ?? (map[ex.exerciseId] = []);
+          if (!list.some(o => o.methodId === methodId && o.categoryName === categoryName)) {
+            list.push({ methodId, categoryName, subCategory: ex.subCategory });
+          }
+        });
+      });
+    });
+    return map;
+  }, [exercisesByMethod]);
+
+  // Switching the method changes which periodization values the placed exercise uses
+  const handleChangeExerciseMethod = useCallback((distributionId: string, option: ExerciseMethodOption) => {
+    onDistributionChange(exerciseDistribution.map(ex =>
+      ex.id === distributionId
+        ? { ...ex, methodId: option.methodId, categoryName: option.categoryName, subCategory: option.subCategory ?? ex.subCategory }
+        : ex
+    ));
+  }, [exerciseDistribution, onDistributionChange]);
 
   // Helper to find superset in mapping
   const findSessionSuperset = (
@@ -519,12 +552,16 @@ export function EnhancedExerciseDistribution({
     // Use the method explicitly chosen by the coach (Case A: auto-set; Case B: selected via dialog)
     const primaryMethodId = inlinePicker.methodId ?? '';
 
+    // Store method and exercise category separately, the same way drag-and-drop does
+    // (session methods can be "Method::Category"). Periodization lookup handles both forms.
+    const [primaryBaseMethodId, primaryCategoryName = ''] = primaryMethodId.split('::');
+
     const newDistEntries: ExerciseDistribution[] = exercises.map((ex, i) => ({
       id: `ex-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`,
       exerciseId: ex.exerciseId,
       exerciseName: ex.exerciseName,
-      methodId: primaryMethodId,
-      categoryName: '',
+      methodId: primaryBaseMethodId,
+      categoryName: primaryCategoryName,
       subCategory: ex.subCategory,
       dayDate,
       sessionIndex,
@@ -2588,6 +2625,8 @@ export function EnhancedExerciseDistribution({
                                     onExerciseNotesChange={handleExerciseNotesChange}
                                     onReorderSection={handleSectionReorder}
                                     onSaveToLibrary={onSaveToLibrary}
+                                    methodOptionsByExercise={methodOptionsByExercise}
+                                    onChangeExerciseMethod={handleChangeExerciseMethod}
                                   />
                                 );
                               })}
