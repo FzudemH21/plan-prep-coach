@@ -472,11 +472,14 @@ export function WorkoutSessionSheet({
       );
       
       if (sessionSpecificSections.length > 0) {
+        // Exercises not linked to any of this session's sections (no / stale sectionId) go into the
+        // first section — otherwise they'd be invisible here while the Master Planner shows them
+        const sectionIds = new Set(sessionSpecificSections.map(s => s.id));
         return sessionSpecificSections
           .sort((a, b) => a.order - b.order)
-          .map(section => {
+          .map((section, sectionIdx) => {
             const sectionExercises = exercisesList
-              .filter((ex: any) => ex.sectionId === section.id)
+              .filter((ex: any) => ex.sectionId === section.id || (sectionIdx === 0 && !sectionIds.has(ex.sectionId)))
               .map((ex, idx) => {
                 // ===== CIRCUIT BLOCKS: Pass circuit fields through directly =====
                 if (ex.isCircuit) {
@@ -2858,16 +2861,50 @@ export function WorkoutSessionSheet({
   };
 
   const handleRenameSection = (sectionId: string, newName: string) => {
-    setWorkoutSections(sections =>
-      sections.map(s => s.id === sectionId ? { ...s, name: newName } : s)
+    const renamedSections = workoutSections.map(s => s.id === sectionId ? { ...s, name: newName } : s);
+    setWorkoutSections(renamedSections);
+    if (!onSectionsChange) return;
+
+    const isPlanSection = (sessionSectionsProp ?? []).some(
+      s => s.id === sectionId && s.dayDate === dayDate && s.sessionIndex === sessionIndex
     );
-    
-    // Sync to Step 1
-    if (sessionSectionsProp && onSectionsChange) {
-      const updatedSections = sessionSectionsProp.map(s =>
-        s.id === sectionId ? { ...s, name: newName } : s
-      );
-      onSectionsChange(updatedSections);
+    if (isPlanSection) {
+      // Sync to Step 2 / Master Planner / calendar (shared sessionSections)
+      onSectionsChange((sessionSectionsProp ?? []).map(s =>
+        s.id === sectionId && s.dayDate === dayDate && s.sessionIndex === sessionIndex ? { ...s, name: newName } : s
+      ));
+      return;
+    }
+
+    // The session had no sections of its own yet (they were derived from exercise categories and
+    // only reached the plan on "Save") — store this session's sections now, and link its
+    // exercises to them, so the new name shows everywhere and isn't lost on close.
+    const otherSections = (sessionSectionsProp ?? []).filter(
+      s => !(s.dayDate === dayDate && s.sessionIndex === sessionIndex)
+    );
+    onSectionsChange([
+      ...otherSections,
+      ...renamedSections.map(section => ({
+        id: section.id,
+        dayDate,
+        sessionIndex,
+        name: section.name,
+        order: section.order,
+        comments: section.comments,
+      })),
+    ]);
+    if (onDistributionChange && allExerciseDistribution) {
+      const sectionOf = new Map<string, string>();
+      renamedSections.forEach(section => section.exercises.forEach(ex => { if (ex.id) sectionOf.set(ex.id, section.id); }));
+      let changed = false;
+      const updated = allExerciseDistribution.map(distEx => {
+        if (distEx.dayDate !== dayDate || distEx.sessionIndex !== sessionIndex) return distEx;
+        const target = sectionOf.get(distEx.id || distEx.exerciseId);
+        if (!target || distEx.sectionId === target) return distEx;
+        changed = true;
+        return { ...distEx, sectionId: target };
+      });
+      if (changed) onDistributionChange(updated);
     }
   };
 
