@@ -37,6 +37,7 @@ import { useWizardData } from '@/contexts/WizardDataContext';
 import { WizardAIAssistant, FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
 import { WIZARD_CHAT_ID } from '@/contexts/AIChatContext';
 import { onExerciseRenamed, renameExerciseInValue } from '@/utils/exerciseRename';
+import { notifySessionMetaChanged, SESSION_META_CHANGED_EVENT } from '@/utils/parameterVisibility';
 import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
 import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
 import { useCoachMemory } from '@/hooks/useCoachMemory';
@@ -539,6 +540,14 @@ export default function MicrocyclePlanningPage() {
   // written to localStorage by their own setters/handlers — also save them to the program, or e.g.
   // an inline session rename in the Master Planner never reaches the saved plan.
   useEffect(() => { markDirty(); }, [trainingDays, dailyIntensityData, parameterValues]);
+
+  // Per-session data kept in its own storage keys (comments, parameter visibility, session
+  // intensities, the session sheet's sections) — save it with the program when it changes
+  useEffect(() => {
+    const onChange = () => markDirty();
+    window.addEventListener(SESSION_META_CHANGED_EVENT, onChange);
+    return () => window.removeEventListener(SESSION_META_CHANGED_EVENT, onChange);
+  }, [markDirty]);
 
   // Save session sections to localStorage
   useEffect(() => {
@@ -1595,6 +1604,7 @@ export default function MicrocyclePlanningPage() {
     // Store session-specific intensity in localStorage
     const sessionIntensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
     localStorage.setItem(sessionIntensityKey, intensity);
+    notifySessionMetaChanged();
     
     // Count total sessions for this day from trainingDays (source of truth)
     const day = trainingDays.find(d => d.date === dayDate);
@@ -1667,6 +1677,7 @@ export default function MicrocyclePlanningPage() {
     if (sessionCount === 1) {
       const sessionIntensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_0`;
       localStorage.setItem(sessionIntensityKey, intensity);
+      notifySessionMetaChanged();
     }
     
     toast({
@@ -3279,6 +3290,7 @@ export default function MicrocyclePlanningPage() {
         const iVal = oldIntensities[oldIdx];
         if (iVal !== undefined) {
           localStorage.setItem(`sessionIntensity_${mesoId}_${dayDate}_${newIdx}`, iVal);
+          notifySessionMetaChanged();
         }
         
         const cVal = oldComments[oldIdx];

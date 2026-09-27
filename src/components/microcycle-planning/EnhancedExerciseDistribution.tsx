@@ -38,6 +38,7 @@ import { cn } from '@/lib/utils';
 import { cleanupSupersetsOnExerciseDelete, toggleSuperset } from '@/utils/supersetUtils';
 import { getBorgBg, getBorgFg, getBorgLabelFull, getBorgStyleLight, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { CircuitBuilderDialog } from '@/components/templates/CircuitBuilderDialog';
+import { notifySessionMetaChanged } from '@/utils/parameterVisibility';
 
 interface EnhancedExerciseDistributionProps {
   mesocycle: ExtendedMesocycle;
@@ -219,6 +220,7 @@ export function EnhancedExerciseDistribution({
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
         localStorage.setItem(key, value);
+        notifySessionMetaChanged();
       }, 300);
     };
   }, []);

@@ -10,6 +10,7 @@ import { MasterPlannerGrid } from './MasterPlannerGrid';
 import { cn } from '@/lib/utils';
 import { TrainingDay } from '@/types/daily-intensity';
 import { ExtendedMesocycle } from '@/features/planner/types';
+import { notifySessionMetaChanged } from '@/utils/parameterVisibility';
 import { IntensityLevel } from '@/types/training';
 import { TrainingDayCell } from './TrainingDayCell';
 import { WeekRow } from './WeekRow';
@@ -741,6 +742,7 @@ export function TrainingCalendarView({
                   const parsed = existing ? JSON.parse(existing) : {};
                   parsed.comments = comment;
                   localStorage.setItem(key, JSON.stringify(parsed));
+                  notifySessionMetaChanged();
                 } catch {}
               }}
               onSectionCommentChange={(sectionId, comment) => {

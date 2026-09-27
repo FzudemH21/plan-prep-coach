@@ -82,16 +82,60 @@ const EXTRA_SESSION_KEYS = [
   'manuallyAddedMethods',     // Legacy Mesocycle-level manual methods
 ] as const;
 
+/**
+ * Per-session keys ({prefix}{mesocycleId}_{yyyy-MM-dd}_{sessionIndex}): session comments +
+ * parameter visibility, session intensities, the session sheet's saved sections. Saved with the
+ * program inside extraSessionState, restored on load, cleared on switch.
+ */
+const SESSION_KEY_PREFIXES = ['workoutSessions_', 'sessionIntensity_', 'workoutSections_'] as const;
+const isSessionKey = (key: string) => SESSION_KEY_PREFIXES.some(p => key.startsWith(p));
+// Legacy prefixes that are only ever cleared
+const LEGACY_SESSION_KEY_PREFIXES = ['sessionIntensities_', 'sessionNames_', 'exercises_'];
+
 const readExtraSessionState = (): Record<string, string> => {
   const state: Record<string, string> = {};
   EXTRA_SESSION_KEYS.forEach(key => {
     const value = localStorage.getItem(key);
     if (value !== null) state[key] = value;
   });
+
+  // Per-session keys of this program only: its mesocycles and training days. These keys used to
+  // survive program switches, so browser storage can still hold other programs' entries.
+  let planDates: Set<string> | null = null;
+  let mesoIds: Set<string> | null = null;
+  try {
+    const days = JSON.parse(localStorage.getItem('trainingDays') ?? '[]') as Array<{ date?: string }>;
+    if (Array.isArray(days) && days.length > 0) planDates = new Set(days.map(d => d.date ?? ''));
+    const meso = JSON.parse(localStorage.getItem('mesocycleData') ?? 'null') as { mesocycles?: Array<{ id?: string }> } | null;
+    if (meso?.mesocycles?.length) mesoIds = new Set(meso.mesocycles.map(m => m.id ?? ''));
+  } catch { /* keep all */ }
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !isSessionKey(key)) continue;
+    const match = key.match(/^[A-Za-z]+_(.+)_(\d{4}-\d{2}-\d{2})_\d+$/);
+    if (match) {
+      if (mesoIds && !mesoIds.has(match[1])) continue;
+      if (planDates && !planDates.has(match[2])) continue;
+    }
+    const value = localStorage.getItem(key);
+    if (value !== null) state[key] = value;
+  }
   return state;
 };
 
-const removeExtraSessionKeys = () => EXTRA_SESSION_KEYS.forEach(key => localStorage.removeItem(key));
+const removeSessionKeys = () => {
+  const keys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (isSessionKey(key) || LEGACY_SESSION_KEY_PREFIXES.some(p => key.startsWith(p)))) keys.push(key);
+  }
+  keys.forEach(key => localStorage.removeItem(key));
+};
+
+const removeExtraSessionKeys = () => {
+  EXTRA_SESSION_KEYS.forEach(key => localStorage.removeItem(key));
+  removeSessionKeys();
+};
 
 type ChatMap = Record<string, import('@/utils/anthropicApi').Message[]>;
 
@@ -261,9 +305,27 @@ export function useTrainingPrograms() {
     // Extra wizard state: restore this program's own copy. When reopening the program that
     // is already open, localStorage is the live (newest) state, so leave it untouched.
     if (!reopeningActiveProgram) {
-      removeExtraSessionKeys();
+      const hasSavedSessionKeys = Object.keys(program.extraSessionState ?? {}).some(isSessionKey);
+      if (hasSavedSessionKeys) {
+        removeExtraSessionKeys();
+      } else {
+        // Migration: saved before per-session keys were stored with the program — keep the ones
+        // on this program's dates (what it showed so far); its next save stores them
+        EXTRA_SESSION_KEYS.forEach(key => localStorage.removeItem(key));
+        const planDates = new Set((program.trainingDays ?? []).map((d: { date?: string }) => d.date ?? ''));
+        const stale: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (!key) continue;
+          if (LEGACY_SESSION_KEY_PREFIXES.some(pf => key.startsWith(pf))) { stale.push(key); continue; }
+          if (!isSessionKey(key)) continue;
+          const date = key.match(/_(\d{4}-\d{2}-\d{2})_\d+$/)?.[1];
+          if (!date || !planDates.has(date)) stale.push(key);
+        }
+        stale.forEach(key => localStorage.removeItem(key));
+      }
       Object.entries(program.extraSessionState ?? {}).forEach(([key, value]) => {
-        if ((EXTRA_SESSION_KEYS as readonly string[]).includes(key)) localStorage.setItem(key, value);
+        if ((EXTRA_SESSION_KEYS as readonly string[]).includes(key) || isSessionKey(key)) localStorage.setItem(key, value);
       });
     }
 
@@ -358,16 +420,6 @@ export function useTrainingPrograms() {
     staticKeys.forEach(key => localStorage.removeItem(key));
     // Drop the program's AI conversation but keep global chats (Parameter Database, Toolbox, …)
     localStorage.setItem('aiConversations', JSON.stringify(filterChats(readChatsFromLS(), false)));
-
-    const dynamicPrefixes = [
-      'workoutSections_', 'workoutSessions_', 'sessionIntensities_', 'sessionNames_', 'exercises_',
-    ];
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && dynamicPrefixes.some(p => key.startsWith(p))) keysToRemove.push(key);
-    }
-    keysToRemove.forEach(key => localStorage.removeItem(key));
   }, [flushExtraStateToActiveProgram]);
 
   // Update program status

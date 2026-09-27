@@ -1996,7 +1996,17 @@ export default function MesocyclePage() {
         if (!updated[mesocycleId][microcycleIndex]) updated[mesocycleId][microcycleIndex] = {};
         if (!updated[mesocycleId][microcycleIndex][methodName]) updated[mesocycleId][microcycleIndex][methodName] = {};
         if (!updated[mesocycleId][microcycleIndex][methodName][sessionIndex]) updated[mesocycleId][microcycleIndex][methodName][sessionIndex] = {};
-        updated[mesocycleId][microcycleIndex][methodName][sessionIndex][parameterName] = value;
+        const slot: Record<string, string | number> = { ...updated[mesocycleId][microcycleIndex][methodName][sessionIndex], [parameterName]: value };
+        // The table value is authoritative for the whole session: drop per-set variants of this
+        // parameter in the slot (e.g. "Work Intensity_set1" left by older session-sheet saves),
+        // which would otherwise keep winning over it in the session sheet and Master Planner
+        if (!parameterName.endsWith('_unit') && !/_set\d+$/i.test(parameterName)) {
+          const prefix = `${parameterName}_set`.toLowerCase();
+          Object.keys(slot).forEach(k => {
+            if (k.toLowerCase().startsWith(prefix) && /^\d+$/.test(k.slice(prefix.length))) delete slot[k];
+          });
+        }
+        updated[mesocycleId][microcycleIndex][methodName][sessionIndex] = slot;
         return updated;
       });
     });

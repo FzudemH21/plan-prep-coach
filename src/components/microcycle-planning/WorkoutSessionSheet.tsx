@@ -48,7 +48,7 @@ import { PrintSessionView } from '@/components/print/PrintSessionView';
 import { useExerciseMetrics } from '@/hooks/useExerciseMetrics';
 import { useCoachProfile } from '@/hooks/useCoachProfile';
 import { onExerciseRenamed, renameExerciseInValue } from '@/utils/exerciseRename';
-import { readSessionMeta } from '@/utils/parameterVisibility';
+import { notifySessionMetaChanged, readSessionMeta } from '@/utils/parameterVisibility';
 
 interface SessionSectionProp {
   id: string;
@@ -1959,6 +1959,7 @@ export function WorkoutSessionSheet({
     // Save workout sections structure
     const sectionsKey = `workoutSections_${mesocycleId}_${dayDate}_${sessionIndex}`;
     localStorage.setItem(sectionsKey, JSON.stringify(workoutSections));
+    notifySessionMetaChanged();
 
     // If single session day, sync day intensity
     if (isSingleSessionDay && onIntensityChange) {
@@ -2491,6 +2492,7 @@ export function WorkoutSessionSheet({
         };
 
         localStorage.setItem(metadataKey, JSON.stringify(parsed));
+        notifySessionMetaChanged();
         setParameterVisibilityOverrides(prev => ({ ...prev, ...parameterVisibility }));
       } catch (e) {
         console.error('Failed to save parameter visibility:', e);

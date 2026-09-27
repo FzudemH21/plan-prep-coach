@@ -15,6 +15,15 @@ export interface SessionVisibilityData {
   [key: string]: unknown;
 }
 
+/**
+ * Fired after per-session data (workoutSessions_ / sessionIntensity_ / workoutSections_ keys) is
+ * written, so the wizard auto-saves it into the program — these keys aren't React state.
+ */
+export const SESSION_META_CHANGED_EVENT = 'ppc:session-meta-changed';
+export function notifySessionMetaChanged(): void {
+  window.dispatchEvent(new Event(SESSION_META_CHANGED_EVENT));
+}
+
 export const sessionMetaKey = (mesocycleId: string, dayDate: string, sessionIndex: number) =>
   `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
 
@@ -31,6 +40,7 @@ export function readSessionMeta(mesocycleId: string, dayDate: string, sessionInd
 export function writeSessionMeta(mesocycleId: string, dayDate: string, sessionIndex: number, data: SessionVisibilityData): void {
   try {
     localStorage.setItem(sessionMetaKey(mesocycleId, dayDate, sessionIndex), JSON.stringify(data));
+    notifySessionMetaChanged();
   } catch { /* ignore */ }
 }
 

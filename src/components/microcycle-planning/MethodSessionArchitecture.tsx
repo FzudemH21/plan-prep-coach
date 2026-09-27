@@ -45,6 +45,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { notifySessionMetaChanged } from '@/utils/parameterVisibility';
 
 export interface MethodSessionArchitectureProps {
   mesocycle: ExtendedMesocycle;
@@ -352,6 +353,7 @@ export function MethodSessionArchitecture({
       let parsed: Record<string, unknown> = {};
       try { if (existing) parsed = JSON.parse(existing) as Record<string, unknown>; } catch { /* ignore */ }
       localStorage.setItem(key, JSON.stringify({ ...parsed, comments: comment }));
+      notifySessionMetaChanged();
       setSessionCommentsMap(prev => ({ ...prev, [`${dayDate}_${sessionIndex}`]: comment }));
     },
     [mesocycle.id]
