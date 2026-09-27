@@ -15,7 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Play, Video, ExternalLink, Link2, X, Pencil, Plus, TrendingUp, TrendingDown, GripVertical } from 'lucide-react';
-import { useCustomLibraries, CustomLibrary, CustomExercise, LibraryColumn } from '@/contexts/CustomLibrariesContext';
+import { useCustomLibraries, CustomLibrary, CustomExercise, LibraryColumn, getNameColumnId } from '@/contexts/CustomLibrariesContext';
 import { useExerciseProgressions, ProgressionDirection, ExerciseProgression } from '@/hooks/useExerciseProgressions';
 import { ExerciseLibraryPopup } from '@/components/microcycle-planning/ExerciseLibraryPopup';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
@@ -89,7 +89,7 @@ export function ExerciseDetailDialog({
   isOpen,
   onClose,
   exerciseId,
-  exerciseName,
+  exerciseName: exerciseNameProp,
   libraryId,
   mode: propMode,
   readOnly = false,
@@ -232,6 +232,13 @@ export function ExerciseDetailDialog({
 
     return null;
   }, [libraries, exerciseId, libraryId, propExerciseData]);
+
+  // The library's current name wins over the name handed in by the caller — callers pass the copy
+  // stored in the program/session, which is stale right after a rename.
+  const libraryName = foundExercise
+    ? foundExercise.exercise.data?.[getNameColumnId(foundExercise.library) ?? '']
+    : undefined;
+  const exerciseName: string = typeof libraryName === 'string' && libraryName.trim() !== '' ? libraryName : exerciseNameProp;
 
   // Get actual data to display
   const exerciseData = propExerciseData || foundExercise?.exercise?.data || {};

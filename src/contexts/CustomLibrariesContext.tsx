@@ -1,6 +1,16 @@
 import React, { createContext, useContext, useCallback } from 'react';
 import { useSupabaseStore } from '@/hooks/useSupabaseStore';
 import { syncExerciseDetailToSchedule } from '@/utils/exerciseDetailSync';
+import { propagateExerciseRename, renameExerciseInValue } from '@/utils/exerciseRename';
+
+/**
+ * The column holding an exercise's name: "Name" / "Exercise Name", else the first column whose
+ * name contains "name", else the first column (same fallbacks used around the app).
+ */
+export function getNameColumnId(lib: { columns: Array<{ id: string; name: string }> }): string | undefined {
+  const exact = lib.columns.find(c => ['name', 'exercise name'].includes(c.name.trim().toLowerCase()));
+  return (exact ?? lib.columns.find(c => c.name.toLowerCase().includes('name')) ?? lib.columns[0])?.id;
+}
 
 export interface LibraryColumn {
   id: string;
@@ -224,6 +234,13 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
     // Detect if video or description changed — either via top-level fields or via a
     // column with role 'video'/'description' (inline cell edit path)
     const lib = data.libraries.find(l => l.id === libraryId);
+
+    // Detect a rename (name column changed) — the name is copied into programs, selections,
+    // circuits, templates and athlete schedules, so it's propagated everywhere below.
+    const nameColumnId = lib ? getNameColumnId(lib) : undefined;
+    const oldName = lib?.exercises.find(e => e.id === exerciseId)?.data?.[nameColumnId ?? ''];
+    const newName = nameColumnId && updates.data && nameColumnId in updates.data ? updates.data[nameColumnId] : undefined;
+    const renamedTo = typeof newName === 'string' && newName.trim() !== '' && newName !== oldName ? newName : null;
     const videoOrDescChanged = (
       'videoUrl' in updates ||
       'description' in updates ||
@@ -232,18 +249,24 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
       ))
     );
 
+    const updatedLibraries = data.libraries.map(l =>
+      l.id === libraryId
+        ? {
+            ...l,
+            exercises: l.exercises.map(ex => ex.id === exerciseId ? { ...ex, ...updates } : ex),
+            lastUpdated: new Date().toISOString(),
+          }
+        : l
+    );
     save({
       ...data,
-      libraries: data.libraries.map(l =>
-        l.id === libraryId
-          ? {
-              ...l,
-              exercises: l.exercises.map(ex => ex.id === exerciseId ? { ...ex, ...updates } : ex),
-              lastUpdated: new Date().toISOString(),
-            }
-          : l
-      ),
+      // Circuits in any library that use this exercise get the new name in the same save
+      libraries: renamedTo
+        ? updatedLibraries.map(l => ({ ...l, circuits: renameExerciseInValue(l.circuits, exerciseId, renamedTo) }))
+        : updatedLibraries,
     });
+
+    if (renamedTo) void propagateExerciseRename(exerciseId, renamedTo);
 
     if (videoOrDescChanged && lib) {
       const ex = lib.exercises.find(e => e.id === exerciseId);
@@ -267,21 +290,48 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
     updates: Array<{ exerciseId: string } & Partial<CustomExercise>>,
   ) => {
     const updateMap = new Map(updates.map(u => [String(u.exerciseId), u]));
+
+    // Renames in this batch (name column changed) — propagated like single updates
+    const targetLib = data.libraries.find(l => l.id === libraryId);
+    const nameColumnId = targetLib ? getNameColumnId(targetLib) : undefined;
+    const renames: Array<{ exerciseId: string; newName: string }> = [];
+    if (targetLib && nameColumnId) {
+      targetLib.exercises.forEach(ex => {
+        const newName = updateMap.get(String(ex.id))?.data?.[nameColumnId];
+        if (typeof newName === 'string' && newName.trim() !== '' && newName !== ex.data?.[nameColumnId]) {
+          renames.push({ exerciseId: ex.id, newName });
+        }
+      });
+    }
+
+    const updatedLibraries = data.libraries.map(lib =>
+      lib.id === libraryId
+        ? {
+            ...lib,
+            exercises: lib.exercises.map(ex => {
+              const u = updateMap.get(String(ex.id));
+              return u ? { ...ex, ...u } : ex;
+            }),
+            lastUpdated: new Date().toISOString(),
+          }
+        : lib
+    );
     save({
       ...data,
-      libraries: data.libraries.map(lib =>
-        lib.id === libraryId
-          ? {
-              ...lib,
-              exercises: lib.exercises.map(ex => {
-                const u = updateMap.get(String(ex.id));
-                return u ? { ...ex, ...u } : ex;
-              }),
-              lastUpdated: new Date().toISOString(),
-            }
-          : lib
-      ),
+      libraries: renames.length === 0
+        ? updatedLibraries
+        : updatedLibraries.map(l => ({
+            ...l,
+            circuits: renames.reduce((circuits, r) => renameExerciseInValue(circuits, r.exerciseId, r.newName), l.circuits),
+          })),
     });
+
+    // One after another, so concurrent updates of the same stores can't overwrite each other
+    if (renames.length > 0) {
+      void (async () => {
+        for (const r of renames) await propagateExerciseRename(r.exerciseId, r.newName);
+      })();
+    }
   }, [data, save]);
 
   const deleteExerciseFromLibrary = useCallback((libraryId: string, exerciseId: string) => {

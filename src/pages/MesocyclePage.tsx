@@ -4,6 +4,7 @@ import { WIZARD_CHAT_ID } from '@/contexts/AIChatContext';
 import { MesocycleVisibilityToggles } from '@/components/mesocycle/MesocycleVisibilityToggles';
 import { cn } from '@/lib/utils';
 import { evaluateFormula } from '@/utils/formulaEvaluator';
+import { onExerciseRenamed, renameExerciseInValue } from '@/utils/exerciseRename';
 import React, { useState, useEffect, useMemo, useCallback, useTransition } from 'react';
 import { useAthletes } from '@/hooks/useAthletes';
 import { getAthleteDisplayName } from '@/types/athlete';
@@ -198,6 +199,10 @@ export default function MesocyclePage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, mpTableKey]);
+  // A library exercise was renamed: keep the in-memory selection's names in sync
+  useEffect(() => onExerciseRenamed(({ exerciseId, newName }) => {
+    setExerciseCellData(prev => renameExerciseInValue(prev, exerciseId, newName));
+  }), []);
   const { dragState, startDrag, endDrag, addToSelection, clearSelection, fillCells } = useDragFill();
   const { toast } = useToast();
   const { athletes } = useAthletes();

@@ -47,6 +47,7 @@ import { ExerciseHistorySheet, type HistoryEntry } from '@/components/shared/Exe
 import { PrintSessionView } from '@/components/print/PrintSessionView';
 import { useExerciseMetrics } from '@/hooks/useExerciseMetrics';
 import { useCoachProfile } from '@/hooks/useCoachProfile';
+import { onExerciseRenamed, renameExerciseInValue } from '@/utils/exerciseRename';
 
 interface SessionSectionProp {
   id: string;
@@ -1066,7 +1067,14 @@ export function WorkoutSessionSheet({
     // Default empty state
     return [{ id: 'section-0', name: 'Uncategorized', order: 0, exercises: [] }];
   });
-  
+
+  // A library exercise was renamed (e.g. via this sheet's exercise detail): show the new name
+  // right away and keep it when this sheet saves its sections.
+  useEffect(() => onExerciseRenamed(({ exerciseId, newName }) => {
+    setWorkoutSections(prev => renameExerciseInValue(prev, exerciseId, newName));
+    setDetailExercise(prev => renameExerciseInValue(prev, exerciseId, newName));
+  }), []);
+
   // Create a stable key to detect when parameterValues actually has data for this microcycle
   const parameterValuesKey = useMemo(() => {
     const microData = parameterValues[mesocycleId]?.[microcycleIndex];

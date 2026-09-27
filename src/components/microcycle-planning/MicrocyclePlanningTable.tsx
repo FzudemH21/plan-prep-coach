@@ -12,6 +12,7 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import { useToast } from '@/hooks/use-toast';
 import { ExerciseSelectionCell } from './ExerciseSelectionCell';
 import { MesocycleVisibilityToggles } from '@/components/mesocycle/MesocycleVisibilityToggles';
+import { onExerciseRenamed, renameExerciseInValue } from '@/utils/exerciseRename';
 
 /** Same normalization MesocyclePage uses to match methods to toolbox entries. */
 const normalizeMethodKey = (str: string): string =>
@@ -78,6 +79,12 @@ export const MicrocyclePlanningTable = forwardRef<MicrocyclePlanningTableHandle,
       setPlanningState(JSON.parse(savedState));
     }
   }, []);
+
+  // A library exercise was renamed: update the names held here (the change flows on to the page
+  // via onExerciseSelectionChange, so the saved program gets it too)
+  useEffect(() => onExerciseRenamed(({ exerciseId, newName }) => {
+    setPlanningState(prev => renameExerciseInValue(prev, exerciseId, newName));
+  }), []);
 
   // Save state to localStorage and notify parent whenever it changes.
   // Skip the very first execution (initial empty state before load completes).

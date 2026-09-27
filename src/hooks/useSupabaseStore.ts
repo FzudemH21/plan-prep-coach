@@ -27,6 +27,16 @@ const _fetchedKeys = new Set<string>();
 // Callbacks registered by secondary instances waiting for the first fetch.
 const _pendingCallbacks = new Map<string, Array<(data: unknown) => void>>();
 
+// ─── Cross-instance sync ──────────────────────────────────────────────────────
+// Every mounted hook instance of a table registers here. When one instance saves (or the
+// table is updated via updateSupabaseStoreData), all instances get the new data — otherwise
+// a page holding a stale copy would overwrite the newer data on its next save.
+const _instances = new Map<string, Set<(data: unknown) => void>>();
+
+function notifyInstances(tableName: string, data: unknown, except?: (data: unknown) => void): void {
+  _instances.get(tableName)?.forEach(fn => { if (fn !== except) fn(data); });
+}
+
 // ─── Cache helpers ────────────────────────────────────────────────────────────
 
 function readCache<T>(cacheKey: string): T | null {
@@ -92,6 +102,16 @@ export function useSupabaseStore<T>({
   // Sync-init from cache (no flicker on revisit)
   const [data, setData] = useState<T>(() => readCache<T>(cacheKey) ?? defaultValue);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Receive saves made by other instances of the same table
+  const receiveRef = useRef<(incoming: unknown) => void>((incoming) => setData(incoming as T));
+  useEffect(() => {
+    const receive = receiveRef.current;
+    const set = _instances.get(tableName) ?? new Set();
+    set.add(receive);
+    _instances.set(tableName, set);
+    return () => { set.delete(receive); };
+  }, [tableName]);
 
   // Prevent the load effect from running twice in StrictMode
   const loadedForUser = useRef<string | null>(null);
@@ -201,6 +221,7 @@ export function useSupabaseStore<T>({
     async (newData: T): Promise<void> => {
       setData(newData);
       writeCache(cacheKey, newData);
+      notifyInstances(tableName, newData, receiveRef.current);
       if (!user) return;
       try {
         await upsertRow(tableName, user.id, newData);
@@ -212,4 +233,38 @@ export function useSupabaseStore<T>({
   );
 
   return [data, save, isLoading];
+}
+
+/**
+ * Update a store from outside a component (e.g. propagating an exercise rename into every
+ * program). If an instance of the table is mounted, the local cache is the freshest copy (it's
+ * written before every upsert); otherwise the row is fetched from Supabase first, so an outdated
+ * cache (e.g. edited on another device) can't overwrite newer server data. Mounted instances are
+ * updated too. The updater returns the same object when nothing changed (then nothing is saved).
+ */
+export async function updateSupabaseStoreData<T>(
+  tableName: string,
+  legacyKey: string,
+  updater: (current: T) => T,
+): Promise<void> {
+  const cacheKey = `${legacyKey}_sb_cache`;
+  const { data: authData } = await supabase.auth.getUser();
+  const userId = authData.user?.id;
+
+  let current: T | null = null;
+  if ((_instances.get(tableName)?.size ?? 0) > 0 || !userId) {
+    current = readCache<T>(cacheKey);
+  } else {
+    const { data: row, error } = await supabase.from(tableName).select('data').eq('user_id', userId).maybeSingle();
+    if (error) throw error;
+    current = (row?.data as T | undefined) ?? null;
+  }
+  if (current === null) return;
+
+  const next = updater(current);
+  if (next === current) return;
+
+  writeCache(cacheKey, next);
+  notifyInstances(tableName, next);
+  if (userId) await upsertRow(tableName, userId, next);
 }

@@ -36,6 +36,7 @@ import { ExportPDFButton } from '@/components/pdf/ExportPDFButton';
 import { useWizardData } from '@/contexts/WizardDataContext';
 import { WizardAIAssistant, FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
 import { WIZARD_CHAT_ID } from '@/contexts/AIChatContext';
+import { onExerciseRenamed, renameExerciseInValue } from '@/utils/exerciseRename';
 import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
 import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
 import { useCoachMemory } from '@/hooks/useCoachMemory';
@@ -550,6 +551,13 @@ export default function MicrocyclePlanningPage() {
     localStorage.setItem('dayMethodAssignments', JSON.stringify(dayMethodAssignments));
     markDirty();
   }, [dayMethodAssignments]);
+
+  // A library exercise was renamed (anywhere, e.g. in the session sheet): update the names held in
+  // memory here, or the next save would write the old name back.
+  useEffect(() => onExerciseRenamed(({ exerciseId, newName }) => {
+    setExerciseDistribution(prev => renameExerciseInValue(prev, exerciseId, newName));
+    setExerciseSelectionData(prev => renameExerciseInValue(prev, exerciseId, newName));
+  }), []);
 
   // Days that actually have something on them: a method assigned in step 1, an exercise placed,
   // or a section. dateKey → highest session index in use (-1 if only sections, no index info).
