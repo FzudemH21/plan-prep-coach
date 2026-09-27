@@ -1302,12 +1302,7 @@ export default function AthleteSessionPage() {
                                       className="min-w-0 text-sm truncate text-left hover:text-primary active:opacity-60 transition-colors"
                                     >{ex.name}</button>
                                   )}
-                                  {ex.eachSide && (
-                                    <span className="shrink-0 inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 leading-none">
-                                      Perform on each side
-                                    </span>
-                                  )}
-                                  {/* Comment button */}
+                                  {/* Comment button */
                                   <button
                                     onClick={() => {
                                       setCommentTarget({ exerciseName: ex.name, sectionName: sec.name });
@@ -1325,7 +1320,7 @@ export default function AthleteSessionPage() {
                                   </span>
                                 ) : ex.plannedSets ? (
                                   <span className="text-xs text-muted-foreground shrink-0">
-                                    {ex.plannedSets} sets
+                                    {ex.plannedSets} {ex.plannedSets === 1 ? 'set' : 'sets'}
                                   </span>
                                 ) : null}
                               </div>

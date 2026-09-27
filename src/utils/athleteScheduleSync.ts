@@ -344,6 +344,9 @@ export async function syncAthleteSchedule(
   // Also build rest-param lookup: "category - subCategory" → restParamName
   const toolboxVisibleMap = new Map<string, string[]>();
   const toolboxRestMap = new Map<string, string>();
+  // Set-count parameter per method (toolbox isSetParameter, not a rest parameter) — for methods
+  // whose set count isn't literally called "Sets"
+  const toolboxSetParamMap = new Map<string, string>();
   if (toolboxEntries) {
     const grouped = new Map<string, string[]>();
     for (const entry of toolboxEntries) {
@@ -356,6 +359,8 @@ export async function syncAthleteSchedule(
       const REST_NAME = /rest|pause|recovery/i;
       if (entry.isRestParameter || REST_NAME.test(entry.parameterName)) {
         toolboxRestMap.set(key, entry.parameterName);
+      } else if (entry.isSetParameter && !toolboxSetParamMap.has(key)) {
+        toolboxSetParamMap.set(key, entry.parameterName);
       }
       // Include all params that are shown in the grid by default (per toolbox config).
       // Qualitative params and rest params are intentionally kept here — the coach app
@@ -400,6 +405,16 @@ export async function syncAthleteSchedule(
     return Math.max(0, list.indexOf(`${ex.dayDate}#${ex.sessionIndex ?? 0}`));
   };
 
+  /** Planned set count: a "Sets" parameter, else the method's toolbox set-count parameter */
+  function plannedSetCount(params: Record<string, string | number>, methodKey: string): number | undefined {
+    const key = Object.keys(params).find(k => /^sets?$/i.test(k))
+      ?? (toolboxSetParamMap.has(methodKey) && params[toolboxSetParamMap.get(methodKey)!] !== undefined
+        ? toolboxSetParamMap.get(methodKey)
+        : undefined);
+    const n = key !== undefined && params[key] !== '' ? Number(params[key]) : NaN;
+    return !isNaN(n) && n > 0 ? n : undefined;
+  }
+
   // Helper: get planned params for an exercise
   function getPlannedParams(ex: ExerciseEntry): {
     plannedSets: number | undefined;
@@ -415,8 +430,7 @@ export async function syncAthleteSchedule(
     if (ex.parameterSource === 'toolbox') {
       if (ex.adhocPlannedParams) {
         const adhocParams = ex.adhocPlannedParams as Record<string, string | number>;
-        const setsKey = Object.keys(adhocParams).find(k => /^sets?$/i.test(k));
-        const plannedSets = setsKey ? Number(adhocParams[setsKey]) : undefined;
+        const plannedSets = plannedSetCount(adhocParams, baseMethodKey);
         const visibleParams = Array.isArray(ex.adhocVisibleParams)
           ? (ex.adhocVisibleParams as string[])
           : undefined;
@@ -485,8 +499,7 @@ export async function syncAthleteSchedule(
     }
 
     // Extract set count
-    const setsKey = Object.keys(storedParams).find(k => /^sets?$/i.test(k));
-    const plannedSets = setsKey && storedParams[setsKey] ? Number(storedParams[setsKey]) : undefined;
+    const plannedSets = plannedSetCount(storedParams, baseMethodKey);
 
     // Get visible params from toolbox — strip ::suffix before lookup
     let visibleParams: string[] | undefined;
