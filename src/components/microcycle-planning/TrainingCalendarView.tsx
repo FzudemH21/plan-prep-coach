@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -357,6 +357,13 @@ export function TrainingCalendarView({
   // Group days into weeks
   const weeks = useMemo(() => groupDaysIntoWeeks(calendarDays), [calendarDays]);
 
+  // The mesocycle a date belongs to (via its microcycle) — the Master Planner spans all mesocycles
+  const mesocycleForDate = useCallback((dateString: string): ExtendedMesocycle => {
+    const microcycleId = trainingDays.find(td => td.date === dateString)?.microcycleId;
+    return (microcycleId && mesocycles.find(m => m.microcycles.some(mc => mc.id === microcycleId))) || viewedMesocycle;
+  }, [trainingDays, mesocycles, viewedMesocycle]);
+  const mesoIdForDate = useCallback((dateString: string) => mesocycleForDate(dateString).id, [mesocycleForDate]);
+
   // Calculate all days across ALL mesocycles for Master Planner view
   // (mirrors AthleteCalendarView which spans the full assignment, not just one mesocycle)
   const allMesocycleDays = useMemo((): CalendarDay[] => {
@@ -406,7 +413,7 @@ export function TrainingCalendarView({
           
           let sessionName = trainingDay?.sessionNames?.[parseInt(idx)] || `Session ${parseInt(idx) + 1}`;
           
-          const intensityKey = `sessionIntensity_${viewedMesocycle.id}_${dateString}_${idx}`;
+          const intensityKey = `sessionIntensity_${mesoIdForDate(dateString)}_${dateString}_${idx}`;
           const storedIntensity = localStorage.getItem(intensityKey);
           const dayIntensity = trainingDay ? (dailyIntensityData?.find(di => di.date === dateString)?.intensity || '5') : 'moderate';
           const sessionIntensity = storedIntensity || dayIntensity;
@@ -431,7 +438,7 @@ export function TrainingCalendarView({
         totalExercises: exercises.length,
       };
     });
-  }, [viewMode, mesocycles, viewedMesocycle, exercisesByDate, trainingDays, dailyIntensityData, daySplitStates]);
+  }, [viewMode, mesocycles, viewedMesocycle, exercisesByDate, trainingDays, dailyIntensityData, daySplitStates, mesoIdForDate]);
 
   const handlePrevious = () => {
     setCurrentDate(prev => subWeeks(prev, 1));
@@ -469,15 +476,16 @@ export function TrainingCalendarView({
     if (!addExerciseContext) return 0;
     const trainingDay = trainingDays.find(td => td.date === addExerciseContext.dayDate);
     if (!trainingDay) return 0;
-    const idx = viewedMesocycle.microcycles.findIndex(mc => mc.id === trainingDay.microcycleId);
+    const idx = mesocycleForDate(addExerciseContext.dayDate).microcycles.findIndex(mc => mc.id === trainingDay.microcycleId);
     return idx >= 0 ? idx : 0;
-  }, [addExerciseContext, trainingDays, viewedMesocycle.microcycles]);
+  }, [addExerciseContext, trainingDays, mesocycleForDate]);
+  const addExerciseMesocycleId = addExerciseContext ? mesoIdForDate(addExerciseContext.dayDate) : viewedMesocycle.id;
 
   // Compute available methods for the add exercise flow (same logic as WorkoutSessionSheet)
   const availableMethodsForAdd = useMemo(() => {
     if (!addExerciseContext || !parameterValues) return [];
     const { sessionIndex } = addExerciseContext;
-    const methodsForSession = parameterValues[viewedMesocycle.id]?.[addExerciseMicrocycleIndex];
+    const methodsForSession = parameterValues[addExerciseMesocycleId]?.[addExerciseMicrocycleIndex];
     if (!methodsForSession) return [];
     
     return Object.keys(methodsForSession).flatMap(methodKey => {
@@ -490,7 +498,7 @@ export function TrainingCalendarView({
         : [methodKey, undefined];
       return [{ id: methodKey, methodId, categoryName: categoryName || undefined }];
     });
-  }, [addExerciseContext, parameterValues, viewedMesocycle.id, addExerciseMicrocycleIndex]);
+  }, [addExerciseContext, parameterValues, addExerciseMesocycleId, addExerciseMicrocycleIndex]);
 
   // Handler for exercises selected from library popup
   const handleExercisesSelectedFromLibrary = (exercises: ExerciseSelection[]) => {
@@ -689,6 +697,7 @@ export function TrainingCalendarView({
               dailyIntensityData={dailyIntensityData}
               parameterValues={parameterValues}
               currentMesocycle={viewedMesocycle}
+              mesocycles={mesocycles}
               trainingDays={trainingDays}
               toolboxData={toolboxData}
               weeksToDisplay={masterWeeksToDisplay}
@@ -696,16 +705,17 @@ export function TrainingCalendarView({
               onParameterChange={onSaveParameters ? (dayDate, sessionIndex, methodId, categoryName, paramName, value) => {
                 const trainingDay = trainingDays.find(td => td.date === dayDate);
                 const microcycleId = trainingDay?.microcycleId;
-                const microcycleIndex = viewedMesocycle.microcycles?.findIndex(m => m.id === microcycleId) ?? 0;
+                const dayMeso = mesocycleForDate(dayDate);
+                const microcycleIndex = Math.max(0, dayMeso.microcycles?.findIndex(m => m.id === microcycleId) ?? 0);
                 const fullMethodKey = categoryName ? `${methodId}::${categoryName}` : methodId;
-                onSaveParameters(viewedMesocycle.id, microcycleIndex, fullMethodKey, sessionIndex, '', { [paramName]: value });
+                onSaveParameters(dayMeso.id, microcycleIndex, fullMethodKey, sessionIndex, '', { [paramName]: value });
               } : undefined}
               sessionSections={sessionSections}
               supersets={supersets}
               onSessionNameChange={onRenameSession}
               onSessionCommentChange={(dayDate, sessionIndex, comment) => {
                 // Save session comment to localStorage
-                const key = `workoutSessions_${viewedMesocycle.id}_${dayDate}_${sessionIndex}`;
+                const key = `workoutSessions_${mesoIdForDate(dayDate)}_${dayDate}_${sessionIndex}`;
                 try {
                   const existing = localStorage.getItem(key);
                   const parsed = existing ? JSON.parse(existing) : {};
@@ -1241,7 +1251,7 @@ export function TrainingCalendarView({
         }}
         onMethodSelected={handleMethodSelectedForExercises}
         availableMethods={availableMethodsForAdd}
-        mesocycleId={viewedMesocycle.id}
+        mesocycleId={addExerciseMesocycleId}
         microcycleIndex={addExerciseMicrocycleIndex}
         sessionIndex={addExerciseContext?.sessionIndex || 0}
       />

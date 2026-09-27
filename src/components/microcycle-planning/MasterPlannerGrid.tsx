@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { getDay } from 'date-fns';
+import { format, getDay } from 'date-fns';
 import { MasterPlannerColumn } from './MasterPlannerColumn';
 import { IntensityLevel, SubGoal, Event } from '@/types/training';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -48,6 +48,8 @@ interface MasterPlannerGridProps {
   dailyIntensityData?: any[];
   parameterValues?: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
   currentMesocycle?: ExtendedMesocycle;
+  /** All mesocycles of the plan (each column resolves its own day's mesocycle) */
+  mesocycles?: ExtendedMesocycle[];
   trainingDays?: TrainingDay[];
   toolboxData?: ToolboxDatabase;
   onParameterChange?: (
@@ -134,6 +136,7 @@ export function MasterPlannerGrid({
   dailyIntensityData,
   parameterValues,
   currentMesocycle,
+  mesocycles,
   trainingDays,
   toolboxData,
   onParameterChange,
@@ -204,8 +207,18 @@ export function MasterPlannerGrid({
   const canGoBack = startWeekOffset > 0;
   const canGoForward = startWeekOffset + weeksToDisplay < totalWeeksInMesocycle;
 
-  // Reset offset when mesocycle or weeks-per-view changes
-  useEffect(() => { setStartWeekOffset(0); }, [currentMesocycle?.id, weeksToDisplay]);
+  // The grid spans the whole plan; when a mesocycle is selected, jump to its first week
+  // (first matching day on/after its start date)
+  const mesoStartKey = currentMesocycle?.startDate
+    ? format(new Date(currentMesocycle.startDate), 'yyyy-MM-dd')
+    : undefined;
+  useEffect(() => {
+    if (!mesoStartKey || allMatchingDays.length <= weeksToDisplay) { setStartWeekOffset(0); return; }
+    const idx = allMatchingDays.findIndex(d => d.dateString >= mesoStartKey);
+    setStartWeekOffset(idx > 0 ? idx : 0);
+  // Only on mesocycle / weeks-per-view change — not when the day of week or data changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMesocycle?.id, mesoStartKey, weeksToDisplay]);
 
   if (filteredDays.length === 0) {
     return (
@@ -269,6 +282,7 @@ export function MasterPlannerGrid({
               dailyIntensityData={dailyIntensityData}
               parameterValues={parameterValues}
               currentMesocycle={currentMesocycle}
+              mesocycles={mesocycles}
               trainingDays={trainingDays}
               toolboxData={toolboxData}
               onParameterChange={onParameterChange}

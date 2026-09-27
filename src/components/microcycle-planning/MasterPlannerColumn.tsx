@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, memo, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, memo, useMemo, useRef } from 'react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +21,7 @@ import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useExerciseMetrics } from '@/hooks/useExerciseMetrics';
 import { evaluateFormula, parseNumeric } from '@/utils/formulaEvaluator';
+import { isParameterVisible, type ParameterVisibilityOverrides } from './ParameterVisibilityPopover';
 import { AthletePerformanceParameter } from '@/types/athlete';
 import {
   Table,
@@ -109,6 +110,8 @@ interface MasterPlannerColumnProps {
   dailyIntensityData?: any[];
   parameterValues?: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
   currentMesocycle?: ExtendedMesocycle;
+  /** All mesocycles of the plan — each column resolves the mesocycle its own day belongs to */
+  mesocycles?: ExtendedMesocycle[];
   trainingDays?: TrainingDay[];
   toolboxData?: ToolboxDatabase;
   onParameterChange?: (
@@ -335,6 +338,15 @@ const EditableSessionName = memo(({
     setLocalName(sessionName);
   }, [sessionName]);
 
+  // Keep a pending edit if the column unmounts before the input blurs (e.g. switching the day
+  // or mesocycle while still typing)
+  const pendingRef = useRef<{ editing: boolean; name: string; original: string; onSave: (name: string) => void }>();
+  pendingRef.current = { editing: isEditing, name: localName, original: sessionName, onSave };
+  useEffect(() => () => {
+    const p = pendingRef.current;
+    if (p?.editing && p.name.trim() && p.name.trim() !== p.original) p.onSave(p.name.trim());
+  }, []);
+
   const handleSave = () => {
     // Always close editing mode
     setIsEditing(false);
@@ -471,7 +483,8 @@ export function MasterPlannerColumn({
   onAddSession,
   dailyIntensityData,
   parameterValues,
-  currentMesocycle,
+  currentMesocycle: viewedMesocycle,
+  mesocycles,
   trainingDays,
   toolboxData,
   onParameterChange,
@@ -547,6 +560,22 @@ export function MasterPlannerColumn({
   const isExerciseCollapsed = (exerciseId: string) => !expandedExercises[exerciseId];
   const hasTraining = day.sessions.length > 0;
   const isSingleSession = day.sessions.length === 1;
+  // The mesocycle this day belongs to (the grid spans the whole plan, the selected one is only
+  // where it starts) — same resolution as the Workout Session Sheet
+  const currentMesocycle = useMemo(() => {
+    const microcycleId = trainingDays?.find(td => td.date === day.dateString)?.microcycleId;
+    return (microcycleId && mesocycles?.find(m => m.microcycles?.some(mc => mc.id === microcycleId))) || viewedMesocycle;
+  }, [trainingDays, day.dateString, mesocycles, viewedMesocycle]);
+
+  // Parameter show/hide choices made in the Workout Session Sheet for a session
+  const getSessionParamVisibility = useCallback((sessionIndex: number): ParameterVisibilityOverrides => {
+    if (!currentMesocycle) return {};
+    try {
+      const stored = localStorage.getItem(`workoutSessions_${currentMesocycle.id}_${day.dateString}_${sessionIndex}`);
+      return (stored && JSON.parse(stored)?.parameterVisibility) || {};
+    } catch { return {}; }
+  }, [currentMesocycle, day.dateString]);
+
   const currentIntensity: IntensityLevel = migrateLegacyIntensity(dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || '5') as IntensityLevel;
 
   // Helper: check if two exercises are linked in a superset
@@ -770,19 +799,20 @@ export function MasterPlannerColumn({
       ? Number(storedParams[setParam.name] || 0) 
       : 0;
 
-    // Split params into visible (grid) and hidden (badges)
-    const visibleParams = methodParams.filter(p => 
-      !p.isSetParameter && 
+    // Split params into visible (grid) and hidden (badges) — same rules as the Workout Session
+    // Sheet: toolbox "show in grid" default + the session's show/hide choices
+    const visibility = getSessionParamVisibility(exercise.sessionIndex);
+    const displayableParams = methodParams.filter(p =>
+      !p.isSetParameter &&
       !p.isFrequencyParameter &&
-      p.name !== 'frequency_per_week' && 
-      p.name !== 'Frequency' &&
-      p.showInGridByDefault !== false
+      p.name !== 'frequency_per_week' &&
+      p.name !== 'Frequency'
     );
-
-    const hiddenParams = methodParams.filter(p => 
-      p.showInGridByDefault === false &&
-      !p.isSetParameter && 
-      !p.isFrequencyParameter
+    const visibleParams = displayableParams.filter(p =>
+      isParameterVisible(p.name, p.showInGridByDefault ?? true, visibility)
+    );
+    const hiddenParams = displayableParams.filter(p =>
+      !isParameterVisible(p.name, p.showInGridByDefault ?? true, visibility)
     );
 
     const rowCount = Math.max(setCount, 1);
@@ -797,7 +827,7 @@ export function MasterPlannerColumn({
             ? tp.category === methodMain2 && tp.subCategory === methodSub2
             : tp.category === methodMain2 && (!tp.subCategory || tp.subCategory === '');
           return catMatch && tp.isCalculated && !!tp.formula;
-        })
+        }).filter(tp => isParameterVisible(tp.parameterName, tp.showInGridByDefault ?? true, visibility))
       : [];
 
     const PCT_UNITS_LOCAL = new Set(['%', '%1RM', '%BW', '%maxV', '%maxHR']);
@@ -924,7 +954,7 @@ export function MasterPlannerColumn({
               <TableHeader>
                 <TableRow className="h-6 border-b">
                   <TableHead className="py-0.5 px-1 font-medium h-6 min-w-[40px] w-[40px] text-center whitespace-nowrap">{setParam?.name || 'Set'}</TableHead>
-                  {visibleParams.slice(0, 4).map(p => (
+                  {visibleParams.map(p => (
                     <TableHead key={p.name} className="py-0.5 px-1 font-medium h-6 min-w-[80px] whitespace-nowrap">
                       {formatParamName(p.displayName || p.name)}
                       {p.unit && (
@@ -948,7 +978,7 @@ export function MasterPlannerColumn({
                   return (
                     <TableRow key={idx} className="h-7 border-0">
                       <TableCell className="py-0 px-1 text-center text-muted-foreground min-w-[40px] w-[40px]">{setNumber}</TableCell>
-                      {visibleParams.slice(0, 4).map(p => {
+                      {visibleParams.map(p => {
                         const perSetKey = `${p.name}_set${setNumber}`;
                         const currentValue = storedParams[perSetKey] ?? storedParams[p.name];
                         return (

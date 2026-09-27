@@ -532,7 +532,13 @@ export default function MicrocyclePlanningPage() {
   // Save day split states to localStorage
   useEffect(() => {
     localStorage.setItem('daySplitStates', JSON.stringify(daySplitStates));
+    markDirty();
   }, [daySplitStates]);
+
+  // Session names and day intensities (trainingDays), daily intensities and parameter edits are
+  // written to localStorage by their own setters/handlers — also save them to the program, or e.g.
+  // an inline session rename in the Master Planner never reaches the saved plan.
+  useEffect(() => { markDirty(); }, [trainingDays, dailyIntensityData, parameterValues]);
 
   // Save session sections to localStorage
   useEffect(() => {
