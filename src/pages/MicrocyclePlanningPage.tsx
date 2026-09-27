@@ -226,7 +226,7 @@ export default function MicrocyclePlanningPage() {
   const [dayMethodAssignments, setDayMethodAssignments] = useState<Record<string, string[]>>({});
   const [methodAllocations, setMethodAllocations] = useState<Record<string, string[]>>({});
 
-  const totalSteps = 3; // Step 1: Method & Session Architecture, Step 2: Exercise Distribution, Step 3: Training Calendar
+  const totalSteps = 3; // Step 1: Method Distribution, Step 2: Exercise Distribution, Step 3: Training Calendar
 
 
   // Load data from localStorage
@@ -926,8 +926,28 @@ export default function MicrocyclePlanningPage() {
 
   // (resolvedMethodAllocations is defined above allocatedExercises, which needs it)
 
+  // A method (or "Method::Category") counts as characterised in a mesocycle if the periodization
+  // table has at least one value for it — or for any of its category splits — in any microcycle
+  // of that mesocycle. Used by step 1's copy so methods absent from the target mesocycle aren't
+  // copied into it.
+  const isMethodCharacterizedInMesocycle = useCallback((methodKey: string, mesocycleId: string): boolean => {
+    const base = methodKey.split('::')[0];
+    const mesoData = parameterValues[mesocycleId];
+    if (!mesoData) return false;
+    return Object.values(mesoData).some(microData =>
+      microData && Object.entries(microData).some(([key, sessions]) =>
+        (key === methodKey || key === base || key.startsWith(`${base}::`)) &&
+        Object.values(sessions ?? {}).some(params =>
+          Object.entries(params ?? {}).some(([param, value]) =>
+            !param.endsWith('_unit') && value !== '' && value !== null && value !== undefined
+          )
+        )
+      )
+    );
+  }, [parameterValues]);
+
   // Calculate frequency for each method/microcycle
-  const getMethodFrequency = (methodId: string, microcycleId: string, categoryName?: string): number => {
+  const getMethodFrequency =(methodId: string, microcycleId: string, categoryName?: string): number => {
     if (!currentMesocycle) return 1;
     
     const microcycleIndex = currentMesocycle.microcycles.findIndex(m => m.id === microcycleId);
@@ -4928,6 +4948,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
             onRemoveSession={handleRemoveSession}
             onRenameSession={handleRenameSession}
             getMethodFrequencyTarget={getMethodFrequency}
+            isMethodCharacterizedInMesocycle={isMethodCharacterizedInMesocycle}
             selectedMicrocycleIndex={currentMicrocycleIndex}
             onSelectedMicrocycleIndexChange={setCurrentMicrocycleIndex}
           />

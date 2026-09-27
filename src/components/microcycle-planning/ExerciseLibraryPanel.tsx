@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -121,15 +121,19 @@ export function ExerciseLibraryPanel({
     return grouped;
   }, [filteredExercises]);
 
-  // Auto-expand all top categories and methods when exercises load
+  // Top categories start open; methods (and their exercise lists) start collapsed for a better
+  // overview. Only categories appearing for the first time are opened, so data updates (e.g.
+  // placing an exercise) don't re-open what the coach collapsed.
+  const seenTopCategories = useRef<Set<string>>(new Set());
   useEffect(() => {
-    const topCats = new Set(Object.keys(groupedByTopCategory));
-    setExpandedTopCategories(topCats);
-    const methods = new Set(
-      Object.values(groupedByTopCategory).flatMap(ms => ms.map(m => m.methodId))
-    );
-    setExpandedMethods(methods);
+    const newOnes = Object.keys(groupedByTopCategory).filter(c => !seenTopCategories.current.has(c));
+    if (newOnes.length === 0) return;
+    newOnes.forEach(c => seenTopCategories.current.add(c));
+    setExpandedTopCategories(prev => new Set([...prev, ...newOnes]));
   }, [groupedByTopCategory]);
+
+  // While searching, show every match without having to open things
+  const isSearching = searchQuery.trim().length > 0;
 
   const renderExercise = (
     exercise: { exerciseId: string; exerciseName: string },
@@ -196,7 +200,7 @@ export function ExerciseLibraryPanel({
 
             {/* Level 1: Top category */}
             {Object.entries(groupedByTopCategory).map(([topCategory, methods]) => {
-              const isTopOpen = expandedTopCategories.has(topCategory);
+              const isTopOpen = isSearching || expandedTopCategories.has(topCategory);
               return (
                 <Collapsible
                   key={topCategory}
@@ -219,7 +223,7 @@ export function ExerciseLibraryPanel({
 
                     {/* Level 2: Sub-category (method) */}
                     {methods.map(({ methodId, subCategory, categories }) => {
-                      const isMethodOpen = expandedMethods.has(methodId);
+                      const isMethodOpen = isSearching || expandedMethods.has(methodId);
                       const categoryEntries = Object.entries(categories);
                       // A method is only shown with category sub-groups when the toolbox
                       // explicitly defines exercise categories for it. Methods absent from
@@ -273,7 +277,7 @@ export function ExerciseLibraryPanel({
                               // Level 3: Exercise categories
                               categoryEntries.map(([categoryName, exercises]) => {
                                 const categoryKey = `${methodId}::${categoryName}`;
-                                const isCatOpen = expandedCategories.has(categoryKey);
+                                const isCatOpen = isSearching || expandedCategories.has(categoryKey);
                                 return (
                                   <Collapsible
                                     key={categoryKey}

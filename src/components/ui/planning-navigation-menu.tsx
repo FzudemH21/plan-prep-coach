@@ -29,7 +29,7 @@ const PLANNING_STEPS: PlanningStep[] = [
   { id: 7, label: "Method Periodization", page: "mesocycle", pageStep: 4 },
   { id: 8, label: "Exercise Selection", page: "mesocycle", pageStep: 5 },
   // Microcycle Planning (3 steps)
-  { id: 9, label: "Method & Session Architecture", page: "microcycle", pageStep: 1 },
+  { id: 9, label: "Method Distribution", page: "microcycle", pageStep: 1 },
   { id: 10, label: "Exercise Distribution", page: "microcycle", pageStep: 2 },
   { id: 11, label: "Training Calendar", page: "microcycle", pageStep: 3 },
 ];

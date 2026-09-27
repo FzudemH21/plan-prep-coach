@@ -69,6 +69,8 @@ export interface MethodSessionArchitectureProps {
   onRenameSession: (dayDate: string, sessionIndex: number, newName: string) => void;
   /** Returns the periodization-table target frequency for a method in a specific microcycle */
   getMethodFrequencyTarget?: (methodId: string, microcycleId: string) => number;
+  /** True if the method has at least one periodization value in the mesocycle (copy only copies these) */
+  isMethodCharacterizedInMesocycle?: (methodKey: string, mesocycleId: string) => boolean;
   /** Controlled selected microcycle index (lifted to page for pill navigation) */
   selectedMicrocycleIndex?: number;
   onSelectedMicrocycleIndexChange?: (index: number) => void;
@@ -135,6 +137,7 @@ export function MethodSessionArchitecture({
   onRemoveSession,
   onRenameSession,
   getMethodFrequencyTarget,
+  isMethodCharacterizedInMesocycle,
   selectedMicrocycleIndex: selectedMicrocycleIndexProp,
   onSelectedMicrocycleIndexChange,
 }: MethodSessionArchitectureProps) {
@@ -150,7 +153,10 @@ export function MethodSessionArchitecture({
   const [copyingMicrocycleId, setCopyingMicrocycleId] = useState<string | null>(null);
   const [clearingMicrocycleId, setClearingMicrocycleId] = useState<string | null>(null);
   const [clearingMesocycleId, setClearingMesocycleId] = useState<string | null>(null);
+  const [confirmCopyMesocycle, setConfirmCopyMesocycle] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  /** Methods with exercise-category cards — collapsed unless listed here */
+  const [expandedMethods, setExpandedMethods] = useState<Set<string>>(new Set());
   // ── selected microcycle: controlled by parent when prop provided, else local ──
   const [selectedMicrocycleIndexLocal, setSelectedMicrocycleIndexLocal] = useState(0);
   const selectedMicrocycleIndex = selectedMicrocycleIndexProp ?? selectedMicrocycleIndexLocal;
@@ -351,6 +357,79 @@ export function MethodSessionArchitecture({
     [mesocycle.id]
   );
 
+  // ── copy helpers ────────────────────────────────────────────────────────────
+  // Copies one microcycle's day→method assignments onto another, day by day and session by
+  // session, into `assignments` (mutated). A method is only copied if it's characterised in the
+  // target mesocycle — i.e. has at least one periodization value there (an unassigned method
+  // never has one) — and only up to its periodization frequency in the target microcycle.
+  const copyMicrocycleAssignments = useCallback(
+    (
+      sourceMicrocycleId: string,
+      targetMicrocycleId: string,
+      targetMesocycleId: string,
+      assignments: Record<string, string[]>
+    ): { skipped: Set<string> } => {
+      const sourceDays = trainingDays.filter(d => d.microcycleId === sourceMicrocycleId);
+      const targetDays = trainingDays.filter(d => d.microcycleId === targetMicrocycleId);
+      const skipped = new Set<string>();
+      const placed: Record<string, number> = {};
+      const caps: Record<string, number> = {};
+
+      const isAllowed = (method: string): boolean => {
+        if (isMethodCharacterizedInMesocycle && !isMethodCharacterizedInMesocycle(method, targetMesocycleId)) {
+          skipped.add(method);
+          return false;
+        }
+        if (getMethodFrequencyTarget) {
+          if (!(method in caps)) caps[method] = getMethodFrequencyTarget(method, targetMicrocycleId);
+          if (caps[method] === 0) return false;                // not assigned in target microcycle
+          if ((placed[method] ?? 0) >= caps[method]) return false; // frequency cap reached
+        }
+        return true;
+      };
+
+      const minDays = Math.min(sourceDays.length, targetDays.length);
+      for (let i = 0; i < minDays; i++) {
+        const sourceDate = sourceDays[i].date;
+        const targetDate = targetDays[i].date;
+        // Rest days (Borg "0") have no sessions — same rule as the day columns below
+        const sourceSessionCount = migrateLegacyIntensity(sourceDays[i].intensity) === '0' ? 0 : (daySplitStates[sourceDate] ?? 1);
+        const targetSessionCount = migrateLegacyIntensity(targetDays[i].intensity) === '0' ? 0 : (daySplitStates[targetDate] ?? 1);
+        if (targetSessionCount === 0) continue; // never put methods (or new sessions) on a rest day
+
+        for (let si = 0; si < sourceSessionCount; si++) {
+          const targetKey = `${targetDate}_${si}`;
+          const filteredMethods = (dayMethodAssignments[`${sourceDate}_${si}`] ?? []).filter(isAllowed);
+          filteredMethods.forEach(method => { placed[method] = (placed[method] ?? 0) + 1; });
+
+          if (filteredMethods.length > 0) {
+            assignments[targetKey] = filteredMethods;
+          } else if (si < targetSessionCount) {
+            // Clear target slot if nothing to copy into it
+            delete assignments[targetKey];
+          }
+        }
+
+        // Target sessions the source day doesn't have get cleared — the copy mirrors the source
+        for (let si = sourceSessionCount; si < targetSessionCount; si++) {
+          delete assignments[`${targetDate}_${si}`];
+        }
+
+        // Add sessions to target day if source had more
+        for (let j = 0; j < sourceSessionCount - targetSessionCount; j++) {
+          onAddSession(targetDate);
+        }
+      }
+      return { skipped };
+    },
+    [trainingDays, dayMethodAssignments, daySplitStates, getMethodFrequencyTarget, isMethodCharacterizedInMesocycle, onAddSession]
+  );
+
+  const describeCopyResult = (base: string, skipped: Set<string>, targetName: string) =>
+    skipped.size === 0
+      ? base
+      : `${base} Not copied — no periodization values in ${targetName}: ${[...skipped].map(m => m.replace('::', ' › ')).join(', ')}.`;
+
   // ── copy from previous microcycle ───────────────────────────────────────────
   const handleCopyFromPreviousMicrocycle = useCallback(
     (targetMicrocycleId: string) => {
@@ -381,90 +460,49 @@ export function MethodSessionArchitecture({
           return;
         }
 
-        const sourceDays = trainingDays.filter(d => d.microcycleId === sourceMicrocycleId);
-        const targetDays = trainingDays.filter(d => d.microcycleId === targetMicrocycleId);
-
-        if (sourceDays.length === 0) {
+        if (!trainingDays.some(d => d.microcycleId === sourceMicrocycleId)) {
           toast({ title: 'Nothing to copy', description: 'Previous microcycle has no sessions', variant: 'destructive' });
           return;
         }
 
-        // Build target frequency caps: method → max allowed copies in target microcycle.
-        // A method with target frequency 0 (not assigned) must not be copied at all.
-        const targetFreqCap: Record<string, number> = {};
-        if (getMethodFrequencyTarget) {
-          // Collect all unique method keys from source assignments
-          const allSourceKeys = sourceDays.flatMap(d => {
-            const count = d.intensity === 'off' ? 0 : (daySplitStates[d.date] ?? 1);
-            return Array.from({ length: count }, (_, si) => `${d.date}_${si}`);
-          });
-          const uniqueMethods = new Set<string>();
-          allSourceKeys.forEach(k => {
-            (dayMethodAssignments[k] ?? []).forEach(m => uniqueMethods.add(m));
-          });
-          uniqueMethods.forEach(method => {
-            targetFreqCap[method] = getMethodFrequencyTarget(method, targetMicrocycleId);
-          });
-        }
-
-        const minDays = Math.min(sourceDays.length, targetDays.length);
         const newAssignments: Record<string, string[]> = { ...dayMethodAssignments };
-
-        // Running tally of how many times each method has been placed so far
-        const methodPlacedCount: Record<string, number> = {};
-
-        for (let i = 0; i < minDays; i++) {
-          const sourceDate = sourceDays[i].date;
-          const targetDate = targetDays[i].date;
-
-          const sourceSessionCount = sourceDays[i].intensity === 'off' ? 0 : (daySplitStates[sourceDate] ?? 1);
-          const targetSessionCount = targetDays[i].intensity === 'off' ? 0 : (daySplitStates[targetDate] ?? 1);
-
-          // Copy method assignments session by session, applying frequency caps
-          for (let si = 0; si < sourceSessionCount; si++) {
-            const sourceKey = `${sourceDate}_${si}`;
-            const targetKey = `${targetDate}_${si}`;
-            const sourceMethods = dayMethodAssignments[sourceKey] ?? [];
-
-            const filteredMethods = sourceMethods.filter(method => {
-              // If we have frequency cap data, enforce it
-              if (getMethodFrequencyTarget) {
-                const cap = targetFreqCap[method] ?? 0;
-                if (cap === 0) return false; // Method not assigned in target microcycle
-                const placed = methodPlacedCount[method] ?? 0;
-                if (placed >= cap) return false; // Already reached the frequency cap
-              }
-              return true;
-            });
-
-            // Update placed counts for accepted methods
-            filteredMethods.forEach(method => {
-              methodPlacedCount[method] = (methodPlacedCount[method] ?? 0) + 1;
-            });
-
-            if (filteredMethods.length > 0) {
-              newAssignments[targetKey] = filteredMethods;
-            } else if (si < targetSessionCount) {
-              // Clear target slot if nothing to copy into it
-              delete newAssignments[targetKey];
-            }
-          }
-
-          // Add sessions to target day if source had more
-          const sessionsToAdd = sourceSessionCount - targetSessionCount;
-          for (let j = 0; j < sessionsToAdd; j++) {
-            onAddSession(targetDate);
-          }
-        }
-
+        const { skipped } = copyMicrocycleAssignments(
+          sourceMicrocycleId, targetMicrocycleId, allMesocycles[targetMesoIndex].id, newAssignments
+        );
         onDayMethodAssignmentsChange(newAssignments);
-        toast({ title: 'Copied', description: 'Method assignments copied from previous microcycle' });
+        toast({
+          title: 'Copied',
+          description: describeCopyResult('Method assignments copied from previous microcycle.', skipped, allMesocycles[targetMesoIndex].name),
+        });
       } finally {
         setCopyingMicrocycleId(null);
       }
     },
-    [allMesocycles, trainingDays, dayMethodAssignments, daySplitStates, getMethodFrequencyTarget, onAddSession, onDayMethodAssignmentsChange, toast]
+    [allMesocycles, trainingDays, dayMethodAssignments, copyMicrocycleAssignments, onDayMethodAssignmentsChange, toast]
   );
+
+  // ── copy whole previous mesocycle ───────────────────────────────────────────
+  // Week 1 ← previous mesocycle's week 1, week 2 ← week 2, …; if this mesocycle has more
+  // microcycles than the previous one, the extra weeks repeat the previous mesocycle's last week.
+  const handleCopyFromPreviousMesocycle = useCallback(() => {
+    const mesoIndex = allMesocycles.findIndex(m => m.id === mesocycle.id);
+    const previous = mesoIndex > 0 ? allMesocycles[mesoIndex - 1] : null;
+    if (!previous || previous.microcycles.length === 0) {
+      toast({ title: 'Cannot copy', description: 'There is no previous mesocycle to copy from', variant: 'destructive' });
+      return;
+    }
+    const newAssignments: Record<string, string[]> = { ...dayMethodAssignments };
+    const skipped = new Set<string>();
+    mesocycle.microcycles.forEach((micro, i) => {
+      const source = previous.microcycles[Math.min(i, previous.microcycles.length - 1)];
+      copyMicrocycleAssignments(source.id, micro.id, mesocycle.id, newAssignments).skipped.forEach(m => skipped.add(m));
+    });
+    onDayMethodAssignmentsChange(newAssignments);
+    toast({
+      title: 'Copied',
+      description: describeCopyResult(`Method setup copied from ${previous.name}.`, skipped, mesocycle.name),
+    });
+  }, [allMesocycles, mesocycle, dayMethodAssignments, copyMicrocycleAssignments, onDayMethodAssignmentsChange, toast]);
 
   // ── clear microcycle ─────────────────────────────────────────────────────────
   const handleClearMicrocycle = useCallback(
@@ -546,6 +584,27 @@ export function MethodSessionArchitecture({
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
             Clear
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    {/* Copy previous mesocycle Confirmation */}
+    <AlertDialog open={confirmCopyMesocycle} onOpenChange={setConfirmCopyMesocycle}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Copy method setup from previous mesocycle?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Each microcycle of <strong>{mesocycle.name}</strong> gets the method assignments of the matching
+            microcycle of <strong>{allMesocycles[allMesocycles.findIndex(m => m.id === mesocycle.id) - 1]?.name}</strong>,
+            replacing what's there now. Methods without periodization values in {mesocycle.name} are left out,
+            and each method is only placed as often as its periodization frequency allows.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={() => { handleCopyFromPreviousMesocycle(); setConfirmCopyMesocycle(false); }}>
+            Copy
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -691,14 +750,46 @@ export function MethodSessionArchitecture({
                               };
 
                               if (hasCategories) {
+                                // Methods with category cards start collapsed for a better overview;
+                                // the header still shows how many sessions are placed vs. targeted.
+                                const isOpen = expandedMethods.has(methodId);
+                                const keys = exCats!.map(cat => `${methodId}::${cat}`);
+                                const placedSum = keys.reduce((s, k) => s + (methodFrequency[k] ?? 0), 0);
+                                const targetSum = keys.reduce((s, k) => s + (methodTargetFrequency[k] ?? 0), 0);
                                 return (
                                   <div key={methodId}>
-                                    <div className="px-2 py-1 text-xs font-medium text-muted-foreground/70 select-none">
-                                      {shortName(methodId)}
-                                    </div>
-                                    <div className="ml-2 space-y-0.5">
-                                      {exCats!.map(cat => renderCard(`${methodId}::${cat}`))}
-                                    </div>
+                                    <button
+                                      onClick={() =>
+                                        setExpandedMethods(prev => {
+                                          const next = new Set(prev);
+                                          next.has(methodId) ? next.delete(methodId) : next.add(methodId);
+                                          return next;
+                                        })
+                                      }
+                                      className="w-full flex items-center gap-1 px-1 py-1 text-xs font-medium text-muted-foreground hover:text-foreground rounded select-none"
+                                    >
+                                      {isOpen
+                                        ? <ChevronDown className="h-3 w-3 shrink-0" />
+                                        : <ChevronRight className="h-3 w-3 shrink-0" />}
+                                      <span className="truncate text-left flex-1">{shortName(methodId)}</span>
+                                      {(placedSum > 0 || targetSum > 0) && (
+                                        <span
+                                          className={cn(
+                                            'shrink-0 text-[10px] tabular-nums',
+                                            targetSum > 0 && placedSum === targetSum ? 'text-green-600' :
+                                            placedSum > targetSum ? 'text-red-600' : 'text-muted-foreground'
+                                          )}
+                                          title={`${placedSum} of ${targetSum} sessions placed across ${keys.length} categories`}
+                                        >
+                                          {placedSum}/{targetSum}
+                                        </span>
+                                      )}
+                                    </button>
+                                    {isOpen && (
+                                      <div className="ml-3 space-y-0.5">
+                                        {keys.map(key => renderCard(key))}
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               }
@@ -732,6 +823,16 @@ export function MethodSessionArchitecture({
                   >
                     {getBorgLabelFull(migrateLegacyIntensity(mesocycle.intensity))}
                   </Badge>
+                  {allMesocycles.findIndex(m => m.id === mesocycle.id) > 0 && (
+                    <Button
+                      size="sm" variant="ghost"
+                      className="h-7 w-7 p-0"
+                      title="Copy the method setup from the previous mesocycle"
+                      onClick={() => setConfirmCopyMesocycle(true)}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button
                     size="sm" variant="ghost"
                     className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive"
