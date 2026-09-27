@@ -344,16 +344,19 @@ export default function MicrocyclePlanningPage() {
     if (savedTrainingDays) {
       const loadedDays: any[] = JSON.parse(savedTrainingDays);
       loadedDays.forEach((day: any) => {
-        const actualIntensity = intensityMapInit[day.date] ?? day.intensity;
+        // Rest = Borg "0" (the old check compared against the retired 'off' value and never
+        // matched — so rest days, including days whose last session was deleted, got a session
+        // back on every reload).
+        const isRest = migrateLegacyIntensity(intensityMapInit[day.date] ?? day.intensity ?? '5') === '0';
+        // These are step 1's session slots (raw); Exercise Distribution and the calendar use the
+        // effective count, which hides days with nothing on them. Don't derive from day.sessions —
+        // trainingDays stores the effective count (0 on empty days).
         if (parsedSplitStates[day.date] === undefined) {
-          // New entry: default to 0 for off days, 1 otherwise
-          parsedSplitStates[day.date] = actualIntensity === 'off' ? 0 : (day.sessions ?? 1);
-        } else if (actualIntensity === 'off') {
-          // Intensity is off — ensure 0 sessions (clear any stale value)
+          parsedSplitStates[day.date] = isRest ? 0 : 1;
+        } else if (isRest) {
           parsedSplitStates[day.date] = 0;
         } else if (parsedSplitStates[day.date] === 0) {
-          // Non-off day with 0 sessions (e.g. day's intensity was changed from off
-          // in MesocyclePage but daySplitStates wasn't updated yet) — auto-create.
+          // Training day with 0 slots (e.g. intensity changed from rest in MesocyclePage) — give it one
           parsedSplitStates[day.date] = 1;
         }
       });
@@ -444,18 +447,18 @@ export default function MicrocyclePlanningPage() {
         })
       );
 
-      // Also sync daySplitStates: off days → 0 sessions, non-off days that
-      // were 0 (because they were previously off) → 1 session.
+      // Also sync daySplitStates (step 1 slots): rest days (Borg "0") → 0, days that were rest
+      // and became training days → 1.
       setDaySplitStates(prev => {
         const next = { ...prev };
         let changed = false;
         trainingDays.forEach(day => {
           const correctIntensity = intensityMap.get(day.date);
           if (correctIntensity && day.intensity !== correctIntensity) {
-            if (correctIntensity === 'off') {
+            if (migrateLegacyIntensity(correctIntensity) === '0') {
               next[day.date] = 0;
               changed = true;
-            } else if (day.intensity === '0' && (prev[day.date] ?? 0) === 0) {
+            } else if (migrateLegacyIntensity(day.intensity ?? '5') === '0' && (prev[day.date] ?? 0) === 0) {
               next[day.date] = 1;
               changed = true;
             }
@@ -548,20 +551,48 @@ export default function MicrocyclePlanningPage() {
     markDirty();
   }, [dayMethodAssignments]);
 
-  // Sync day split states to trainingDays
+  // Days that actually have something on them: a method assigned in step 1, an exercise placed,
+  // or a section. dateKey → highest session index in use (-1 if only sections, no index info).
+  const dayContentMaxIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    const note = (date: string, idx: number) => map.set(date, Math.max(map.get(date) ?? -1, idx));
+    Object.entries(dayMethodAssignments).forEach(([key, methods]) => {
+      if (!methods?.length) return;
+      const sep = key.lastIndexOf('_');
+      note(key.slice(0, sep), Number(key.slice(sep + 1)) || 0);
+    });
+    exerciseDistribution.forEach(ex => note(ex.dayDate, ex.sessionIndex ?? 0));
+    sessionSections.forEach(s => note(s.dayDate, s.sessionIndex ?? 0));
+    return map;
+  }, [dayMethodAssignments, exerciseDistribution, sessionSections]);
+
+  // Sessions per day as used from Exercise Distribution onwards (step 2, training calendar,
+  // saved trainingDays → athlete schedule). A day with nothing on it gets NO session, whatever its
+  // intensity — so no empty "Rest" sessions end up in the final calendar. Step 1 keeps using the
+  // raw daySplitStates, so every training day still offers a slot to drop methods onto.
+  const effectiveDaySplitStates = useMemo(() => {
+    const result: Record<string, number> = {};
+    trainingDays.forEach(day => {
+      const maxIdx = dayContentMaxIndex.get(day.date);
+      result[day.date] = maxIdx === undefined ? 0 : Math.max(daySplitStates[day.date] ?? 1, maxIdx + 1);
+    });
+    return result;
+  }, [trainingDays, daySplitStates, dayContentMaxIndex]);
+
+  // Sync effective session counts to trainingDays (returns the same array when nothing changed,
+  // so effects watching trainingDays don't re-run needlessly)
   useEffect(() => {
-    setTrainingDays(prev => 
-      prev.map(day => {
-        // If there's a saved split state, use it
-        if (daySplitStates[day.date] !== undefined) {
-          return { ...day, sessions: daySplitStates[day.date] };
-        }
-        // Otherwise, default to 0 if intensity is rest ("0"), else 1
-        const defaultSessions = migrateLegacyIntensity(day.intensity ?? '5') === '0' ? 0 : 1;
-        return { ...day, sessions: defaultSessions };
-      })
-    );
-  }, [daySplitStates]);
+    setTrainingDays(prev => {
+      let changed = false;
+      const next = prev.map(day => {
+        const sessions = effectiveDaySplitStates[day.date] ?? 0;
+        if (day.sessions === sessions) return day;
+        changed = true;
+        return { ...day, sessions };
+      });
+      return changed ? next : prev;
+    });
+  }, [effectiveDaySplitStates]);
 
   // Enrich trainingDays with test/event names from macrocycleData
   useEffect(() => {
@@ -1279,6 +1310,27 @@ export default function MicrocyclePlanningPage() {
         [dayDate]: currentSessions + 1
       };
     });
+  };
+
+  // "Add Session" in Exercise Distribution / Training Calendar. On a day that shows no session yet
+  // (nothing on it), create session 1 with a section, so it counts as content and doesn't get
+  // hidden again by the effective session count.
+  const handleAddSessionWithContent = (dayDate: string) => {
+    if ((effectiveDaySplitStates[dayDate] ?? 0) > 0) {
+      handleAddSession(dayDate);
+      return;
+    }
+    setSessionSections(prev => [
+      ...prev,
+      {
+        id: `section-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        dayDate,
+        sessionIndex: 0,
+        name: 'Section 1',
+        order: 0,
+      },
+    ]);
+    setDaySplitStates(prev => ({ ...prev, [dayDate]: Math.max(prev[dayDate] ?? 0, 1) }));
   };
 
   // Handle removing a session from a day
@@ -3535,7 +3587,7 @@ export default function MicrocyclePlanningPage() {
           onDistributionChange={setExerciseDistribution}
           onSectionsChange={setSessionSections}
           onSupersetsChange={setSupersets}
-          onAddSession={handleAddSession}
+          onAddSession={handleAddSessionWithContent}
           onRemoveSession={handleRemoveSession}
           onRenameSession={handleRenameSession}
           onSessionIntensityChange={handleSessionIntensityChange}
@@ -5000,8 +5052,8 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
               onSectionsChange={setSessionSections}
               onSupersetsChange={setSupersets}
               onDistributionChange={(dist) => setExerciseDistribution(dist as ExerciseDistribution[])}
-              onAddSession={handleAddSession}
-              daySplitStates={daySplitStates}
+              onAddSession={handleAddSessionWithContent}
+              daySplitStates={effectiveDaySplitStates}
               selectedAthleteId={selectedAthleteId}
               athletePerformanceParameters={selectedAthletePerformanceParameters}
               biometricDefinitions={biometricDefinitions}

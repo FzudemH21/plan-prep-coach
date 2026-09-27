@@ -2487,7 +2487,9 @@ export function EnhancedExerciseDistribution({
                     <div className="flex gap-4">
                       {days.map((day) => {
                         // Off days always have 0 sessions regardless of stored session count
-                        const sessionsCount = day.intensity === 'off' ? 0 : (day.sessions ?? 1);
+                        // Effective count from the page: 0 unless the day has methods, exercises or
+                        // sections — no pre-made (empty / "Rest") sessions, whatever the intensity
+                        const sessionsCount = day.sessions ?? 0;
                         
                         // Safety check
                         if (!day || !day.date) {

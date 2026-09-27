@@ -276,7 +276,7 @@ export function MethodSessionArchitecture({
   useEffect(() => {
     const map: Record<string, IntensityLevel> = {};
     mesocycleDays.forEach(day => {
-      const cnt = day.intensity === 'off' ? 0 : (daySplitStates[day.date] ?? 1);
+      const cnt = migrateLegacyIntensity(day.intensity) === '0' ? 0 : (daySplitStates[day.date] ?? 1);
       for (let i = 0; i < cnt; i++) {
         const stored = localStorage.getItem(
           `sessionIntensity_${mesocycle.id}_${day.date}_${i}`
@@ -291,7 +291,7 @@ export function MethodSessionArchitecture({
   useEffect(() => {
     const map: Record<string, string> = {};
     mesocycleDays.forEach(day => {
-      const cnt = day.intensity === 'off' ? 0 : (daySplitStates[day.date] ?? 1);
+      const cnt = migrateLegacyIntensity(day.intensity) === '0' ? 0 : (daySplitStates[day.date] ?? 1);
       for (let i = 0; i < cnt; i++) {
         const raw = localStorage.getItem(
           `workoutSessions_${mesocycle.id}_${day.date}_${i}`
