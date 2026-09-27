@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -489,21 +488,23 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
     Array.from({ length: setCount }, (_, i) => i).every(i => doneArr.includes(i));
 
   return (
-    <div className="overflow-x-auto rounded-lg border bg-background">
-      <table className="w-full text-sm">
+    // Fixed layout: parameter columns share the phone's width (no sideways scrolling); labels wrap
+    <div className="rounded-lg border bg-background">
+      <table className="w-full table-fixed text-sm">
         <thead>
           <tr className="border-b bg-muted/30">
-            <th className="text-center py-2 px-2 text-xs text-muted-foreground font-semibold w-8">#</th>
+            <th className="text-center py-2 px-1 text-xs text-muted-foreground font-semibold w-7">#</th>
             {columns.map(col => {
               const unit = exercise.plannedParams?.[`${col}_unit`] as string | undefined;
               return (
-                <th key={col} className="text-center py-2 px-2 text-xs text-muted-foreground font-semibold">
-                  {unit ? `${col} (${unit})` : col}
+                <th key={col} className="text-center py-2 px-1 text-xs leading-tight text-muted-foreground font-semibold break-words align-bottom">
+                  {col}
+                  {unit && <span className="block font-normal">({unit})</span>}
                 </th>
               );
             })}
             {/* Mark-all / unmark-all header button — always tappable */}
-            <th className="w-10 py-2 text-center">
+            <th className="w-11 py-2 text-center">
               <button
                 onClick={() => onMarkAll(exercise.id)}
                 title={allDone ? 'Unmark all sets' : 'Mark all sets done'}
@@ -534,7 +535,7 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
                   // planned value so the athlete can see targets without re-typing them.
                   const displayValue = (logged !== undefined && logged !== '') ? logged : planned;
                   return (
-                    <td key={col} className="py-1.5 px-1.5">
+                    <td key={col} className="py-1.5 px-1">
                       <input
                         type="text"
                         inputMode="decimal"
@@ -543,7 +544,7 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
                         onChange={e => onLogValue(exercise.id, setIdx, col, e.target.value)}
                         disabled={isDone}
                         className={cn(
-                          'w-full text-center border rounded-md px-1.5 py-1.5 text-sm min-w-[48px]',
+                          'w-full min-w-0 text-center border rounded-md px-1 py-2 text-sm',
                           'focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary',
                           'disabled:opacity-50 disabled:cursor-not-allowed',
                           isDone && 'line-through text-muted-foreground',
@@ -555,7 +556,7 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
                   );
                 })}
                 {/* Tick button — tapping a done set un-ticks it (misclick recovery) */}
-                <td className="py-1.5 pr-2 text-center">
+                <td className="py-1.5 pr-1 text-center">
                   <button
                     onClick={() => onCompleteSet(exercise.id, setIdx)}
                     className={cn(
@@ -1218,7 +1219,7 @@ export default function AthleteSessionPage() {
             <p className="text-sm">No exercises assigned yet.</p>
           </div>
         ) : (
-          <ScrollArea className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
             <div className="px-4 py-4 space-y-3">
                 {/* Completed banner */}
                 {currentLog && (
@@ -1294,11 +1295,11 @@ export default function AthleteSessionPage() {
                                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                                   {ex.isCircuit && <RefreshCw className="h-3 w-3 text-muted-foreground shrink-0" />}
                                   {ex.isCircuit ? (
-                                    <span className="text-sm truncate">{ex.name}</span>
+                                    <span className="min-w-0 text-sm truncate">{ex.name}</span>
                                   ) : (
                                     <button
                                       onClick={() => setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription })}
-                                      className="text-sm truncate text-left hover:text-primary active:opacity-60 transition-colors"
+                                      className="min-w-0 text-sm truncate text-left hover:text-primary active:opacity-60 transition-colors"
                                     >{ex.name}</button>
                                   )}
                                   {ex.eachSide && (
@@ -1376,16 +1377,17 @@ export default function AthleteSessionPage() {
                                 const paramNames = Array.from(new Set(sets.flatMap(s => Object.keys(s.values))));
                                 if (paramNames.length === 0) return null;
                                 return (
-                                  <div className="px-4 pb-3 overflow-x-auto">
-                                    <table className="text-xs w-full">
+                                  <div className="px-4 pb-3">
+                                    <table className="text-xs w-full table-fixed">
                                       <thead>
                                         <tr className="text-muted-foreground">
-                                          <th className="text-left font-normal pb-1 pr-4 w-5">#</th>
+                                          <th className="text-left font-normal pb-1 pr-2 w-6">#</th>
                                           {paramNames.map(p => {
                                             const unit = ex.plannedParams?.[`${p}_unit`] as string | undefined;
                                             return (
-                                              <th key={p} className="text-left font-normal pb-1 pr-4">
-                                                {unit ? `${p} (${unit})` : p}
+                                              <th key={p} className="text-left font-normal pb-1 pr-2 leading-tight break-words align-bottom">
+                                                {p}
+                                                {unit && <span className="block">({unit})</span>}
                                               </th>
                                             );
                                           })}
@@ -1394,9 +1396,9 @@ export default function AthleteSessionPage() {
                                       <tbody>
                                         {sets.map(s => (
                                           <tr key={s.setNumber} className="border-t border-border/20">
-                                            <td className="pr-4 py-1 text-muted-foreground">{s.setNumber}</td>
+                                            <td className="pr-2 py-1 text-muted-foreground">{s.setNumber}</td>
                                             {paramNames.map(p => (
-                                              <td key={p} className="pr-4 py-1 font-medium">{s.values[p] ?? '—'}</td>
+                                              <td key={p} className="pr-2 py-1 font-medium break-words">{s.values[p] ?? '—'}</td>
                                             ))}
                                           </tr>
                                         ))}
@@ -1424,7 +1426,7 @@ export default function AthleteSessionPage() {
                   );
                 })}
               </div>
-            </ScrollArea>
+            </div>
         )}
 
         {/* Start CTA — always visible so athletes can log any session, even ones without exercises */}
@@ -1734,7 +1736,7 @@ export default function AthleteSessionPage() {
         </div>
 
         {/* All exercises in this section — grouped by superset */}
-        <ScrollArea className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
           <div className="px-4 py-3 space-y-4">
             {sectionExercises.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
@@ -1940,7 +1942,7 @@ export default function AthleteSessionPage() {
             })()}
             <div className="h-2" />
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Bottom action bar — shows finish action; warns if sets are missing */}
         <div className="px-4 py-4 border-t bg-background shrink-0">

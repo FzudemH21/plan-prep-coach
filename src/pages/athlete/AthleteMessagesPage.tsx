@@ -3,7 +3,6 @@ import { format, parseISO, isToday, isYesterday } from 'date-fns';
 import { Send, MessageCircle, Loader2, Paperclip, X, FileText, ImageIcon, Film } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { useAthleteApp } from '@/hooks/useAthleteApp';
 import { useChat } from '@/hooks/useChat';
@@ -150,7 +149,7 @@ export default function AthleteMessagesPage() {
       </div>
 
       {/* Message list */}
-      <ScrollArea className="flex-1 px-3 py-2">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-2">
         {loading && (
           <div className="flex justify-center py-6">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -219,7 +218,7 @@ export default function AthleteMessagesPage() {
           </div>
         ))}
         <div ref={bottomRef} />
-      </ScrollArea>
+      </div>
 
       {/* Input bar */}
       <div className="shrink-0 border-t px-3 py-2 bg-background">

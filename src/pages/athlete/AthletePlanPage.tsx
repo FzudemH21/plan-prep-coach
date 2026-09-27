@@ -5,7 +5,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { DragDropContext, Droppable, Draggable, DropResult, DraggableProvidedDragHandleProps } from '@hello-pangea/dnd';
 import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog } from '@/hooks/useAthleteApp';
@@ -464,7 +463,7 @@ export default function AthletePlanPage() {
 
       {/* Day list */}
       <DragDropContext onDragEnd={onDragEnd}>
-        <ScrollArea className="flex-1 px-4">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-4">
           <div className="py-3 pb-4">
             {weekDays.map((dateStr, i) => (
               <div key={dateStr}>
@@ -481,7 +480,7 @@ export default function AthletePlanPage() {
               </div>
             ))}
           </div>
-        </ScrollArea>
+        </div>
       </DragDropContext>
 
       {/* Test result entry dialog */}
