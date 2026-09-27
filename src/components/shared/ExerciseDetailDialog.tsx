@@ -55,8 +55,11 @@ const extractYouTubeId = (url: string): string | null => {
   if (!url) return null;
 
   const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\s?]+)/,
-    /^([a-zA-Z0-9_-]{11})$/, // Just the ID
+    // watch?v=… (v may come after other query params), youtu.be/…, embed/…, shorts/…, live/…, v/…
+    // on any youtube subdomain (www., m., music.)
+    /youtube(?:-nocookie)?\.com\/watch\?(?:[^#\s]*&)?v=([a-zA-Z0-9_-]{11})/,
+    /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:embed|shorts|live|v)\/)([a-zA-Z0-9_-]{11})/,
+    /^\s*([a-zA-Z0-9_-]{11})\s*$/, // Just the ID
   ];
 
   for (const pattern of patterns) {
@@ -462,6 +465,17 @@ export function ExerciseDetailDialog({
             <p className="text-xs text-muted-foreground mt-1">Click to play</p>
           )}
         </div>
+      ) : (localVideoUrl || videoUrl) && /^https?:\/\//i.test((localVideoUrl || videoUrl).trim()) ? (
+        // A link we can't embed (not YouTube) — still offer it
+        <a
+          href={(localVideoUrl || videoUrl).trim()}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+        >
+          <ExternalLink className="h-4 w-4" />
+          Open video
+        </a>
       ) : (
         <p className="text-sm text-muted-foreground italic">No video available</p>
       );
