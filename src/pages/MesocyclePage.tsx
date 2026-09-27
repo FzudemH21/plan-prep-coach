@@ -2943,7 +2943,16 @@ export default function MesocyclePage() {
     
     // Get full method name with category if applicable
     const fullMethodName = categoryName ? `${methodId}::${categoryName}` : methodId;
-    
+
+    // List parameters in the method's Training Toolbox order (they were listed in the order their
+    // values happened to be stored). Parameters no longer in the toolbox go last.
+    const toolboxParamDefs = methodParametersMap[fullMethodName] ?? methodParametersMap[methodId] ?? [];
+    const toolboxIndex = (name: string) => {
+      const i = toolboxParamDefs.findIndex(p => p.name === name);
+      return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+    };
+    const byToolboxOrder = (a: string, b: string) => toolboxIndex(a) - toolboxIndex(b);
+
     // Find the mesocycle
     const mesocycle = mesocycles.find(m => m.id === mesocycleId);
     if (!mesocycle) return '';
@@ -3054,7 +3063,7 @@ export default function MesocyclePage() {
       
       // Build data rows for each parameter
       const dataRows: string[] = [];
-      Array.from(allParamNames).forEach(paramName => {
+      Array.from(allParamNames).sort(byToolboxOrder).forEach(paramName => {
         const rowParts = [paramName.padEnd(20)]; // Parameter name in first column
         
         for (let sessionIdx = 0; sessionIdx < maxSessionCount; sessionIdx++) {
@@ -3084,6 +3093,7 @@ export default function MesocyclePage() {
     } else {
       // Range display (when mesocycle is NOT split OR no frequency split)
       const formattedParams = Object.entries(parameterMap)
+        .sort(([a], [b]) => byToolboxOrder(a, b))
         .map(([paramName, values]) => {
           const uniqueValues = Array.from(values);
           
