@@ -33,6 +33,7 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { AlertTriangle, CalendarIcon, ChevronDown, ChevronRight, Plus, Trash2, Trophy, X } from 'lucide-react';
+import { latestValueOf, useSelfReportedResults, withSelfReported } from '@/hooks/useSelfReportedResults';
 import { buildPackedDateMap } from '@/utils/assignmentPacking';
 import { TrainingProgram } from '@/hooks/useTrainingPrograms';
 import { AthleteCalendarAssignment, AssignedMesocycle, AssignedMicrocycle, AthletePerformanceParameter, ReviewedSubGoal, ReviewedEvent } from '@/types/athlete';
@@ -69,6 +70,8 @@ export function AssignProgramDialog({
   const [selectedMicrocycleIds, setSelectedMicrocycleIds] = useState<string[]>([]);
   const [expandedMesocycles, setExpandedMesocycles] = useState<string[]>([]);
   const [reviewedSubGoals, setReviewedSubGoals] = useState<ReviewedSubGoal[]>([]);
+  // The athlete's own test results from the athlete app (baseline pre-fill)
+  const selfReportedResults = useSelfReportedResults(athleteId);
   const [reviewedEvents, setReviewedEvents] = useState<ReviewedEvent[]>([]);
 
   // Reset state when dialog opens/closes
@@ -159,6 +162,12 @@ export function AssignProgramDialog({
       ? differenceInDays(startDate, originalStartDate)
       : 0;
 
+    /** The athlete's latest value for a parameter — coach-recorded or self-reported in the app */
+    const latestAthleteValue = (parameterId: string) => latestValueOf(withSelfReported(
+      athletePerformanceParameters.find(pp => pp.athleticismParameterId === parameterId)?.values ?? [],
+      selfReportedResults.get(parameterId),
+    ));
+
     /** Program test/event date -> assigned date (null when its microcycle isn't assigned) */
     const placeDate = (d: string): string | null => {
       const day = d.slice(0, 10);
@@ -178,16 +187,9 @@ export function AssignProgramDialog({
 
       // Auto-fill baseline from athlete performance data
       let baseline = sg.preTestValue || 0;
-      if (sg.parameterLinkedId && athletePerformanceParameters.length > 0) {
-        const athleteParam = athletePerformanceParameters.find(
-          pp => pp.athleticismParameterId === sg.parameterLinkedId
-        );
-        if (athleteParam && athleteParam.values.length > 0) {
-          const sorted = [...athleteParam.values].sort(
-            (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
-          );
-          baseline = parseFloat(sorted[0].value) || baseline;
-        }
+      if (sg.parameterLinkedId) {
+        const latest = latestAthleteValue(sg.parameterLinkedId);
+        if (latest) baseline = parseFloat(latest.value) || baseline;
       }
 
       return {
@@ -208,16 +210,9 @@ export function AssignProgramDialog({
       if (!sg.testDates || sg.testDates.length === 0) return;
       const shiftedDates = sg.testDates.map(placeDate).filter((d): d is string => d !== null);
       let baseline = sg.baselineValue || 0;
-      if (sg.linkedParameterId && athletePerformanceParameters.length > 0) {
-        const athleteParam = athletePerformanceParameters.find(
-          pp => pp.athleticismParameterId === sg.linkedParameterId
-        );
-        if (athleteParam && athleteParam.values.length > 0) {
-          const sorted = [...athleteParam.values].sort(
-            (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
-          );
-          baseline = parseFloat(sorted[0].value) || baseline;
-        }
+      if (sg.linkedParameterId) {
+        const latest = latestAthleteValue(sg.linkedParameterId);
+        if (latest) baseline = parseFloat(latest.value) || baseline;
       }
       reviewed.push({
         id: sg.id,
@@ -280,7 +275,7 @@ export function AssignProgramDialog({
     // Tests/events whose dates all fall in unassigned microcycles aren't offered
     setReviewedSubGoals(dedupedTests.filter(t => t.scheduledDates.length > 0));
     setReviewedEvents(dedupedEvents.filter(e => e.scheduledDates.length > 0));
-  }, [selectedProgram, startDate, athletePerformanceParameters, selectedMicrocycleIds]);
+  }, [selectedProgram, startDate, athletePerformanceParameters, selectedMicrocycleIds, selfReportedResults]);
 
   // Warn when the chosen start date is in the past
   const pastDateWarning = useMemo(() => {

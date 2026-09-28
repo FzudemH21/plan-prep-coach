@@ -690,6 +690,7 @@ export function AthleteCalendarDayCell({
 
       {/* Test/Event Dialog */}
       <CalendarEventDialog
+        athleteId={athleteId}
         open={testEventDialogOpen}
         onOpenChange={setTestEventDialogOpen}
         date={day.dateString}

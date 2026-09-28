@@ -1857,6 +1857,7 @@ export default function CoachMobileAthleteProfilePage() {
       {/* ── Tests & Events dialog ── */}
       {athleteId && (
         <CalendarEventDialog
+          athleteId={athleteId}
           open={eventDialogDate !== null}
           onOpenChange={open => { if (!open) setEventDialogDate(null); }}
           date={eventDialogDate ?? today}

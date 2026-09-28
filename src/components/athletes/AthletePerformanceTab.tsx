@@ -3,6 +3,7 @@ import type { MetricsSnapshot, MetricsSnapshotItem, AthleteConnection } from '@/
 import { ExerciseMetricsTab } from '@/components/athletes/ExerciseMetricsTab';
 import { format, subDays, parseISO } from 'date-fns';
 import { supabase } from '@/lib/supabase';
+import { withSelfReported } from '@/hooks/useSelfReportedResults';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import {
   AreaChart,
@@ -734,7 +735,8 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
               filteredBiometrics.map(ab => {
                 const def = athleteData.getBiometricDefinition(ab.biometricDefinitionId);
                 if (!def) return null;
-                const latest = getLatestValue(ab.values);
+                // Include the athlete's self-reported values (athlete app), like the detail view
+                const latest = getLatestValue(withSelfReported(ab.values, selfReportedMap.get(`bio:${ab.biometricDefinitionId}`)));
                 const isSel = resolvedSelected?.kind === 'biometric' && resolvedSelected.ab.id === ab.id;
                 return (
                   <MetricRow
@@ -764,7 +766,8 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
               filteredPerformance.map(pp => {
                 const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
                 if (!param) return null;
-                const latest = getLatestValue(pp.values);
+                // Include the athlete's self-reported values (athlete app), like the detail view
+                const latest = getLatestValue(withSelfReported(pp.values, selfReportedMap.get(pp.athleticismParameterId)));
                 const isSel = resolvedSelected?.kind === 'performance' && resolvedSelected.pp.id === pp.id;
                 return (
                   <MetricRow

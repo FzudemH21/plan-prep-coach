@@ -20,6 +20,7 @@ import { parseDateStr } from '@/utils/dateUtils';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useAthletes } from '@/hooks/useAthletes';
+import { latestValueOf, useSelfReportedResults, withSelfReported } from '@/hooks/useSelfReportedResults';
 import { AthletePerformanceParameter, AthleteBiometric } from '@/types/athlete';
 import { AddParameterDialogV2 } from '@/components/goals/AddParameterDialogV2';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -42,6 +43,8 @@ interface CalendarEventDialogProps {
   onAdd: (type: 'test' | 'event', title: string, notes?: string, parameterId?: string, targetValue?: string) => void;
   onDelete: (eventId: string) => void;
   athletePerformanceParameters?: AthletePerformanceParameter[];
+  /** The athlete (for values they reported themselves in the athlete app) */
+  athleteId?: string;
   /** Athlete's biometric records — used to show baseline for body-metric tests. */
   athleteBiometrics?: AthleteBiometric[];
 }
@@ -55,7 +58,12 @@ export function CalendarEventDialog({
   onDelete,
   athletePerformanceParameters = [],
   athleteBiometrics = [],
+  athleteId,
 }: CalendarEventDialogProps) {
+  // The athlete's own test results from the athlete app count as recorded values too
+  const selfReported = useSelfReportedResults(
+    athleteId ?? athletePerformanceParameters[0]?.athleteId ?? athleteBiometrics[0]?.athleteId ?? null
+  );
   const { data: parametersData, addParameter } = useParametersDataV2();
   const { data: toolboxData } = useToolboxData();
   const athleteData = useAthletes();
@@ -76,26 +84,21 @@ export function CalendarEventDialog({
   const isBioId = (id: string | null) => id?.startsWith('bio:') ?? false;
   const bioDefId = (id: string) => id.slice(4); // strip 'bio:' prefix
 
+  /** Latest value of a parameter: coach-recorded (profile) or self-reported by the athlete */
+  const latestRecordedValue = (paramId: string) => {
+    const recorded = isBioId(paramId)
+      ? athleteBiometrics.find(b => b.biometricDefinitionId === bioDefId(paramId))?.values ?? []
+      : athletePerformanceParameters.find(p => p.athleticismParameterId === paramId)?.values ?? [];
+    return latestValueOf(withSelfReported(recorded, selfReported.get(paramId)));
+  };
+
   // Load baseline value from athlete profile when parameter changes
   useEffect(() => {
     if (!selectedParameterId) { setBaselineValue(''); return; }
-    if (isBioId(selectedParameterId)) {
-      const defId = bioDefId(selectedParameterId);
-      const ab = athleteBiometrics.find(b => b.biometricDefinitionId === defId);
-      setBaselineValue(ab && ab.values.length > 0 ? ab.values[ab.values.length - 1].value : '');
-    } else {
-      const pp = athletePerformanceParameters.find(p => p.athleticismParameterId === selectedParameterId);
-      setBaselineValue(pp && pp.values.length > 0 ? pp.values[pp.values.length - 1].value : '');
-    }
-  }, [selectedParameterId, athletePerformanceParameters, athleteBiometrics]);
+    setBaselineValue(latestRecordedValue(selectedParameterId)?.value ?? '');
+  }, [selectedParameterId, athletePerformanceParameters, athleteBiometrics, selfReported]);
 
-  const hasAthleteBaseline = selectedParameterId !== null && (() => {
-    if (isBioId(selectedParameterId)) {
-      const defId = bioDefId(selectedParameterId);
-      return athleteBiometrics.some(b => b.biometricDefinitionId === defId && b.values.length > 0);
-    }
-    return athletePerformanceParameters.some(p => p.athleticismParameterId === selectedParameterId && p.values.length > 0);
-  })();
+  const hasAthleteBaseline = selectedParameterId !== null && latestRecordedValue(selectedParameterId) !== null;
 
   // Resolve display name + unit for whatever is selected
   const selectedParameter = isBioId(selectedParameterId ?? '')
