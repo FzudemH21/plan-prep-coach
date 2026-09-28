@@ -1,13 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dumbbell, ChevronRight, ChevronLeft, ChevronDown, Activity, CalendarDays, CheckCircle2, GripVertical, ClipboardCheck, BedDouble, Check, Info, Paperclip, X } from 'lucide-react';
+import { Dumbbell, ChevronRight, ChevronLeft, ChevronDown, Activity, CalendarDays, CheckCircle2, GripVertical, ClipboardCheck, BedDouble, Check, Info } from 'lucide-react';
 import { TestDetailsDialog } from '@/components/athlete-app/TestDetailsDialog';
-import { MAX_ATTACHMENT_BYTES, uploadTestAttachments } from '@/utils/athleteUploads';
+import { TestResultDialog, type TestResultTarget } from '@/components/athlete-app/TestResultDialog';
+import { useAthleteTestResults } from '@/hooks/useAthleteTestResults';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { DragDropContext, Droppable, Draggable, DropResult, DraggableProvidedDragHandleProps } from '@hello-pangea/dnd';
 import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog, SCHEDULE_PAST_DAYS } from '@/hooks/useAthleteApp';
 import { supabase } from '@/lib/supabase';
@@ -403,100 +400,11 @@ export default function AthletePlanPage() {
   const [selectedWeek, setSelectedWeek] = useState<string>(currentWeekMonday);
   const canMove = connection?.allowRearrangeWorkouts ?? false;
 
-  // ── Existing test results (parameterId:date → value) ─────────────────────
-  const [existingTestResults, setExistingTestResults] = useState<Map<string, string>>(new Map());
-  // Latest self-reported value per parameter (any date)
-  const [latestSelfReported, setLatestSelfReported] = useState<Map<string, { value: string; recordedAt: string }>>(new Map());
-
-  useEffect(() => {
-    if (!connection?.id) return;
-    supabase
-      .from('athlete_test_results')
-      .select('parameter_id, value, recorded_at')
-      .eq('athlete_connection_id', connection.id)
-      .order('recorded_at', { ascending: false })
-      .then(({ data }) => {
-        const map = new Map<string, string>();
-        const latest = new Map<string, { value: string; recordedAt: string }>();
-        for (const row of (data ?? []) as { parameter_id: string; value: string; recorded_at: string }[]) {
-          const date = row.recorded_at.slice(0, 10);
-          const key = `${row.parameter_id}:${date}`;
-          if (!map.has(key)) map.set(key, row.value);
-          if (!latest.has(row.parameter_id)) latest.set(row.parameter_id, { value: row.value, recordedAt: row.recorded_at });
-        }
-        setExistingTestResults(map);
-        setLatestSelfReported(latest);
-      });
-  }, [connection?.id]);
-
-  // ── Test result sheet state ───────────────────────────────────────────────
-  const [testSheetEvent, setTestSheetEvent] = useState<{ ev: AthleteCalendarEvent; date: string } | null>(null);
-  const [testValue, setTestValue] = useState('');
-  const [testNote, setTestNote] = useState('');
-  const [testSaving, setTestSaving] = useState(false);
-  const [testSaved, setTestSaved] = useState(false);
-  const [testFiles, setTestFiles] = useState<File[]>([]);
-  const [testFileError, setTestFileError] = useState<string | null>(null);
+  // Test results (which tests have a result, latest values) and the result / details dialogs
+  const { resultsByDate: existingTestResults, lastValueLabelFor, markSaved } = useAthleteTestResults(connection);
+  const [testTarget, setTestTarget] = useState<TestResultTarget | null>(null);
   const [detailsEvent, setDetailsEvent] = useState<AthleteCalendarEvent | null>(null);
-
-  /** Latest value for a parameter: the athlete's own results or the coach-recorded ones */
-  const lastValueLabelFor = (parameterId: string | undefined, unit?: string): string | null => {
-    if (!parameterId) return null;
-    const candidates: Array<{ value: string; recordedAt: string }> = [];
-    const own = latestSelfReported.get(parameterId);
-    if (own) candidates.push(own);
-    const coachItem = connection?.profileData?.metricsSnapshot?.performanceParams
-      ?.find(item => item.parameterId === parameterId);
-    coachItem?.values.forEach(v => candidates.push(v));
-    if (candidates.length === 0) return null;
-    const newest = candidates.reduce((a, b) => (new Date(a.recordedAt) > new Date(b.recordedAt) ? a : b));
-    const d = new Date(newest.recordedAt);
-    const dateLabel = isNaN(d.getTime()) ? '' : ` · ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
-    return `${newest.value}${unit ? ` ${unit}` : ''}${dateLabel}`;
-  };
-
-  const openTestSheet = (ev: AthleteCalendarEvent, date: string) => {
-    setTestSheetEvent({ ev, date });
-    setTestValue('');
-    setTestNote('');
-    setTestSaved(false);
-    setTestFiles([]);
-    setTestFileError(null);
-  };
-
-  const handleSaveTestResult = async () => {
-    if (!testSheetEvent || !testValue.trim() || !testSheetEvent.ev.parameterId) return;
-    setTestSaving(true);
-    try {
-      const recordedAt = new Date(`${testSheetEvent.date}T12:00:00`).toISOString();
-      // Photos / videos first; a failed upload doesn't block saving the result itself
-      let attachments: string[] = [];
-      let failed: string[] = [];
-      if (testFiles.length > 0 && connection?.id) {
-        ({ paths: attachments, failed } = await uploadTestAttachments(connection.id, testSheetEvent.ev.parameterId, testFiles));
-      }
-      try {
-        await submitTestResult(testSheetEvent.ev.parameterId, testValue.trim(), recordedAt, testNote.trim() || undefined, attachments);
-      } catch (err) {
-        if (attachments.length === 0) throw err;
-        // Attachments not set up yet on the server — keep the result, without them
-        await submitTestResult(testSheetEvent.ev.parameterId, testValue.trim(), recordedAt, testNote.trim() || undefined);
-        failed = testFiles.map(f => f.name);
-      }
-      setExistingTestResults(prev => new Map(prev).set(`${testSheetEvent.ev.parameterId!}:${testSheetEvent.date}`, testValue.trim()));
-      setLatestSelfReported(prev => new Map(prev).set(testSheetEvent.ev.parameterId!, { value: testValue.trim(), recordedAt }));
-      setTestSaved(true);
-      if (failed.length > 0) {
-        setTestFileError(`Result saved, but ${failed.length === 1 ? 'this file' : 'these files'} couldn't be attached: ${failed.join(', ')}`);
-      } else {
-        setTimeout(() => setTestSheetEvent(null), 1200);
-      }
-    } finally {
-      setTestSaving(false);
-    }
-  };
-
-  // ─────────────────────────────────────────────────────────────────────────
+  const openTestSheet = (ev: AthleteCalendarEvent, date: string) => setTestTarget({ ev, date });
 
   const clampedWeek = selectedWeek > maxWeekMonday ? maxWeekMonday : selectedWeek;
   const prevWeek = addDays(clampedWeek, -7);
@@ -607,107 +515,15 @@ export default function AthletePlanPage() {
         onClose={() => setDetailsEvent(null)}
       />
 
-      {/* Test result entry dialog */}
-      <Dialog open={!!testSheetEvent} onOpenChange={open => { if (!open) setTestSheetEvent(null); }}>
-        <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-base">
-              {testSheetEvent?.ev.title ?? 'Enter result'}
-            </DialogTitle>
-            {(testSheetEvent?.ev.targetValue || lastValueLabelFor(testSheetEvent?.ev.parameterId, testSheetEvent?.ev.unit)) && (
-              <DialogDescription className="space-y-0.5">
-                {testSheetEvent?.ev.targetValue && (
-                  <span className="block">Goal: {testSheetEvent.ev.targetValue}{testSheetEvent.ev.unit ? ` ${testSheetEvent.ev.unit}` : ''}</span>
-                )}
-                {lastValueLabelFor(testSheetEvent?.ev.parameterId, testSheetEvent?.ev.unit) && (
-                  <span className="block">Last value: {lastValueLabelFor(testSheetEvent?.ev.parameterId, testSheetEvent?.ev.unit)}</span>
-                )}
-              </DialogDescription>
-            )}
-          </DialogHeader>
-
-          <div className="space-y-4 mt-1">
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">
-                Result{testSheetEvent?.ev.unit ? ` (${testSheetEvent.ev.unit})` : ''}
-              </label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                placeholder="Enter value…"
-                value={testValue}
-                onChange={e => setTestValue(e.target.value)}
-                className="text-base h-11"
-                autoFocus
-              />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium mb-1.5 block text-muted-foreground">
-                Note <span className="font-normal">(optional)</span>
-              </label>
-              <Textarea
-                placeholder="Any context, conditions, remarks…"
-                value={testNote}
-                onChange={e => setTestNote(e.target.value)}
-                rows={2}
-                className="resize-none"
-              />
-            </div>
-
-            {/* Photos / videos of the attempt */}
-            <div>
-              <label className="text-sm font-medium mb-1.5 block text-muted-foreground">
-                Photos / videos <span className="font-normal">(optional, max 50 MB each)</span>
-              </label>
-              {testFiles.length > 0 && (
-                <ul className="space-y-1 mb-2">
-                  {testFiles.map((f, i) => (
-                    <li key={`${f.name}-${i}`} className="flex items-center gap-2 text-sm rounded-md border px-2 py-1.5">
-                      <Paperclip className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                      <span className="flex-1 min-w-0 truncate">{f.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => setTestFiles(prev => prev.filter((_, j) => j !== i))}
-                        className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted active:bg-muted/80"
-                        aria-label={`Remove ${f.name}`}
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <label className="min-h-[44px] flex items-center justify-center gap-2 rounded-md border border-dashed text-sm font-medium cursor-pointer hover:bg-muted active:bg-muted/80">
-                <Paperclip className="h-4 w-4" />
-                Add photo or video
-                <input
-                  type="file"
-                  accept="image/*,video/*"
-                  multiple
-                  className="hidden"
-                  onChange={e => {
-                    const picked = Array.from(e.target.files ?? []);
-                    const tooBig = picked.filter(f => f.size > MAX_ATTACHMENT_BYTES);
-                    setTestFileError(tooBig.length > 0 ? `Too large (max 50 MB): ${tooBig.map(f => f.name).join(', ')}` : null);
-                    setTestFiles(prev => [...prev, ...picked.filter(f => f.size <= MAX_ATTACHMENT_BYTES)]);
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-              {testFileError && <p className="text-xs text-destructive mt-1.5">{testFileError}</p>}
-            </div>
-
-            <Button
-              className="w-full h-11"
-              disabled={!testValue.trim() || testSaving || testSaved}
-              onClick={handleSaveTestResult}
-            >
-              {testSaved ? '✓ Saved' : testSaving ? 'Saving…' : 'Save result'}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Test result entry */}
+      <TestResultDialog
+        target={testTarget}
+        connectionId={connection?.id}
+        lastValueLabel={testTarget ? lastValueLabelFor(testTarget.ev.parameterId, testTarget.ev.unit) : null}
+        submitTestResult={submitTestResult}
+        onSaved={markSaved}
+        onClose={() => setTestTarget(null)}
+      />
     </div>
   );
 }
