@@ -375,31 +375,30 @@ export function CalendarEventDialog({
                       </Popover>
                     </div>
 
-                    {/* Baseline Value (from athlete profile, display only) */}
-                    <div className="space-y-1.5">
-                      <Label htmlFor="cal-baseline">
-                        Baseline Value{' '}
-                        <span className="text-xs text-muted-foreground">
-                          ({hasAthleteBaseline ? 'from athlete profile' : 'not recorded'})
-                        </span>
-                      </Label>
-                      <Input
-                        id="cal-baseline"
-                        value={baselineValue}
-                        onChange={e => !hasAthleteBaseline && setBaselineValue(e.target.value)}
-                        readOnly={hasAthleteBaseline}
-                        placeholder={
-                          !selectedParameter
-                            ? 'Select a parameter first'
-                            : hasAthleteBaseline
-                            ? ''
-                            : 'No baseline recorded'
-                        }
-                        className={cn(
-                          hasAthleteBaseline && 'bg-muted text-muted-foreground cursor-default'
-                        )}
-                      />
-                    </div>
+                    {/* Baseline: the athlete's latest recorded value, display only — not editable
+                        here (a value typed here was never saved; results are recorded through the
+                        test itself or the athlete's Performance tab) */}
+                    {selectedParameter && (
+                      hasAthleteBaseline ? (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="cal-baseline">
+                            Baseline Value{' '}
+                            <span className="text-xs text-muted-foreground">(latest from athlete profile)</span>
+                          </Label>
+                          <Input
+                            id="cal-baseline"
+                            value={baselineValue}
+                            readOnly
+                            tabIndex={-1}
+                            className="bg-muted text-muted-foreground cursor-default"
+                          />
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          No baseline recorded for this athlete yet.
+                        </p>
+                      )
+                    )}
 
                     {/* Target Value */}
                     <div className="space-y-1.5">
