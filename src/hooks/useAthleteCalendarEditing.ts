@@ -2183,15 +2183,22 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         const offset = sessionOffsetByDay[td.date] ?? 0;
         const newTotal = offset + (td.sessions ?? 1);
         const existingIdx = updated.findIndex(d => d.date === td.date);
+        // The merged program's own session names, placed after the day's existing sessions
+        const incomingNames = td.sessionNames ?? [];
+        const nameAt = (i: number) => incomingNames[i - offset] || `Session ${i + 1}`;
         if (existingIdx >= 0) {
           const existing = updated[existingIdx];
           const existingNames = existing.sessionNames || [];
           const newNames = [...existingNames];
           while (newNames.length < newTotal) {
-            newNames.push(`Session ${newNames.length + 1}`);
+            newNames.push(nameAt(newNames.length));
           }
+          // A day without sessions of its own takes the merged program's mesocycle/microcycle,
+          // so its sessions are looked up in that program's periodization
+          const adoptIds = offset === 0 && (existing.sessions ?? 0) === 0;
           updated[existingIdx] = {
             ...existing,
+            ...(adoptIds && td.mesocycleId ? { mesocycleId: td.mesocycleId, microcycleId: td.microcycleId } : {}),
             intensity: td.intensity ?? existing.intensity,
             sessions: Math.max(existing.sessions ?? 0, newTotal),
             sessionNames: newNames,
@@ -2201,7 +2208,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
           updated.push({
             ...td,
             sessions: newTotal,
-            sessionNames: Array.from({ length: newTotal }, (_, i) => `Session ${i + 1}`),
+            sessionNames: Array.from({ length: newTotal }, (_, i) => nameAt(i)),
           } as TrainingDay);
         }
       });

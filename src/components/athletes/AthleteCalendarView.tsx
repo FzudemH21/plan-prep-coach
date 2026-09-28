@@ -16,6 +16,7 @@ import { useAthletes } from '@/hooks/useAthletes';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useAthleteCalendarEditing } from '@/hooks/useAthleteCalendarEditing';
 import { useCalendarEvents, CalendarEvent } from '@/hooks/useCalendarEvents';
+import { namespaceProgramForMerge } from '@/utils/assignmentMerge';
 import {
   shiftExerciseDates,
   shiftDailyIntensityDates,
@@ -2167,19 +2168,30 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           const athleteEventsForSync = await transferTestsEvents();
 
           if (mergeIntoExisting) {
-            // MERGE PATH: add program sessions into the current active assignment
+            // MERGE PATH: add program sessions into the current active assignment.
+            // The program's mesocycles/microcycles get ids of their own inside this assignment
+            // (every program uses "meso-1", "micro-1-1", …) and are recorded on the assignment —
+            // otherwise the merged program's values overwrite the earlier program's and its days
+            // can't be mapped to a mesocycle/week (no planned values in the athlete app).
+            const existingAssignment = assignments.find(a => a.id === selectedAssignmentId);
+            const merged = namespaceProgramForMerge({
+              trainingDays: finalTrainingDays,
+              dailyIntensity: filteredDailyIntensity,
+              parameterValues: (program.parameterValues || {}) as Record<string, unknown>,
+              programMesocycles: assignment.assignedMesocycles || [],
+              tag: Date.now().toString(36),
+            });
             editing.mergeSessionData(
               filteredExercises,
               filteredSections,
               filteredSupersets,
-              finalTrainingDays,
+              merged.trainingDays,
               finalDaySplitStates,
-              filteredDailyIntensity,
-              program.parameterValues || {},
+              merged.dailyIntensity,
+              merged.parameterValues,
             );
-            // Update the assignment's date range so isWithinInterval renders the correct cells
+            // Record the merged mesocycles and widen the date range so the calendar renders them
             if (selectedAssignmentId) {
-              const existingAssignment = assignments.find(a => a.id === selectedAssignmentId);
               const newStartIso = assignment.startDate;
               const allDates = finalTrainingDays.map((td: any) => td.date).sort();
               const newEndDate = allDates.length > 0
@@ -2194,47 +2206,15 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
               await athleteData.updateCalendarAssignment(selectedAssignmentId, {
                 startDate: updatedStart,
                 endDate: updatedEnd,
+                assignedMesocycles: [...(existingAssignment?.assignedMesocycles ?? []), ...merged.mesocycles],
               });
             }
-            // Sync merged data to athlete_schedule
-            // Use React state first; fall back to a direct Supabase query if connections
-            // haven't finished loading yet (avoids the race condition on first render).
-            let mergeConnectionId = getConnectionForAthlete(athlete.id)?.id;
-            if (!mergeConnectionId && user) {
-              const { data: connRow } = await supabase
-                .from('athlete_connections')
-                .select('id')
-                .eq('athlete_local_id', athlete.id)
-                .eq('coach_user_id', user.id)
-                .maybeSingle();
-              mergeConnectionId = connRow?.id;
-            }
-            if (mergeConnectionId) {
-              syncAthleteSchedule(
-                mergeConnectionId,
-                assignment as AthleteCalendarAssignment,
-                finalTrainingDays,
-                filteredExercises,
-                program.name ?? program.wizardData?.planName ?? 'Training Plan',
-                program.parameterValues || {},
-                filteredSections,
-                toolboxData?.entries,
-                filteredSupersets,
-                undefined, // sessionIntensities not available at assign time
-                enrichEvents(athleteEventsForSync),
-                athleteFormulaData,
-              ).catch(e => console.error('[ASSIGN] ✗ athlete schedule sync (merge) failed:', e));
-            } else {
-              console.warn('[ASSIGN] merge: no connection found for athlete', athlete.id,
-                '— schedule not synced. Create an invite link for this athlete to enable app sync.');
-            }
+            // No separate sync here: mergeSessionData changes the editing state → auto-save →
+            // the auto-sync sends the WHOLE assignment (both programs, their tests/events) to the
+            // athlete app. A partial sync of only the merged days raced with it and replaced
+            // shared days with the new program's sessions alone.
 
-            // Update ONLY parameterValues in the localStorage snapshot so WorkoutSessionSheet
-            // gets the correct periodization data after a re-assign. Do NOT overwrite
-            // exerciseDistribution, trainingDays, sessionSections, supersets, or daySplitStates
-            // here — those are partial (only the newly-merged sessions) and would destroy the
-            // full existing snapshot. They are updated correctly by the next autoSave cycle
-            // after mergeSessionData() updates React state above.
+            // Keep the stored snapshot's parameter values complete until the auto-save rewrites it
             if (selectedAssignmentId) {
               const mergeStorageKey = `athlete-assignment-${selectedAssignmentId}`;
               const existingSnapshot = localStorage.getItem(mergeStorageKey);
@@ -2243,7 +2223,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                   const parsed = JSON.parse(existingSnapshot);
                   localStorage.setItem(mergeStorageKey, JSON.stringify({
                     ...parsed,
-                    parameterValues: program.parameterValues || {},
+                    parameterValues: { ...(parsed.parameterValues ?? {}), ...merged.parameterValues },
                   }));
                 } catch {
                   // ignore — snapshot update is best-effort
