@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BedDouble, Dumbbell, ChevronRight, Activity, CalendarDays, CheckCircle2, ClipboardCheck, Check, Info } from 'lucide-react';
+import { BedDouble, Dumbbell, ChevronRight, ChevronDown, Activity, CalendarDays, CheckCircle2, ClipboardCheck, Check, Info } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog } from '@/hooks/useAthleteApp';
 import { useAthleteTestResults } from '@/hooks/useAthleteTestResults';
@@ -249,6 +249,9 @@ function TodaySchedule({
   // Coach note on a rest day: first event with notes (events are shown as cards too)
   const coachNote = !hasSessions && tests.length === 0 ? (events.find(e => e.notes)?.notes ?? null) : null;
 
+  const [testsOpen, setTestsOpen] = useState(false);
+  const testsDone = tests.filter(ev => ev.parameterId && resultsByDate.get(`${ev.parameterId}:${today}`) !== undefined).length;
+
   const testCards = tests.map(ev => (
     <TestCard
       key={ev.id}
@@ -275,13 +278,26 @@ function TodaySchedule({
       )}
 
       {tests.length > 0 && (
-        // Tests take the day's main card when there's no session (no "Planned Rest Day" then)
+        // Tests take the day's main card when there's no session (no "Planned Rest Day" then);
+        // folded like in the Plan tab — tap to see them all
         <Card className="border-amber-200 bg-amber-50/60">
-          <CardContent className="p-3 space-y-2">
-            <p className="text-sm font-semibold text-amber-900">
-              {tests.length === 1 ? 'You have a test today!' : `You have ${tests.length} tests today!`}
-            </p>
-            {testCards}
+          <CardContent className="p-2 space-y-2">
+            <button
+              type="button"
+              onClick={() => setTestsOpen(o => !o)}
+              aria-expanded={testsOpen}
+              className="w-full min-h-[44px] flex items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-amber-100/60 active:bg-amber-100"
+            >
+              <Activity className="h-4 w-4 text-amber-600 shrink-0" />
+              <span className="flex-1 min-w-0 text-sm font-semibold text-amber-900">
+                {tests.length === 1 ? 'You have a test today!' : `You have ${tests.length} tests today!`}
+              </span>
+              {testsDone > 0 && (
+                <span className="shrink-0 text-xs font-medium text-green-700">{testsDone}/{tests.length} done</span>
+              )}
+              <ChevronDown className={cn('h-4 w-4 text-amber-700 shrink-0 transition-transform', testsOpen && 'rotate-180')} />
+            </button>
+            {testsOpen && testCards}
           </CardContent>
         </Card>
       )}
@@ -411,6 +427,36 @@ function ComingUp({
   );
 }
 
+/** The next 7 days at a glance — training days as intensity-coloured dots */
+function UpcomingStrip({ schedule, today }: { schedule: AthleteScheduleEntry[]; today: string }) {
+  const scheduleMap = new Map(schedule.map(e => [e.date, e]));
+  const upcomingDates = Array.from({ length: COMING_UP_DAYS }, (_, i) => addDays(today, i + 1));
+
+  return (
+    <div>
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Next 7 Days</p>
+      <div className="flex gap-1">
+        {upcomingDates.map(dateStr => {
+          const { day, num } = formatShortDate(dateStr);
+          const e = scheduleMap.get(dateStr);
+          const hasTraining = (e?.sessions.length ?? 0) > 0;
+          const hasTest = (e?.events ?? []).some(ev => ev.type === 'test');
+          return (
+            <div key={dateStr} className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+              <span className="text-xs text-muted-foreground">{day}</span>
+              <span className="text-sm font-medium">{num}</span>
+              <div className="flex items-center gap-0.5 h-2">
+                <div className={cn('w-2 h-2 rounded-full', hasTraining ? getDotColor(e?.intensity ?? null) : 'bg-slate-200')} />
+                {hasTest && <div className="w-2 h-2 rounded-full bg-amber-500" title="Test" />}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 const COMING_UP_DAYS = 7;
@@ -507,6 +553,8 @@ export default function AthleteTodayPage() {
         )}
 
         <ComingUp days={comingUp} getSessionLog={getSessionLog} onShowTestDetails={setDetailsEvent} />
+
+        <UpcomingStrip schedule={schedule} today={today} />
       </div>
     </>
   );
