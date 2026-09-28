@@ -17,7 +17,7 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import { useAthleteCalendarEditing } from '@/hooks/useAthleteCalendarEditing';
 import { useCalendarEvents, CalendarEvent } from '@/hooks/useCalendarEvents';
 import { namespaceProgramForMerge } from '@/utils/assignmentMerge';
-import { buildPackedDateMap, packingMovesDays, remapProgramDates } from '@/utils/assignmentPacking';
+import { buildPackedDateMap, remapProgramDates } from '@/utils/assignmentPacking';
 import { getExerciseVisibility, SESSION_META_CHANGED_EVENT, type SessionVisibilityData } from '@/utils/parameterVisibility';
 import {
   shiftExerciseDates,
@@ -1888,8 +1888,11 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
         // Selected microcycles are assigned back to back (e.g. weeks 2 + 4: week 2 starts on the
         // assignment date, week 4 right after it) - pack them on the program's timeline first
+        // Always applied when microcycles are known: it also drops the unselected ones, so the plan
+        // is anchored at the first SELECTED day (assigning only week 3 must start week 3 on the
+        // assignment date, not two weeks later)
         const packedDateMap = buildPackedDateMap(program.trainingDays ?? [], assignment.selectedMicrocycleIds || []);
-        if (packedDateMap && packingMovesDays(packedDateMap)) {
+        if (packedDateMap) {
           program = remapProgramDates(program, packedDateMap);
         }
 

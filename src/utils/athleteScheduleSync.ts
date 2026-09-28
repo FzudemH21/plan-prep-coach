@@ -830,10 +830,13 @@ export async function syncAthleteSchedule(
       };
     });
 
+  const sessionRowDates = new Set(rows.map(r => r.date));
   // Append event-only rows for dates that have events but no training session row.
   // This ensures tests/events on rest days are visible in the athlete app.
   for (const [evDate, evList] of eventsByDate) {
-    if (trainingDayDates.has(evDate)) continue; // already included above
+    // Skip only dates that already got a session row above — a plan day WITHOUT sessions (rest
+    // day) with a test on it still needs its row, or the test never reaches the app
+    if (sessionRowDates.has(evDate)) continue;
     const meta = mesoByDate.get(evDate);
     rows.push({
       athlete_connection_id: connectionId,
