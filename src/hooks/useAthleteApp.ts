@@ -148,6 +148,9 @@ function mapScheduleRow(row: Record<string, unknown>): AthleteScheduleEntry {
   };
 }
 
+/** How far back the app loads the schedule and session logs (the Plan tab can page back this far) */
+export const SCHEDULE_PAST_DAYS = 182;
+
 export function useAthleteApp() {
   const { user, loading: authLoading } = useAuth();
   const [connection, setConnection] = useState<AthleteConnection | null>(null);
@@ -167,7 +170,7 @@ export function useAthleteApp() {
     const connId = connectionIdRef.current;
     if (!connId) return;
     const todayLocal = new Date();
-    const fromLocal = new Date(todayLocal); fromLocal.setDate(todayLocal.getDate() - 7);
+    const fromLocal = new Date(todayLocal); fromLocal.setDate(todayLocal.getDate() - SCHEDULE_PAST_DAYS);
     const toLocal   = new Date(todayLocal); toLocal.setDate(todayLocal.getDate() + 90);
     const localStr  = (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -247,7 +250,7 @@ export function useAthleteApp() {
 
         // Load session logs (non-fatal — schedule stays usable if this fails)
         const todayLocal = new Date();
-        const fromLocal = new Date(todayLocal); fromLocal.setDate(todayLocal.getDate() - 7);
+        const fromLocal = new Date(todayLocal); fromLocal.setDate(todayLocal.getDate() - SCHEDULE_PAST_DAYS);
         const toLocal   = new Date(todayLocal); toLocal.setDate(todayLocal.getDate() + 90);
         const localStr  = (d: Date) =>
           `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -329,7 +332,7 @@ export function useAthleteApp() {
   const refetchLogs = useCallback(async () => {
     if (!connection) return;
     const todayLocal = new Date();
-    const fromLocal = new Date(todayLocal); fromLocal.setDate(todayLocal.getDate() - 7);
+    const fromLocal = new Date(todayLocal); fromLocal.setDate(todayLocal.getDate() - SCHEDULE_PAST_DAYS);
     const toLocal   = new Date(todayLocal); toLocal.setDate(todayLocal.getDate() + 90);
     const localStr  = (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

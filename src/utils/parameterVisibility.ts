@@ -24,12 +24,26 @@ export function notifySessionMetaChanged(): void {
   window.dispatchEvent(new Event(SESSION_META_CHANGED_EVENT));
 }
 
-export const sessionMetaKey = (mesocycleId: string, dayDate: string, sessionIndex: number) =>
-  `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
+/**
+ * Storage key of one session's stored data ("workoutSessions_", "sessionIntensity_",
+ * "workoutSections_"). With a scope (the athlete calendar's assignment id) the key is
+ * "{prefix}@{scope}@{mesocycleId}_{date}_{index}" — never shared with the training-program wizard,
+ * whose sessions use the same mesocycle ids and often the same dates.
+ */
+export const sessionStorageKey = (
+  prefix: string, mesocycleId: string, dayDate: string, sessionIndex: number, scope?: string,
+) => scope
+  ? `${prefix}@${scope}@${mesocycleId}_${dayDate}_${sessionIndex}`
+  : `${prefix}${mesocycleId}_${dayDate}_${sessionIndex}`;
 
-export function readSessionMeta(mesocycleId: string, dayDate: string, sessionIndex: number): SessionVisibilityData {
+export const sessionMetaKey = (mesocycleId: string, dayDate: string, sessionIndex: number, scope?: string) =>
+  sessionStorageKey('workoutSessions_', mesocycleId, dayDate, sessionIndex, scope);
+
+/** A session's settings; a scoped read falls back to the unscoped key (settings saved before scoping) */
+export function readSessionMeta(mesocycleId: string, dayDate: string, sessionIndex: number, scope?: string): SessionVisibilityData {
   try {
-    const raw = localStorage.getItem(sessionMetaKey(mesocycleId, dayDate, sessionIndex));
+    const raw = localStorage.getItem(sessionMetaKey(mesocycleId, dayDate, sessionIndex, scope))
+      ?? (scope ? localStorage.getItem(sessionMetaKey(mesocycleId, dayDate, sessionIndex)) : null);
     const parsed = raw ? JSON.parse(raw) : {};
     return parsed && typeof parsed === 'object' ? parsed as SessionVisibilityData : {};
   } catch {
@@ -37,9 +51,9 @@ export function readSessionMeta(mesocycleId: string, dayDate: string, sessionInd
   }
 }
 
-export function writeSessionMeta(mesocycleId: string, dayDate: string, sessionIndex: number, data: SessionVisibilityData): void {
+export function writeSessionMeta(mesocycleId: string, dayDate: string, sessionIndex: number, data: SessionVisibilityData, scope?: string): void {
   try {
-    localStorage.setItem(sessionMetaKey(mesocycleId, dayDate, sessionIndex), JSON.stringify(data));
+    localStorage.setItem(sessionMetaKey(mesocycleId, dayDate, sessionIndex, scope), JSON.stringify(data));
     notifySessionMetaChanged();
   } catch { /* ignore */ }
 }

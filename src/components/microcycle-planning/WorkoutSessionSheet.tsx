@@ -48,7 +48,7 @@ import { PrintSessionView } from '@/components/print/PrintSessionView';
 import { useExerciseMetrics } from '@/hooks/useExerciseMetrics';
 import { useCoachProfile } from '@/hooks/useCoachProfile';
 import { onExerciseRenamed, renameExerciseInValue } from '@/utils/exerciseRename';
-import { notifySessionMetaChanged, readSessionMeta } from '@/utils/parameterVisibility';
+import { notifySessionMetaChanged, readSessionMeta, sessionStorageKey } from '@/utils/parameterVisibility';
 
 interface SessionSectionProp {
   id: string;
@@ -134,6 +134,12 @@ interface WorkoutSessionSheetProps {
   onOpenAIAssistant?: (ctx: FocusedSessionContext) => void;
   // Increment to force a full rebuild of exercise parameters from updated parameterValues
   forceParamRefresh?: number;
+  /**
+   * Scope for this session's stored settings (comments, parameter visibility, intensity, saved
+   * sections). The athlete calendar passes its assignment id so its settings never share keys with
+   * the training-program wizard (same mesocycle ids and often the same dates).
+   */
+  storageScope?: string;
   // When true the sheet is opened from the Session Library — hide the "Save to Library"
   // button (already in the library) and show only "Save Changes"
   isLibrarySession?: boolean;
@@ -357,6 +363,7 @@ export function WorkoutSessionSheet({
   athletePerformanceParameters,
   onOpenAIAssistant,
   forceParamRefresh,
+  storageScope,
   isLibrarySession = false,
   athleteConnectionId,
   liveScheduleEntry,
@@ -448,11 +455,17 @@ export function WorkoutSessionSheet({
   const [chainPickerEntries, setChainPickerEntries] = useState<ChainPickerEntry[]>([]);
   const [chainPickerLoading, setChainPickerLoading] = useState(false);
 
+  // Storage keys of this session's settings — scoped (athlete calendar) or the wizard's own.
+  // Reads fall back to the unscoped key, so settings saved before scoping are still found.
+  const scopedKey = (prefix: string) => sessionStorageKey(prefix, mesocycleId, dayDate, sessionIndex, storageScope);
+  const readScoped = (prefix: string): string | null =>
+    localStorage.getItem(scopedKey(prefix))
+    ?? (storageScope ? localStorage.getItem(sessionStorageKey(prefix, mesocycleId, dayDate, sessionIndex)) : null);
+
   // Parameter visibility overrides (loaded from localStorage, saved on save)
   const [parameterVisibilityOverrides, setParameterVisibilityOverrides] = useState<ParameterVisibilityOverrides>(() => {
-    const metadataKey = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
     try {
-      const stored = localStorage.getItem(metadataKey);
+      const stored = readScoped('workoutSessions_');
       if (stored) {
         const parsed = JSON.parse(stored);
         return parsed.parameterVisibility || {};
@@ -472,7 +485,7 @@ export function WorkoutSessionSheet({
           fromExercises[ex.id || ex.exerciseId] = ex.parameterVisibility;
         }
       });
-      return { ...fromExercises, ...(readSessionMeta(mesocycleId, dayDate, sessionIndex).parameterVisibilityByExercise ?? {}) };
+      return { ...fromExercises, ...(readSessionMeta(mesocycleId, dayDate, sessionIndex, storageScope).parameterVisibilityByExercise ?? {}) };
     }
   );
   const getVisibilityOverrides = React.useCallback(
@@ -552,7 +565,7 @@ export function WorkoutSessionSheet({
                   // Fallback: read from saved workoutSections localStorage when parameterValues has no entry
                   if (Object.keys(savedParamsA).length === 0) {
                     try {
-                      const savedJson = localStorage.getItem(`workoutSections_${mesocycleId}_${dayDate}_${sessionIndex}`);
+                      const savedJson = readScoped('workoutSections_');
                       if (savedJson) {
                         const savedSects = JSON.parse(savedJson) as WorkoutSection[];
                         const savedEx = savedSects.flatMap(s => s.exercises).find(e => e.exerciseId === ex.exerciseId);
@@ -851,7 +864,7 @@ export function WorkoutSessionSheet({
         // Fallback: read from saved workoutSections localStorage when parameterValues has no entry
         if (Object.keys(savedParamsB).length === 0) {
           try {
-            const savedJson = localStorage.getItem(`workoutSections_${mesocycleId}_${dayDate}_${sessionIndex}`);
+            const savedJson = readScoped('workoutSections_');
             if (savedJson) {
               const savedSects = JSON.parse(savedJson) as WorkoutSection[];
               const savedEx = savedSects.flatMap(s => s.exercises).find(e => e.exerciseId === ex.exerciseId);
@@ -1069,14 +1082,12 @@ export function WorkoutSessionSheet({
   };
 
   const [workoutSections, setWorkoutSections] = useState<WorkoutSection[]>(() => {
-    const sectionsKey = `workoutSections_${mesocycleId}_${dayDate}_${sessionIndex}`;
-
     if (exercises.length > 0) {
       const built = buildSectionsFromExercises(exercises, parameterValues);
       // Merge saved section comments back — buildSectionsFromExercises only touches
       // exercise parameters, so section-level comments are stripped on every rebuild.
       try {
-        const saved = localStorage.getItem(sectionsKey);
+        const saved = readScoped('workoutSections_');
         if (saved) {
           const savedSects = JSON.parse(saved) as WorkoutSection[];
           const commentMap = new Map(savedSects.map(s => [s.id, s.comments]));
@@ -1087,7 +1098,7 @@ export function WorkoutSessionSheet({
     }
 
     // Only use localStorage if exercises prop is empty (backward compatibility)
-    const storedSections = localStorage.getItem(sectionsKey);
+    const storedSections = readScoped('workoutSections_');
     if (storedSections) {
       try {
         return JSON.parse(storedSections);
@@ -1147,8 +1158,7 @@ export function WorkoutSessionSheet({
         // Merge saved section comments — they're stripped by buildSectionsFromExercises
         const sectionsWithComments = (() => {
           try {
-            const sectionsKey = `workoutSections_${mesocycleId}_${dayDate}_${sessionIndex}`;
-            const saved = localStorage.getItem(sectionsKey);
+            const saved = readScoped('workoutSections_');
             if (saved) {
               const savedSects = JSON.parse(saved) as WorkoutSection[];
               const commentMap = new Map(savedSects.map(s => [s.id, s.comments]));
@@ -1540,8 +1550,7 @@ export function WorkoutSessionSheet({
         const liveNotes = liveScheduleEntry?.sessions[sessionIndex]?.notes;
         setSessionComments(liveNotes != null ? liveNotes : '');
       } else {
-        const key = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
-        const stored = localStorage.getItem(key);
+        const stored = readScoped('workoutSessions_');
         if (stored) {
           try {
             const { comments } = JSON.parse(stored);
@@ -1568,8 +1577,7 @@ export function WorkoutSessionSheet({
         setSessionIntensity(resolvedIntensity as IntensityLevel);
       } else {
         // In Training Wizard context: try localStorage first, then fall back to day intensity
-        const intensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
-        const storedIntensity = localStorage.getItem(intensityKey);
+        const storedIntensity = readScoped('sessionIntensity_');
         
         if (storedIntensity) {
           setSessionIntensity(storedIntensity as IntensityLevel);
@@ -1955,7 +1963,7 @@ export function WorkoutSessionSheet({
 
   const handleSave = () => {
     // Save session comments and parameter visibility (session name is now synced via onRenameSession to trainingDays.sessionNames)
-    const metadataKey = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
+    const metadataKey = scopedKey('workoutSessions_');
     localStorage.setItem(metadataKey, JSON.stringify({
       comments: sessionComments,
       parameterVisibility: parameterVisibilityOverrides,
@@ -1963,11 +1971,11 @@ export function WorkoutSessionSheet({
     }));
 
     // Save session intensity
-    const intensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
+    const intensityKey = scopedKey('sessionIntensity_');
     localStorage.setItem(intensityKey, sessionIntensity);
 
     // Save workout sections structure
-    const sectionsKey = `workoutSections_${mesocycleId}_${dayDate}_${sessionIndex}`;
+    const sectionsKey = scopedKey('workoutSections_');
     localStorage.setItem(sectionsKey, JSON.stringify(workoutSections));
     notifySessionMetaChanged();
 
@@ -2488,9 +2496,9 @@ export function WorkoutSessionSheet({
 
     // Store parameter visibility overrides
     if (Object.keys(parameterVisibility).length > 0) {
-      const metadataKey = `workoutSessions_${mesocycleId}_${dayDate}_${sessionIndex}`;
+      const metadataKey = scopedKey('workoutSessions_');
       try {
-        const existing = localStorage.getItem(metadataKey);
+        const existing = readScoped('workoutSessions_');
         const parsed = existing ? JSON.parse(existing) : {};
         
         // Merge visibility overrides as a flat map (paramName → bool),

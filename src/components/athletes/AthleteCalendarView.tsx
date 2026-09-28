@@ -17,7 +17,7 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import { useAthleteCalendarEditing } from '@/hooks/useAthleteCalendarEditing';
 import { useCalendarEvents, CalendarEvent } from '@/hooks/useCalendarEvents';
 import { namespaceProgramForMerge } from '@/utils/assignmentMerge';
-import { getExerciseVisibility, type SessionVisibilityData } from '@/utils/parameterVisibility';
+import { getExerciseVisibility, SESSION_META_CHANGED_EVENT, type SessionVisibilityData } from '@/utils/parameterVisibility';
 import {
   shiftExerciseDates,
   shiftDailyIntensityDates,
@@ -194,6 +194,17 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       setResyncTick(t => t + 1);
     }
   }, []);
+  // Session settings (e.g. parameter visibility) live in their own storage keys, not in the editing
+  // state — when they change, run the sync so the athlete app gets them
+  useEffect(() => {
+    const onMetaChanged = () => {
+      if (syncInProgressRef.current) { resyncRequestedRef.current = true; return; }
+      setResyncTick(t => t + 1);
+    };
+    window.addEventListener(SESSION_META_CHANGED_EVENT, onMetaChanged);
+    return () => window.removeEventListener(SESSION_META_CHANGED_EVENT, onMetaChanged);
+  }, []);
+
   // Bumped after session logs are re-linked so the calendar reloads them
   const [sessionLogsVersion, setSessionLogsVersion] = useState(0);
 
@@ -1178,6 +1189,32 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   }, [editing.handleClearDays, selectedAssignmentId, toast, getConnectionForAthlete, athlete.id, unlinkSessionLogs]);
 
   // Build mesocycle from assignment for MasterPlannerGrid
+  // All of the assignment's mesocycles — the Master Planner resolves each day's own mesocycle
+  // (merged programs add mesocycles of their own)
+  const mesocyclesFromAssignment = useMemo(() => {
+    if (!editing.selectedAssignment) return [];
+    return (editing.selectedAssignment.assignedMesocycles || []).map(meso => ({
+      id: meso.id,
+      name: meso.name,
+      weeks: meso.weeks,
+      sessionsPerWeek: meso.sessionsPerWeek,
+      sessionLength: meso.sessionLength,
+      startDate: parseDateStr(meso.startDate),
+      endDate: parseDateStr(meso.endDate),
+      duration: meso.duration,
+      intensity: meso.intensity as any,
+      microcycles: (meso.microcycles || []).map(m => ({
+        id: m.id,
+        name: m.name,
+        duration: m.duration,
+        intensity: m.intensity as any,
+      })),
+      trainingMethods: [],
+      trainingQualities: meso.trainingQualities,
+      allocatedSubGoals: meso.allocatedSubGoals,
+    }));
+  }, [editing.selectedAssignment]);
+
   const currentMesocycleFromAssignment = useMemo(() => {
     if (!editing.selectedAssignment) return undefined;
     
@@ -2643,6 +2680,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
               </div>
             ) : (
               <MasterPlannerGrid
+                mesocycles={mesocyclesFromAssignment}
+                sessionMetaScope={selectedAssignmentId ?? undefined}
                 calendarDays={masterPlannerCalendarDays}
                 selectedDayOfWeek={selectedDayOfWeek}
                 onSessionClick={(dayDate, sessionIndex) => {
@@ -2825,6 +2864,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       {/* Workout Session Sheet for viewing/editing sessions */}
       {selectedSessionInfo && selectedSessionInfo.dayDate && selectedSessionInfo.assignmentId !== undefined && (
         <WorkoutSessionSheet
+          storageScope={selectedAssignmentId ?? undefined}
           isOpen={sessionSheetOpen}
           onClose={() => {
             setSessionSheetOpen(false);

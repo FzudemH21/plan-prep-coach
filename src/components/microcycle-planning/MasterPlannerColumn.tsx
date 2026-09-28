@@ -113,6 +113,8 @@ interface MasterPlannerColumnProps {
   currentMesocycle?: ExtendedMesocycle;
   /** All mesocycles of the plan — each column resolves the mesocycle its own day belongs to */
   mesocycles?: ExtendedMesocycle[];
+  /** Scope of the sessions' stored settings (athlete calendar: assignment id) */
+  sessionMetaScope?: string;
   trainingDays?: TrainingDay[];
   toolboxData?: ToolboxDatabase;
   onParameterChange?: (
@@ -492,6 +494,7 @@ export function MasterPlannerColumn({
   parameterValues,
   currentMesocycle: viewedMesocycle,
   mesocycles,
+  sessionMetaScope,
   trainingDays,
   toolboxData,
   onParameterChange,
@@ -578,18 +581,18 @@ export function MasterPlannerColumn({
   const [, setVisibilityVersion] = useState(0);
   const getExerciseParamVisibility = useCallback((sessionIndex: number, exerciseId: string): ParameterVisibilityOverrides => {
     if (!currentMesocycle) return {};
-    return getExerciseVisibility(readSessionMeta(currentMesocycle.id, day.dateString, sessionIndex), exerciseId);
-  }, [currentMesocycle, day.dateString]);
+    return getExerciseVisibility(readSessionMeta(currentMesocycle.id, day.dateString, sessionIndex, sessionMetaScope), exerciseId);
+  }, [currentMesocycle, day.dateString, sessionMetaScope]);
   const updateExerciseParamVisibility = useCallback((
     sessionIndex: number,
     exerciseId: string,
     update: (prev: ParameterVisibilityOverrides) => ParameterVisibilityOverrides,
   ) => {
     if (!currentMesocycle) return;
-    const meta = readSessionMeta(currentMesocycle.id, day.dateString, sessionIndex);
-    writeSessionMeta(currentMesocycle.id, day.dateString, sessionIndex, updateExerciseVisibility(meta, exerciseId, update));
+    const meta = readSessionMeta(currentMesocycle.id, day.dateString, sessionIndex, sessionMetaScope);
+    writeSessionMeta(currentMesocycle.id, day.dateString, sessionIndex, updateExerciseVisibility(meta, exerciseId, update), sessionMetaScope);
     setVisibilityVersion(v => v + 1);
-  }, [currentMesocycle, day.dateString]);
+  }, [currentMesocycle, day.dateString, sessionMetaScope]);
 
   const currentIntensity: IntensityLevel = migrateLegacyIntensity(dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || '5') as IntensityLevel;
 

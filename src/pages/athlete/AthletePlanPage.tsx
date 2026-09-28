@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { DragDropContext, Droppable, Draggable, DropResult, DraggableProvidedDragHandleProps } from '@hello-pangea/dnd';
-import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog } from '@/hooks/useAthleteApp';
+import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog, SCHEDULE_PAST_DAYS } from '@/hooks/useAthleteApp';
 import { supabase } from '@/lib/supabase';
 import { IntensityBadge } from '@/components/athlete-app/IntensityBadge';
 import { cn } from '@/lib/utils';
@@ -324,10 +324,13 @@ export default function AthletePlanPage() {
 
   const maxWeekMonday = getMondayOf(addDays(today, weeksAhead * 7));
 
+  // Past weeks back to the start of the loaded window (not just the first loaded entry, which
+  // made it impossible to go back before the current plan's first week)
   const minWeekMonday = useMemo(() => {
-    if (schedule.length === 0) return currentWeekMonday;
-    return getMondayOf(schedule[0].date);
-  }, [schedule, currentWeekMonday]);
+    const windowStart = getMondayOf(addDays(today, -SCHEDULE_PAST_DAYS));
+    const firstEntry = schedule.length > 0 ? getMondayOf(schedule[0].date) : currentWeekMonday;
+    return firstEntry < windowStart ? firstEntry : windowStart;
+  }, [schedule, currentWeekMonday, today]);
 
   const [selectedWeek, setSelectedWeek] = useState<string>(currentWeekMonday);
   const canMove = connection?.allowRearrangeWorkouts ?? false;

@@ -88,7 +88,8 @@ const EXTRA_SESSION_KEYS = [
  * program inside extraSessionState, restored on load, cleared on switch.
  */
 const SESSION_KEY_PREFIXES = ['workoutSessions_', 'sessionIntensity_', 'workoutSections_'] as const;
-const isSessionKey = (key: string) => SESSION_KEY_PREFIXES.some(p => key.startsWith(p));
+// Keys scoped to an athlete-calendar assignment ("{prefix}@{assignmentId}@…") are not the program's
+const isSessionKey = (key: string) => SESSION_KEY_PREFIXES.some(p => key.startsWith(p) && !key.startsWith(`${p}@`));
 // Legacy prefixes that are only ever cleared
 const LEGACY_SESSION_KEY_PREFIXES = ['sessionIntensities_', 'sessionNames_', 'exercises_'];
 

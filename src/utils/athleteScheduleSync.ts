@@ -6,7 +6,7 @@
  * localStorage, so the athlete app can read sessions directly from Supabase.
  */
 import { supabase } from '@/lib/supabase';
-import { getExerciseVisibility, type SessionVisibilityData } from '@/utils/parameterVisibility';
+import { getExerciseVisibility, sessionMetaKey, type SessionVisibilityData } from '@/utils/parameterVisibility';
 import { AthleteCalendarAssignment } from '@/types/athlete';
 import type { ToolboxEntry } from '@/types/toolbox';
 import type { CalendarEvent } from '@/hooks/useCalendarEvents';
@@ -549,8 +549,10 @@ export async function syncAthleteSchedule(
     // Params absent from the record keep their toolbox default (showInGridByDefault).
     // We must apply overrides as a patch on top of visibleParams, not replace it entirely.
     try {
-      const visKey = `workoutSessions_${mesocycleId}_${ex.dayDate}_${ex.sessionIndex}`;
-      const storedVis = localStorage.getItem(visKey);
+      // The athlete calendar's own (assignment-scoped) setting first; the unscoped key is the
+      // wizard's / from before scoping
+      const storedVis = localStorage.getItem(sessionMetaKey(mesocycleId, ex.dayDate, ex.sessionIndex, assignment.id))
+        ?? localStorage.getItem(sessionMetaKey(mesocycleId, ex.dayDate, ex.sessionIndex));
       // The exercise's own visibility (edited in this calendar, or copied from the program at
       // assignment) wins; otherwise the setting stored for this session
       const ownVisibility = (ex.parameterVisibility && typeof ex.parameterVisibility === 'object')

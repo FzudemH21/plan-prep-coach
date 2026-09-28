@@ -50,6 +50,8 @@ interface MasterPlannerGridProps {
   currentMesocycle?: ExtendedMesocycle;
   /** All mesocycles of the plan (each column resolves its own day's mesocycle) */
   mesocycles?: ExtendedMesocycle[];
+  /** Scope of the sessions' stored settings (athlete calendar: assignment id) */
+  sessionMetaScope?: string;
   trainingDays?: TrainingDay[];
   toolboxData?: ToolboxDatabase;
   onParameterChange?: (
@@ -139,6 +141,7 @@ export function MasterPlannerGrid({
   parameterValues,
   currentMesocycle,
   mesocycles,
+  sessionMetaScope,
   trainingDays,
   toolboxData,
   onParameterChange,
@@ -285,6 +288,7 @@ export function MasterPlannerGrid({
               parameterValues={parameterValues}
               currentMesocycle={currentMesocycle}
               mesocycles={mesocycles}
+              sessionMetaScope={sessionMetaScope}
               trainingDays={trainingDays}
               toolboxData={toolboxData}
               onParameterChange={onParameterChange}
