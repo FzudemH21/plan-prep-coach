@@ -2378,6 +2378,25 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     const assignmentToDelete = deleteAssignment;
     setDeleteAssignment(null);
 
+    // Every date this assignment covers: its recorded mesocycles, its date range (widened when
+    // programs were merged into it) and the days stored in its snapshot
+    const coveredDates = new Set<string>();
+    const addRange = (startIso?: string, endIso?: string) => {
+      if (!startIso || !endIso) return;
+      const start = new Date(startIso.slice(0, 10) + 'T12:00:00');
+      const end = new Date(endIso.slice(0, 10) + 'T12:00:00');
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
+      for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 86400000)) {
+        coveredDates.add(d.toISOString().slice(0, 10));
+      }
+    };
+    for (const meso of assignmentToDelete.assignedMesocycles) addRange(meso.startDate, meso.endDate);
+    addRange(assignmentToDelete.startDate, assignmentToDelete.endDate);
+    try {
+      const snapshot = JSON.parse(localStorage.getItem(`athlete-assignment-${assignmentToDelete.id}`) ?? 'null');
+      (snapshot?.trainingDays ?? []).forEach((td: { date?: string }) => { if (td.date) coveredDates.add(td.date); });
+    } catch { /* ignore */ }
+
     // Remove from assignments list
     athleteData.deleteCalendarAssignment(assignmentToDelete.id);
 
@@ -2389,17 +2408,13 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       setSelectedAssignmentId(null);
     }
 
+    // Logged sessions stay in the athlete's history but are unlinked from these dates
+    void unlinkSessionLogs([...coveredDates]);
+
     // Delete athlete_schedule rows for every date covered by this assignment
     const connection = getConnectionForAthlete(athlete.id);
     if (connection) {
-      const datesToDelete: string[] = [];
-      for (const meso of assignmentToDelete.assignedMesocycles) {
-        const start = new Date(meso.startDate.slice(0, 10) + 'T12:00:00');
-        const end = new Date(meso.endDate.slice(0, 10) + 'T12:00:00');
-        for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 86400000)) {
-          datesToDelete.push(d.toISOString().slice(0, 10));
-        }
-      }
+      const datesToDelete = [...coveredDates];
       if (datesToDelete.length > 0) {
         const BATCH = 200;
         for (let i = 0; i < datesToDelete.length; i += BATCH) {
