@@ -744,7 +744,9 @@ export default function AthleteSessionPage() {
   // Shown when the athlete tries to finish with incomplete sets
   const [incompleteWarning, setIncompleteWarning] = useState<'section' | 'workout' | null>(null);
   // Shown when the athlete tries to leave the session page after the workout has started
-  const [abandonWarning, setAbandonWarning] = useState(false);
+  // Abandon-workout confirmation: where to go once confirmed ('leave' the page, or back to the
+  // session 'overview' when the athlete backs out of the first section)
+  const [abandonTarget, setAbandonTarget] = useState<'leave' | 'overview' | null>(null);
 
   // Exercise detail sheet — tapping a name or ⓘ opens it
   const [detailTarget, setDetailTarget] = useState<ExerciseDetailTarget | null>(null);
@@ -1193,6 +1195,48 @@ export default function AthleteSessionPage() {
 
   // ── Screen: Overview ───────────────────────────────────────────────────────
 
+  // ── Abandon workout ────────────────────────────────────────────────────────
+  // Confirmed abandon: the started log row is deleted (so the calendar doesn't show the session as
+  // "In progress") and the workout's progress is cleared.
+  async function abandonWorkout(target: 'leave' | 'overview') {
+    setAbandonTarget(null);
+    if (sessionLogId) {
+      await supabase.from('athlete_session_logs').delete().eq('id', sessionLogId);
+      setSessionLogId(null);
+    }
+    workoutStartTimeRef.current = null;
+    setWorkoutElapsed(0);
+    setLoggedValues({});
+    setCompletedSets({});
+    setSetCountOverrides({});
+    setSwappedExercises({});
+    setSectionIdx(0);
+    if (target === 'leave') navigate(-1);
+    else setPhase('overview');
+  }
+
+  const abandonDialog = (
+    <AlertDialog open={abandonTarget !== null} onOpenChange={o => { if (!o) setAbandonTarget(null); }}>
+      <AlertDialogContent className="sm:max-w-[360px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Abandon workout?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Your progress will be lost and the session won't be marked as started.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep going</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={() => { if (abandonTarget) void abandonWorkout(abandonTarget); }}
+          >
+            Abandon
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
   if (phase === 'overview') {
     return (
       <div className="absolute inset-0 flex flex-col bg-background max-w-[480px] mx-auto overflow-hidden">
@@ -1200,8 +1244,9 @@ export default function AthleteSessionPage() {
         <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
           <button
             onClick={() => {
-              if (workoutStartTimeRef.current !== null) {
-                setAbandonWarning(true);
+              // A started workout (log row / running timer) must be abandoned explicitly
+              if (workoutStartTimeRef.current !== null || sessionLogId) {
+                setAbandonTarget('leave');
               } else {
                 navigate(-1);
               }
@@ -1478,35 +1523,7 @@ export default function AthleteSessionPage() {
           </div>
         </div>
 
-        {/* Abandon workout confirmation */}
-        <AlertDialog open={abandonWarning} onOpenChange={o => { if (!o) setAbandonWarning(false); }}>
-          <AlertDialogContent className="sm:max-w-[360px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Abandon workout?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Your progress will be lost.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Keep going</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={async () => {
-                  setAbandonWarning(false);
-                  if (sessionLogId) {
-                    await supabase
-                      .from('athlete_session_logs')
-                      .delete()
-                      .eq('id', sessionLogId);
-                  }
-                  navigate(-1);
-                }}
-              >
-                Abandon
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        {abandonDialog}
 
         {/* Exercise detail sheet — available in overview so circuit exercises can be tapped */}
         <ExerciseDetailSheet
@@ -1583,7 +1600,8 @@ export default function AthleteSessionPage() {
           <button
             onClick={() => {
               if (isFirst) {
-                setPhase('overview');
+                // Backing out of the first section leaves the workout → confirm abandoning it
+                setAbandonTarget('overview');
               } else {
                 setSectionIdx(i => i - 1);
                 setPhase('active');
@@ -1629,6 +1647,8 @@ export default function AthleteSessionPage() {
             Start Section
           </Button>
         </div>
+
+        {abandonDialog}
       </div>
     );
   }
