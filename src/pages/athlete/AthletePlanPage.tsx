@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dumbbell, ChevronRight, ChevronLeft, Activity, CalendarDays, CheckCircle2, GripVertical, ClipboardCheck, BedDouble, Check } from 'lucide-react';
+import { Dumbbell, ChevronRight, ChevronLeft, ChevronDown, Activity, CalendarDays, CheckCircle2, GripVertical, ClipboardCheck, BedDouble, Check } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -167,6 +167,75 @@ function DaySection({
   const { weekday, dateLabel } = formatDayHeader(dateStr);
   const hasSessions = (entry?.sessions.length ?? 0) > 0;
 
+  const dayTests = (entry?.events ?? []).filter(ev => ev.type === 'test');
+  const dayEvents = (entry?.events ?? []).filter(ev => ev.type !== 'test');
+  const [testsOpen, setTestsOpen] = useState(false);
+  const testsWithResult = dayTests.filter(ev =>
+    ev.parameterId && existingTestResults.get(`${ev.parameterId}:${dateStr}`) !== undefined
+  ).length;
+  const testWord = dayTests.length === 1 ? 'a test' : `${dayTests.length} tests`;
+  const testsLabel = isToday
+    ? `You have ${testWord} today!`
+    : isPast
+      ? `${dayTests.length === 1 ? '1 test' : `${dayTests.length} tests`} on this day`
+      : `${dayTests.length === 1 ? '1 test' : `${dayTests.length} tests`} scheduled`;
+
+  const renderEventCard = (ev: AthleteCalendarEvent) => (
+    <div
+      key={ev.id}
+      className={cn(
+        'rounded-lg px-2.5 py-2 border text-xs',
+        isPast ? 'opacity-60' : '',
+        ev.type === 'test'
+          ? 'border-amber-200 bg-amber-50/60'
+          : 'border-blue-200 bg-blue-50/60',
+      )}
+    >
+      <div className="flex items-start gap-2">
+        {ev.type === 'test'
+          ? <Activity className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+          : <CalendarDays className="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5" />}
+        <div className="min-w-0 flex-1">
+          <p className={cn('font-medium', ev.type === 'test' ? 'text-amber-800' : 'text-blue-800')}>
+            {ev.title}
+          </p>
+          {ev.type === 'test' && ev.targetValue && (
+            <p className="text-amber-700 mt-0.5">
+              <span className="font-medium">Goal:</span> {ev.targetValue}{ev.unit ? ` ${ev.unit}` : ''}
+            </p>
+          )}
+          {ev.notes && (
+            <p className="text-muted-foreground mt-0.5 leading-relaxed">{ev.notes}</p>
+          )}
+        </div>
+      </div>
+      {/* Enter result / locked result */}
+      {ev.type === 'test' && ev.parameterId && (() => {
+        const resultValue = existingTestResults.get(`${ev.parameterId}:${dateStr}`);
+        if (resultValue !== undefined) {
+          return (
+            <div className="mt-2 flex items-center gap-1.5 text-xs text-green-700 font-medium">
+              <Check className="h-3 w-3 shrink-0" />
+              Result: {resultValue}
+            </div>
+          );
+        }
+        if (!isPast) {
+          return (
+            <button
+              onClick={() => onEnterTestResult(ev, dateStr)}
+              className="mt-2 w-full min-h-[44px] flex items-center justify-center gap-1.5 text-sm font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 active:bg-amber-300 rounded-md py-2 transition-colors"
+            >
+              <ClipboardCheck className="h-4 w-4" />
+              Enter result
+            </button>
+          );
+        }
+        return null;
+      })()}
+    </div>
+  );
+
   return (
     <div
       className={cn(
@@ -193,64 +262,38 @@ function DaySection({
       {/* Intensity badge */}
       {entry?.intensity && <IntensityBadge intensity={entry.intensity} />}
 
-      {/* Tests & events */}
-      {(entry?.events ?? []).length > 0 && (
+      {/* Events (competitions, vacation, ...) */}
+      {dayEvents.length > 0 && (
         <div className="space-y-1.5">
-          {entry!.events.map((ev: AthleteCalendarEvent) => (
-            <div
-              key={ev.id}
-              className={cn(
-                'rounded-lg px-2.5 py-2 border text-xs',
-                isPast ? 'opacity-60' : '',
-                ev.type === 'test'
-                  ? 'border-amber-200 bg-amber-50/60'
-                  : 'border-blue-200 bg-blue-50/60',
-              )}
-            >
-              <div className="flex items-start gap-2">
-                {ev.type === 'test'
-                  ? <Activity className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
-                  : <CalendarDays className="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5" />}
-                <div className="min-w-0 flex-1">
-                  <p className={cn('font-medium', ev.type === 'test' ? 'text-amber-800' : 'text-blue-800')}>
-                    {ev.title}
-                  </p>
-                  {ev.type === 'test' && ev.targetValue && (
-                    <p className="text-amber-700 mt-0.5">
-                      <span className="font-medium">Goal:</span> {ev.targetValue}{ev.unit ? ` ${ev.unit}` : ''}
-                    </p>
-                  )}
-                  {ev.notes && (
-                    <p className="text-muted-foreground mt-0.5 leading-relaxed">{ev.notes}</p>
-                  )}
-                </div>
-              </div>
-              {/* Enter result / locked result */}
-              {ev.type === 'test' && ev.parameterId && (() => {
-                const resultValue = existingTestResults.get(`${ev.parameterId}:${dateStr}`);
-                if (resultValue !== undefined) {
-                  return (
-                    <div className="mt-2 flex items-center gap-1.5 text-xs text-green-700 font-medium">
-                      <Check className="h-3 w-3 shrink-0" />
-                      Result: {resultValue}
-                    </div>
-                  );
-                }
-                if (!isPast) {
-                  return (
-                    <button
-                      onClick={() => onEnterTestResult(ev, dateStr)}
-                      className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 active:bg-amber-300 rounded-md py-1.5 transition-colors"
-                    >
-                      <ClipboardCheck className="h-3.5 w-3.5" />
-                      Enter result
-                    </button>
-                  );
-                }
-                return null;
-              })()}
-            </div>
-          ))}
+          {dayEvents.map(renderEventCard)}
+        </div>
+      )}
+
+      {/* Tests - folded behind one button, tap to see them all and enter results */}
+      {dayTests.length > 0 && (
+        <div className="space-y-1.5">
+          <button
+            type="button"
+            onClick={() => setTestsOpen(o => !o)}
+            aria-expanded={testsOpen}
+            className={cn(
+              'w-full min-h-[44px] flex items-center gap-2 rounded-lg px-3 py-2 border text-left transition-colors',
+              'border-amber-200 bg-amber-50/80 hover:bg-amber-100 active:bg-amber-200',
+              isPast && 'opacity-60',
+            )}
+          >
+            <Activity className="h-4 w-4 text-amber-600 shrink-0" />
+            <span className="flex-1 min-w-0 text-sm font-medium text-amber-800">
+              {testsLabel}
+            </span>
+            {testsWithResult > 0 && (
+              <span className="shrink-0 text-xs font-medium text-green-700">
+                {testsWithResult}/{dayTests.length} done
+              </span>
+            )}
+            <ChevronDown className={cn('h-4 w-4 text-amber-700 shrink-0 transition-transform', testsOpen && 'rotate-180')} />
+          </button>
+          {testsOpen && dayTests.map(renderEventCard)}
         </div>
       )}
 
