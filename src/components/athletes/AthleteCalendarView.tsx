@@ -964,8 +964,14 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
    * When sessions are removed, unlink their logs — kept as history, but renamed so a session that
    * later takes the same date/position doesn't inherit "In progress" / "Done". When one session of
    * a day is removed, the logs of the sessions after it move up one position with them.
+   * `fromIndexByDate`: new sessions are about to be created from that position on (program merged
+   * in, session added) — any log still sitting there belongs to a session removed earlier.
    */
-  const unlinkSessionLogs = useCallback(async (dates: string[], removedIndex?: number) => {
+  const unlinkSessionLogs = useCallback(async (
+    dates: string[],
+    removedIndex?: number,
+    fromIndexByDate?: Record<string, number>,
+  ) => {
     const connection = getConnectionForAthlete(athlete.id);
     if (!connection || dates.length === 0) return;
     const { data, error } = await supabase
@@ -981,6 +987,13 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       if (!sid || sid.includes('~removed-')) continue;
       const m = sid.match(/^(.*)-(\d+)$/);
       const idx = m ? Number(m[2]) : -1;
+      if (fromIndexByDate) {
+        const from = fromIndexByDate[row.date as string];
+        if (from !== undefined && m && idx >= from) {
+          updates.push({ id: row.id as string, session_id: `${sid}~removed-${stamp}`, order: -1 });
+        }
+        continue;
+      }
       if (removedIndex === undefined || idx === removedIndex) {
         updates.push({ id: row.id as string, session_id: `${sid}~removed-${stamp}`, order: -1 });
       } else if (m && idx > removedIndex) {
@@ -1662,6 +1675,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     // Increment the session count in the editing state FIRST so the
     // calendar display shows the new session immediately.
     editing.handleAddSession(dateString);
+    // A log left at this position by a removed session must not attach to the new one
+    void unlinkSessionLogs([dateString], undefined, { [dateString]: newSessionIndex });
 
     // Open the WorkoutSessionSheet for the newly created (empty) session.
     setSelectedSessionInfo({
@@ -2239,6 +2254,18 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
               programMesocycles: assignment.assignedMesocycles || [],
               tag: Date.now().toString(36),
             });
+            // The merged sessions are new: logs left at their positions by removed sessions
+            // must not attach to them (same offset rule as mergeSessionData)
+            const mergeFromIndex: Record<string, number> = {};
+            new Set<string>([
+              ...filteredExercises.map(ex => ex.dayDate),
+              ...finalTrainingDays.map((td: { date: string }) => td.date),
+            ]).forEach(dayDate => {
+              const existing = editing.exerciseDistribution.filter(ex => ex.dayDate === dayDate);
+              mergeFromIndex[dayDate] = existing.length > 0 ? Math.max(...existing.map(ex => ex.sessionIndex)) + 1 : 0;
+            });
+            void unlinkSessionLogs(Object.keys(mergeFromIndex), undefined, mergeFromIndex);
+
             editing.mergeSessionData(
               filteredExercises,
               filteredSections,
@@ -2371,7 +2398,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
     setShowAssignDialog(false);
     setSelectedDate(null);
-  }, [athlete.id, athleteData, getProgram, addCalendarEvent, getEventsForAthlete, selectedAssignmentId, editing.mergeSessionData, user]);
+  }, [athlete.id, athleteData, getProgram, addCalendarEvent, getEventsForAthlete, selectedAssignmentId, editing.mergeSessionData, editing.exerciseDistribution, assignments, unlinkSessionLogs, user]);
 
   const handleDeleteAssignment = async () => {
     if (!deleteAssignment) return;
@@ -2662,7 +2689,11 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 onClearDay={handleClearDay}
                 onPasteDay={editing.handlePasteDay}
                 copiedDay={editing.copiedDay}
-                onAddSession={editing.handleAddSession}
+                onAddSession={(dayDate: string) => {
+                  const newIdx = editing.daySplitStates[dayDate] ?? 0;
+                  editing.handleAddSession(dayDate);
+                  void unlinkSessionLogs([dayDate], undefined, { [dayDate]: newIdx });
+                }}
                 allExerciseDistribution={editing.exerciseDistribution}
                 onExerciseChange={editing.handleExerciseChange}
                 selectedAthleteId={athlete.id}
