@@ -463,7 +463,17 @@ export function WorkoutSessionSheet({
   // Per-exercise visibility (exerciseId → overrides) — takes precedence over the session-wide map,
   // so toggling a parameter on one exercise doesn't change the others
   const [exerciseVisibilityOverrides, setExerciseVisibilityOverrides] = useState<Record<string, ParameterVisibilityOverrides>>(
-    () => readSessionMeta(mesocycleId, dayDate, sessionIndex).parameterVisibilityByExercise ?? {}
+    () => {
+      // Visibility carried on the exercises (copied from the program when it was assigned to an
+      // athlete), then whatever was set for this session here
+      const fromExercises: Record<string, ParameterVisibilityOverrides> = {};
+      exercises.forEach(ex => {
+        if (ex.parameterVisibility && Object.keys(ex.parameterVisibility).length > 0) {
+          fromExercises[ex.id || ex.exerciseId] = ex.parameterVisibility;
+        }
+      });
+      return { ...fromExercises, ...(readSessionMeta(mesocycleId, dayDate, sessionIndex).parameterVisibilityByExercise ?? {}) };
+    }
   );
   const getVisibilityOverrides = React.useCallback(
     (exerciseId: string): ParameterVisibilityOverrides =>

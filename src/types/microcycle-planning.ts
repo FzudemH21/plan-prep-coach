@@ -117,6 +117,10 @@ export interface ExerciseDistribution {
   // so they flow through to athlete_schedule without needing a periodization-table lookup.
   adhocPlannedParams?: Record<string, string | number>;
   adhocVisibleParams?: string[];
+  // Which parameters this exercise shows (overrides on the toolbox's showInGridByDefault), copied
+  // from the program's session settings at assignment — the session keys are date-based and the
+  // athlete's dates are shifted, so the setting has to travel with the exercise
+  parameterVisibility?: Record<string, boolean>;
 }
 
 export interface SessionSection {

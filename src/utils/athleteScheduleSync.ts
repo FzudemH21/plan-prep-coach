@@ -551,10 +551,18 @@ export async function syncAthleteSchedule(
     try {
       const visKey = `workoutSessions_${mesocycleId}_${ex.dayDate}_${ex.sessionIndex}`;
       const storedVis = localStorage.getItem(visKey);
-      if (storedVis) {
-        const parsed = JSON.parse(storedVis) as SessionVisibilityData;
+      // The exercise's own visibility (edited in this calendar, or copied from the program at
+      // assignment) wins; otherwise the setting stored for this session
+      const ownVisibility = (ex.parameterVisibility && typeof ex.parameterVisibility === 'object')
+        ? ex.parameterVisibility as Record<string, boolean>
+        : null;
+      if (storedVis || ownVisibility) {
+        const parsed = (storedVis ? JSON.parse(storedVis) : {}) as SessionVisibilityData;
+        const hasOwnForSession = !!parsed.parameterVisibilityByExercise?.[ex.id || ex.exerciseId];
         // Per exercise (falls back to the legacy session-wide map)
-        const parameterVisibility = getExerciseVisibility(parsed, ex.id || ex.exerciseId);
+        const parameterVisibility = hasOwnForSession || !ownVisibility
+          ? getExerciseVisibility(parsed, ex.id || ex.exerciseId)
+          : ownVisibility;
         if (parameterVisibility && typeof parameterVisibility === 'object' && Object.keys(parameterVisibility).length > 0) {
           // Start with toolbox defaults as mutable base
           let base: string[] = visibleParams ? [...visibleParams] : [];
