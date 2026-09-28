@@ -43,7 +43,9 @@ import {
   BookmarkPlus,
   BookOpen,
   MessageCircle,
+  RefreshCw,
 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import {
   Athlete,
   MonitoringConfig,
@@ -156,10 +158,12 @@ function WeeksAheadSelect({ athlete }: { athlete: Athlete }) {
 // ── App Account Card ──────────────────────────────────────────────────────────
 
 function AppAccountCard({ athlete }: { athlete: Athlete }) {
-  const { getConnectionForAthlete, createConnection, revokeConnection, loading } = useAthleteConnections();
+  const { getConnectionForAthlete, createConnection, revokeConnection, regenerateInviteCode, loading } = useAthleteConnections();
   const connection = getConnectionForAthlete(athlete.id);
+  const { toast } = useToast();
 
   const [creating, setCreating] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [revoking, setRevoking] = useState(false);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
@@ -192,8 +196,24 @@ function AppAccountCard({ athlete }: { athlete: Athlete }) {
       setShowInviteDialog(true);
     } catch (e) {
       console.error('Failed to create connection', e);
+      toast({ title: 'Could not create the app account', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (!connection) return;
+    setRegenerating(true);
+    try {
+      const code = await regenerateInviteCode(connection.id);
+      setInviteCode(code);
+      setShowInviteDialog(true);
+    } catch (e) {
+      console.error('Failed to regenerate invite link', e);
+      toast({ title: 'Could not create a new invite link', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -210,6 +230,7 @@ function AppAccountCard({ athlete }: { athlete: Athlete }) {
       await revokeConnection(connection.id);
     } catch (e) {
       console.error('Failed to revoke connection', e);
+      toast({ title: 'Could not revoke access', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setRevoking(false);
       setShowRevokeConfirm(false);
@@ -267,15 +288,30 @@ function AppAccountCard({ athlete }: { athlete: Athlete }) {
                   </button>
                 </div>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-destructive hover:text-destructive gap-1.5"
-                onClick={() => setShowRevokeConfirm(true)}
-              >
-                <UserX className="h-3.5 w-3.5" />
-                Revoke Access
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                {!connection.connectedAt && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={handleRegenerate}
+                    disabled={regenerating}
+                    title="Replace the invite link — the old link stops working"
+                  >
+                    <RefreshCw className={cn('h-3.5 w-3.5', regenerating && 'animate-spin')} />
+                    {regenerating ? 'Creating…' : 'New Invite Link'}
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive gap-1.5"
+                  onClick={() => setShowRevokeConfirm(true)}
+                >
+                  <UserX className="h-3.5 w-3.5" />
+                  Revoke Access
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">

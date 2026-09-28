@@ -218,13 +218,34 @@ export function useAthleteConnections() {
     );
   }, []);
 
+  /**
+   * Replace the invite code of a connection that hasn't been claimed yet — the old link stops
+   * working, the new one can be sent. Returns the new code.
+   */
+  const regenerateInviteCode = useCallback(async (connectionId: string): Promise<string> => {
+    const bytes = crypto.getRandomValues(new Uint8Array(6));
+    const code = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+    const { data, error } = await supabase
+      .from('athlete_connections')
+      .update({ invite_code: code })
+      .eq('id', connectionId)
+      .is('athlete_auth_user_id', null)
+      .select('id');
+    if (error) throw error;
+    if (!data || data.length === 0) throw new Error('This athlete has already connected their app account.');
+    setConnections(prev => prev.map(c => c.id === connectionId ? { ...c, inviteCode: code } : c));
+    return code;
+  }, []);
+
   /** Delete a connection (revoke athlete app access). */
   const revokeConnection = useCallback(async (connectionId: string) => {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('athlete_connections')
       .delete()
-      .eq('id', connectionId);
+      .eq('id', connectionId)
+      .select('id');
     if (error) throw error;
+    if (!data || data.length === 0) throw new Error('The app account could not be removed. Please reload and try again.');
     setConnections(prev => prev.filter(c => c.id !== connectionId));
   }, []);
 
@@ -260,6 +281,7 @@ export function useAthleteConnections() {
     createConnection,
     syncProfileToConnection,
     revokeConnection,
+    regenerateInviteCode,
     updateWeeksAhead,
     updateMonitoringEnabled,
     updateMonitoringConfig,

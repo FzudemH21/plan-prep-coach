@@ -10,6 +10,35 @@ import { cn } from '@/lib/utils';
 
 type Step = 'loading' | 'invalid' | 'form' | 'success';
 
+/** The invite functions (migration 20260928_athlete_invite_functions) haven't been installed yet */
+const isMissingFunction = (err: { code?: string; message?: string } | null) =>
+  !!err && (err.code === 'PGRST202' || /could not find the function/i.test(err.message ?? ''));
+
+interface InviteRow { id: string; athlete_name: string; athlete_email: string | null; claimed: boolean }
+
+/** Look up an invite by code. Works for visitors who aren't signed in (security-definer function). */
+async function fetchInvite(code: string): Promise<InviteRow | null> {
+  const { data, error } = await supabase.rpc('get_athlete_invite', { p_code: code });
+  if (!error) {
+    const row = (Array.isArray(data) ? data[0] : data) as InviteRow | undefined;
+    return row ?? null;
+  }
+  if (!isMissingFunction(error)) return null;
+  // Fallback before the migration: direct read (only works where row-level security allows it)
+  const { data: legacy, error: legacyErr } = await supabase
+    .from('athlete_connections')
+    .select('id, athlete_name, athlete_email, athlete_auth_user_id')
+    .eq('invite_code', code)
+    .maybeSingle();
+  if (legacyErr || !legacy) return null;
+  return {
+    id: legacy.id as string,
+    athlete_name: legacy.athlete_name as string,
+    athlete_email: (legacy.athlete_email as string) ?? null,
+    claimed: !!legacy.athlete_auth_user_id,
+  };
+}
+
 export default function AthleteConnectPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -30,19 +59,13 @@ export default function AthleteConnectPage() {
   // Validate invite code on mount
   useEffect(() => {
     if (!code) { setStep('invalid'); return; }
-    supabase
-      .from('athlete_connections')
-      .select('id, athlete_name, athlete_email, athlete_auth_user_id')
-      .eq('invite_code', code)
-      .single()
-      .then(({ data, error: err }) => {
-        if (err || !data) { setStep('invalid'); return; }
-        if (data.athlete_auth_user_id) { setStep('invalid'); return; } // already used
-        setConnectionId(data.id as string);
-        setAthleteName(data.athlete_name as string);
-        if (data.athlete_email) setEmail(data.athlete_email as string);
-        setStep('form');
-      });
+    fetchInvite(code).then(invite => {
+      if (!invite || invite.claimed) { setStep('invalid'); return; } // unknown or already used
+      setConnectionId(invite.id);
+      setAthleteName(invite.athlete_name);
+      if (invite.athlete_email) setEmail(invite.athlete_email);
+      setStep('form');
+    });
   }, [code]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -90,16 +113,21 @@ export default function AthleteConnectPage() {
       // 2. Tag user as athlete in metadata
       await supabase.auth.updateUser({ data: { role: 'athlete' } });
 
-      // 3. Link the connection row (requires the athlete_claim_connection RLS policy)
-      const { error: linkError } = await supabase
-        .from('athlete_connections')
-        .update({
-          athlete_auth_user_id: userId,
-          athlete_email: email,
-          connected_at: new Date().toISOString(),
-        })
-        .eq('id', connectionId);
-      if (linkError) throw new Error(`Could not link account: ${linkError.message}`);
+      // 3. Link the connection row — claimed by invite code on the server
+      const { error: claimError } = await supabase.rpc('claim_athlete_invite', { p_code: code });
+      if (claimError) {
+        if (!isMissingFunction(claimError)) throw new Error(`Could not link account: ${claimError.message}`);
+        // Fallback before the migration (athlete_claim_connection RLS policy)
+        const { error: linkError } = await supabase
+          .from('athlete_connections')
+          .update({
+            athlete_auth_user_id: userId,
+            athlete_email: email,
+            connected_at: new Date().toISOString(),
+          })
+          .eq('id', connectionId);
+        if (linkError) throw new Error(`Could not link account: ${linkError.message}`);
+      }
 
       setStep('success');
       setTimeout(() => navigate('/athlete/onboarding'), 2500);
