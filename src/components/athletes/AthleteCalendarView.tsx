@@ -17,6 +17,7 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import { useAthleteCalendarEditing } from '@/hooks/useAthleteCalendarEditing';
 import { useCalendarEvents, CalendarEvent } from '@/hooks/useCalendarEvents';
 import { namespaceProgramForMerge } from '@/utils/assignmentMerge';
+import { buildPackedDateMap, packingMovesDays, remapProgramDates } from '@/utils/assignmentPacking';
 import { getExerciseVisibility, SESSION_META_CHANGED_EVENT, type SessionVisibilityData } from '@/utils/parameterVisibility';
 import {
   shiftExerciseDates,
@@ -1841,9 +1842,11 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 Array.isArray(mesoData) ? mesoData.map((m: any) => m.id).filter(Boolean) : []
               );
-              // Accept if there are no IDs to validate (optimistic) or at least one key matches
-              const hasMatch = programMesoIds.size === 0 ||
-                Object.keys(localPv).some(k => programMesoIds.has(k));
+              // Only when the wizard has THIS program open - every program uses "meso-1", ... so a
+              // mesocycle-id match alone would take another program's values
+              const isOpenInWizard = localStorage.getItem('activeProgramId') === program.id;
+              const hasMatch = isOpenInWizard && (programMesoIds.size === 0 ||
+                Object.keys(localPv).some(k => programMesoIds.has(k)));
               if (hasMatch) {
                 program = { ...program, parameterValues: localPv };
               }
@@ -1855,6 +1858,41 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       }
 
       if (program) {
+        // Carry each exercise's parameter visibility (set in the wizard's session sheet / Master
+        // Planner) on the exercise itself - it's stored under the program's own dates and
+        // mesocycle ids, which no longer match once the plan is moved into the athlete's calendar
+        {
+          const sourceProgram = program;
+          const programSessionMeta = (key: string): SessionVisibilityData | null => {
+            try {
+              const live = localStorage.getItem('activeProgramId') === sourceProgram.id ? localStorage.getItem(key) : null;
+              const raw = live ?? sourceProgram.extraSessionState?.[key] ?? null;
+              return raw ? JSON.parse(raw) as SessionVisibilityData : null;
+            } catch { return null; }
+          };
+          const programMesoByDate = new Map<string, string>(
+            (sourceProgram.trainingDays ?? [])
+              .filter((td: { date?: string; mesocycleId?: string }) => td.date && td.mesocycleId)
+              .map((td: { date: string; mesocycleId: string }) => [td.date, td.mesocycleId])
+          );
+          const exercisesWithVisibility = (sourceProgram.exerciseDistribution ?? []).map(ex => {
+            const mesoId = programMesoByDate.get(ex.dayDate);
+            if (!mesoId) return ex;
+            const meta = programSessionMeta(`workoutSessions_${mesoId}_${ex.dayDate}_${ex.sessionIndex ?? 0}`);
+            if (!meta) return ex;
+            const visibility = getExerciseVisibility(meta, ex.id || ex.exerciseId);
+            return Object.keys(visibility).length > 0 ? { ...ex, parameterVisibility: visibility } : ex;
+          });
+          program = { ...sourceProgram, exerciseDistribution: exercisesWithVisibility };
+        }
+
+        // Selected microcycles are assigned back to back (e.g. weeks 2 + 4: week 2 starts on the
+        // assignment date, week 4 right after it) - pack them on the program's timeline first
+        const packedDateMap = buildPackedDateMap(program.trainingDays ?? [], assignment.selectedMicrocycleIds || []);
+        if (packedDateMap && packingMovesDays(packedDateMap)) {
+          program = remapProgramDates(program, packedDateMap);
+        }
+
         // Compute a robust originalStartDate from the earliest valid date in SELECTED mesocycles' data.
         // Filter by selectedMesocycleIds so that assigning only meso 2 anchors the shift to meso 2's
         // own start, not the whole program's start. Without this, sessions land at
@@ -1940,33 +1978,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         const dayOffset = (normalizedNewStart.getTime() - normalizedOriginalStart.getTime()) / 86400000;
 
         try {
-          // Carry each exercise's parameter visibility (set in the wizard's session sheet / Master
-          // Planner) on the exercise itself — it's stored under the program's own dates and
-          // mesocycle ids, which no longer match once the plan is shifted into the athlete's calendar
-          const programSessionMeta = (key: string): SessionVisibilityData | null => {
-            try {
-              const live = localStorage.getItem('activeProgramId') === program!.id ? localStorage.getItem(key) : null;
-              const raw = live ?? program!.extraSessionState?.[key] ?? null;
-              return raw ? JSON.parse(raw) as SessionVisibilityData : null;
-            } catch { return null; }
-          };
-          const programMesoByDate = new Map<string, string>(
-            (program.trainingDays ?? [])
-              .filter((td: { date?: string; mesocycleId?: string }) => td.date && td.mesocycleId)
-              .map((td: { date: string; mesocycleId: string }) => [td.date, td.mesocycleId])
-          );
-          const exercisesWithVisibility = (program.exerciseDistribution ?? []).map(ex => {
-            const mesoId = programMesoByDate.get(ex.dayDate);
-            if (!mesoId) return ex;
-            const meta = programSessionMeta(`workoutSessions_${mesoId}_${ex.dayDate}_${ex.sessionIndex ?? 0}`);
-            if (!meta) return ex;
-            const visibility = getExerciseVisibility(meta, ex.id || ex.exerciseId);
-            return Object.keys(visibility).length > 0 ? { ...ex, parameterVisibility: visibility } : ex;
-          });
-
           // Shift all program data to match the new start date using normalized dates
-          const shiftedExercises = exercisesWithVisibility.length > 0
-            ? shiftExerciseDates(exercisesWithVisibility, normalizedOriginalStart, normalizedNewStart)
+          const shiftedExercises = program.exerciseDistribution
+            ? shiftExerciseDates(program.exerciseDistribution, normalizedOriginalStart, normalizedNewStart)
             : [];
           
           // Get daily intensity data - try program object first, then global localStorage key

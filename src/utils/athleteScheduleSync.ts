@@ -532,54 +532,58 @@ export async function syncAthleteSchedule(
     // Extract set count
     const plannedSets = plannedSetCount(storedParams, baseMethodKey);
 
-    // Get visible params from toolbox — strip ::suffix before lookup
+    // Visible parameter columns — same rule as the Workout Session Sheet: every parameter this
+    // exercise actually has (Periodization Table / own values + the method's calculated ones),
+    // minus set-count / frequency / rest parameters, each shown per the coach's choice for this
+    // exercise, else its toolbox "show in grid" default; in Training Toolbox order.
+    // (Before, the coach's choices were patched onto the toolbox default list; with that list
+    // unavailable only the parameters switched ON survived — e.g. just "RiR", even for methods
+    // that don't have it.)
     let visibleParams: string[] | undefined;
-    if (toolboxEntries && baseMethodKey) {
-      const vp = toolboxVisibleMap.get(baseMethodKey);
-      if (vp && vp.length > 0) visibleParams = vp;
-    }
-
-    // Apply the coach's per-session visibility overrides (set via ParameterVisibilityPopover).
-    // Key format matches WorkoutSessionSheet: workoutSessions_{mesoId}_{shiftedDate}_{sessionIdx}
-    //
-    // IMPORTANT: parameterVisibility is a DELTA relative to showInGridByDefault — it only
-    // stores params where the coach changed from the toolbox default:
-    //   { Tempo: true }  → Tempo was hidden by default, coach turned it ON
-    //   { Organization: false } → Organization was visible by default, coach turned it OFF
-    // Params absent from the record keep their toolbox default (showInGridByDefault).
-    // We must apply overrides as a patch on top of visibleParams, not replace it entirely.
     try {
-      // The athlete calendar's own (assignment-scoped) setting first; the unscoped key is the
-      // wizard's / from before scoping
+      const methodEntries = (toolboxEntries ?? []).filter(te =>
+        (te.subCategory ? `${te.category} - ${te.subCategory}` : te.category) === baseMethodKey);
+      const entryFor = (name: string) => methodEntries.find(te => te.parameterName === name);
+      const REST_NAME = /rest|pause|recovery/i;
+      const isStructural = (name: string) => {
+        const te = entryFor(name);
+        if (te?.isFrequencyParameter || /^frequency/i.test(name)) return true;
+        if (/^sets?$/i.test(name)) return true;
+        if (te?.isSetParameter && !te.isRestParameter && !REST_NAME.test(name)) return true;
+        return false;
+      };
+      const ownNames = Object.keys(storedParams)
+        .filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k))
+        .filter(k => storedParams[k] !== '' && storedParams[k] !== undefined && storedParams[k] !== null);
+      const calcNames = methodEntries.filter(te => te.isCalculated && te.formula).map(te => te.parameterName);
+      const candidates = [...new Set([...ownNames, ...calcNames])].filter(n => !isStructural(n));
+
+      // The coach's choices: this calendar's setting for the exercise (assignment-scoped key,
+      // then the unscoped one from before scoping), else the choices copied from the program
       const storedVis = localStorage.getItem(sessionMetaKey(mesocycleId, ex.dayDate, ex.sessionIndex, assignment.id))
         ?? localStorage.getItem(sessionMetaKey(mesocycleId, ex.dayDate, ex.sessionIndex));
-      // The exercise's own visibility (edited in this calendar, or copied from the program at
-      // assignment) wins; otherwise the setting stored for this session
+      const parsed = (storedVis ? JSON.parse(storedVis) : {}) as SessionVisibilityData;
+      const exKey = ex.id || ex.exerciseId;
       const ownVisibility = (ex.parameterVisibility && typeof ex.parameterVisibility === 'object')
         ? ex.parameterVisibility as Record<string, boolean>
         : null;
-      if (storedVis || ownVisibility) {
-        const parsed = (storedVis ? JSON.parse(storedVis) : {}) as SessionVisibilityData;
-        const hasOwnForSession = !!parsed.parameterVisibilityByExercise?.[ex.id || ex.exerciseId];
-        // Per exercise (falls back to the legacy session-wide map)
-        const parameterVisibility = hasOwnForSession || !ownVisibility
-          ? getExerciseVisibility(parsed, ex.id || ex.exerciseId)
-          : ownVisibility;
-        if (parameterVisibility && typeof parameterVisibility === 'object' && Object.keys(parameterVisibility).length > 0) {
-          // Start with toolbox defaults as mutable base
-          let base: string[] = visibleParams ? [...visibleParams] : [];
-          for (const [param, visible] of Object.entries(parameterVisibility)) {
-            if (visible && !base.includes(param)) {
-              base.push(param);          // was hidden by default → turn on
-            } else if (!visible) {
-              base = base.filter(p => p !== param);  // was visible by default → turn off
-            }
-          }
-          if (base.length > 0) visibleParams = base;
-        }
-      }
+      const overrides: Record<string, boolean> = parsed.parameterVisibilityByExercise?.[exKey]
+        ?? ownVisibility
+        ?? parsed.parameterVisibility
+        ?? {};
+
+      const order = (name: string) => {
+        const i = methodEntries.findIndex(te => te.parameterName === name);
+        return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+      };
+      const visible = candidates
+        .filter(name => overrides[name] ?? (entryFor(name)?.showInGridByDefault ?? true))
+        .map((name, i) => ({ name, i }))
+        .sort((a, b) => (order(a.name) - order(b.name)) || (a.i - b.i))
+        .map(({ name }) => name);
+      if (visible.length > 0) visibleParams = visible;
     } catch {
-      // ignore — fall through with toolbox-derived visibleParams
+      // ignore — the app then shows every parameter that has a planned value
     }
 
     // Get rest param name from toolbox

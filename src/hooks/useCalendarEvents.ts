@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useSupabaseStore } from './useSupabaseStore';
 
 export interface CalendarEvent {
@@ -13,6 +13,14 @@ export interface CalendarEvent {
 
 type CalendarEventsStore = Record<string, CalendarEvent[]>;
 
+/**
+ * Newest events store across every mounted instance. Components keep callbacks with an older
+ * render's store (e.g. the assign handler); writing "{...store, …}" from such a snapshot silently
+ * dropped events added in the meantime — tests of a just-assigned program went missing. Reads and
+ * writes go through this instead.
+ */
+let latestStore: CalendarEventsStore | null = null;
+
 export function useCalendarEvents() {
   const [store, setStore] = useSupabaseStore<CalendarEventsStore>({
     tableName: 'calendar_events',
@@ -20,15 +28,30 @@ export function useCalendarEvents() {
     defaultValue: {},
   });
 
+  // A newly loaded / received store (Supabase load, another instance's write) becomes the latest
+  const seenStoreRef = useRef<CalendarEventsStore | null>(null);
+  if (seenStoreRef.current !== store) {
+    seenStoreRef.current = store;
+    latestStore = store;
+  }
+  const current = useCallback((): CalendarEventsStore => latestStore ?? store, [store]);
+
+  /** Apply a change to the newest store and save it */
+  const write = useCallback(async (update: (current: CalendarEventsStore) => CalendarEventsStore) => {
+    const next = update(latestStore ?? store);
+    latestStore = next;
+    await setStore(next);
+  }, [store, setStore]);
+
   const getEventsForDate = useCallback(
     (athleteId: string, date: string): CalendarEvent[] =>
-      (store[athleteId] || []).filter(e => e.date === date),
-    [store],
+      (current()[athleteId] || []).filter(e => e.date === date),
+    [current],
   );
 
   const getEventsForAthlete = useCallback(
-    (athleteId: string): CalendarEvent[] => store[athleteId] || [],
-    [store],
+    (athleteId: string): CalendarEvent[] => current()[athleteId] || [],
+    [current],
   );
 
   const addEvent = useCallback(
@@ -37,14 +60,13 @@ export function useCalendarEvents() {
         ...event,
         id: `ce-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       };
-      await setStore({ ...store, [athleteId]: [...(store[athleteId] || []), newEvent] });
+      await write(cur => ({ ...cur, [athleteId]: [...(cur[athleteId] || []), newEvent] }));
       return newEvent;
     },
-    [store, setStore],
+    [write],
   );
 
-  // Batch-add multiple events in a single store write to avoid stale-closure races
-  // when called in a loop (each addEvent call would read the same snapshot of store).
+  // Batch-add multiple events in a single store write
   const addEvents = useCallback(
     async (athleteId: string, events: Array<Omit<CalendarEvent, 'id'>>): Promise<CalendarEvent[]> => {
       if (events.length === 0) return [];
@@ -52,20 +74,17 @@ export function useCalendarEvents() {
         ...event,
         id: `ce-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`,
       }));
-      await setStore({ ...store, [athleteId]: [...(store[athleteId] || []), ...newEvents] });
+      await write(cur => ({ ...cur, [athleteId]: [...(cur[athleteId] || []), ...newEvents] }));
       return newEvents;
     },
-    [store, setStore],
+    [write],
   );
 
   const deleteEvent = useCallback(
     async (athleteId: string, eventId: string): Promise<void> => {
-      await setStore({
-        ...store,
-        [athleteId]: (store[athleteId] || []).filter(e => e.id !== eventId),
-      });
+      await write(cur => ({ ...cur, [athleteId]: (cur[athleteId] || []).filter(e => e.id !== eventId) }));
     },
-    [store, setStore],
+    [write],
   );
 
   const updateEvent = useCallback(
@@ -74,23 +93,23 @@ export function useCalendarEvents() {
       eventId: string,
       updates: Partial<Omit<CalendarEvent, 'id' | 'date'>>,
     ): Promise<void> => {
-      await setStore({
-        ...store,
-        [athleteId]: (store[athleteId] || []).map(e =>
-          e.id === eventId ? { ...e, ...updates } : e
-        ),
-      });
+      await write(cur => ({
+        ...cur,
+        [athleteId]: (cur[athleteId] || []).map(e => (e.id === eventId ? { ...e, ...updates } : e)),
+      }));
     },
-    [store, setStore],
+    [write],
   );
 
   const deleteEventsForAthlete = useCallback(
     async (athleteId: string): Promise<void> => {
-      const updated = { ...store };
-      delete updated[athleteId];
-      await setStore(updated);
+      await write(cur => {
+        const updated = { ...cur };
+        delete updated[athleteId];
+        return updated;
+      });
     },
-    [store, setStore],
+    [write],
   );
 
   return { getEventsForDate, getEventsForAthlete, addEvent, addEvents, deleteEvent, updateEvent, deleteEventsForAthlete };

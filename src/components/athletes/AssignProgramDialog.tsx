@@ -32,7 +32,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { AlertTriangle, CalendarIcon, ChevronDown, ChevronRight, Plus, Trophy, X } from 'lucide-react';
+import { AlertTriangle, CalendarIcon, ChevronDown, ChevronRight, Plus, Trash2, Trophy, X } from 'lucide-react';
+import { buildPackedDateMap } from '@/utils/assignmentPacking';
 import { TrainingProgram } from '@/hooks/useTrainingPrograms';
 import { AthleteCalendarAssignment, AssignedMesocycle, AssignedMicrocycle, AthletePerformanceParameter, ReviewedSubGoal, ReviewedEvent } from '@/types/athlete';
 import { SubGoal, Event as TrainingEvent } from '@/types/training';
@@ -141,22 +142,39 @@ export function AssignProgramDialog({
     }
 
     const macro = selectedProgram.macrocycleData;
-    const originalStartDate = selectedProgram.duration?.startDate 
-      ? new Date(selectedProgram.duration.startDate) 
+
+    // Same placement as the plan itself: selected microcycles back to back from the start date.
+    // A test on a day of a microcycle that isn't assigned is left out (dates can be added below).
+    const packedDateMap = buildPackedDateMap(selectedProgram.trainingDays ?? [], selectedMicrocycleIds);
+    const firstSelectedDay = packedDateMap && packedDateMap.size > 0
+      ? [...packedDateMap.keys()].sort()[0]
       : null;
-    
-    const dayOffset = originalStartDate 
+    const originalStartDate = firstSelectedDay
+      ? new Date(firstSelectedDay + 'T12:00:00')
+      : selectedProgram.duration?.startDate
+        ? new Date(selectedProgram.duration.startDate)
+        : null;
+
+    const dayOffset = originalStartDate
       ? differenceInDays(startDate, originalStartDate)
       : 0;
+
+    /** Program test/event date -> assigned date (null when its microcycle isn't assigned) */
+    const placeDate = (d: string): string | null => {
+      const day = d.slice(0, 10);
+      if (packedDateMap) {
+        const packed = packedDateMap.get(day);
+        if (!packed) return null;
+        return addDays(new Date(packed + 'T12:00:00'), dayOffset).toISOString();
+      }
+      return addDays(new Date(d + (d.length === 10 ? 'T12:00:00' : '')), dayOffset).toISOString();
+    };
 
     // Process sub-goals (tests)
     const subGoals: SubGoal[] = macro.subGoals || [];
     const reviewed: ReviewedSubGoal[] = subGoals.map(sg => {
       // Shift scheduled dates
-      const shiftedDates = (sg.testDates || []).map(d => {
-        const shifted = addDays(new Date(d + (d.length === 10 ? 'T12:00:00' : '')), dayOffset);
-        return shifted.toISOString();
-      });
+      const shiftedDates = (sg.testDates || []).map(placeDate).filter((d): d is string => d !== null);
 
       // Auto-fill baseline from athlete performance data
       let baseline = sg.preTestValue || 0;
@@ -188,10 +206,7 @@ export function AssignProgramDialog({
     const smartGoals: Array<{ id: string; description: string; baselineValue: number; desiredValue: number; unit: string; linkedParameterId?: string; testDates?: string[] }> = macro.smartGoals || [];
     smartGoals.forEach(sg => {
       if (!sg.testDates || sg.testDates.length === 0) return;
-      const shiftedDates = sg.testDates.map(d => {
-        const shifted = addDays(new Date(d + (d.length === 10 ? 'T12:00:00' : '')), dayOffset);
-        return shifted.toISOString();
-      });
+      const shiftedDates = sg.testDates.map(placeDate).filter((d): d is string => d !== null);
       let baseline = sg.baselineValue || 0;
       if (sg.linkedParameterId && athletePerformanceParameters.length > 0) {
         const athleteParam = athletePerformanceParameters.find(
@@ -236,10 +251,7 @@ export function AssignProgramDialog({
     // Process events
     const events: TrainingEvent[] = macro.events || [];
     const reviewedEvts: ReviewedEvent[] = events.map(evt => {
-      const shiftedDates = (evt.eventDates || []).map(d => {
-        const shifted = addDays(new Date(d), dayOffset);
-        return shifted.toISOString();
-      });
+      const shiftedDates = (evt.eventDates || []).map(placeDate).filter((d): d is string => d !== null);
       return {
         id: evt.id,
         name: evt.name,
@@ -265,9 +277,10 @@ export function AssignProgramDialog({
       }
     });
 
-    setReviewedSubGoals(dedupedTests);
-    setReviewedEvents(dedupedEvents);
-  }, [selectedProgram, startDate, athletePerformanceParameters]);
+    // Tests/events whose dates all fall in unassigned microcycles aren't offered
+    setReviewedSubGoals(dedupedTests.filter(t => t.scheduledDates.length > 0));
+    setReviewedEvents(dedupedEvents.filter(e => e.scheduledDates.length > 0));
+  }, [selectedProgram, startDate, athletePerformanceParameters, selectedMicrocycleIds]);
 
   // Warn when the chosen start date is in the past
   const pastDateWarning = useMemo(() => {
@@ -647,9 +660,18 @@ export function AssignProgramDialog({
                     <div key={`test-${sg.testMethod}-${sg.parameterLinkedId || idx}`} className="p-3 space-y-2">
                       <div className="flex items-center gap-2">
                         <Trophy className="h-4 w-4 text-amber-600 shrink-0" />
-                        <span className="text-sm font-medium">
+                        <span className="text-sm font-medium flex-1 min-w-0 truncate">
                           {sg.testMethod}{sg.unit ? ` [${sg.unit}]` : ''}
                         </span>
+                        <button
+                          type="button"
+                          className="shrink-0 p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                          title="Don't assign this test"
+                          aria-label={`Remove ${sg.testMethod}`}
+                          onClick={() => setReviewedSubGoals(prev => prev.filter((_, i) => i !== idx))}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
@@ -771,7 +793,16 @@ export function AssignProgramDialog({
                     <div key={`event-${evt.name}-${idx}`} className="p-3 space-y-2">
                       <div className="flex items-center gap-2">
                         <CalendarIcon className="h-4 w-4 text-blue-600 shrink-0" />
-                        <span className="text-sm font-medium">{evt.name}</span>
+                        <span className="text-sm font-medium flex-1 min-w-0 truncate">{evt.name}</span>
+                        <button
+                          type="button"
+                          className="shrink-0 p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                          title="Don't assign this event"
+                          aria-label={`Remove ${evt.name}`}
+                          onClick={() => setReviewedEvents(prev => prev.filter((_, i) => i !== idx))}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">Comments</Label>
