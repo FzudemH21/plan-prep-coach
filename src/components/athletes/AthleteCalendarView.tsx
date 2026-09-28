@@ -2103,10 +2103,13 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
             return td;
           });
 
-          // Transfer tests & events to calendarEvents (one entry per scheduled date)
-          const transferTestsEvents = async () => {
+          // Transfer tests & events to calendarEvents (one entry per scheduled date).
+          // Returns the athlete's full event list INCLUDING the ones just added — the sync must
+          // get this list: getEventsForAthlete() still returns the pre-assign snapshot here, so
+          // syncing with it sent the previous assignment's tests to the app, not the new ones.
+          const transferTestsEvents = async (): Promise<CalendarEvent[]> => {
+            const existingEvents = getEventsForAthlete(athlete.id);
             try {
-              const existingEvents = getEventsForAthlete(athlete.id);
               const existingKey = (type: string, title: string, date: string) =>
                 `${type}|${title}|${date}`;
               const existingSet = new Set(
@@ -2145,11 +2148,11 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 });
               });
 
-              if (toAdd.length > 0) {
-                await addCalendarEvents(athlete.id, toAdd);
-              }
+              const added = toAdd.length > 0 ? await addCalendarEvents(athlete.id, toAdd) : [];
+              return [...existingEvents, ...added];
             } catch (evtError) {
               console.error('[handleAssignProgram] Error transferring tests/events:', evtError);
+              return existingEvents;
             }
           };
 
@@ -2159,6 +2162,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           const athleteFormulaData: AthleteFormulaData =
             athleteFormulaDataRef.current ?? await buildAthleteFormulaData();
           athleteFormulaDataRef.current = athleteFormulaData;
+
+          // Tests/events first, so the athlete schedule sync below includes them
+          const athleteEventsForSync = await transferTestsEvents();
 
           if (mergeIntoExisting) {
             // MERGE PATH: add program sessions into the current active assignment
@@ -2215,7 +2221,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 toolboxData?.entries,
                 filteredSupersets,
                 undefined, // sessionIntensities not available at assign time
-                enrichEvents(getEventsForAthlete(athlete.id)),
+                enrichEvents(athleteEventsForSync),
                 athleteFormulaData,
               ).catch(e => console.error('[ASSIGN] ✗ athlete schedule sync (merge) failed:', e));
             } else {
@@ -2244,8 +2250,6 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 }
               }
             }
-
-            await transferTestsEvents();
           } else if (newAssignment) {
             // CREATE PATH: save to new assignment key and switch to it.
             // Guard: newAssignment.id must be defined — if it's undefined the key becomes
@@ -2294,15 +2298,13 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 toolboxData?.entries,
                 dataToSave.supersets,
                 undefined, // sessionIntensities not available at assign time
-                enrichEvents(getEventsForAthlete(athlete.id)),
+                enrichEvents(athleteEventsForSync),
                 athleteFormulaData,
               ).catch(e => console.error('[ASSIGN] ✗ athlete schedule sync failed:', e));
             } else {
               console.warn('[ASSIGN] create: no connection found for athlete', athlete.id,
                 '— schedule not synced. Create an invite link for this athlete to enable app sync.');
             }
-
-            await transferTestsEvents();
 
             // Update cache immediately
             setAssignmentDataCache(prev => ({
