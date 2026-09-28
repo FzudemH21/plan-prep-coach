@@ -3,7 +3,7 @@
  * coach's parameter database) and the athlete's last value for it.
  */
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Play } from 'lucide-react';
 import type { AthleteCalendarEvent } from '@/hooks/useAthleteApp';
 
 /** YouTube video id from watch / youtu.be / embed / shorts / live links */
@@ -42,15 +42,29 @@ export function TestDetailsDialog({
 
         {videoUrl && (
           ytId ? (
-            <div className="rounded-lg overflow-hidden border bg-black aspect-video">
-              <iframe
-                src={`https://www.youtube.com/embed/${ytId}`}
-                title={`${event?.title ?? 'Test'} video`}
-                className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
+            // Preview that opens the video on YouTube (the YouTube app on a phone). Not embedded:
+            // many channels (e.g. World Athletics) block playback inside other apps/websites.
+            <a
+              href={`https://www.youtube.com/watch?v=${ytId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block relative rounded-lg overflow-hidden border bg-black aspect-video active:opacity-90"
+              aria-label="Watch the video on YouTube"
+            >
+              <img
+                src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`}
+                alt=""
+                className="w-full h-full object-cover opacity-90"
               />
-            </div>
+              <span className="absolute inset-0 flex items-center justify-center">
+                <span className="w-14 h-14 rounded-full bg-black/70 flex items-center justify-center">
+                  <Play className="h-7 w-7 text-white ml-0.5" fill="currentColor" />
+                </span>
+              </span>
+              <span className="absolute bottom-2 right-2 text-[11px] font-medium text-white bg-black/70 rounded px-1.5 py-0.5">
+                Opens YouTube
+              </span>
+            </a>
           ) : (
             <a
               href={videoUrl}
