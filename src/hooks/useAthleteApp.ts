@@ -109,6 +109,9 @@ export interface AthleteCalendarEvent {
   targetValue?: string;
   unit?: string;
   parameterId?: string;   // links to ParameterV2 — set on test events so athlete can submit results
+  /** Test details from the coach's parameter database */
+  instructions?: string;
+  videoUrl?: string;
 }
 
 export interface AthleteScheduleEntry {
@@ -453,17 +456,19 @@ export function useAthleteApp() {
     value: string,
     recordedAt: string,
     note?: string,
+    attachments?: string[],
   ) => {
     if (!connection) return;
+    const row = {
+      athlete_connection_id: connection.id,
+      parameter_id: parameterId,
+      value,
+      recorded_at: recordedAt,
+      note: note ?? null,
+    };
     const { error } = await supabase
       .from('athlete_test_results')
-      .insert({
-        athlete_connection_id: connection.id,
-        parameter_id: parameterId,
-        value,
-        recorded_at: recordedAt,
-        note: note ?? null,
-      });
+      .insert(attachments && attachments.length > 0 ? { ...row, attachments } : row);
     if (error) throw error;
   }, [connection]);
 

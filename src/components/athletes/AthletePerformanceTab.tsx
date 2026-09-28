@@ -3,6 +3,8 @@ import type { MetricsSnapshot, MetricsSnapshotItem, AthleteConnection } from '@/
 import { ExerciseMetricsTab } from '@/components/athletes/ExerciseMetricsTab';
 import { format, subDays, parseISO } from 'date-fns';
 import { supabase } from '@/lib/supabase';
+import { attachmentLabel, attachmentUrl, isVideoPath } from '@/utils/athleteUploads';
+import { Image as ImageIcon, Video } from 'lucide-react';
 import { withSelfReported } from '@/hooks/useSelfReportedResults';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import {
@@ -268,26 +270,40 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
 
   useEffect(() => {
     if (!connection) return;
-    supabase
-      .from('athlete_test_results')
-      .select('id, parameter_id, value, recorded_at, note')
-      .eq('athlete_connection_id', connection.id)
-      .then(({ data }) => {
-        if (!data) return;
-        const map = new Map<string, ParameterValue[]>();
-        for (const row of data as Array<{ id: string; parameter_id: string; value: string; recorded_at: string; note: string | null }>) {
-          const existing = map.get(row.parameter_id) ?? [];
-          existing.push({
-            id: row.id,
-            value: row.value,
-            recordedAt: row.recorded_at,
-            selfReported: true,
-            note: row.note ?? undefined,
-          });
-          map.set(row.parameter_id, existing);
-        }
-        setSelfReportedMap(map);
-      });
+    let cancelled = false;
+    (async () => {
+      type Row = { id: string; parameter_id: string; value: string; recorded_at: string; note: string | null; attachments?: string[] | null };
+      // With attachments (photos / videos); falls back to the columns that exist before the
+      // attachments migration has been run
+      const withAttachments = await supabase
+        .from('athlete_test_results')
+        .select('id, parameter_id, value, recorded_at, note, attachments')
+        .eq('athlete_connection_id', connection.id);
+      let rows = withAttachments.data as Row[] | null;
+      if (withAttachments.error) {
+        const plain = await supabase
+          .from('athlete_test_results')
+          .select('id, parameter_id, value, recorded_at, note')
+          .eq('athlete_connection_id', connection.id);
+        rows = plain.data as Row[] | null;
+      }
+      if (cancelled || !rows) return;
+      const map = new Map<string, ParameterValue[]>();
+      for (const row of rows) {
+        const existing = map.get(row.parameter_id) ?? [];
+        existing.push({
+          id: row.id,
+          value: row.value,
+          recordedAt: row.recorded_at,
+          selfReported: true,
+          note: row.note ?? undefined,
+          attachments: Array.isArray(row.attachments) && row.attachments.length > 0 ? row.attachments : undefined,
+        });
+        map.set(row.parameter_id, existing);
+      }
+      setSelfReportedMap(map);
+    })();
+    return () => { cancelled = true; };
   }, [athlete.id, connection]);
 
   // ── Metrics snapshot — push to athlete_connections.profile_data on mount and on every change ──
@@ -312,6 +328,7 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
           const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
           if (!param) return null;
           return {
+            parameterId: pp.athleticismParameterId,
             name: param.name,
             unit: param.unit ?? null,
             category: param.category ?? undefined,
@@ -636,6 +653,25 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
                         <p className="text-xs text-muted-foreground mt-1 ml-28 italic">
                           "{v.note}"
                         </p>
+                      )}
+                      {v.attachments && v.attachments.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-1.5 ml-28">
+                          {v.attachments.map(path => (
+                            <button
+                              key={path}
+                              type="button"
+                              onClick={async () => {
+                                const url = await attachmentUrl(path);
+                                if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                              }}
+                              className="inline-flex items-center gap-1 text-xs rounded-md border bg-background px-2 py-1 hover:bg-muted"
+                              title="Open attachment"
+                            >
+                              {isVideoPath(path) ? <Video className="h-3 w-3" /> : <ImageIcon className="h-3 w-3" />}
+                              <span className="max-w-[160px] truncate">{attachmentLabel(path)}</span>
+                            </button>
+                          ))}
+                        </div>
                       )}
                     </div>
                   ))}

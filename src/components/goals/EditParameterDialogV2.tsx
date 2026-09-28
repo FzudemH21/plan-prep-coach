@@ -168,6 +168,8 @@ export function EditParameterDialogV2({
   const [unit, setUnit] = useState(parameter.unit || '');
   const [category, setCategory] = useState(parameter.category || '');
   const [applicableSports, setApplicableSports] = useState<string[]>(parameter.applicableSports ?? []);
+  const [testInstructions, setTestInstructions] = useState(parameter.testInstructions ?? '');
+  const [testVideoUrl, setTestVideoUrl] = useState(parameter.testVideoUrl ?? '');
   
   // Popover states
   const [contributesToSearchOpen, setContributesToSearchOpen] = useState(false);
@@ -222,6 +224,8 @@ export function EditParameterDialogV2({
     setUnit(parameter.unit || '');
     setCategory(parameter.category || '');
     setApplicableSports(parameter.applicableSports ?? []);
+    setTestInstructions(parameter.testInstructions ?? '');
+    setTestVideoUrl(parameter.testVideoUrl ?? '');
   }, [parameter]);
 
   // Get available parameters for "Contributes To" (exclude self and already linked as target)
@@ -520,6 +524,38 @@ export function EditParameterDialogV2({
                   />
                   <p className="text-xs text-muted-foreground">
                     Which sports is this parameter relevant for? Press Enter or comma to add.
+                  </p>
+                </div>
+
+                {/* Test details for athletes */}
+                <div className="space-y-2">
+                  <Label htmlFor="edit-test-instructions">Test instructions</Label>
+                  <Textarea
+                    id="edit-test-instructions"
+                    value={testInstructions}
+                    onChange={(e) => setTestInstructions(e.target.value)}
+                    onBlur={() => {
+                      const v = testInstructions.trim();
+                      if (v !== (parameter.testInstructions ?? '')) onUpdateParameter({ testInstructions: v || undefined });
+                    }}
+                    placeholder="How to perform the test: warm-up, setup, execution, number of attempts, what counts…"
+                    rows={4}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-test-video">Test video</Label>
+                  <Input
+                    id="edit-test-video"
+                    value={testVideoUrl}
+                    onChange={(e) => setTestVideoUrl(e.target.value)}
+                    onBlur={() => {
+                      const v = testVideoUrl.trim();
+                      if (v !== (parameter.testVideoUrl ?? '')) onUpdateParameter({ testVideoUrl: v || undefined });
+                    }}
+                    placeholder="YouTube or other video link"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Athletes see the instructions and video under "Test details" when this parameter is tested in their app.
                   </p>
                 </div>
               </div>

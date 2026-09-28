@@ -12,6 +12,8 @@ import type { MonitoringConfig } from '@/types/athlete';
 // ── Metrics snapshot (written by coach app, read by athlete app) ──────────────
 
 export interface MetricsSnapshotItem {
+  /** Performance parameter id (ParameterV2) — lets the athlete app match tests to values */
+  parameterId?: string;
   name: string;
   unit: string | null;
   category?: string;

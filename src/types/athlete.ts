@@ -199,6 +199,8 @@ export interface ParameterValue {
   selfReported?: boolean;
   /** Optional note left by the athlete when entering a self-reported value. */
   note?: string;
+  /** Storage paths of photos / videos the athlete attached (bucket "athlete-uploads") */
+  attachments?: string[];
 }
 
 export interface AthleteBiometric {

@@ -259,12 +259,16 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   /** Enrich calendar events with the unit from the parameter database so the
    *  athlete app can display "Goal: 10.5 s" rather than just "Goal: 10.5". */
   const enrichEvents = useCallback((events: ReturnType<typeof getEventsForAthlete>) =>
-    events.map(ev => ({
-      ...ev,
-      unit: ev.parameterId
-        ? parametersData?.parameters.find(p => p.id === ev.parameterId)?.unit
-        : undefined,
-    })),
+    events.map(ev => {
+      const param = ev.parameterId ? parametersData?.parameters.find(p => p.id === ev.parameterId) : undefined;
+      return {
+        ...ev,
+        unit: param?.unit,
+        // Test details from the parameter database, shown in the athlete app
+        instructions: param?.testInstructions,
+        videoUrl: param?.testVideoUrl,
+      };
+    }),
   [parametersData]);
 
   // ── Helper: build AthleteFormulaData for formula pre-computation ─────────────────

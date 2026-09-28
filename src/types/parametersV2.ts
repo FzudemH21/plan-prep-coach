@@ -9,6 +9,10 @@ export interface ParameterV2 {
   unit?: string;                   // "kg", "s", "cm", etc.
   category?: string;               // Category for organization (can be custom)
   applicableSports?: string[];     // Sports this parameter is relevant for (free-text tags)
+  /** How to perform the test — shown to athletes ("Test details") when this parameter is tested */
+  testInstructions?: string;
+  /** Demo video (YouTube or any link) for the test — shown with the instructions */
+  testVideoUrl?: string;
   createdAt: string;
 }
 

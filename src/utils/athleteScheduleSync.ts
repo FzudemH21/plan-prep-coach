@@ -207,7 +207,7 @@ async function buildExerciseDetailMap(userId: string): Promise<ExerciseDetailMap
 }
 
 /** CalendarEvent enriched with the parameter unit, resolved at call time. */
-export type SyncCalendarEvent = CalendarEvent & { unit?: string };
+export type SyncCalendarEvent = CalendarEvent & { unit?: string; instructions?: string; videoUrl?: string };
 
 export async function syncAthleteSchedule(
   connectionId: string,
@@ -702,7 +702,7 @@ export async function syncAthleteSchedule(
   }
 
   // Build events-by-date lookup
-  const eventsByDate = new Map<string, Array<{ id: string; type: string; title: string; notes?: string; targetValue?: string; unit?: string; parameterId?: string }>>();
+  const eventsByDate = new Map<string, Array<{ id: string; type: string; title: string; notes?: string; targetValue?: string; unit?: string; parameterId?: string; instructions?: string; videoUrl?: string }>>();
   for (const ev of calendarEvents ?? []) {
     if (!eventsByDate.has(ev.date)) eventsByDate.set(ev.date, []);
     eventsByDate.get(ev.date)!.push({
@@ -713,6 +713,9 @@ export async function syncAthleteSchedule(
       targetValue: ev.targetValue,
       unit: ev.unit,
       parameterId: ev.parameterId,
+      // Test details from the parameter database (athlete app "Test details")
+      instructions: ev.instructions,
+      videoUrl: ev.videoUrl,
     });
   }
 

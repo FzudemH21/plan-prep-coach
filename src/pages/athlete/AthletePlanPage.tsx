@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dumbbell, ChevronRight, ChevronLeft, ChevronDown, Activity, CalendarDays, CheckCircle2, GripVertical, ClipboardCheck, BedDouble, Check } from 'lucide-react';
+import { Dumbbell, ChevronRight, ChevronLeft, ChevronDown, Activity, CalendarDays, CheckCircle2, GripVertical, ClipboardCheck, BedDouble, Check, Info, Paperclip, X } from 'lucide-react';
+import { TestDetailsDialog } from '@/components/athlete-app/TestDetailsDialog';
+import { MAX_ATTACHMENT_BYTES, uploadTestAttachments } from '@/utils/athleteUploads';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -152,6 +154,8 @@ function DaySection({
   canMove,
   onEnterTestResult,
   existingTestResults,
+  lastValueLabelFor,
+  onShowTestDetails,
 }: {
   dateStr: string;
   entry: AthleteScheduleEntry | null;
@@ -160,6 +164,9 @@ function DaySection({
   canMove?: boolean;
   onEnterTestResult: (ev: AthleteCalendarEvent, date: string) => void;
   existingTestResults: Map<string, string>;
+  /** "8.5 s · Jun 15" — the athlete's latest value for a parameter, if any */
+  lastValueLabelFor: (parameterId: string | undefined, unit?: string) => string | null;
+  onShowTestDetails: (ev: AthleteCalendarEvent) => void;
 }) {
   const _now = new Date();
   const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
@@ -204,11 +211,29 @@ function DaySection({
               <span className="font-medium">Goal:</span> {ev.targetValue}{ev.unit ? ` ${ev.unit}` : ''}
             </p>
           )}
+          {ev.type === 'test' && (() => {
+            const last = lastValueLabelFor(ev.parameterId, ev.unit);
+            return last ? (
+              <p className="text-amber-700 mt-0.5">
+                <span className="font-medium">Last:</span> {last}
+              </p>
+            ) : null;
+          })()}
           {ev.notes && (
             <p className="text-muted-foreground mt-0.5 leading-relaxed">{ev.notes}</p>
           )}
         </div>
       </div>
+      {/* Test details (instructions / video from the coach) */}
+      {ev.type === 'test' && (ev.instructions || ev.videoUrl) && (
+        <button
+          onClick={() => onShowTestDetails(ev)}
+          className="mt-2 w-full min-h-[44px] flex items-center justify-center gap-1.5 text-sm font-medium text-amber-800 border border-amber-200 bg-white/70 hover:bg-amber-50 active:bg-amber-100 rounded-md py-2 transition-colors"
+        >
+          <Info className="h-4 w-4" />
+          Test details
+        </button>
+      )}
       {/* Enter result / locked result */}
       {ev.type === 'test' && ev.parameterId && (() => {
         const resultValue = existingTestResults.get(`${ev.parameterId}:${dateStr}`);
@@ -380,6 +405,8 @@ export default function AthletePlanPage() {
 
   // ── Existing test results (parameterId:date → value) ─────────────────────
   const [existingTestResults, setExistingTestResults] = useState<Map<string, string>>(new Map());
+  // Latest self-reported value per parameter (any date)
+  const [latestSelfReported, setLatestSelfReported] = useState<Map<string, { value: string; recordedAt: string }>>(new Map());
 
   useEffect(() => {
     if (!connection?.id) return;
@@ -390,12 +417,15 @@ export default function AthletePlanPage() {
       .order('recorded_at', { ascending: false })
       .then(({ data }) => {
         const map = new Map<string, string>();
+        const latest = new Map<string, { value: string; recordedAt: string }>();
         for (const row of (data ?? []) as { parameter_id: string; value: string; recorded_at: string }[]) {
           const date = row.recorded_at.slice(0, 10);
           const key = `${row.parameter_id}:${date}`;
           if (!map.has(key)) map.set(key, row.value);
+          if (!latest.has(row.parameter_id)) latest.set(row.parameter_id, { value: row.value, recordedAt: row.recorded_at });
         }
         setExistingTestResults(map);
+        setLatestSelfReported(latest);
       });
   }, [connection?.id]);
 
@@ -405,12 +435,33 @@ export default function AthletePlanPage() {
   const [testNote, setTestNote] = useState('');
   const [testSaving, setTestSaving] = useState(false);
   const [testSaved, setTestSaved] = useState(false);
+  const [testFiles, setTestFiles] = useState<File[]>([]);
+  const [testFileError, setTestFileError] = useState<string | null>(null);
+  const [detailsEvent, setDetailsEvent] = useState<AthleteCalendarEvent | null>(null);
+
+  /** Latest value for a parameter: the athlete's own results or the coach-recorded ones */
+  const lastValueLabelFor = (parameterId: string | undefined, unit?: string): string | null => {
+    if (!parameterId) return null;
+    const candidates: Array<{ value: string; recordedAt: string }> = [];
+    const own = latestSelfReported.get(parameterId);
+    if (own) candidates.push(own);
+    const coachItem = connection?.profileData?.metricsSnapshot?.performanceParams
+      ?.find(item => item.parameterId === parameterId);
+    coachItem?.values.forEach(v => candidates.push(v));
+    if (candidates.length === 0) return null;
+    const newest = candidates.reduce((a, b) => (new Date(a.recordedAt) > new Date(b.recordedAt) ? a : b));
+    const d = new Date(newest.recordedAt);
+    const dateLabel = isNaN(d.getTime()) ? '' : ` · ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
+    return `${newest.value}${unit ? ` ${unit}` : ''}${dateLabel}`;
+  };
 
   const openTestSheet = (ev: AthleteCalendarEvent, date: string) => {
     setTestSheetEvent({ ev, date });
     setTestValue('');
     setTestNote('');
     setTestSaved(false);
+    setTestFiles([]);
+    setTestFileError(null);
   };
 
   const handleSaveTestResult = async () => {
@@ -418,10 +469,28 @@ export default function AthletePlanPage() {
     setTestSaving(true);
     try {
       const recordedAt = new Date(`${testSheetEvent.date}T12:00:00`).toISOString();
-      await submitTestResult(testSheetEvent.ev.parameterId, testValue.trim(), recordedAt, testNote.trim() || undefined);
+      // Photos / videos first; a failed upload doesn't block saving the result itself
+      let attachments: string[] = [];
+      let failed: string[] = [];
+      if (testFiles.length > 0 && connection?.id) {
+        ({ paths: attachments, failed } = await uploadTestAttachments(connection.id, testSheetEvent.ev.parameterId, testFiles));
+      }
+      try {
+        await submitTestResult(testSheetEvent.ev.parameterId, testValue.trim(), recordedAt, testNote.trim() || undefined, attachments);
+      } catch (err) {
+        if (attachments.length === 0) throw err;
+        // Attachments not set up yet on the server — keep the result, without them
+        await submitTestResult(testSheetEvent.ev.parameterId, testValue.trim(), recordedAt, testNote.trim() || undefined);
+        failed = testFiles.map(f => f.name);
+      }
       setExistingTestResults(prev => new Map(prev).set(`${testSheetEvent.ev.parameterId!}:${testSheetEvent.date}`, testValue.trim()));
+      setLatestSelfReported(prev => new Map(prev).set(testSheetEvent.ev.parameterId!, { value: testValue.trim(), recordedAt }));
       setTestSaved(true);
-      setTimeout(() => setTestSheetEvent(null), 1200);
+      if (failed.length > 0) {
+        setTestFileError(`Result saved, but ${failed.length === 1 ? 'this file' : 'these files'} couldn't be attached: ${failed.join(', ')}`);
+      } else {
+        setTimeout(() => setTestSheetEvent(null), 1200);
+      }
     } finally {
       setTestSaving(false);
     }
@@ -522,12 +591,21 @@ export default function AthletePlanPage() {
                   canMove={canMove}
                   onEnterTestResult={openTestSheet}
                   existingTestResults={existingTestResults}
+                  lastValueLabelFor={lastValueLabelFor}
+                  onShowTestDetails={setDetailsEvent}
                 />
               </div>
             ))}
           </div>
         </div>
       </DragDropContext>
+
+      {/* Test details: instructions + video from the coach */}
+      <TestDetailsDialog
+        event={detailsEvent}
+        lastValueLabel={detailsEvent ? lastValueLabelFor(detailsEvent.parameterId, detailsEvent.unit) : null}
+        onClose={() => setDetailsEvent(null)}
+      />
 
       {/* Test result entry dialog */}
       <Dialog open={!!testSheetEvent} onOpenChange={open => { if (!open) setTestSheetEvent(null); }}>
@@ -536,9 +614,14 @@ export default function AthletePlanPage() {
             <DialogTitle className="text-base">
               {testSheetEvent?.ev.title ?? 'Enter result'}
             </DialogTitle>
-            {testSheetEvent?.ev.targetValue && (
-              <DialogDescription>
-                Goal: {testSheetEvent.ev.targetValue}{testSheetEvent.ev.unit ? ` ${testSheetEvent.ev.unit}` : ''}
+            {(testSheetEvent?.ev.targetValue || lastValueLabelFor(testSheetEvent?.ev.parameterId, testSheetEvent?.ev.unit)) && (
+              <DialogDescription className="space-y-0.5">
+                {testSheetEvent?.ev.targetValue && (
+                  <span className="block">Goal: {testSheetEvent.ev.targetValue}{testSheetEvent.ev.unit ? ` ${testSheetEvent.ev.unit}` : ''}</span>
+                )}
+                {lastValueLabelFor(testSheetEvent?.ev.parameterId, testSheetEvent?.ev.unit) && (
+                  <span className="block">Last value: {lastValueLabelFor(testSheetEvent?.ev.parameterId, testSheetEvent?.ev.unit)}</span>
+                )}
               </DialogDescription>
             )}
           </DialogHeader>
@@ -570,6 +653,49 @@ export default function AthletePlanPage() {
                 rows={2}
                 className="resize-none"
               />
+            </div>
+
+            {/* Photos / videos of the attempt */}
+            <div>
+              <label className="text-sm font-medium mb-1.5 block text-muted-foreground">
+                Photos / videos <span className="font-normal">(optional, max 50 MB each)</span>
+              </label>
+              {testFiles.length > 0 && (
+                <ul className="space-y-1 mb-2">
+                  {testFiles.map((f, i) => (
+                    <li key={`${f.name}-${i}`} className="flex items-center gap-2 text-sm rounded-md border px-2 py-1.5">
+                      <Paperclip className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span className="flex-1 min-w-0 truncate">{f.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setTestFiles(prev => prev.filter((_, j) => j !== i))}
+                        className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted active:bg-muted/80"
+                        aria-label={`Remove ${f.name}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <label className="min-h-[44px] flex items-center justify-center gap-2 rounded-md border border-dashed text-sm font-medium cursor-pointer hover:bg-muted active:bg-muted/80">
+                <Paperclip className="h-4 w-4" />
+                Add photo or video
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  multiple
+                  className="hidden"
+                  onChange={e => {
+                    const picked = Array.from(e.target.files ?? []);
+                    const tooBig = picked.filter(f => f.size > MAX_ATTACHMENT_BYTES);
+                    setTestFileError(tooBig.length > 0 ? `Too large (max 50 MB): ${tooBig.map(f => f.name).join(', ')}` : null);
+                    setTestFiles(prev => [...prev, ...picked.filter(f => f.size <= MAX_ATTACHMENT_BYTES)]);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              {testFileError && <p className="text-xs text-destructive mt-1.5">{testFileError}</p>}
             </div>
 
             <Button
