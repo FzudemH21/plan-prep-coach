@@ -182,6 +182,20 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   // Each concurrent sync does DELETE-then-UPSERT; interleaving makes a later
   // DELETE wipe rows that an earlier UPSERT just wrote, leaving the DB empty.
   const syncInProgressRef = useRef(false);
+  // A sync requested while another one runs is queued: when the running one finishes, the
+  // auto-sync runs again with the latest state (e.g. the tests of a program just assigned —
+  // before, the skipped sync was simply lost until the next edit).
+  const resyncRequestedRef = useRef(false);
+  const [resyncTick, setResyncTick] = useState(0);
+  const finishSync = useCallback(() => {
+    syncInProgressRef.current = false;
+    if (resyncRequestedRef.current) {
+      resyncRequestedRef.current = false;
+      setResyncTick(t => t + 1);
+    }
+  }, []);
+  // Bumped after session logs are re-linked so the calendar reloads them
+  const [sessionLogsVersion, setSessionLogsVersion] = useState(0);
 
   // Dates explicitly cleared by the coach this session.
   // The poll effect and realtime subscription both use this to prevent re-populating
@@ -603,7 +617,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     // Mutex: skip if another sync is already running. The concurrent fires are all
     // triggered by the same editing state, so the one that proceeds syncs the correct data.
     if (syncInProgressRef.current) {
-      console.log('[autoSync] skipped — sync already in progress');
+      console.log('[autoSync] deferred — sync already in progress');
+      resyncRequestedRef.current = true;
       return;
     }
     syncInProgressRef.current = true;
@@ -633,13 +648,12 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           variant: 'destructive',
         });
       }
-    }).finally(() => {
-      syncInProgressRef.current = false;
-    });
-  // Re-run when a save completes OR when connections finish loading (so a save
-  // that was deferred due to "connections still loading" gets retried automatically).
+    }).finally(finishSync);
+  // Re-run when a save completes, when connections finish loading (so a save that was
+  // deferred due to "connections still loading" gets retried), or when a sync that was
+  // deferred behind a running one is due.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing.lastSavedAt, connectionsLoading]);
+  }, [editing.lastSavedAt, connectionsLoading, resyncTick]);
 
   // Re-sync to athlete_schedule once per assignment when data finishes loading.
   // This ensures stale Supabase records (written before a code fix) are refreshed
@@ -739,7 +753,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         enrichEvents(getEventsForAthlete(athlete.id)),
         formulaData,
       ).catch(err => console.error('[loadSync] ✗ sync failed:', err))
-        .finally(() => { syncInProgressRef.current = false; });
+        .finally(finishSync);
     }).catch(e => {
       // Formula data build failed — still sync without it (formula cols stay as "Auto")
       console.warn('[loadSync] formula data build failed, syncing without it:', e);
@@ -757,7 +771,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         ed.sessionIntensities,
         enrichEvents(getEventsForAthlete(athlete.id)),
       ).catch(e2 => console.error('[loadSync] ✗ sync failed:', e2))
-        .finally(() => { syncInProgressRef.current = false; });
+        .finally(finishSync);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAssignmentId, editing.isInitializing, editing.trainingDays.length, connectionsLoading]);
@@ -945,6 +959,46 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     }
   }, [assignments, selectedAssignmentId]);
 
+  /**
+   * Session logs (started / finished) are linked to a session by "${assignmentId}-${date}-${index}".
+   * When sessions are removed, unlink their logs — kept as history, but renamed so a session that
+   * later takes the same date/position doesn't inherit "In progress" / "Done". When one session of
+   * a day is removed, the logs of the sessions after it move up one position with them.
+   */
+  const unlinkSessionLogs = useCallback(async (dates: string[], removedIndex?: number) => {
+    const connection = getConnectionForAthlete(athlete.id);
+    if (!connection || dates.length === 0) return;
+    const { data, error } = await supabase
+      .from('athlete_session_logs')
+      .select('id, date, session_id')
+      .eq('athlete_connection_id', connection.id)
+      .in('date', dates);
+    if (error || !data || data.length === 0) return;
+    const stamp = Date.now().toString(36);
+    const updates: Array<{ id: string; session_id: string; order: number }> = [];
+    for (const row of data) {
+      const sid = row.session_id as string | null;
+      if (!sid || sid.includes('~removed-')) continue;
+      const m = sid.match(/^(.*)-(\d+)$/);
+      const idx = m ? Number(m[2]) : -1;
+      if (removedIndex === undefined || idx === removedIndex) {
+        updates.push({ id: row.id as string, session_id: `${sid}~removed-${stamp}`, order: -1 });
+      } else if (m && idx > removedIndex) {
+        updates.push({ id: row.id as string, session_id: `${m[1]}-${idx - 1}`, order: idx });
+      }
+    }
+    // Unlink first, then move later sessions up in position order
+    updates.sort((a, b) => a.order - b.order);
+    for (const u of updates) {
+      const { error: updErr } = await supabase
+        .from('athlete_session_logs')
+        .update({ session_id: u.session_id })
+        .eq('id', u.id);
+      if (updErr) console.warn('[unlinkSessionLogs] could not update log', u.id, updErr.message);
+    }
+    if (updates.length > 0) setSessionLogsVersion(v => v + 1);
+  }, [getConnectionForAthlete, athlete.id]);
+
   // Wrapper: clear day in editing state AND patch assignmentDataCache so non-selected
   // assignment rendering (cache path) immediately reflects the cleared state.
   // Optimistic wrapper: remove the session from liveScheduleMap immediately so
@@ -990,19 +1044,12 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       }
     }
     editing.handleDeleteSession(dayDate, sessionIndex);
-  }, [editing, getConnectionForAthlete, athlete.id]);
+    void unlinkSessionLogs([dayDate], sessionIndex);
+  }, [editing, getConnectionForAthlete, athlete.id, unlinkSessionLogs]);
 
   const handleClearDay = useCallback((dayDate: string) => {
-    // Block clearing if any session on this day has been completed by the athlete
-    const hasCompleted = Array.from(sessionLogs.keys()).some(key => key.startsWith(`${dayDate}-`));
-    if (hasCompleted) {
-      toast({
-        title: 'Cannot clear day',
-        description: 'This day contains completed sessions and cannot be cleared.',
-        variant: 'destructive',
-      });
-      return;
-    }
+    // Logged sessions on this day stay in the athlete's history but are unlinked (below), so
+    // a session placed here later doesn't show as "In progress" / "Done".
     // Mark as cleared immediately so the poll/realtime guards kick in before
     // any async Supabase operation completes.
     clearedDatesRef.current.add(dayDate);
@@ -1047,8 +1094,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         .eq('date', dayDate)
         .then(() => { /* ignore result — liveScheduleMap already cleared optimistically */ });
     }
+    void unlinkSessionLogs([dayDate]);
     toast({ title: 'Day cleared' });
-  }, [editing.handleClearDay, selectedAssignmentId, getConnectionForAthlete, athlete.id, sessionLogs, toast]);
+  }, [editing.handleClearDay, selectedAssignmentId, getConnectionForAthlete, athlete.id, toast, unlinkSessionLogs]);
 
   // Wrapper: clear week in editing state AND patch assignmentDataCache.
   const handleClearWeek = useCallback((weekStartDate: string) => {
@@ -1061,25 +1109,11 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       weekDates.push(format(d, 'yyyy-MM-dd'));
     }
 
-    // Separate days: completed (locked) vs clearable
-    const completedDates = new Set(
-      weekDates.filter(date => Array.from(sessionLogs.keys()).some(key => key.startsWith(`${date}-`)))
-    );
-    const clearableDates = weekDates.filter(date => !completedDates.has(date));
+    // Logged sessions stay in the athlete's history but are unlinked (below)
+    const clearableDates = weekDates;
 
-    if (completedDates.size > 0) {
-      toast({
-        title: completedDates.size === weekDates.length ? 'Cannot clear week' : 'Week partially cleared',
-        description: completedDates.size === weekDates.length
-          ? 'All days in this week have completed sessions and cannot be cleared.'
-          : `${completedDates.size} day(s) with completed sessions were skipped.`,
-        variant: completedDates.size === weekDates.length ? 'destructive' : 'default',
-      });
-      if (completedDates.size === weekDates.length) return;
-    }
-
-    // Only clear days that have no completed sessions — use atomic bulk clear to
-    // avoid the stale-closure bug that occurs when handleClearDay is called in a loop.
+    // Atomic bulk clear — avoids the stale-closure bug that occurs when handleClearDay is
+    // called in a loop.
     editing.handleClearDays(clearableDates);
 
     // Mark all clearable dates as cleared immediately so the poll/realtime guards
@@ -1126,10 +1160,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         .in('date', clearableDates)
         .then(() => { /* ignore result — liveScheduleMap already cleared optimistically */ });
     }
-    if (completedDates.size === 0) {
-      toast({ title: 'Week cleared' });
-    }
-  }, [editing.handleClearDays, selectedAssignmentId, sessionLogs, toast, getConnectionForAthlete, athlete.id]);
+    void unlinkSessionLogs(clearableDates);
+    toast({ title: 'Week cleared' });
+  }, [editing.handleClearDays, selectedAssignmentId, toast, getConnectionForAthlete, athlete.id, unlinkSessionLogs]);
 
   // Build mesocycle from assignment for MasterPlannerGrid
   const currentMesocycleFromAssignment = useMemo(() => {
@@ -1251,7 +1284,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       });
 
     return () => { cancelled = true; };
-  }, [athlete.id, getConnectionForAthlete, calendarDateRange]);
+  }, [athlete.id, getConnectionForAthlete, calendarDateRange, sessionLogsVersion]);
 
   const handleCompletedSessionClick = useCallback((log: CoachSessionLog) => {
     setSelectedCompletedLog(log);
