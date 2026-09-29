@@ -479,6 +479,8 @@ export default function CoachMobileAthleteProfilePage() {
   const [eventDialogDate, setEventDialogDate] = useState<string | null>(null);
   const [testResultTarget, setTestResultTarget] = useState<{ event: AthleteCalendarEvent; date: string } | null>(null);
   const [testResultDate, setTestResultDate] = useState('');
+  // Days whose tests are unfolded in the calendar (folded by default, like in the athlete app)
+  const [openTestDays, setOpenTestDays] = useState<Set<string>>(new Set());
   const [testResultValue, setTestResultValue] = useState('');
   const [testResultNote, setTestResultNote] = useState('');
   const [testResultSaving, setTestResultSaving] = useState(false);
@@ -1414,6 +1416,10 @@ export default function CoachMobileAthleteProfilePage() {
                     const isPast   = dateStr < today;
                     const { weekday, dateLabel } = formatDayHeader(dateStr);
                     const hasSessions = (entry?.sessions.length ?? 0) > 0;
+                    const dayTests = (entry?.events ?? []).filter(ev => ev.type === 'test');
+                    const dayEvents = (entry?.events ?? []).filter(ev => ev.type !== 'test');
+                    const testsOpen = openTestDays.has(dateStr);
+                    const testsDone = dayTests.filter(ev => ev.parameterId && existingTestResults.has(`${ev.parameterId}:${dateStr}`)).length;
 
                     return (
                       <div key={dateStr}>
@@ -1454,10 +1460,91 @@ export default function CoachMobileAthleteProfilePage() {
                             : <span className="opacity-40"><IntensityBadge intensity="0" /></span>}
                         </button>
 
-                        {/* Tests & Events */}
-                        {(entry?.events ?? []).length > 0 && (
+                        {/* Events (competitions, …) */}
+                        {dayEvents.length > 0 && (
                           <div className="space-y-1.5">
-                            {entry!.events.map(ev => {
+                            {dayEvents.map(ev => {
+                              const resultValue = ev.parameterId ? existingTestResults.get(`${ev.parameterId}:${dateStr}`) : undefined;
+                              const hasResult = resultValue !== undefined;
+                              return (
+                                <button
+                                  key={ev.id}
+                                  onClick={() => setEventDialogDate(dateStr)}
+                                  className={cn(
+                                    'w-full text-left rounded-lg border p-2.5 active:opacity-70 transition-opacity',
+                                    ev.type === 'test' ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200',
+                                  )}
+                                >
+                                  <div className="flex items-start gap-2">
+                                    {ev.type === 'test'
+                                      ? <Trophy className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+                                      : <Calendar className="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5" />}
+                                    <div className="flex-1 min-w-0">
+                                      <p className={cn('text-xs font-medium truncate', ev.type === 'test' ? 'text-amber-800' : 'text-blue-800')}>
+                                        {ev.title}
+                                      </p>
+                                      {ev.type === 'test' && ev.targetValue && (
+                                        <p className="text-xs text-amber-700 mt-0.5">{t('coachMobile.athleteProfile.goal', { value: ev.targetValue })}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {ev.type === 'test' && ev.parameterId && (
+                                    hasResult ? (
+                                      <div className="mt-1.5 flex items-center gap-1 text-xs text-green-700 font-medium">
+                                        <Check className="h-3 w-3 shrink-0" />
+                                        {resultValue}
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={e => {
+                                          e.stopPropagation();
+                                          setTestResultTarget({ event: ev, date: dateStr });
+                                          setTestResultDate(dateStr);
+                                          setTestResultValue('');
+                                          setTestResultNote('');
+                                        }}
+                                        className="mt-1.5 w-full flex items-center justify-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 active:bg-amber-300 rounded-md py-1.5 transition-colors"
+                                      >
+                                        <ClipboardCheck className="h-3.5 w-3.5" />
+                                        {t('coachMobile.athleteProfile.enterResult')}
+                                      </button>
+                                    )
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Tests — folded behind one button, like in the athlete app */}
+                        {dayTests.length > 0 && (
+                          <div className="space-y-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setOpenTestDays(prev => {
+                                const next = new Set(prev);
+                                if (next.has(dateStr)) next.delete(dateStr); else next.add(dateStr);
+                                return next;
+                              })}
+                              aria-expanded={testsOpen}
+                              className={cn(
+                                'w-full min-h-[44px] flex items-center gap-2 rounded-lg px-3 py-2 border text-left transition-colors',
+                                'border-amber-200 bg-amber-50/80 hover:bg-amber-100 active:bg-amber-200',
+                                isPast && 'opacity-60',
+                              )}
+                            >
+                              <Trophy className="h-4 w-4 text-amber-600 shrink-0" />
+                              <span className="flex-1 min-w-0 text-sm font-medium text-amber-800">
+                                {t(isToday ? 'coachMobile.athleteProfile.testsToday' : isPast ? 'coachMobile.athleteProfile.testsOnDay' : 'coachMobile.athleteProfile.testsScheduled', { count: dayTests.length })}
+                              </span>
+                              {testsDone > 0 && (
+                                <span className="shrink-0 text-xs font-medium text-green-700">
+                                  {t('coachMobile.athleteProfile.testsDone', { done: testsDone, total: dayTests.length })}
+                                </span>
+                              )}
+                              <ChevronDown className={cn('h-4 w-4 text-amber-700 shrink-0 transition-transform', testsOpen && 'rotate-180')} />
+                            </button>
+                            {testsOpen && dayTests.map(ev => {
                               const resultValue = ev.parameterId ? existingTestResults.get(`${ev.parameterId}:${dateStr}`) : undefined;
                               const hasResult = resultValue !== undefined;
                               return (
