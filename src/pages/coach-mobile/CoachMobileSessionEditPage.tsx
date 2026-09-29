@@ -74,36 +74,15 @@ function getSetCount(ex: ExerciseSummary): number {
  * "has a value yet", because that causes all other columns to vanish the moment
  * the user fills in the first set of one param.
  */
-function hasAnyValue(ex: ExerciseSummary, paramName: string): boolean {
-  if (!ex.plannedParams) return false;
-  return Object.entries(ex.plannedParams).some(([k, v]) => {
-    if (v === undefined || v === null || v === '') return false;
-    return k === paramName || k.startsWith(`${paramName}_set`);
-  });
-}
-
-function getParamColumns(ex: ExerciseSummary, toolboxEntries?: ToolboxEntry[]): string[] {
+function getParamColumns(ex: ExerciseSummary): string[] {
   const REST_RE = /rest|pause|recovery/i;
 
-  // Build a set of calculated param names for this exercise's method so they're always
-  // shown even when the formula couldn't produce a value (e.g. missing e1RM).
-  const calculatedParams = new Set<string>();
-  if (toolboxEntries && ex.methodKey) {
-    const strippedMethod = ex.methodKey.includes('::') ? ex.methodKey.split('::')[0] : ex.methodKey;
-    for (const entry of toolboxEntries) {
-      if (!entry.isCalculated) continue;
-      const mid = entry.subCategory ? `${entry.category} - ${entry.subCategory}` : entry.category;
-      if (mid === strippedMethod) calculatedParams.add(entry.parameterName);
-    }
-  }
-
-  // visibleParams lists which params the coach configured — but only show columns
-  // that have at least one actual planned value OR are a formula-calculated param.
-  // Toolbox-default params the coach never set values for (e.g. Organization) stay hidden.
+  // visibleParams are the columns the coach chose (per exercise, synced from the session sheet) —
+  // show them all, also those without a planned value yet (e.g. Weight when the intensity is
+  // prescribed via RiR: the athlete enters the weight while logging)
   if (ex.visibleParams && ex.visibleParams.length > 0) {
     const candidates = ex.visibleParams.filter(p => p !== ex.restParamName && !REST_RE.test(p));
-    const withValues = candidates.filter(p => hasAnyValue(ex, p) || calculatedParams.has(p));
-    if (withValues.length > 0) return withValues;
+    if (candidates.length > 0) return candidates;
   }
 
   // Fall back: derive from plannedParams keys (strip _setN suffix)
@@ -1934,7 +1913,7 @@ export default function CoachMobileSessionEditPage() {
                                         {t('coachMobile.sessionEdit.noExercisesInSection')}
                                       </p>
                                     ) : section.exercises.map((ex, exIdx) => {
-                                      const params = getParamColumns(ex, toolboxData?.entries);
+                                      const params = getParamColumns(ex);
                                       const sets = getSetCount(ex);
                                       const hasNotes = exerciseNotesOpen.has(ex.id);
                                       return (

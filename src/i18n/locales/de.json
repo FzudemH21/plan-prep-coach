@@ -712,6 +712,7 @@
       "abandonTitle": "Training abbrechen?",
       "abandonDesc": "Fortschritt und der laufende Log werden gelöscht.",
       "keepGoing": "Weitermachen",
+      "previousValuesHint": "Blasse {{params}}-Werte: vom letzten Mal ({{date}})",
       "pauseWorkout": "Training pausieren",
       "pauseInsteadHint": "Um jetzt aufzuhören und später weiterzumachen, pausiere das Training stattdessen.",
       "pauseAndFinishLater": "Pausieren & später beenden",

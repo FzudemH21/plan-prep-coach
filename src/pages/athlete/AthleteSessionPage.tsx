@@ -32,6 +32,7 @@ import {
   clearWorkoutProgress, countDoneSets, findUnfinishedWorkout, saveWorkoutProgress, useWorkoutAutosave,
   type UnfinishedWorkout, type WorkoutProgress,
 } from '@/utils/workoutProgress';
+import { previousValueFor, usePreviousExerciseValues, type PreviousExerciseValues } from '@/hooks/usePreviousExerciseValues';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -95,6 +96,10 @@ function getParamColumns(ex: ExerciseSummary): string[] {
   // Strip rest parameters — rest drives the timer, not a log column for the athlete
   const REST_RE = /rest|pause|recovery/i;
   candidates = candidates.filter(p => p !== ex.restParamName && !REST_RE.test(p));
+
+  // The coach chose these columns — show them all, also those without a planned value (e.g. Weight
+  // when the intensity is prescribed via RiR: the athlete enters the weight they used)
+  if (ex.visibleParams && ex.visibleParams.length > 0 && candidates.length > 0) return candidates;
 
   // Filter to only columns that have at least one non-empty planned value.
   // Supports two storage formats:
@@ -483,16 +488,24 @@ interface SetTableProps {
   onLogValue: (exId: string, setIdx: number, paramName: string, val: string) => void;
   onCompleteSet: (exId: string, setIdx: number) => void;
   onMarkAll: (exId: string) => void;
+  /** Values logged the last time this exercise was done — hints in empty fields */
+  previous?: PreviousExerciseValues;
 }
 
-function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue, onCompleteSet, onMarkAll }: SetTableProps) {
+function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue, onCompleteSet, onMarkAll, previous }: SetTableProps) {
   const columns = getParamColumns(exercise);
   const doneArr = completedSets[exercise.id] ?? [];
   const allDone = doneArr.length >= setCount &&
     Array.from({ length: setCount }, (_, i) => i).every(i => doneArr.includes(i));
+  // Columns without a planned value that show last time's values as hints (e.g. Weight)
+  const hintColumns = previous
+    ? columns.filter(col => Array.from({ length: setCount }, (_, i) => i)
+      .some(i => !getPlannedValue(exercise, col, i) && previousValueFor(previous, col, i)))
+    : [];
 
   return (
     // Fixed layout: parameter columns share the phone's width (no sideways scrolling); labels wrap
+    <div>
     <div className="rounded-lg border bg-background">
       <table className="w-full table-fixed text-sm">
         <thead>
@@ -544,11 +557,11 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
                         type="text"
                         inputMode="decimal"
                         value={displayValue}
-                        placeholder="—"
+                        placeholder={previousValueFor(previous, col, setIdx) || '—'}
                         onChange={e => onLogValue(exercise.id, setIdx, col, e.target.value)}
                         disabled={isDone}
                         className={cn(
-                          'w-full min-w-0 text-center border rounded-md px-1 py-2 text-sm',
+                          'w-full min-w-0 text-center border rounded-md px-1 py-2 text-sm placeholder:text-muted-foreground/50',
                           'focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary',
                           'disabled:opacity-50 disabled:cursor-not-allowed',
                           isDone && 'line-through text-muted-foreground',
@@ -578,6 +591,12 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
           })}
         </tbody>
       </table>
+    </div>
+      {previous && hintColumns.length > 0 && (
+        <p className="text-xs text-muted-foreground mt-1.5">
+          Faded {hintColumns.join(', ')}: your values from last time ({formatDate(previous.date)})
+        </p>
+      )}
     </div>
   );
 }
@@ -889,6 +908,17 @@ export default function AthleteSessionPage() {
   }, [state]);
 
   const currentSection = sections[sectionIdx];
+
+  // What the athlete logged last time for each exercise — hints in empty fields (e.g. Weight)
+  const exerciseNames = useMemo(
+    () => (state?.entry.sessions[state.sessionIdx]?.exercises ?? []).map(e => e.name),
+    [state],
+  );
+  const previousValues = usePreviousExerciseValues(
+    connection?.id,
+    exerciseNames,
+    state ? { date: state.entry.date, sessionId: state.entry.sessions[state.sessionIdx]?.id ?? '' } : null,
+  );
 
   // ── Workout elapsed timer ──────────────────────────────────────────────────
 
@@ -2112,6 +2142,7 @@ export default function AthleteSessionPage() {
                           onLogValue={handleLogValue}
                           onCompleteSet={handleCompleteSet}
                           onMarkAll={handleMarkAll}
+                          previous={previousValues.get(ex.name.toLowerCase())}
                         />
                         {/* Add / remove set buttons */}
                         <div className="flex justify-end gap-2 mt-2">

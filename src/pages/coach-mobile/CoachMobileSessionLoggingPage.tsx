@@ -30,6 +30,7 @@ import {
   clearWorkoutProgress, countDoneSets, findUnfinishedWorkout, saveWorkoutProgress, useWorkoutAutosave,
   type UnfinishedWorkout, type WorkoutProgress,
 } from '@/utils/workoutProgress';
+import { previousValueFor, usePreviousExerciseValues, type PreviousExerciseValues } from '@/hooks/usePreviousExerciseValues';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -103,6 +104,10 @@ function getParamColumns(ex: ExerciseSummary): string[] {
 
   const REST_RE = /rest|pause|recovery/i;
   candidates = candidates.filter(p => p !== ex.restParamName && !REST_RE.test(p));
+
+  // The coach chose these columns — show them all, also those without a planned value (e.g. Weight
+  // when the intensity is prescribed via RiR: the athlete's weight is entered while logging)
+  if (ex.visibleParams && ex.visibleParams.length > 0 && candidates.length > 0) return candidates;
 
   if (ex.plannedParams) {
     const withValues = candidates.filter(param => {
@@ -396,30 +401,40 @@ interface SetTableProps {
   onLogValue: (exId: string, setIdx: number, paramName: string, val: string) => void;
   onCompleteSet: (exId: string, setIdx: number) => void;
   onMarkAll: (exId: string) => void;
+  /** Values logged the last time this exercise was done — hints in empty fields */
+  previous?: PreviousExerciseValues;
 }
 
-function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue, onCompleteSet, onMarkAll }: SetTableProps) {
+function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue, onCompleteSet, onMarkAll, previous }: SetTableProps) {
   const { t } = useTranslation();
   const columns = getParamColumns(exercise);
   const doneArr = completedSets[exercise.id] ?? [];
   const allDone = doneArr.length >= setCount &&
     Array.from({ length: setCount }, (_, i) => i).every(i => doneArr.includes(i));
+  // Columns without a planned value that show last time's values as hints (e.g. Weight)
+  const hintColumns = previous
+    ? columns.filter(col => Array.from({ length: setCount }, (_, i) => i)
+      .some(i => !getPlannedValue(exercise, col, i) && previousValueFor(previous, col, i)))
+    : [];
 
   return (
-    <div className="overflow-x-auto rounded-lg border bg-background">
-      <table className="w-full text-sm">
+    <div>
+    {/* Fixed layout: parameter columns share the phone's width (no sideways scrolling); labels wrap */}
+    <div className="rounded-lg border bg-background">
+      <table className="w-full table-fixed text-sm">
         <thead>
           <tr className="border-b bg-muted/30">
-            <th className="text-center py-2 px-2 text-xs text-muted-foreground font-semibold w-8">#</th>
+            <th className="text-center py-2 px-1 text-xs text-muted-foreground font-semibold w-7">#</th>
             {columns.map(col => {
               const unit = exercise.plannedParams?.[`${col}_unit`] as string | undefined;
               return (
-                <th key={col} className="text-center py-2 px-2 text-xs text-muted-foreground font-semibold">
-                  {unit ? `${col} (${unit})` : col}
+                <th key={col} className="text-center py-2 px-1 text-xs leading-tight text-muted-foreground font-semibold break-words align-bottom">
+                  {col}
+                  {unit && <span className="block font-normal">({unit})</span>}
                 </th>
               );
             })}
-            <th className="w-10 py-2 text-center">
+            <th className="w-11 py-2 text-center">
               <button onClick={() => onMarkAll(exercise.id)}
                 title={allDone ? t('coachMobile.sessionLogging.setTable.unmarkAll') : t('coachMobile.sessionLogging.setTable.markAllDone')}
                 className={cn(
@@ -436,18 +451,19 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
             const isDone = doneArr.includes(setIdx);
             return (
               <tr key={setIdx} className={cn('border-b last:border-0 transition-colors', isDone && 'bg-primary/5')}>
-                <td className="text-center py-2 px-2 text-muted-foreground font-medium tabular-nums">{setIdx + 1}</td>
+                <td className="text-center py-2 px-1 text-muted-foreground font-medium tabular-nums">{setIdx + 1}</td>
                 {columns.map(col => {
                   const planned = getPlannedValue(exercise, col, setIdx);
                   const logged = loggedValues[exercise.id]?.[setIdx]?.[col];
                   const displayValue = (logged !== undefined && logged !== '') ? logged : planned;
                   return (
-                    <td key={col} className="py-1.5 px-1.5">
-                      <input type="text" inputMode="decimal" value={displayValue} placeholder="—"
+                    <td key={col} className="py-1.5 px-1">
+                      <input type="text" inputMode="decimal" value={displayValue}
+                        placeholder={previousValueFor(previous, col, setIdx) || '—'}
                         onChange={e => onLogValue(exercise.id, setIdx, col, e.target.value)}
                         disabled={isDone}
                         className={cn(
-                          'w-full text-center border rounded-md px-1.5 py-1.5 text-sm min-w-[48px]',
+                          'w-full min-w-0 text-center border rounded-md px-1 py-2 text-sm placeholder:text-muted-foreground/50',
                           'focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary',
                           'disabled:opacity-50 disabled:cursor-not-allowed',
                           isDone && 'line-through text-muted-foreground',
@@ -456,7 +472,7 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
                     </td>
                   );
                 })}
-                <td className="py-1.5 pr-2 text-center">
+                <td className="py-1.5 pr-1 text-center">
                   <button onClick={() => onCompleteSet(exercise.id, setIdx)}
                     className={cn(
                       'w-8 h-8 rounded-full flex items-center justify-center mx-auto transition-all active:scale-95',
@@ -472,6 +488,15 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
           })}
         </tbody>
       </table>
+    </div>
+      {previous && hintColumns.length > 0 && (
+        <p className="text-xs text-muted-foreground mt-1.5">
+          {t('coachMobile.sessionLogging.previousValuesHint', {
+            params: hintColumns.join(', '),
+            date: new Date(`${previous.date}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
+          })}
+        </p>
+      )}
     </div>
   );
 }
@@ -690,6 +715,17 @@ export default function CoachMobileSessionLoggingPage() {
   }, [state]);
 
   const currentSection = sections[sectionIdx];
+
+  // What the athlete logged last time for each exercise — hints in empty fields (e.g. Weight)
+  const exerciseNames = useMemo(
+    () => (state?.entry.sessions[state.sessionIdx]?.exercises ?? []).map(e => e.name),
+    [state],
+  );
+  const previousValues = usePreviousExerciseValues(
+    state?.connectionId,
+    exerciseNames,
+    state ? { date: state.entry.date, sessionId: state.entry.sessions[state.sessionIdx]?.id ?? '' } : null,
+  );
 
   // ── Timers ─────────────────────────────────────────────────────────────────
 
@@ -1484,7 +1520,8 @@ export default function CoachMobileSessionLoggingPage() {
                   <>
                     <SetTable exercise={ex} setCount={exSetCount}
                       loggedValues={loggedValues} completedSets={completedSets}
-                      onLogValue={handleLogValue} onCompleteSet={handleCompleteSet} onMarkAll={handleMarkAll} />
+                      onLogValue={handleLogValue} onCompleteSet={handleCompleteSet} onMarkAll={handleMarkAll}
+                      previous={previousValues.get(ex.name.toLowerCase())} />
                     <div className="flex justify-end gap-2 mt-2">
                       <button onClick={() => {
                         const current = setCountOverrides[ex.id] ?? getSetCount(ex);

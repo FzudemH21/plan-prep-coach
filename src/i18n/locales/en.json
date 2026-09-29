@@ -712,6 +712,7 @@
       "abandonTitle": "Abandon workout?",
       "abandonDesc": "Progress and the in-progress log will be deleted.",
       "keepGoing": "Keep going",
+      "previousValuesHint": "Faded {{params}}: values from last time ({{date}})",
       "pauseWorkout": "Pause workout",
       "pauseInsteadHint": "To stop for now and finish later, pause the workout instead.",
       "pauseAndFinishLater": "Pause & finish later",

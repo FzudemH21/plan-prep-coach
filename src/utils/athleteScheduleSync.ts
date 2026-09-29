@@ -552,9 +552,10 @@ export async function syncAthleteSchedule(
         if (te?.isSetParameter && !te.isRestParameter && !REST_NAME.test(name)) return true;
         return false;
       };
+      // Also parameters without a planned value (e.g. Weight when the intensity is prescribed via
+      // RiR) — the session sheet shows them as columns, and the athlete fills them in
       const ownNames = Object.keys(storedParams)
-        .filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k))
-        .filter(k => storedParams[k] !== '' && storedParams[k] !== undefined && storedParams[k] !== null);
+        .filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k));
       const calcNames = methodEntries.filter(te => te.isCalculated && te.formula).map(te => te.parameterName);
       const candidates = [...new Set([...ownNames, ...calcNames])].filter(n => !isStructural(n));
 
@@ -571,6 +572,10 @@ export async function syncAthleteSchedule(
         ?? ownVisibility
         ?? parsed.parameterVisibility
         ?? {};
+      // A method parameter the coach switched on is shown even when this exercise has no entry for it
+      for (const [name, on] of Object.entries(overrides)) {
+        if (on && entryFor(name) && !candidates.includes(name) && !isStructural(name)) candidates.push(name);
+      }
 
       const order = (name: string) => {
         const i = methodEntries.findIndex(te => te.parameterName === name);
