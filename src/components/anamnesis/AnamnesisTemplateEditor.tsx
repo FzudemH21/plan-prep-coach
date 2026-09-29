@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -198,6 +199,16 @@ function SectionEditor({
           </Button>
         </div>
       </div>
+
+      {/* Who fills in this section: the athlete via the online form link, or the coach */}
+      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer w-fit pl-1">
+        <Checkbox
+          checked={!!section.athleteFills}
+          onCheckedChange={(v) => onChange({ ...section, athleteFills: v === true })}
+          className="h-3.5 w-3.5"
+        />
+        Filled in by the athlete (online form link)
+      </label>
 
       <div className="space-y-1.5 pl-1">
         {section.fields.map((field, idx) => (

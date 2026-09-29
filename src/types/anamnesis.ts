@@ -20,6 +20,8 @@ export interface AnamnesisSection {
   id: string;
   title: string;
   fields: AnamnesisField[];
+  /** Filled in by the athlete through the online form link (the rest is for the coach) */
+  athleteFills?: boolean;
 }
 
 export interface AnamnesisTemplate {
@@ -49,8 +51,42 @@ export interface AthleteAnamnesis {
   notes: string;
   aiSummary: string | null;
   attachments: AnamnesisAttachment[];
+  /** Online form link: 'sent' = waiting for the athlete, 'submitted' = athlete sent it; null = coach-only record */
+  formStatus?: 'sent' | 'submitted' | null;
+  formToken?: string | null;
+  formExpiresAt?: string | null;
+  formSubmittedAt?: string | null;
+  formLanguage?: string | null;
+  consent?: AnamnesisConsent | null;
+  /** Profile details the athlete entered in the form ("About you"), applied to the profile by the coach */
+  athleteProfileAnswers?: AnamnesisProfileAnswers | null;
+  profileAppliedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** "About you" in the form — the athlete profile fields the athlete confirms or completes */
+export interface AnamnesisProfileAnswers {
+  firstName?: string;
+  lastName?: string;
+  birthday?: string;
+  sex?: 'male' | 'female' | 'other';
+  sports?: string[];
+  occupation?: string;
+  dailyActivityLevel?: 'sedentary' | 'lightly_active' | 'moderately_active' | 'very_active' | 'extremely_active';
+}
+
+/** Consent given in the form, as stored by the server on submit */
+export interface AnamnesisConsent {
+  privacyNoticeRead: boolean;
+  healthDataConsent: boolean;
+  /** Set when a parent / legal guardian consented for an athlete under 16 */
+  guardianName?: string;
+  privacyText?: string;
+  consentText?: string;
+  noticeVersion?: number;
+  language?: string;
+  consentedAt: string;
 }
 
 // Predefined default template seeded from the sports-science anamnesis protocol
@@ -62,6 +98,7 @@ export const DEFAULT_ANAMNESIS_TEMPLATE: Omit<AnamnesisTemplate, 'id' | 'coachUs
       // profile (entered once in the Add Athlete dialog) — not asked again here.
       id: 'sec-basic',
       title: 'Current Status & History',
+      athleteFills: true,
       fields: [
         { id: 'f-complaint', label: 'Main Complaint / Current Status', fieldType: 'textarea' },
         { id: 'f-injury-history', label: 'Injury / Surgery History', fieldType: 'textarea' },
@@ -71,6 +108,7 @@ export const DEFAULT_ANAMNESIS_TEMPLATE: Omit<AnamnesisTemplate, 'id' | 'coachUs
     {
       id: 'sec-medical',
       title: 'Medical History',
+      athleteFills: true,
       fields: [
         {
           id: 'f-smoking',

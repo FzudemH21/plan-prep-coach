@@ -4,6 +4,8 @@
  * Fetches the last 7 days of activity across all connected athletes:
  *   - Session completions (athlete_session_logs.completed_at)
  *   - Daily check-in submissions (athlete_daily_checkins.created_at)
+ *   - Anamnesis forms filled in through a form link (athlete_anamneses.form_submitted_at) —
+ *     also for athletes without the app
  *
  * "Unread" state is tracked per-item via a localStorage set of read IDs.
  * Items are unread by default; clicking one or pressing "Mark all as read"
@@ -16,7 +18,7 @@ import type { AthleteConnection } from '@/hooks/useAthleteConnections';
 const READ_IDS_KEY = 'ppc-coach-activity-read-ids';
 const FEED_WINDOW_DAYS = 7;
 
-export type FeedItemType = 'session_complete' | 'checkin';
+export type FeedItemType = 'session_complete' | 'checkin' | 'anamnesis_submitted';
 export type FeedFlag = 'illness' | 'low_wellness' | 'pain';
 
 export interface FeedItem {
@@ -65,17 +67,21 @@ export function useCoachActivityFeed(connections: AthleteConnection[]) {
   const connMap = new Map(connections.map((c) => [c.id, c]));
 
   const load = useCallback(async () => {
-    if (connectedIds.length === 0) {
-      setItems([]);
-      return;
-    }
     setLoading(true);
 
     const windowStart = new Date(
       Date.now() - FEED_WINDOW_DAYS * 24 * 60 * 60 * 1000
     ).toISOString();
 
-    const [sessionsRes, checkinsRes] = await Promise.all([
+    // Only the coach's own records are readable (row-level security); fails quietly before the
+    // form-link migration is run
+    const anamnesesRes = await supabase
+      .from('athlete_anamneses')
+      .select('id, athlete_local_id, form_submitted_at, athlete_profile_answers')
+      .gte('form_submitted_at', windowStart)
+      .order('form_submitted_at', { ascending: false });
+
+    const [sessionsRes, checkinsRes] = connectedIds.length === 0 ? [{ data: [] }, { data: [] }] : await Promise.all([
       supabase
         .from('athlete_session_logs')
         .select(
@@ -160,6 +166,20 @@ export function useCoachActivityFeed(connections: AthleteConnection[]) {
         timestamp: row.created_at as string,
         description: `Submitted daily check-in${flagLabel}`,
         flag,
+      });
+    }
+
+    for (const row of (anamnesesRes.error ? [] : anamnesesRes.data ?? []) as Array<Record<string, unknown>>) {
+      const answers = (row.athlete_profile_answers ?? {}) as { firstName?: string; lastName?: string };
+      const conn = connections.find(c => c.athleteLocalId === row.athlete_local_id);
+      feed.push({
+        id: `anam-${row.id as string}`,
+        type: 'anamnesis_submitted',
+        connectionId: conn?.id ?? '',
+        athleteName: [answers.firstName, answers.lastName].filter(Boolean).join(' ') || conn?.athleteName || 'Athlete',
+        athleteLocalId: row.athlete_local_id as string,
+        timestamp: row.form_submitted_at as string,
+        description: 'Filled in the anamnesis form',
       });
     }
 

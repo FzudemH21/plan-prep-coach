@@ -783,6 +783,7 @@ export function AthleteProfileView({
             athlete={athlete}
             autoOpenNew={openNewAnamnesis}
             onAutoOpenHandled={onNewAnamnesisOpened}
+            onUpdateAthlete={(updates) => athleteData.updateAthlete(athlete.id, updates)}
           />
         </TabsContent>
 

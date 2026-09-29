@@ -32,11 +32,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   Plus, Trash2, Loader2, ClipboardList, Sparkles, ChevronRight, X,
-  ChevronUp, ChevronDown, Pencil, Paperclip, FileText, FileImage, ExternalLink,
+  ChevronUp, ChevronDown, Pencil, Paperclip, FileText, FileImage, ExternalLink, Send, ShieldCheck,
 } from 'lucide-react';
 import { useAthleteAnamneses } from '@/hooks/useAthleteAnamneses';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
 import { TemplateEditorDialog } from '@/components/anamnesis/AnamnesisTemplateEditor';
+import { FormLinkBox, PrivacyNoticeDialog, ProfileAnswersBanner, SendFormLinkDialog } from '@/components/anamnesis/AnamnesisFormLink';
+import { useCoachPrivacyNotice } from '@/hooks/useCoachPrivacyNotice';
 import { sendMessage } from '@/utils/anthropicApi';
 import { uploadAnamnesisFile, deleteFile, getSignedUrl } from '@/lib/storage';
 import { useAuth } from '@/hooks/useAuth';
@@ -890,6 +892,16 @@ function RecordCard({
               {record.attachments.length}
             </Badge>
           )}
+          {record.formStatus === 'sent' && (
+            <Badge variant="outline" className="text-xs px-1.5 py-0 border-amber-300 text-amber-800 bg-amber-50">
+              {record.formExpiresAt && new Date(record.formExpiresAt) < new Date() ? 'Form link expired' : 'Waiting for athlete'}
+            </Badge>
+          )}
+          {record.formStatus === 'submitted' && (
+            <Badge variant="outline" className="text-xs px-1.5 py-0 border-blue-300 text-blue-800 bg-blue-50">
+              Filled in by athlete
+            </Badge>
+          )}
         </div>
         {preview && (
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{preview}</p>
@@ -912,13 +924,20 @@ interface AthleteAnamnesisTabProps {
   /** Open the "New Anamnesis" dialog immediately (hand-off from the Add Athlete dialog). */
   autoOpenNew?: boolean;
   onAutoOpenHandled?: () => void;
+  /** Saves profile changes the athlete made in the anamnesis form ("About you") */
+  onUpdateAthlete?: (updates: Partial<Athlete>) => Promise<void>;
 }
 
-export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHandled }: AthleteAnamnesisTabProps) {
+export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHandled, onUpdateAthlete }: AthleteAnamnesisTabProps) {
   const { toast } = useToast();
   const { user } = useAuth();
-  const { anamneses, loading, createAnamnesis, updateAnamnesis, deleteAnamnesis } =
-    useAthleteAnamneses(athlete.id);
+  const {
+    anamneses, loading, createAnamnesis, updateAnamnesis, deleteAnamnesis,
+    sendFormLink, updateFormLink, markProfileApplied,
+  } = useAthleteAnamneses(athlete.id);
+  const privacy = useCoachPrivacyNotice();
+  const [sendOpen, setSendOpen] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
 
   const athleteName = [athlete.firstName, athlete.lastName].filter(Boolean).join(' ') || 'Athlete';
 
@@ -1013,10 +1032,20 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
               : 'No records yet'}
           </p>
         </div>
-        <Button size="sm" className="gap-1.5 h-8" onClick={openNew}>
-          <Plus className="h-3.5 w-3.5" />
-          New Anamnesis
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-muted-foreground" onClick={() => setPrivacyOpen(true)} title="Privacy notice shown in the form link">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Privacy notice
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => setSendOpen(true)}>
+            <Send className="h-3.5 w-3.5" />
+            Send form link
+          </Button>
+          <Button size="sm" className="gap-1.5 h-8" onClick={openNew}>
+            <Plus className="h-3.5 w-3.5" />
+            New Anamnesis
+          </Button>
+        </div>
       </div>
 
       {/* List */}
@@ -1041,6 +1070,20 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
           </div>
         )}
 
+        {!loading && onUpdateAthlete && anamneses.map((record) => (
+          <ProfileAnswersBanner
+            key={`profile-${record.id}`}
+            athlete={athlete}
+            record={record}
+            onApply={async (patch) => {
+              await onUpdateAthlete(patch);
+              await markProfileApplied(record.id);
+              toast({ title: 'Profile updated' });
+            }}
+            onDismiss={() => markProfileApplied(record.id)}
+          />
+        ))}
+
         {!loading && anamneses.map((record) => (
           <RecordCard key={record.id} record={record} onClick={() => openRecord(record)} />
         ))}
@@ -1060,6 +1103,35 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
             </DialogTitle>
             <DialogDescription>{athleteInfoLine}</DialogDescription>
           </DialogHeader>
+          {selectedRecord && (() => {
+            const live = anamneses.find(a => a.id === selectedRecord.id) ?? selectedRecord;
+            const consent = live.consent;
+            if (live.formStatus !== 'sent' && !consent) return null;
+            return (
+              <div className="px-6 pb-3 space-y-2 shrink-0">
+                <FormLinkBox
+                  record={live}
+                  athleteName={athleteName}
+                  onRenew={() => updateFormLink(live.id, 'renew')}
+                  onWithdraw={() => updateFormLink(live.id, 'withdraw')}
+                />
+                {live.formStatus === 'sent' && (
+                  <p className="text-xs text-muted-foreground">
+                    Saving here while the athlete is still filling in the form can overwrite their latest answers.
+                  </p>
+                )}
+                {consent && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <ShieldCheck className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                    Filled in by the athlete on {format(parseISO(consent.consentedAt), 'd MMM yyyy, HH:mm')} · consent given
+                    {consent.guardianName ? ` by parent/guardian ${consent.guardianName}` : ''}
+                    {consent.noticeVersion ? ` · privacy notice v${consent.noticeVersion}` : ''}
+                    {consent.language ? ` · ${consent.language.toUpperCase()}` : ''}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
           <RecordForm
             initial={selectedRecord
               ? {
@@ -1085,6 +1157,17 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
           />
         </DialogContent>
       </Dialog>
+
+      <SendFormLinkDialog
+        open={sendOpen}
+        onClose={() => setSendOpen(false)}
+        athleteName={athleteName}
+        privacy={privacy}
+        onCreate={(templateId, snapshot) => sendFormLink(templateId, snapshot)}
+        onRenew={(id) => updateFormLink(id, 'renew')}
+        onWithdraw={(id) => updateFormLink(id, 'withdraw')}
+      />
+      <PrivacyNoticeDialog open={privacyOpen} onClose={() => setPrivacyOpen(false)} privacy={privacy} />
     </div>
   );
 }

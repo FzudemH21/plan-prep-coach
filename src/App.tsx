@@ -40,6 +40,7 @@ import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import AthleteLoginPage from "./pages/athlete/AthleteLoginPage";
 import AthleteConnectPage from "./pages/athlete/AthleteConnectPage";
+import AnamnesisFormPage from "./pages/AnamnesisFormPage";
 import AthleteOnboardingPage from "./pages/athlete/AthleteOnboardingPage";
 import AthleteTodayPage from "./pages/athlete/AthleteTodayPage";
 import AthletePlanPage from "./pages/athlete/AthletePlanPage";
@@ -105,6 +106,8 @@ function AppRoutes() {
         {/* Athlete app — public routes (no auth required) */}
         <Route path="/athlete/login" element={<AthleteLoginPage />} />
         <Route path="/athlete/connect" element={<AthleteConnectPage />} />
+        {/* Anamnesis form link — public, token-checked in the database */}
+        <Route path="/anamnesis/:token" element={<AnamnesisFormPage />} />
         <Route path="/athlete/onboarding" element={<AthleteAuthGuard><AthleteOnboardingPage /></AthleteAuthGuard>} />
 
         {/* Athlete session — full-screen, no nav shell */}
