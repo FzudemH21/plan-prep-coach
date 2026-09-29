@@ -384,6 +384,8 @@ function ComingUp({
   onShowTestDetails: (ev: AthleteCalendarEvent) => void;
 }) {
   const navigate = useNavigate();
+  // Days whose tests are unfolded (folded behind one "N scheduled tests" button by default)
+  const [openTestDays, setOpenTestDays] = useState<Set<string>>(new Set());
   if (days.length === 0) return null;
   return (
     <div className="space-y-2">
@@ -427,7 +429,25 @@ function ComingUp({
                     </button>
                   );
                 })}
-                {tests.map(ev => (
+                {tests.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setOpenTestDays(prev => {
+                      const next = new Set(prev);
+                      if (next.has(e.date)) next.delete(e.date); else next.add(e.date);
+                      return next;
+                    })}
+                    aria-expanded={openTestDays.has(e.date)}
+                    className="w-full min-h-[44px] flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-left active:bg-amber-100"
+                  >
+                    <Activity className="h-4 w-4 text-amber-600 shrink-0" />
+                    <span className="flex-1 min-w-0 text-sm font-medium text-amber-900">
+                      {tests.length === 1 ? '1 scheduled test' : `${tests.length} scheduled tests`}
+                    </span>
+                    <ChevronDown className={cn('h-4 w-4 text-amber-700 shrink-0 transition-transform', openTestDays.has(e.date) && 'rotate-180')} />
+                  </button>
+                )}
+                {openTestDays.has(e.date) && tests.map(ev => (
                   <button
                     key={ev.id}
                     onClick={() => onShowTestDetails(ev)}

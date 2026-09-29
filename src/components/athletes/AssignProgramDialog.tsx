@@ -73,6 +73,17 @@ export function AssignProgramDialog({
   // The athlete's own test results from the athlete app (baseline pre-fill)
   const selfReportedResults = useSelfReportedResults(athleteId);
   const [reviewedEvents, setReviewedEvents] = useState<ReviewedEvent[]>([]);
+  // Tests / events the coach removed in step 3 — stay removed when the list is rebuilt
+  // (start date or microcycle selection changes)
+  const [removedTestKeys, setRemovedTestKeys] = useState<Set<string>>(new Set());
+  const [removedEventKeys, setRemovedEventKeys] = useState<Set<string>>(new Set());
+  const testKey = (t: { testMethod: string; parameterLinkedId?: string }) => `${t.testMethod}-${t.parameterLinkedId || ''}`;
+
+  // The parent may pass a new (equal) array on every render — only rebuild the tests list when
+  // the values actually change, otherwise every re-render reset removals and edits
+  const athleteParamsKey = JSON.stringify(athletePerformanceParameters);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stableAthleteParams = useMemo(() => athletePerformanceParameters, [athleteParamsKey]);
 
   // Reset state when dialog opens/closes
   useEffect(() => {
@@ -85,8 +96,16 @@ export function AssignProgramDialog({
       setExpandedMesocycles([]);
       setReviewedSubGoals([]);
       setReviewedEvents([]);
+      setRemovedTestKeys(new Set());
+      setRemovedEventKeys(new Set());
     }
   }, [open, selectedDate]);
+
+  // Another program → its own tests, nothing removed yet
+  useEffect(() => {
+    setRemovedTestKeys(new Set());
+    setRemovedEventKeys(new Set());
+  }, [selectedProgramId]);
 
   // Get selected program
   const selectedProgram = useMemo(() => {
@@ -164,7 +183,7 @@ export function AssignProgramDialog({
 
     /** The athlete's latest value for a parameter — coach-recorded or self-reported in the app */
     const latestAthleteValue = (parameterId: string) => latestValueOf(withSelfReported(
-      athletePerformanceParameters.find(pp => pp.athleticismParameterId === parameterId)?.values ?? [],
+      stableAthleteParams.find(pp => pp.athleticismParameterId === parameterId)?.values ?? [],
       selfReportedResults.get(parameterId),
     ));
 
@@ -272,10 +291,11 @@ export function AssignProgramDialog({
       }
     });
 
-    // Tests/events whose dates all fall in unassigned microcycles aren't offered
-    setReviewedSubGoals(dedupedTests.filter(t => t.scheduledDates.length > 0));
-    setReviewedEvents(dedupedEvents.filter(e => e.scheduledDates.length > 0));
-  }, [selectedProgram, startDate, athletePerformanceParameters, selectedMicrocycleIds, selfReportedResults]);
+    // Tests/events whose dates all fall in unassigned microcycles aren't offered; removed ones stay removed
+    setReviewedSubGoals(dedupedTests.filter(t => t.scheduledDates.length > 0 && !removedTestKeys.has(testKey(t))));
+    setReviewedEvents(dedupedEvents.filter(e => e.scheduledDates.length > 0 && !removedEventKeys.has(e.name)));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProgram, startDate, stableAthleteParams, selectedMicrocycleIds, selfReportedResults]);
 
   // Warn when the chosen start date is in the past
   const pastDateWarning = useMemo(() => {
@@ -663,7 +683,10 @@ export function AssignProgramDialog({
                           className="shrink-0 p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                           title="Don't assign this test"
                           aria-label={`Remove ${sg.testMethod}`}
-                          onClick={() => setReviewedSubGoals(prev => prev.filter((_, i) => i !== idx))}
+                          onClick={() => {
+                            setRemovedTestKeys(prev => new Set(prev).add(testKey(sg)));
+                            setReviewedSubGoals(prev => prev.filter((_, i) => i !== idx));
+                          }}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -794,7 +817,10 @@ export function AssignProgramDialog({
                           className="shrink-0 p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                           title="Don't assign this event"
                           aria-label={`Remove ${evt.name}`}
-                          onClick={() => setReviewedEvents(prev => prev.filter((_, i) => i !== idx))}
+                          onClick={() => {
+                            setRemovedEventKeys(prev => new Set(prev).add(evt.name));
+                            setReviewedEvents(prev => prev.filter((_, i) => i !== idx));
+                          }}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>

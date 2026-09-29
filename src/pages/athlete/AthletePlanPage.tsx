@@ -197,7 +197,7 @@ function DaySection({
     ? `You have ${testWord} today!`
     : isPast
       ? `${dayTests.length === 1 ? '1 test' : `${dayTests.length} tests`} on this day`
-      : `${dayTests.length === 1 ? '1 test' : `${dayTests.length} tests`} scheduled`;
+      : dayTests.length === 1 ? '1 scheduled test' : `${dayTests.length} scheduled tests`;
 
   const renderEventCard = (ev: AthleteCalendarEvent) => (
     <div

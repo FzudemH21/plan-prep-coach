@@ -1447,8 +1447,11 @@ export default function AthleteSessionPage() {
                           })
                         }
                       >
-                        <div className="text-left">
+                        <div className="text-left min-w-0">
                           <p className="font-semibold text-sm">{sec.name}</p>
+                          {sec.notes && (
+                            <p className="text-sm text-muted-foreground mt-0.5 whitespace-pre-line">{sec.notes}</p>
+                          )}
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {sec.exercises.length} exercise{sec.exercises.length !== 1 ? 's' : ''}
                           </p>
@@ -1480,17 +1483,6 @@ export default function AthleteSessionPage() {
                                       className="min-w-0 text-sm truncate text-left hover:text-primary active:opacity-60 transition-colors"
                                     >{ex.name}</button>
                                   )}
-                                  {/* Comment button */}
-                                  <button
-                                    onClick={() => {
-                                      setCommentTarget({ exerciseName: ex.name, sectionName: sec.name });
-                                      setCommentText('');
-                                    }}
-                                    className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60 transition-colors"
-                                    aria-label="Add comment"
-                                  >
-                                    <MessageSquare className="h-3.5 w-3.5" />
-                                  </button>
                                 </div>
                                 {ex.isCircuit ? (
                                   <span className="text-xs text-muted-foreground shrink-0">
@@ -1699,58 +1691,6 @@ export default function AthleteSessionPage() {
           target={detailTarget}
           onClose={() => setDetailTarget(null)}
         />
-
-        {/* Exercise/Section comment dialog */}
-        <Dialog open={!!commentTarget} onOpenChange={(o) => { if (!o) { setCommentTarget(null); setCommentText(''); } }}>
-          <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-base">Add Comment</DialogTitle>
-              {commentTarget && (
-                <DialogDescription className="text-xs">
-                  📎 {[commentTarget.exerciseName, commentTarget.sectionName, session.name, entry.date ? new Date(entry.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : undefined].filter(Boolean).join(' · ')}
-                </DialogDescription>
-              )}
-            </DialogHeader>
-            <div className="flex items-end gap-2 mt-1">
-              <Textarea
-                autoFocus
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                placeholder="Write your comment…"
-                rows={3}
-                className="flex-1 resize-none text-sm"
-              />
-              <Button
-                size="icon"
-                className="h-10 w-10 shrink-0"
-                disabled={!commentText.trim() || commentSending}
-                onClick={async () => {
-                  if (!commentText.trim() || commentSending || !commentTarget) return;
-                  setCommentSending(true);
-                  try {
-                    await chatSend(commentText, {
-                      messageType: 'exercise_comment',
-                      reference: {
-                        exerciseName: commentTarget.exerciseName,
-                        sectionName: commentTarget.sectionName,
-                        sessionName: session.name,
-                        date: entry.date,
-                      },
-                    });
-                    setCommentTarget(null);
-                    setCommentText('');
-                  } catch {
-                    // silent
-                  } finally {
-                    setCommentSending(false);
-                  }
-                }}
-              >
-                {commentSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
     );
   }
