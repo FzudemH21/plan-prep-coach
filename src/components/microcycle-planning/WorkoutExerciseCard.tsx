@@ -522,16 +522,46 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                         // First try stored unit in exercise parameters
                         let unit = exercise.parameters[`${param.name}_unit`] as string | undefined;
                         // If no unit stored, look up from toolbox (for quantitative params)
-                        if (!unit && toolboxParams) {
-                          const toolboxEntry = toolboxParams.find(tp => tp.parameterName === param.name);
-                          if (toolboxEntry && toolboxEntry.parameterType === 'quantitative' && toolboxEntry.options.length > 0) {
-                            unit = toolboxEntry.options[0];
-                          }
+                        const toolboxEntry = toolboxParams?.find(tp => tp.parameterName === param.name);
+                        const unitOptions = toolboxEntry?.parameterType === 'quantitative' ? toolboxEntry.options : [];
+                        if (!unit && unitOptions.length > 0) unit = unitOptions[0];
+                        if (param.isRestParameter) {
+                          return <TableHead key={param.name}>{`${param.name} [s]`}</TableHead>;
                         }
-                        const headerText = unit ? `${param.name} [${unit}]` : param.name;
-                        const displayHeader = param.isRestParameter ? `${param.name} [s]` : headerText;
+                        // Several units in the Training Toolbox → the unit is chosen here, for this
+                        // exercise (saved as its own override, like its values)
+                        if (unitOptions.length > 1) {
+                          return (
+                            <TableHead key={param.name}>
+                              <DropdownMenu modal={false}>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center gap-0.5 rounded px-1 -mx-1 hover:bg-muted hover:text-foreground transition-colors"
+                                    title="Change unit"
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                  >
+                                    {param.name} [{unit}]
+                                    <ChevronDown className="h-3 w-3 shrink-0" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start" className="z-[60] bg-popover">
+                                  {unitOptions.map(option => (
+                                    <DropdownMenuItem
+                                      key={option}
+                                      onClick={() => onUnitChange(param.name, option)}
+                                      className={option === unit ? 'font-semibold' : undefined}
+                                    >
+                                      {option}
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableHead>
+                          );
+                        }
                         return (
-                          <TableHead key={param.name}>{displayHeader}</TableHead>
+                          <TableHead key={param.name}>{unit ? `${param.name} [${unit}]` : param.name}</TableHead>
                         );
                       })}
                       <TableHead className="w-12"></TableHead>
