@@ -33,6 +33,7 @@ import {
   type UnfinishedWorkout, type WorkoutProgress,
 } from '@/utils/workoutProgress';
 import { previousValueFor, usePreviousExerciseValues, type PreviousExerciseValues } from '@/hooks/usePreviousExerciseValues';
+import { SectionNavigator, nextUnfinishedSection } from '@/components/workout/SectionNavigator';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1137,15 +1138,10 @@ export default function AthleteSessionPage() {
     const newCS = { ...completedSets, [exerciseId]: newDoneArr };
     setCompletedSets(newCS);
 
-    const isLastSection = sectionIdx === sections.length - 1;
     const restSecs = getRestSeconds(ex);
 
-    if (isSectionComplete(currentSection!, newCS)) {
-      if (isLastSection) {
-        startRest(restSecs, () => { setPhase('done'); setBorgSheetOpen(true); });
-      } else {
-        startRest(restSecs, () => { setSectionIdx(i => i + 1); setPhase('sectionIntro'); });
-      }
+    if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
+      continueAfterSection(newCS, restSecs);
     } else {
       // Mid-superset: all siblings haven't completed this set yet — skip rest entirely
       if (!isSupersetRoundComplete(exerciseId, setIdx, newCS, currentSection!)) {
@@ -1178,17 +1174,23 @@ export default function AthleteSessionPage() {
     const newCS = { ...completedSets, [exerciseId]: newDoneArr };
     setCompletedSets(newCS);
 
-    const isLastSection = sectionIdx === sections.length - 1;
-
-    if (isSectionComplete(currentSection!, newCS)) {
-      const restSecs = getRestSeconds(ex);
-      if (isLastSection) {
-        startRest(restSecs, () => { setPhase('done'); setBorgSheetOpen(true); });
-      } else {
-        startRest(restSecs, () => { setSectionIdx(i => i + 1); setPhase('sectionIntro'); });
-      }
+    if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
+      continueAfterSection(newCS, getRestSeconds(ex));
     }
     // If section not yet complete, just update completed sets — no rest needed
+  }
+
+  /** Per section: all its sets done */
+  function sectionCompleteFlags(cs: Record<string, number[]>): boolean[] {
+    return sections.map(s => isSectionComplete(s, cs, setCountOverrides));
+  }
+
+  /** The current section is done: rest, then the next unfinished section (sections may have been
+   *  skipped via the section navigation) — or finish when every section is done */
+  function continueAfterSection(cs: Record<string, number[]>, restSecs: number) {
+    const next = nextUnfinishedSection(sectionCompleteFlags(cs), sectionIdx);
+    if (next === null) startRest(restSecs, () => { setPhase('done'); setBorgSheetOpen(true); });
+    else startRest(restSecs, () => { setSectionIdx(next); setPhase('sectionIntro'); });
   }
 
   function handleSaved() {
@@ -1886,7 +1888,10 @@ export default function AthleteSessionPage() {
     const totalSetsDone = doneCounts.reduce((a, b) => a + b, 0);
     const totalSetsPlanned = sectionExercises.reduce((a, ex) => a + (setCountOverrides[ex.id] ?? getSetCount(ex)), 0);
     const sectionComplete = isSectionComplete(currentSection!, completedSets, setCountOverrides);
-    const isLastSection = sectionIdx === sections.length - 1;
+    const completeFlags = sectionCompleteFlags(completedSets);
+    // Where "Finish Section" leads: the next section not done yet; none left → "Finish Workout"
+    const nextSectionIdx = nextUnfinishedSection(completeFlags, sectionIdx);
+    const workoutComplete = completeFlags.every(Boolean);
 
     return (
       <div className="absolute inset-0 flex flex-col bg-background max-w-[480px] mx-auto overflow-hidden">
@@ -1921,16 +1926,14 @@ export default function AthleteSessionPage() {
         {/* Section progress bar */}
         <div className="px-4 pt-3 pb-2 shrink-0">
           {totalSections > 1 && (
-            <div className="flex justify-center gap-1.5 mb-2">
-              {sections.map((_, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    'rounded-full transition-all',
-                    i === sectionIdx ? 'w-4 h-2 bg-primary' : 'w-2 h-2 bg-muted-foreground/30',
-                  )}
-                />
-              ))}
+            // Move freely between sections — e.g. when an exercise isn't possible right now
+            <div className="-mt-2 mb-0.5">
+              <SectionNavigator
+                sectionNames={sections.map(s => s.name)}
+                complete={completeFlags}
+                currentIdx={sectionIdx}
+                onSelect={i => { setSectionIdx(i); setPhase('active'); }}
+              />
             </div>
           )}
           <p className="text-xs text-center text-muted-foreground">
@@ -2150,13 +2153,13 @@ export default function AthleteSessionPage() {
 
         {/* Bottom action bar — shows finish action; warns if sets are missing */}
         <div className="px-4 py-4 border-t bg-background shrink-0">
-          {isLastSection ? (
+          {nextSectionIdx === null ? (
             <Button
               className="w-full"
               size="lg"
-              variant={sectionComplete ? 'default' : 'outline'}
+              variant={workoutComplete ? 'default' : 'outline'}
               onClick={() => {
-                if (!sectionComplete) { setIncompleteWarning('workout'); return; }
+                if (!workoutComplete) { setIncompleteWarning('workout'); return; }
                 setPhase('done'); setBorgSheetOpen(true);
               }}
             >
@@ -2164,19 +2167,27 @@ export default function AthleteSessionPage() {
               Finish Workout
             </Button>
           ) : (
-            <Button
-              className="w-full"
-              size="lg"
-              variant={sectionComplete ? 'default' : 'outline'}
-              onClick={() => {
-                if (!sectionComplete) { setIncompleteWarning('section'); return; }
-                setSectionIdx(i => i + 1);
-                setPhase('sectionIntro');
-              }}
-            >
-              <Check className="h-4 w-4 mr-2" />
-              Finish Section
-            </Button>
+            <>
+              <Button
+                className="w-full"
+                size="lg"
+                variant={sectionComplete ? 'default' : 'outline'}
+                onClick={() => {
+                  if (!sectionComplete) { setIncompleteWarning('section'); return; }
+                  setSectionIdx(nextSectionIdx);
+                  setPhase('sectionIntro');
+                }}
+              >
+                <Check className="h-4 w-4 mr-2" />
+                Finish Section
+              </Button>
+              <button
+                onClick={() => setIncompleteWarning('workout')}
+                className="w-full min-h-[44px] mt-1 -mb-2 text-sm text-muted-foreground hover:text-foreground active:opacity-60 transition-colors"
+              >
+                End workout early
+              </button>
+            </>
           )}
         </div>
 
@@ -2232,10 +2243,11 @@ export default function AthleteSessionPage() {
                 onClick={() => {
                   const warn = incompleteWarning;
                   setIncompleteWarning(null);
-                  if (warn === 'workout') {
+                  const next = nextUnfinishedSection(sectionCompleteFlags(completedSets), sectionIdx);
+                  if (warn === 'workout' || next === null) {
                     setPhase('done'); setBorgSheetOpen(true);
                   } else {
-                    setSectionIdx(i => i + 1);
+                    setSectionIdx(next);
                     setPhase('sectionIntro');
                   }
                 }}

@@ -31,6 +31,7 @@ import {
   type UnfinishedWorkout, type WorkoutProgress,
 } from '@/utils/workoutProgress';
 import { previousValueFor, usePreviousExerciseValues, type PreviousExerciseValues } from '@/hooks/usePreviousExerciseValues';
+import { SectionNavigator, nextUnfinishedSection } from '@/components/workout/SectionNavigator';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -637,7 +638,8 @@ export default function CoachMobileSessionLoggingPage() {
   const [commentText, setCommentText] = useState('');
   const [commentSending, setCommentSending] = useState(false);
   const [sessionLock, setSessionLock] = useState<SessionLockInfo | null>(null);
-  const [incompleteWarning, setIncompleteWarning] = useState(false);
+  // Finishing with sets missing: the current 'section' (→ next unfinished one) or the whole 'workout'
+  const [incompleteWarning, setIncompleteWarning] = useState<'section' | 'workout' | null>(null);
 
   // ── Exercise swap ──────────────────────────────────────────────────────────
   interface ChainEntry { id: string; toExerciseId: string; toExerciseName: string; direction: 'progression' | 'regression'; level: number; notes: string | null; }
@@ -934,11 +936,9 @@ export default function CoachMobileSessionLoggingPage() {
     const newDoneArr = [...doneArr, setIdx];
     const newCS = { ...completedSets, [exerciseId]: newDoneArr };
     setCompletedSets(newCS);
-    const isLastSection = sectionIdx === sections.length - 1;
     const restSecs = getRestSeconds(ex);
-    if (isSectionComplete(currentSection!, newCS)) {
-      if (isLastSection) startRest(restSecs, () => { setPhase('done'); setBorgSheetOpen(true); });
-      else startRest(restSecs, () => { setSectionIdx(i => i + 1); setPhase('sectionIntro'); });
+    if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
+      continueAfterSection(newCS, restSecs);
     } else {
       if (!isSupersetRoundComplete(exerciseId, setIdx, newCS, currentSection!)) { setPhase('active'); return; }
       startRest(restSecs, () => setPhase('active'));
@@ -956,12 +956,22 @@ export default function CoachMobileSessionLoggingPage() {
     const newDoneArr = [...doneArr, ...undone];
     const newCS = { ...completedSets, [exerciseId]: newDoneArr };
     setCompletedSets(newCS);
-    const isLastSection = sectionIdx === sections.length - 1;
-    if (isSectionComplete(currentSection!, newCS)) {
-      const restSecs = getRestSeconds(ex);
-      if (isLastSection) startRest(restSecs, () => { setPhase('done'); setBorgSheetOpen(true); });
-      else startRest(restSecs, () => { setSectionIdx(i => i + 1); setPhase('sectionIntro'); });
+    if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
+      continueAfterSection(newCS, getRestSeconds(ex));
     }
+  }
+
+  /** Per section: all its sets done */
+  function sectionCompleteFlags(cs: Record<string, number[]>): boolean[] {
+    return sections.map(s => isSectionComplete(s, cs, setCountOverrides));
+  }
+
+  /** The current section is done: rest, then the next unfinished section (sections may have been
+   *  skipped via the section navigation) — or finish when every section is done */
+  function continueAfterSection(cs: Record<string, number[]>, restSecs: number) {
+    const next = nextUnfinishedSection(sectionCompleteFlags(cs), sectionIdx);
+    if (next === null) startRest(restSecs, () => { setPhase('done'); setBorgSheetOpen(true); });
+    else startRest(restSecs, () => { setSectionIdx(next); setPhase('sectionIntro'); });
   }
 
   function handleCompleteCircuitRound(exId: string, roundIdx: number) {
@@ -975,11 +985,8 @@ export default function CoachMobileSessionLoggingPage() {
     setCompletedSets(newCS);
     const ex = currentSection?.exercises.find(e => e.id === exId);
     if (!ex) return;
-    const isLastSection = sectionIdx === sections.length - 1;
-    if (isSectionComplete(currentSection!, newCS)) {
-      const restSecs = getRestSeconds(ex);
-      if (isLastSection) startRest(restSecs, () => { setPhase('done'); setBorgSheetOpen(true); });
-      else startRest(restSecs, () => { setSectionIdx(i => i + 1); setPhase('sectionIntro'); });
+    if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
+      continueAfterSection(newCS, getRestSeconds(ex));
     }
   }
 
@@ -1415,7 +1422,10 @@ export default function CoachMobileSessionLoggingPage() {
     const totalSetsDone = sectionExercises.reduce((a, ex) => a + (completedSets[ex.id] ?? []).length, 0);
     const totalSetsPlanned = sectionExercises.reduce((a, ex) => a + (setCountOverrides[ex.id] ?? getSetCount(ex)), 0);
     const sectionComplete = isSectionComplete(currentSection!, completedSets, setCountOverrides);
-    const isLastSection = sectionIdx === sections.length - 1;
+    const completeFlags = sectionCompleteFlags(completedSets);
+    // Where "Finish Section" leads: the next section not done yet; none left → "Finish Workout"
+    const nextSectionIdx = nextUnfinishedSection(completeFlags, sectionIdx);
+    const workoutComplete = completeFlags.every(Boolean);
 
     // Build superset groups
     const LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -1563,11 +1573,15 @@ export default function CoachMobileSessionLoggingPage() {
 
         <div className="px-4 pt-3 pb-2 shrink-0">
           {sections.length > 1 && (
-            <div className="flex justify-center gap-1.5 mb-2">
-              {sections.map((_, i) => (
-                <div key={i} className={cn('rounded-full transition-all',
-                  i === sectionIdx ? 'w-4 h-2 bg-primary' : 'w-2 h-2 bg-muted-foreground/30')} />
-              ))}
+            // Move freely between sections — e.g. when an exercise isn't possible right now
+            <div className="-mt-2 mb-0.5">
+              <SectionNavigator
+                sectionNames={sections.map(s => s.name)}
+                complete={completeFlags}
+                currentIdx={sectionIdx}
+                onSelect={i => { setSectionIdx(i); setPhase('active'); }}
+                labels={{ previous: t('coachMobile.sessionLogging.previousSection'), next: t('coachMobile.sessionLogging.nextSection') }}
+              />
             </div>
           )}
           <p className="text-xs text-center text-muted-foreground">{t('coachMobile.sessionLogging.setsDoneProgress', { done: totalSetsDone, total: totalSetsPlanned })}</p>
@@ -1620,44 +1634,52 @@ export default function CoachMobileSessionLoggingPage() {
 
         {/* Finish workout / section bottom bar */}
         <div className="px-4 py-4 border-t bg-background shrink-0">
-          {isLastSection ? (
+          {nextSectionIdx === null ? (
             <Button
               className="w-full" size="lg"
-              variant={sectionComplete ? 'default' : 'outline'}
+              variant={workoutComplete ? 'default' : 'outline'}
               onClick={() => {
-                if (!sectionComplete) { setIncompleteWarning(true); return; }
+                if (!workoutComplete) { setIncompleteWarning('workout'); return; }
                 setPhase('done'); setBorgSheetOpen(true);
               }}
             >
               <Check className="h-4 w-4 mr-2" /> {t('coachMobile.sessionLogging.finishWorkout')}
             </Button>
           ) : (
-            <Button
-              className="w-full" size="lg"
-              variant={sectionComplete ? 'default' : 'outline'}
-              onClick={() => {
-                if (!sectionComplete) { setIncompleteWarning(true); return; }
-                setSectionIdx(i => i + 1);
-                setPhase('sectionIntro');
-              }}
-            >
-              <Check className="h-4 w-4 mr-2" /> {t('coachMobile.sessionLogging.finishSection')}
-            </Button>
+            <>
+              <Button
+                className="w-full" size="lg"
+                variant={sectionComplete ? 'default' : 'outline'}
+                onClick={() => {
+                  if (!sectionComplete) { setIncompleteWarning('section'); return; }
+                  setSectionIdx(nextSectionIdx);
+                  setPhase('sectionIntro');
+                }}
+              >
+                <Check className="h-4 w-4 mr-2" /> {t('coachMobile.sessionLogging.finishSection')}
+              </Button>
+              <button onClick={() => setIncompleteWarning('workout')}
+                className="w-full min-h-[44px] mt-1 -mb-2 text-sm text-muted-foreground hover:text-foreground active:opacity-60 transition-colors">
+                {t('coachMobile.sessionLogging.endWorkoutEarly')}
+              </button>
+            </>
           )}
         </div>
 
-        <AlertDialog open={incompleteWarning} onOpenChange={o => { if (!o) setIncompleteWarning(false); }}>
+        <AlertDialog open={incompleteWarning !== null} onOpenChange={o => { if (!o) setIncompleteWarning(null); }}>
           <AlertDialogContent className="sm:max-w-[360px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
             <AlertDialogHeader>
-              <AlertDialogTitle>{isLastSection ? t('coachMobile.sessionLogging.finishWorkoutWarningTitle') : t('coachMobile.sessionLogging.finishSectionWarningTitle')}</AlertDialogTitle>
+              <AlertDialogTitle>{incompleteWarning === 'workout' ? t('coachMobile.sessionLogging.finishWorkoutWarningTitle') : t('coachMobile.sessionLogging.finishSectionWarningTitle')}</AlertDialogTitle>
               <AlertDialogDescription>{t('coachMobile.sessionLogging.incompleteWarningDesc')}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>{t('coachMobile.sessionLogging.goBack')}</AlertDialogCancel>
               <AlertDialogAction onClick={() => {
-                setIncompleteWarning(false);
-                if (isLastSection) { setPhase('done'); setBorgSheetOpen(true); }
-                else { setSectionIdx(i => i + 1); setPhase('sectionIntro'); }
+                const warn = incompleteWarning;
+                setIncompleteWarning(null);
+                const next = nextUnfinishedSection(sectionCompleteFlags(completedSets), sectionIdx);
+                if (warn === 'workout' || next === null) { setPhase('done'); setBorgSheetOpen(true); }
+                else { setSectionIdx(next); setPhase('sectionIntro'); }
               }}>{t('coachMobile.sessionLogging.finishAnyway')}</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
