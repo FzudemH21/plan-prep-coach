@@ -488,20 +488,32 @@ export default function CoachMobileAthleteProfilePage() {
   // Fetch already-entered test results for this athlete (keyed by parameterId, most recent wins)
   useEffect(() => {
     if (!connection?.id) return;
-    supabase
-      .from('athlete_test_results')
-      .select('parameter_id, value, recorded_at')
-      .eq('athlete_connection_id', connection.id)
-      .order('recorded_at', { ascending: false })
-      .then(({ data }) => {
-        const map = new Map<string, string>();
-        for (const row of (data ?? []) as { parameter_id: string; value: string; recorded_at: string }[]) {
-          const date = row.recorded_at.slice(0, 10);
-          const key = `${row.parameter_id}:${date}`;
-          if (!map.has(key)) map.set(key, row.value);
-        }
-        setExistingTestResults(map);
-      });
+    (async () => {
+      // A result counts for the test it was entered for (scheduled_for); older results / before
+      // the migration: for the test on their recorded date
+      type Row = { parameter_id: string; value: string; recorded_at: string; scheduled_for?: string | null };
+      const full = await supabase
+        .from('athlete_test_results')
+        .select('parameter_id, value, recorded_at, scheduled_for')
+        .eq('athlete_connection_id', connection.id)
+        .order('recorded_at', { ascending: false });
+      let rows = full.data as Row[] | null;
+      if (full.error) {
+        const basic = await supabase
+          .from('athlete_test_results')
+          .select('parameter_id, value, recorded_at')
+          .eq('athlete_connection_id', connection.id)
+          .order('recorded_at', { ascending: false });
+        rows = basic.data as Row[] | null;
+      }
+      const map = new Map<string, string>();
+      for (const row of rows ?? []) {
+        const date = row.scheduled_for ?? row.recorded_at.slice(0, 10);
+        const key = `${row.parameter_id}:${date}`;
+        if (!map.has(key)) map.set(key, row.value);
+      }
+      setExistingTestResults(map);
+    })();
   }, [connection?.id]);
 
   // ── Event handlers (tests & events) ───────────────────────────────────────────
@@ -575,18 +587,21 @@ export default function CoachMobileAthleteProfilePage() {
     setTestResultSaving(true);
     try {
       const recordedAt = new Date(`${date}T12:00:00`).toISOString();
-      const { error } = await supabase.from('athlete_test_results').insert({
+      const baseRow = {
         athlete_connection_id: connection.id,
         parameter_id: event.parameterId,
         value: testResultValue.trim(),
         recorded_at: recordedAt,
         note: testResultNote.trim() || null,
-      });
+      };
+      // Linked to the scheduled test (column from migration 20260929_…; without it: plain insert)
+      let { error } = await supabase.from('athlete_test_results').insert({ ...baseRow, scheduled_for: testResultTarget.date });
+      if (error) ({ error } = await supabase.from('athlete_test_results').insert(baseRow));
       if (error) {
         toast({ title: 'Failed to save result', description: error.message, variant: 'destructive' });
         return;
       }
-      setExistingTestResults(prev => new Map(prev).set(`${event.parameterId!}:${date}`, testResultValue.trim()));
+      setExistingTestResults(prev => new Map(prev).set(`${event.parameterId!}:${testResultTarget.date}`, testResultValue.trim()));
       setTestResultSaved(true);
       setTimeout(() => {
         setTestResultTarget(null);

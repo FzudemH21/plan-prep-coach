@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dumbbell, ChevronRight, ChevronLeft, ChevronDown, Activity, CalendarDays, CheckCircle2, GripVertical, ClipboardCheck, BedDouble, Check, Info } from 'lucide-react';
+import { Dumbbell, ChevronRight, ChevronLeft, ChevronDown, Activity, CalendarDays, CheckCircle2, GripVertical, ClipboardCheck, BedDouble, Check, Info, Pencil } from 'lucide-react';
 import { TestDetailsDialog } from '@/components/athlete-app/TestDetailsDialog';
 import { TestResultDialog, type TestResultTarget } from '@/components/athlete-app/TestResultDialog';
-import { useAthleteTestResults } from '@/hooks/useAthleteTestResults';
+import { useAthleteTestResults, type TestResultRow } from '@/hooks/useAthleteTestResults';
 import { Card, CardContent } from '@/components/ui/card';
 import { DragDropContext, Droppable, Draggable, DropResult, DraggableProvidedDragHandleProps } from '@hello-pangea/dnd';
 import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog, SCHEDULE_PAST_DAYS } from '@/hooks/useAthleteApp';
@@ -150,7 +150,7 @@ function DaySection({
   getSessionLog,
   canMove,
   onEnterTestResult,
-  existingTestResults,
+  resultFor,
   lastValueLabelFor,
   onShowTestDetails,
 }: {
@@ -160,7 +160,8 @@ function DaySection({
   getSessionLog: (date: string, sessionId: string) => SessionLog | null;
   canMove?: boolean;
   onEnterTestResult: (ev: AthleteCalendarEvent, date: string) => void;
-  existingTestResults: Map<string, string>;
+  /** The result entered for a scheduled test (null = none yet) */
+  resultFor: (parameterId: string | undefined, scheduledDate: string) => TestResultRow | null;
   /** "8.5 s · Jun 15" — the athlete's latest value for a parameter, if any */
   lastValueLabelFor: (parameterId: string | undefined, unit?: string) => string | null;
   onShowTestDetails: (ev: AthleteCalendarEvent) => void;
@@ -175,7 +176,7 @@ function DaySection({
   const dayEvents = (entry?.events ?? []).filter(ev => ev.type !== 'test');
   const [testsOpen, setTestsOpen] = useState(false);
   const testsWithResult = dayTests.filter(ev =>
-    ev.parameterId && existingTestResults.get(`${ev.parameterId}:${dateStr}`) !== undefined
+    resultFor(ev.parameterId, dateStr) !== null
   ).length;
   const testWord = dayTests.length === 1 ? 'a test' : `${dayTests.length} tests`;
   const testsLabel = isToday
@@ -233,13 +234,23 @@ function DaySection({
       )}
       {/* Enter result / locked result */}
       {ev.type === 'test' && ev.parameterId && (() => {
-        const resultValue = existingTestResults.get(`${ev.parameterId}:${dateStr}`);
-        if (resultValue !== undefined) {
+        const result = resultFor(ev.parameterId, dateStr);
+        if (result) {
+          // Done — the result with a way to change it
           return (
-            <div className="mt-2 flex items-center gap-1.5 text-xs text-green-700 font-medium">
-              <Check className="h-3 w-3 shrink-0" />
-              Result: {resultValue}
-            </div>
+          <div className="mt-2 flex items-center gap-2">
+            <span className="flex-1 min-w-0 flex items-center gap-1.5 text-sm text-green-700 font-medium">
+              <Check className="h-4 w-4 shrink-0" />
+              <span className="truncate">Result: {result.value}{ev.unit ? ` ${ev.unit}` : ''}</span>
+            </span>
+            <button
+              onClick={() => onEnterTestResult(ev, dateStr)}
+              className="shrink-0 min-h-[44px] flex items-center gap-1 px-3 rounded-md text-sm font-medium text-amber-800 border border-amber-200 bg-white hover:bg-amber-50 active:bg-amber-100"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
+            </button>
+          </div>
           );
         }
         // Also for past days — a result can be entered late (the date is set in the dialog)
@@ -378,7 +389,7 @@ function DaySection({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function AthletePlanPage() {
-  const { connection, schedule, loading, error, getSessionLog, moveSession, submitTestResult } = useAthleteApp();
+  const { connection, schedule, loading, error, getSessionLog, moveSession, submitTestResult, updateTestResult } = useAthleteApp();
 
   const _now = new Date();
   const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
@@ -399,7 +410,7 @@ export default function AthletePlanPage() {
   const canMove = connection?.allowRearrangeWorkouts ?? false;
 
   // Test results (which tests have a result, latest values) and the result / details dialogs
-  const { resultsByDate: existingTestResults, lastValueLabelFor, markSaved } = useAthleteTestResults(connection);
+  const { resultFor, lastValueLabelFor, markSaved } = useAthleteTestResults(connection);
   const [testTarget, setTestTarget] = useState<TestResultTarget | null>(null);
   const [detailsEvent, setDetailsEvent] = useState<AthleteCalendarEvent | null>(null);
   const openTestSheet = (ev: AthleteCalendarEvent, date: string) => setTestTarget({ ev, date });
@@ -496,7 +507,7 @@ export default function AthletePlanPage() {
                   getSessionLog={getSessionLog}
                   canMove={canMove}
                   onEnterTestResult={openTestSheet}
-                  existingTestResults={existingTestResults}
+                  resultFor={resultFor}
                   lastValueLabelFor={lastValueLabelFor}
                   onShowTestDetails={setDetailsEvent}
                 />
@@ -516,9 +527,11 @@ export default function AthletePlanPage() {
       {/* Test result entry */}
       <TestResultDialog
         target={testTarget}
+        existing={testTarget ? resultFor(testTarget.ev.parameterId, testTarget.date) : null}
         connectionId={connection?.id}
         lastValueLabel={testTarget ? lastValueLabelFor(testTarget.ev.parameterId, testTarget.ev.unit) : null}
         submitTestResult={submitTestResult}
+        updateTestResult={updateTestResult}
         onSaved={markSaved}
         onClose={() => setTestTarget(null)}
       />

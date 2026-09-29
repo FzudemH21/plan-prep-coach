@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Paperclip, X } from 'lucide-react';
 import type { AthleteCalendarEvent } from '@/hooks/useAthleteApp';
 import { MAX_ATTACHMENT_BYTES, uploadTestAttachments } from '@/utils/athleteUploads';
+import type { TestResultRow } from '@/hooks/useAthleteTestResults';
 
 const todayStr = () => {
   const d = new Date();
@@ -24,17 +25,22 @@ export interface TestResultTarget {
 
 export function TestResultDialog({
   target,
+  existing,
   connectionId,
   lastValueLabel,
   submitTestResult,
+  updateTestResult,
   onSaved,
   onClose,
 }: {
   target: TestResultTarget | null;
+  /** The result already entered for this test — the dialog then edits it */
+  existing: TestResultRow | null;
   connectionId: string | undefined;
   lastValueLabel: string | null;
-  submitTestResult: (parameterId: string, value: string, recordedAt: string, note?: string, attachments?: string[]) => Promise<void>;
-  onSaved: (parameterId: string, date: string, value: string, recordedAt: string) => void;
+  submitTestResult: (parameterId: string, value: string, recordedAt: string, note?: string, attachments?: string[], scheduledFor?: string) => Promise<{ id: string | null; attachmentsSaved: boolean }>;
+  updateTestResult: (id: string, fields: { value: string; recordedAt: string; note?: string; attachments?: string[] }) => Promise<void>;
+  onSaved: (row: TestResultRow) => void;
   onClose: () => void;
 }) {
   const [value, setValue] = useState('');
@@ -43,18 +49,20 @@ export function TestResultDialog({
   const [date, setDate] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Fresh form for every test opened
+  // Fresh form for every test opened (pre-filled when editing)
   useEffect(() => {
-    setValue('');
-    setNote('');
-    setDate(target?.date ?? '');
+    setValue(existing?.value ?? '');
+    setNote(existing?.note ?? '');
+    setDate(existing ? existing.recordedAt.slice(0, 10) : target?.date ?? '');
     setFiles([]);
     setFileError(null);
+    setSaveError(null);
     setSaved(false);
-  }, [target?.ev.id, target?.date]);
+  }, [target?.ev.id, target?.date, existing?.id]);
 
   const ev = target?.ev;
 
@@ -63,29 +71,45 @@ export function TestResultDialog({
     const parameterId = target.ev.parameterId;
     const resultDate = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : target.date;
     setSaving(true);
+    setSaveError(null);
     try {
       const recordedAt = new Date(`${resultDate}T12:00:00`).toISOString();
       // Photos / videos first; a failed upload doesn't block saving the result itself
-      let attachments: string[] = [];
+      let uploaded: string[] = [];
       let failed: string[] = [];
       if (files.length > 0 && connectionId) {
-        ({ paths: attachments, failed } = await uploadTestAttachments(connectionId, parameterId, files));
+        ({ paths: uploaded, failed } = await uploadTestAttachments(connectionId, parameterId, files));
       }
-      try {
-        await submitTestResult(parameterId, value.trim(), recordedAt, note.trim() || undefined, attachments);
-      } catch (err) {
-        if (attachments.length === 0) throw err;
-        // Attachments not set up on the server yet — keep the result, without them
-        await submitTestResult(parameterId, value.trim(), recordedAt, note.trim() || undefined);
-        failed = files.map(f => f.name);
+
+      let row: TestResultRow;
+      if (existing) {
+        const attachments = uploaded.length > 0 ? [...existing.attachments, ...uploaded] : undefined;
+        await updateTestResult(existing.id, { value: value.trim(), recordedAt, note: note.trim() || undefined, attachments });
+        row = { ...existing, value: value.trim(), recordedAt, note: note.trim() || null, attachments: attachments ?? existing.attachments };
+      } else {
+        const { id, attachmentsSaved } = await submitTestResult(
+          parameterId, value.trim(), recordedAt, note.trim() || undefined, uploaded, target.date,
+        );
+        if (uploaded.length > 0 && !attachmentsSaved) failed = files.map(f => f.name);
+        row = {
+          id: id ?? `local-${Date.now()}`,
+          parameterId,
+          value: value.trim(),
+          recordedAt,
+          note: note.trim() || null,
+          attachments: attachmentsSaved ? uploaded : [],
+          scheduledFor: target.date,
+        };
       }
-      onSaved(parameterId, resultDate, value.trim(), recordedAt);
+      onSaved(row);
       setSaved(true);
       if (failed.length > 0) {
         setFileError(`Result saved, but ${failed.length === 1 ? 'this file' : 'these files'} couldn't be attached: ${failed.join(', ')}`);
       } else {
         setTimeout(onClose, 1200);
       }
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not save the result. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -95,7 +119,7 @@ export function TestResultDialog({
     <Dialog open={!!target} onOpenChange={open => { if (!open) onClose(); }}>
       <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-base">{ev?.title ?? 'Enter result'}</DialogTitle>
+          <DialogTitle className="text-base">{existing ? `Edit result · ${ev?.title ?? ''}` : ev?.title ?? 'Enter result'}</DialogTitle>
           {(ev?.targetValue || lastValueLabel) && (
             <DialogDescription className="space-y-0.5">
               {ev?.targetValue && (
@@ -197,8 +221,9 @@ export function TestResultDialog({
             disabled={!value.trim() || saving || saved}
             onClick={handleSave}
           >
-            {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save result'}
+            {saved ? '✓ Saved' : saving ? 'Saving…' : existing ? 'Save changes' : 'Save result'}
           </Button>
+          {saveError && <p className="text-xs text-destructive">{saveError}</p>}
         </div>
       </DialogContent>
     </Dialog>

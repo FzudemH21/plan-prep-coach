@@ -457,20 +457,48 @@ export function useAthleteApp() {
     recordedAt: string,
     note?: string,
     attachments?: string[],
-  ) => {
-    if (!connection) return;
-    const row = {
+    scheduledFor?: string,
+  ): Promise<{ id: string | null; attachmentsSaved: boolean }> => {
+    if (!connection) return { id: null, attachmentsSaved: false };
+    const base = {
       athlete_connection_id: connection.id,
       parameter_id: parameterId,
       value,
       recorded_at: recordedAt,
       note: note ?? null,
     };
-    const { error } = await supabase
-      .from('athlete_test_results')
-      .insert(attachments && attachments.length > 0 ? { ...row, attachments } : row);
-    if (error) throw error;
+    const hasFiles = !!attachments && attachments.length > 0;
+    // Newest columns first; drop the optional ones the database doesn't have yet (migrations
+    // 20260929_test_results_scheduled_for_and_edit / 20260928_athlete_test_attachments not run)
+    const attempts: Array<{ row: Record<string, unknown>; files: boolean }> = [
+      { row: { ...base, ...(hasFiles ? { attachments } : {}), ...(scheduledFor ? { scheduled_for: scheduledFor } : {}) }, files: hasFiles },
+      ...(scheduledFor ? [{ row: { ...base, ...(hasFiles ? { attachments } : {}) }, files: hasFiles }] : []),
+      ...(hasFiles ? [{ row: base, files: false }] : []),
+    ];
+    let lastError: unknown = null;
+    for (const attempt of attempts) {
+      const { data, error } = await supabase.from('athlete_test_results').insert(attempt.row).select('id').single();
+      if (!error) return { id: (data as { id: string } | null)?.id ?? null, attachmentsSaved: attempt.files };
+      lastError = error;
+    }
+    throw lastError;
   }, [connection]);
 
-  return { connection, schedule, sessionLogs, loading, error, isAthlete, getTodayEntry, getUpcomingDays, updateProfile, getSessionLog, refetchLogs, refetchSchedule, moveSession, submitTestResult };
+  /** Change an entered result (needs the edit policy from migration 20260929_…) */
+  const updateTestResult = useCallback(async (
+    id: string,
+    fields: { value: string; recordedAt: string; note?: string; attachments?: string[] },
+  ) => {
+    const row: Record<string, unknown> = {
+      value: fields.value,
+      recorded_at: fields.recordedAt,
+      note: fields.note ?? null,
+    };
+    if (fields.attachments) row.attachments = fields.attachments;
+    const { data, error } = await supabase.from('athlete_test_results').update(row).eq('id', id).select('id');
+    if (error) throw error;
+    if (!data || data.length === 0) throw new Error("This result can't be edited yet - please ask your coach to run the latest database update.");
+  }, []);
+
+  return { connection, schedule, sessionLogs, loading, error, isAthlete, getTodayEntry, getUpcomingDays, updateProfile, getSessionLog, refetchLogs, refetchSchedule, moveSession, submitTestResult, updateTestResult };
 }

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { BedDouble, Dumbbell, ChevronRight, ChevronDown, Activity, CalendarDays, CheckCircle2, ClipboardCheck, Check, Info } from 'lucide-react';
+import { BedDouble, Dumbbell, ChevronRight, ChevronDown, Activity, CalendarDays, CheckCircle2, ClipboardCheck, Check, Info, Pencil } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog } from '@/hooks/useAthleteApp';
-import { useAthleteTestResults } from '@/hooks/useAthleteTestResults';
+import { useAthleteTestResults, type TestResultRow } from '@/hooks/useAthleteTestResults';
 import { TestResultDialog, type TestResultTarget } from '@/components/athlete-app/TestResultDialog';
 import { TestDetailsDialog } from '@/components/athlete-app/TestDetailsDialog';
 import { cn } from '@/lib/utils';
@@ -153,8 +153,8 @@ function TestCard({
 }: {
   ev: AthleteCalendarEvent;
   lastValue: string | null;
-  /** Result already entered for this test today */
-  result?: string;
+  /** Result already entered for this test (null = none yet) */
+  result: TestResultRow | null;
   onEnterResult?: (ev: AthleteCalendarEvent) => void;
   onShowDetails: (ev: AthleteCalendarEvent) => void;
 }) {
@@ -190,10 +190,21 @@ function TestCard({
           Test details
         </button>
       )}
-      {result !== undefined ? (
-        <div className="mt-2.5 flex items-center gap-1.5 text-sm text-green-700 font-medium">
-          <Check className="h-4 w-4 shrink-0" />
-          Result: {result}
+      {result ? (
+        <div className="mt-2.5 flex items-center gap-2">
+          <span className="flex-1 min-w-0 flex items-center gap-1.5 text-sm text-green-700 font-medium">
+            <Check className="h-4 w-4 shrink-0" />
+            <span className="truncate">Result: {result.value}{ev.unit ? ` ${ev.unit}` : ''}</span>
+          </span>
+          {onEnterResult && (
+            <button
+              onClick={() => onEnterResult(ev)}
+              className="shrink-0 min-h-[44px] flex items-center gap-1 px-3 rounded-md text-sm font-medium text-amber-800 border border-amber-200 bg-white hover:bg-amber-50 active:bg-amber-100"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
+            </button>
+          )}
         </div>
       ) : ev.parameterId && onEnterResult ? (
         <button
@@ -230,7 +241,7 @@ function TodaySchedule({
   entry,
   today,
   getSessionLog,
-  resultsByDate,
+  resultFor,
   lastValueLabelFor,
   onEnterTestResult,
   onShowTestDetails,
@@ -238,7 +249,7 @@ function TodaySchedule({
   entry: AthleteScheduleEntry | null;
   today: string; // yyyy-MM-dd
   getSessionLog: (date: string, sessionId: string) => SessionLog | null;
-  resultsByDate: Map<string, string>;
+  resultFor: (parameterId: string | undefined, scheduledDate: string) => TestResultRow | null;
   lastValueLabelFor: (parameterId: string | undefined, unit?: string) => string | null;
   onEnterTestResult: (ev: AthleteCalendarEvent) => void;
   onShowTestDetails: (ev: AthleteCalendarEvent) => void;
@@ -250,14 +261,14 @@ function TodaySchedule({
   const coachNote = !hasSessions && tests.length === 0 ? (events.find(e => e.notes)?.notes ?? null) : null;
 
   const [testsOpen, setTestsOpen] = useState(false);
-  const testsDone = tests.filter(ev => ev.parameterId && resultsByDate.get(`${ev.parameterId}:${today}`) !== undefined).length;
+  const testsDone = tests.filter(ev => resultFor(ev.parameterId, today) !== null).length;
 
   const testCards = tests.map(ev => (
     <TestCard
       key={ev.id}
       ev={ev}
       lastValue={lastValueLabelFor(ev.parameterId, ev.unit)}
-      result={ev.parameterId ? resultsByDate.get(`${ev.parameterId}:${today}`) : undefined}
+      result={resultFor(ev.parameterId, today)}
       onEnterResult={onEnterTestResult}
       onShowDetails={onShowTestDetails}
     />
@@ -462,9 +473,9 @@ function UpcomingStrip({ schedule, today }: { schedule: AthleteScheduleEntry[]; 
 const COMING_UP_DAYS = 7;
 
 export default function AthleteTodayPage() {
-  const { connection, schedule, loading, error, getTodayEntry, getSessionLog, submitTestResult } = useAthleteApp();
+  const { connection, schedule, loading, error, getTodayEntry, getSessionLog, submitTestResult, updateTestResult } = useAthleteApp();
   const { todayCheckin, openCheckin } = useOutletContext<AthleteLayoutContext>();
-  const { resultsByDate, lastValueLabelFor, markSaved } = useAthleteTestResults(connection);
+  const { resultFor, lastValueLabelFor, markSaved } = useAthleteTestResults(connection);
   const [testTarget, setTestTarget] = useState<TestResultTarget | null>(null);
   const [detailsEvent, setDetailsEvent] = useState<AthleteCalendarEvent | null>(null);
 
@@ -506,9 +517,11 @@ export default function AthleteTodayPage() {
     <>
       <TestResultDialog
         target={testTarget}
+        existing={testTarget ? resultFor(testTarget.ev.parameterId, testTarget.date) : null}
         connectionId={connection?.id}
         lastValueLabel={testTarget ? lastValueLabelFor(testTarget.ev.parameterId, testTarget.ev.unit) : null}
         submitTestResult={submitTestResult}
+        updateTestResult={updateTestResult}
         onSaved={markSaved}
         onClose={() => setTestTarget(null)}
       />
@@ -542,7 +555,7 @@ export default function AthleteTodayPage() {
           entry={todayEntry}
           today={today}
           getSessionLog={getSessionLog}
-          resultsByDate={resultsByDate}
+          resultFor={resultFor}
           lastValueLabelFor={lastValueLabelFor}
           onEnterTestResult={ev => setTestTarget({ ev, date: today })}
           onShowTestDetails={setDetailsEvent}
