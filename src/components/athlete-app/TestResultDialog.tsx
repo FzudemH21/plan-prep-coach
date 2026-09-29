@@ -11,6 +11,11 @@ import { Paperclip, X } from 'lucide-react';
 import type { AthleteCalendarEvent } from '@/hooks/useAthleteApp';
 import { MAX_ATTACHMENT_BYTES, uploadTestAttachments } from '@/utils/athleteUploads';
 
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 export interface TestResultTarget {
   ev: AthleteCalendarEvent;
   /** yyyy-MM-dd the test is scheduled on */
@@ -34,6 +39,8 @@ export function TestResultDialog({
 }) {
   const [value, setValue] = useState('');
   const [note, setNote] = useState('');
+  // Date the test was done — the scheduled day by default, changeable if entered late / done another day
+  const [date, setDate] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -43,6 +50,7 @@ export function TestResultDialog({
   useEffect(() => {
     setValue('');
     setNote('');
+    setDate(target?.date ?? '');
     setFiles([]);
     setFileError(null);
     setSaved(false);
@@ -53,9 +61,10 @@ export function TestResultDialog({
   const handleSave = async () => {
     if (!target || !value.trim() || !target.ev.parameterId) return;
     const parameterId = target.ev.parameterId;
+    const resultDate = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : target.date;
     setSaving(true);
     try {
-      const recordedAt = new Date(`${target.date}T12:00:00`).toISOString();
+      const recordedAt = new Date(`${resultDate}T12:00:00`).toISOString();
       // Photos / videos first; a failed upload doesn't block saving the result itself
       let attachments: string[] = [];
       let failed: string[] = [];
@@ -70,7 +79,7 @@ export function TestResultDialog({
         await submitTestResult(parameterId, value.trim(), recordedAt, note.trim() || undefined);
         failed = files.map(f => f.name);
       }
-      onSaved(parameterId, target.date, value.trim(), recordedAt);
+      onSaved(parameterId, resultDate, value.trim(), recordedAt);
       setSaved(true);
       if (failed.length > 0) {
         setFileError(`Result saved, but ${failed.length === 1 ? 'this file' : 'these files'} couldn't be attached: ${failed.join(', ')}`);
@@ -110,6 +119,20 @@ export function TestResultDialog({
               onChange={e => setValue(e.target.value)}
               className="text-base h-11"
               autoFocus
+            />
+          </div>
+
+          <div>
+            <label htmlFor="test-result-date" className="text-sm font-medium mb-1.5 block text-muted-foreground">
+              Date of the test
+            </label>
+            <Input
+              id="test-result-date"
+              type="date"
+              value={date}
+              max={todayStr()}
+              onChange={e => setDate(e.target.value)}
+              className="text-base h-11"
             />
           </div>
 

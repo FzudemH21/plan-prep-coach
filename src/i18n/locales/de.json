@@ -421,6 +421,7 @@
       "goal": "Ziel: {{value}}",
       "resultSaved": "Ergebnis gespeichert!",
       "resultValue": "Ergebniswert",
+      "testDate": "Datum des Tests",
       "resultPlaceholder": "z. B. 8.2",
       "noteOptional": "Notiz (optional)",
       "noteContextPlaceholder": "Kontext oder Bedingungen hinzufügen…",

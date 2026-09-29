@@ -242,18 +242,16 @@ function DaySection({
             </div>
           );
         }
-        if (!isPast) {
-          return (
-            <button
-              onClick={() => onEnterTestResult(ev, dateStr)}
-              className="mt-2 w-full min-h-[44px] flex items-center justify-center gap-1.5 text-sm font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 active:bg-amber-300 rounded-md py-2 transition-colors"
-            >
-              <ClipboardCheck className="h-4 w-4" />
-              Enter result
-            </button>
-          );
-        }
-        return null;
+        // Also for past days — a result can be entered late (the date is set in the dialog)
+        return (
+          <button
+            onClick={() => onEnterTestResult(ev, dateStr)}
+            className="mt-2 w-full min-h-[44px] flex items-center justify-center gap-1.5 text-sm font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 active:bg-amber-300 rounded-md py-2 transition-colors"
+          >
+            <ClipboardCheck className="h-4 w-4" />
+            Enter result
+          </button>
+        );
       })()}
     </div>
   );

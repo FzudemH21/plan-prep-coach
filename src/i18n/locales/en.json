@@ -421,6 +421,7 @@
       "goal": "Goal: {{value}}",
       "resultSaved": "Result saved!",
       "resultValue": "Result value",
+      "testDate": "Date of the test",
       "resultPlaceholder": "e.g. 8.2",
       "noteOptional": "Note (optional)",
       "noteContextPlaceholder": "Add context or conditions…",

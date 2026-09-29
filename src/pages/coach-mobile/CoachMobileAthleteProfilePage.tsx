@@ -478,6 +478,7 @@ export default function CoachMobileAthleteProfilePage() {
   // Tests & events
   const [eventDialogDate, setEventDialogDate] = useState<string | null>(null);
   const [testResultTarget, setTestResultTarget] = useState<{ event: AthleteCalendarEvent; date: string } | null>(null);
+  const [testResultDate, setTestResultDate] = useState('');
   const [testResultValue, setTestResultValue] = useState('');
   const [testResultNote, setTestResultNote] = useState('');
   const [testResultSaving, setTestResultSaving] = useState(false);
@@ -567,7 +568,9 @@ export default function CoachMobileAthleteProfilePage() {
 
   const handleSubmitTestResult = useCallback(async () => {
     if (!testResultTarget || !testResultValue.trim() || !connection) return;
-    const { event, date } = testResultTarget;
+    const { event } = testResultTarget;
+    // The date entered in the sheet (defaults to the scheduled day)
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(testResultDate) ? testResultDate : testResultTarget.date;
     if (!event.parameterId) return;
     setTestResultSaving(true);
     try {
@@ -594,7 +597,7 @@ export default function CoachMobileAthleteProfilePage() {
     } finally {
       setTestResultSaving(false);
     }
-  }, [testResultTarget, testResultValue, testResultNote, connection]);
+  }, [testResultTarget, testResultValue, testResultNote, testResultDate, connection]);
 
   // Intensity levels for picker
   const intensityLevels = Object.entries(INTENSITY_CONFIG)
@@ -1475,6 +1478,7 @@ export default function CoachMobileAthleteProfilePage() {
                                         onClick={e => {
                                           e.stopPropagation();
                                           setTestResultTarget({ event: ev, date: dateStr });
+                                          setTestResultDate(dateStr);
                                           setTestResultValue('');
                                           setTestResultNote('');
                                         }}
@@ -1914,6 +1918,17 @@ export default function CoachMobileAthleteProfilePage() {
                     placeholder={t('coachMobile.athleteProfile.resultPlaceholder')}
                     autoFocus
                     onKeyDown={e => { if (e.key === 'Enter' && testResultValue.trim()) handleSubmitTestResult(); }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="coach-test-result-date" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    {t('coachMobile.athleteProfile.testDate')}
+                  </label>
+                  <Input
+                    id="coach-test-result-date"
+                    type="date"
+                    value={testResultDate}
+                    onChange={e => setTestResultDate(e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
