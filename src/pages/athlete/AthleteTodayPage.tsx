@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BedDouble, Dumbbell, ChevronRight, ChevronDown, Activity, CalendarDays, CheckCircle2, ClipboardCheck, Check, Info, Pencil } from 'lucide-react';
+import { BedDouble, Dumbbell, ChevronRight, ChevronDown, Activity, CalendarDays, CheckCircle2, ClipboardCheck, Check, Info, Pencil, Pause } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog } from '@/hooks/useAthleteApp';
 import { useAthleteTestResults, type TestResultRow } from '@/hooks/useAthleteTestResults';
@@ -64,18 +64,23 @@ function SessionCard({
   entry,
   index,
   log,
+  unfinished,
 }: {
   session: AthleteScheduleEntry['sessions'][0];
   entry: AthleteScheduleEntry;
   index: number;
   log?: SessionLog | null;
+  /** Started but not finished (paused / left mid-workout) */
+  unfinished?: SessionLog | null;
 }) {
   const navigate = useNavigate();
   return (
     <Card
       className={cn(
         'cursor-pointer active:scale-[0.98] transition-all',
-        log ? 'border-green-200 bg-green-50/50 hover:bg-green-50/80' : 'hover:bg-muted/60'
+        log ? 'border-green-200 bg-green-50/50 hover:bg-green-50/80'
+          : unfinished ? 'border-amber-200 bg-amber-50/50 hover:bg-amber-50/80'
+          : 'hover:bg-muted/60'
       )}
       onClick={() => navigate('/athlete/session', { state: { entry, sessionIdx: index, log } })}
     >
@@ -83,11 +88,13 @@ function SessionCard({
         <div className="flex items-center gap-3">
           <div className={cn(
             'w-9 h-9 rounded-lg flex items-center justify-center shrink-0',
-            log ? 'bg-green-100' : 'bg-primary/10'
+            log ? 'bg-green-100' : unfinished ? 'bg-amber-100' : 'bg-primary/10'
           )}>
             {log
               ? <CheckCircle2 className="h-4 w-4 text-green-600" />
-              : <Dumbbell className="h-4 w-4 text-primary" />}
+              : unfinished
+                ? <Pause className="h-4 w-4 text-amber-600" />
+                : <Dumbbell className="h-4 w-4 text-primary" />}
           </div>
           <div>
             <p className="font-medium text-sm">{session.name}</p>
@@ -103,6 +110,11 @@ function SessionCard({
                 {log.borgRating !== null && log.durationSeconds
                   ? ` · sRPE: ${log.borgRating * Math.round(log.durationSeconds / 60)} AU`
                   : ''}
+              </p>
+            ) : unfinished ? (
+              <p className="text-xs font-medium text-amber-700 mt-0.5 flex items-center gap-1">
+                <Pause className="h-3 w-3 shrink-0" />
+                {unfinished.pausedAt ? 'Paused' : 'In progress'} · tap to resume
               </p>
             ) : session.intensity ? (
               <div className="mt-1.5">
@@ -241,6 +253,7 @@ function TodaySchedule({
   entry,
   today,
   getSessionLog,
+  getUnfinishedLog,
   resultFor,
   lastValueLabelFor,
   onEnterTestResult,
@@ -249,6 +262,7 @@ function TodaySchedule({
   entry: AthleteScheduleEntry | null;
   today: string; // yyyy-MM-dd
   getSessionLog: (date: string, sessionId: string) => SessionLog | null;
+  getUnfinishedLog: (date: string, sessionId: string) => SessionLog | null;
   resultFor: (parameterId: string | undefined, scheduledDate: string) => TestResultRow | null;
   lastValueLabelFor: (parameterId: string | undefined, unit?: string) => string | null;
   onEnterTestResult: (ev: AthleteCalendarEvent) => void;
@@ -322,6 +336,7 @@ function TodaySchedule({
               entry={entry!}
               index={index}
               log={getSessionLog(entry!.date, session.id)}
+              unfinished={getUnfinishedLog(entry!.date, session.id)}
             />
           ))}
         </div>
@@ -473,7 +488,7 @@ function UpcomingStrip({ schedule, today }: { schedule: AthleteScheduleEntry[]; 
 const COMING_UP_DAYS = 7;
 
 export default function AthleteTodayPage() {
-  const { connection, schedule, loading, error, getTodayEntry, getSessionLog, submitTestResult, updateTestResult } = useAthleteApp();
+  const { connection, schedule, loading, error, getTodayEntry, getSessionLog, getUnfinishedLog, submitTestResult, updateTestResult } = useAthleteApp();
   const { todayCheckin, openCheckin } = useOutletContext<AthleteLayoutContext>();
   const { resultFor, lastValueLabelFor, markSaved } = useAthleteTestResults(connection);
   const [testTarget, setTestTarget] = useState<TestResultTarget | null>(null);
@@ -555,6 +570,7 @@ export default function AthleteTodayPage() {
           entry={todayEntry}
           today={today}
           getSessionLog={getSessionLog}
+          getUnfinishedLog={getUnfinishedLog}
           resultFor={resultFor}
           lastValueLabelFor={lastValueLabelFor}
           onEnterTestResult={ev => setTestTarget({ ev, date: today })}

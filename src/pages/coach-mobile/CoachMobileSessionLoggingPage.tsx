@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, Check, Dumbbell, RefreshCw,
   CheckCircle2, Timer, History, MessageSquare, ArrowUpDown,
-  TrendingUp, TrendingDown, Send, Loader2, Link2, Lock,
+  TrendingUp, TrendingDown, Send, Loader2, Link2, Lock, Pause, Play,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -26,10 +26,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { useChat } from '@/hooks/useChat';
 import { ExerciseHistorySheet } from '@/components/shared/ExerciseHistorySheet';
 import { checkSessionLock, type SessionLockInfo } from '@/utils/sessionLock';
+import {
+  clearWorkoutProgress, countDoneSets, findUnfinishedWorkout, saveWorkoutProgress, useWorkoutAutosave,
+  type UnfinishedWorkout, type WorkoutProgress,
+} from '@/utils/workoutProgress';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type Phase = 'overview' | 'sectionIntro' | 'active' | 'rest' | 'done';
+type Phase = 'overview' | 'sectionIntro' | 'active' | 'rest' | 'done' | 'paused';
 
 interface SectionData {
   id: string;
@@ -596,7 +600,8 @@ export default function CoachMobileSessionLoggingPage() {
   const [borgSheetOpen, setBorgSheetOpen] = useState(false);
   const [sessionLogId, setSessionLogId] = useState<string | null>(null);
   const [setCountOverrides, setSetCountOverrides] = useState<Record<string, number>>({});
-  const [abandonWarning, setAbandonWarning] = useState(false);
+  // Abandon-workout confirmation: 'leave' the page afterwards, or stay on the 'overview' (Start over)
+  const [abandonWarning, setAbandonWarning] = useState<false | 'leave' | 'overview'>(false);
   const [detailTarget, setDetailTarget] = useState<ExerciseDetailTarget | null>(null);
   const workoutStartTimeRef = useRef<number | null>(null);
   const [workoutElapsed, setWorkoutElapsed] = useState(0);
@@ -699,9 +704,88 @@ export default function CoachMobileSessionLoggingPage() {
 
   function startWorkoutTimer() {
     if (workoutStartTimeRef.current === null) {
-      workoutStartTimeRef.current = Date.now();
-      setWorkoutElapsed(0);
+      // Continues from the time already done (a resumed workout); 0 for a fresh one
+      workoutStartTimeRef.current = Date.now() - workoutElapsed * 1000;
     }
+  }
+
+  // ── Pause / resume ─────────────────────────────────────────────────────────
+  // Progress is saved on the session log row while the workout runs (autosave); Pause stops the
+  // clock and marks it paused, so it can be resumed later (also from another device).
+  const [resumable, setResumable] = useState<UnfinishedWorkout | null>(null);
+  const pausedPhaseRef = useRef<'sectionIntro' | 'active'>('active');
+
+  function elapsedNow(): number {
+    return workoutStartTimeRef.current === null
+      ? workoutElapsed
+      : Math.floor((Date.now() - workoutStartTimeRef.current) / 1000);
+  }
+
+  function buildProgress(resumePhase: 'sectionIntro' | 'active', elapsedSeconds: number): WorkoutProgress {
+    return {
+      v: 1,
+      sectionIdx,
+      phase: resumePhase,
+      elapsedSeconds,
+      loggedValues,
+      completedSets,
+      setCountOverrides,
+      swappedExercises,
+    };
+  }
+
+  const workoutRunning = !!sessionLogId && (['sectionIntro', 'active', 'rest', 'done'] as Phase[]).includes(phase);
+  useWorkoutAutosave(
+    sessionLogId,
+    workoutRunning ? buildProgress(phase === 'sectionIntro' ? 'sectionIntro' : 'active', workoutElapsed) : null,
+  );
+
+  async function pauseWorkout(thenLeave = false) {
+    const elapsed = elapsedNow();
+    const resumePhase = phase === 'sectionIntro' ? 'sectionIntro' : 'active';
+    pausedPhaseRef.current = resumePhase;
+    workoutStartTimeRef.current = null;   // clock stops
+    nextAfterRestRef.current = null;      // a running rest is dropped
+    setWorkoutElapsed(elapsed);
+    setAbandonWarning(false);
+    setPhase('paused');
+    if (sessionLogId) await saveWorkoutProgress(sessionLogId, buildProgress(resumePhase, elapsed), true);
+    if (thenLeave) navigate(-1);
+  }
+
+  function resumeWorkout() {
+    const target = pausedPhaseRef.current;
+    if (target === 'active' || workoutElapsed > 0) workoutStartTimeRef.current = Date.now() - workoutElapsed * 1000;
+    setPhase(target);
+  }
+
+  // Unfinished workout of this session the coach started (paused, or left mid-workout) → offer Resume
+  const resumeConnectionId = state?.connectionId;
+  const resumeDate = state?.entry?.date;
+  const resumeSessionId = state ? state.entry.sessions[state.sessionIdx]?.id : undefined;
+  useEffect(() => {
+    if (!resumeConnectionId || !resumeDate || !resumeSessionId || sessionLogId) return;
+    let cancelled = false;
+    findUnfinishedWorkout(resumeConnectionId, resumeDate, resumeSessionId, 'coach')
+      .then(u => { if (!cancelled) setResumable(u); })
+      .catch(() => { /* no resume offered */ });
+    return () => { cancelled = true; };
+  }, [resumeConnectionId, resumeDate, resumeSessionId, sessionLogId]);
+
+  function resumeSavedWorkout(u: UnfinishedWorkout) {
+    const p = u.progress;
+    setSessionLogId(u.logId);
+    setResumable(null);
+    setLoggedValues(p?.loggedValues ?? {});
+    setCompletedSets(p?.completedSets ?? {});
+    setSetCountOverrides(p?.setCountOverrides ?? {});
+    setSwappedExercises(p?.swappedExercises ?? {});
+    setSectionIdx(Math.min(Math.max(0, p?.sectionIdx ?? 0), Math.max(0, sections.length - 1)));
+    const elapsed = p?.elapsedSeconds ?? 0;
+    setWorkoutElapsed(elapsed);
+    const target = p?.phase ?? 'sectionIntro';
+    workoutStartTimeRef.current = target === 'active' || elapsed > 0 ? Date.now() - elapsed * 1000 : null;
+    setPhase(target);
   }
 
   useEffect(() => {
@@ -905,13 +989,72 @@ export default function CoachMobileSessionLoggingPage() {
     };
   });
 
+  // ── Abandon workout ────────────────────────────────────────────────────────
+
+  async function abandonWorkout(target: 'leave' | 'overview') {
+    setAbandonWarning(false);
+    // The running workout, or the saved one offered for resuming ("Start over")
+    const logId = sessionLogId ?? resumable?.logId ?? null;
+    if (logId) {
+      await supabase.from('athlete_session_logs').delete().eq('id', logId);
+      void clearWorkoutProgress(logId, false);
+    }
+    setSessionLogId(null);
+    setResumable(null);
+    if (target === 'leave') { goBack(); return; }
+    workoutStartTimeRef.current = null;
+    setWorkoutElapsed(0);
+    setLoggedValues({});
+    setCompletedSets({});
+    setSetCountOverrides({});
+    setSwappedExercises({});
+    setSectionIdx(0);
+    setPhase('overview');
+  }
+
+  const canPauseInstead = !!sessionLogId && phase !== 'paused';
+  const abandonDialog = (
+    <AlertDialog open={abandonWarning !== false} onOpenChange={o => { if (!o) setAbandonWarning(false); }}>
+      <AlertDialogContent className="sm:max-w-[360px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t('coachMobile.sessionLogging.abandonTitle')}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {t('coachMobile.sessionLogging.abandonDesc')}
+            {canPauseInstead && ` ${t('coachMobile.sessionLogging.pauseInsteadHint')}`}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{t('coachMobile.sessionLogging.keepGoing')}</AlertDialogCancel>
+          {canPauseInstead && (
+            <Button variant="outline" onClick={() => void pauseWorkout(true)}>
+              <Pause className="h-4 w-4 mr-2" />
+              {t('coachMobile.sessionLogging.pauseAndFinishLater')}
+            </Button>
+          )}
+          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={() => { if (abandonWarning) void abandonWorkout(abandonWarning); }}>
+            {t('coachMobile.sessionLogging.abandon')}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
+  const pauseButton = sessionLogId ? (
+    <button onClick={() => void pauseWorkout()}
+      className="w-11 h-11 -mr-2 rounded-full flex items-center justify-center hover:bg-muted active:bg-muted/80 transition-colors shrink-0"
+      aria-label={t('coachMobile.sessionLogging.pauseWorkout')}>
+      <Pause className="h-5 w-5" />
+    </button>
+  ) : null;
+
   // ── Screen: Overview ───────────────────────────────────────────────────────
 
   if (phase === 'overview') {
     return (
       <div className="flex flex-col h-full bg-background">
         <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
-          <button onClick={() => workoutStartTimeRef.current !== null ? setAbandonWarning(true) : goBack()}
+          <button onClick={() => workoutStartTimeRef.current !== null || sessionLogId ? setAbandonWarning('leave') : goBack()}
             className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors">
             <ChevronLeft className="h-5 w-5" />
           </button>
@@ -1024,6 +1167,37 @@ export default function CoachMobileSessionLoggingPage() {
                   </div>
                 </div>
               )}
+              {resumable && (
+                <div className="pt-3 pb-1">
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-center gap-2.5">
+                    <Pause className="h-4 w-4 text-amber-600 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-amber-900">
+                        {resumable.pausedAt ? t('coachMobile.sessionLogging.workoutPaused') : t('coachMobile.sessionLogging.unfinishedWorkout')}
+                      </p>
+                      <p className="text-xs text-amber-800">
+                        {[
+                          t('coachMobile.sessionLogging.setsDoneCount', { count: countDoneSets(resumable.progress) }),
+                          (resumable.progress?.elapsedSeconds ?? 0) > 0 ? formatTime(resumable.progress!.elapsedSeconds) : null,
+                          new Date(resumable.pausedAt ?? resumable.startedAt).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }),
+                        ].filter(Boolean).join(' · ')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {resumable ? (
+                <div className="py-4 space-y-1">
+                  <Button className="w-full" size="lg" disabled={!!sessionLock} onClick={() => resumeSavedWorkout(resumable)}>
+                    <Play className="h-4 w-4 mr-2" />
+                    {t('coachMobile.sessionLogging.resumeWorkout')}
+                  </Button>
+                  <button onClick={() => setAbandonWarning('overview')}
+                    className="w-full min-h-[44px] text-sm text-muted-foreground hover:text-foreground active:opacity-60 transition-colors">
+                    {t('coachMobile.sessionLogging.startOver')}
+                  </button>
+                </div>
+              ) : (
               <div className="py-4">
                 <Button className="w-full" size="lg" disabled={!!sessionLock} onClick={async () => {
                   setPhase('sectionIntro');
@@ -1045,29 +1219,12 @@ export default function CoachMobileSessionLoggingPage() {
                   {t('coachMobile.sessionLogging.startWorkout')}
                 </Button>
               </div>
+              )}
             </div>
           </>
         )}
 
-        <AlertDialog open={abandonWarning} onOpenChange={o => { if (!o) setAbandonWarning(false); }}>
-          <AlertDialogContent className="sm:max-w-[360px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t('coachMobile.sessionLogging.abandonTitle')}</AlertDialogTitle>
-              <AlertDialogDescription>{t('coachMobile.sessionLogging.abandonDesc')}</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>{t('coachMobile.sessionLogging.keepGoing')}</AlertDialogCancel>
-              <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={async () => {
-                  setAbandonWarning(false);
-                  if (sessionLogId) await supabase.from('athlete_session_logs').delete().eq('id', sessionLogId);
-                  goBack();
-                }}>
-                {t('coachMobile.sessionLogging.abandon')}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        {abandonDialog}
 
         <ExerciseDetailSheet target={detailTarget} onClose={() => setDetailTarget(null)} />
       </div>
@@ -1084,7 +1241,10 @@ export default function CoachMobileSessionLoggingPage() {
       <div className="flex flex-col h-full bg-background">
         <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
           <button onClick={async () => {
-              if (isFirst) {
+              if (isFirst && (countDoneSets(buildProgress('sectionIntro', 0)) > 0 || workoutElapsed > 0)) {
+                // A resumed workout with progress — confirm (or pause) instead of silently dropping it
+                setAbandonWarning('overview');
+              } else if (isFirst) {
                 // No sets done yet — silently undo "Start Workout" to release the lock.
                 // Query by connection/date/session instead of sessionLogId to avoid
                 // a stale-closure race (the state might not be set yet if insert is still in flight).
@@ -1096,6 +1256,7 @@ export default function CoachMobileSessionLoggingPage() {
                   .eq('session_id', session.id)
                   .eq('started_by', 'coach')
                   .is('completed_at', null);
+                if (sessionLogId) void clearWorkoutProgress(sessionLogId, false);
                 setSessionLogId(null);
                 setPhase('overview');
               } else {
@@ -1106,7 +1267,8 @@ export default function CoachMobileSessionLoggingPage() {
             className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors">
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <h1 className="flex-1 text-center font-semibold text-base truncate pr-8">{session.name}</h1>
+          <h1 className={cn('flex-1 text-center font-semibold text-base truncate', !pauseButton && 'pr-8')}>{session.name}</h1>
+          {pauseButton}
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-6 gap-4">
           {sections.length > 1 && (
@@ -1129,6 +1291,8 @@ export default function CoachMobileSessionLoggingPage() {
             {t('coachMobile.sessionLogging.startSection')}
           </Button>
         </div>
+
+        {abandonDialog}
       </div>
     );
   }
@@ -1150,6 +1314,60 @@ export default function CoachMobileSessionLoggingPage() {
         <button onClick={skipRest} className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors">
           {t('coachMobile.sessionLogging.skipRest')}
         </button>
+        {sessionLogId && (
+          <Button variant="ghost" className="min-h-[44px] text-muted-foreground" onClick={() => void pauseWorkout()}>
+            <Pause className="h-4 w-4 mr-2" />
+            {t('coachMobile.sessionLogging.pauseWorkout')}
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  // ── Screen: Paused ─────────────────────────────────────────────────────────
+
+  if (phase === 'paused') {
+    const setsDone = countDoneSets(buildProgress('active', workoutElapsed));
+    const setsTotal = session.exercises.reduce((n, ex) => n + (setCountOverrides[ex.id] ?? getSetCount(ex)), 0);
+    return (
+      <div className="flex flex-col h-full bg-background">
+        <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
+          <button onClick={goBack}
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors"
+            aria-label={t('coachMobile.sessionLogging.finishLater')}>
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <h1 className="flex-1 text-center font-semibold text-base truncate pr-8">{session.name}</h1>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-3 text-center">
+          <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mb-2">
+            <Pause className="h-8 w-8 text-amber-600" />
+          </div>
+          <h2 className="text-2xl font-bold">{t('coachMobile.sessionLogging.workoutPaused')}</h2>
+          <p className="text-4xl font-bold tabular-nums">{formatTime(workoutElapsed)}</p>
+          <p className="text-sm text-muted-foreground">
+            {t('coachMobile.sessionLogging.setsDoneOfTotal', { done: setsDone, total: setsTotal })}
+            {sections.length > 1 && ` · ${t('coachMobile.sessionLogging.sectionXofY', { current: sectionIdx + 1, total: sections.length })}`}
+          </p>
+          <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
+            {t('coachMobile.sessionLogging.pausedHint')}
+          </p>
+        </div>
+        <div className="px-4 py-4 border-t space-y-2 shrink-0">
+          <Button className="w-full" size="lg" onClick={resumeWorkout}>
+            <Play className="h-4 w-4 mr-2" />
+            {t('coachMobile.sessionLogging.resume')}
+          </Button>
+          <Button className="w-full" size="lg" variant="outline" onClick={goBack}>
+            {t('coachMobile.sessionLogging.finishLater')}
+          </Button>
+          <button onClick={() => setAbandonWarning('leave')}
+            className="w-full min-h-[44px] text-sm text-destructive hover:underline active:opacity-60">
+            {t('coachMobile.sessionLogging.abandonWorkout')}
+          </button>
+        </div>
+
+        {abandonDialog}
       </div>
     );
   }
@@ -1303,6 +1521,7 @@ export default function CoachMobileSessionLoggingPage() {
             <Timer className="h-3 w-3 shrink-0" />
             <span>{formatTime(workoutElapsed)}</span>
           </div>
+          {pauseButton}
         </div>
 
         <div className="px-4 pt-3 pb-2 shrink-0">
@@ -1562,7 +1781,11 @@ export default function CoachMobileSessionLoggingPage() {
           sessionId={session.id} sessionName={session.name}
           durationSeconds={workoutElapsed} setsLogged={setsLoggedPayload}
           sessionLogId={sessionLogId}
-          onSaved={() => { setBorgSheetOpen(false); goBack(); }}
+          onSaved={() => {
+            setBorgSheetOpen(false);
+            if (sessionLogId) void clearWorkoutProgress(sessionLogId, true);
+            goBack();
+          }}
         />
       </div>
     );

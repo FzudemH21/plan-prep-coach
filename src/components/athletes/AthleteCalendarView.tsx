@@ -1319,14 +1319,19 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     const from = format(calendarDateRange[0], 'yyyy-MM-dd');
     const to   = format(calendarDateRange[calendarDateRange.length - 1], 'yyyy-MM-dd');
 
-    supabase
+    const baseColumns = 'id, date, session_id, session_name, started_at, borg_rating, duration_seconds, completed_at, comment, sets_logged';
+    const query = (columns: string) => supabase
       .from('athlete_session_logs')
-      .select('id, date, session_id, session_name, started_at, borg_rating, duration_seconds, completed_at, comment, sets_logged')
+      .select(columns)
       .eq('athlete_connection_id', connection.id)
       .not('started_at', 'is', null)
       .gte('date', from)
-      .lte('date', to)
-      .then(({ data }) => {
+      .lte('date', to);
+    // paused_at (pause / resume) — without it if the migration hasn't been run yet
+    query(`${baseColumns}, paused_at`)
+      .then(res => (res.error ? query(baseColumns) : res))
+      .then(res => {
+        const data = res.data as unknown as CoachSessionLog[] | null;
         if (cancelled || !data) return;
         const map = new Map<string, CoachSessionLog>();
         for (const row of data) {

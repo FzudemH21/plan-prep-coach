@@ -559,9 +559,15 @@ export function AthleteCalendarDayCell({
                           {/* In-progress indicator */}
                           {isInProgress && (
                             <div className="flex items-center gap-1 mt-0.5">
-                              <span className="text-[10px] text-amber-600 dark:text-amber-400 animate-pulse">
-                                In progress…
-                              </span>
+                              {sessionLog?.paused_at ? (
+                                <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                                  Paused
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-amber-600 dark:text-amber-400 animate-pulse">
+                                  In progress…
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>

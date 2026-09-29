@@ -76,6 +76,8 @@ export interface CoachSessionLog {
   duration_seconds: number | null;
   started_at: string | null;
   completed_at: string | null;
+  /** Set while an unfinished workout is paused (pause / resume) */
+  paused_at?: string | null;
   comment: string | null;
   sets_logged: SetLogEntry[] | null;
 }

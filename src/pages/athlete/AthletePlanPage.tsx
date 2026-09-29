@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dumbbell, ChevronRight, ChevronLeft, ChevronDown, Activity, CalendarDays, CheckCircle2, GripVertical, ClipboardCheck, BedDouble, Check, Info, Pencil } from 'lucide-react';
+import { Dumbbell, ChevronRight, ChevronLeft, ChevronDown, Activity, CalendarDays, CheckCircle2, GripVertical, ClipboardCheck, BedDouble, Check, Info, Pencil, Pause } from 'lucide-react';
 import { TestDetailsDialog } from '@/components/athlete-app/TestDetailsDialog';
 import { TestResultDialog, type TestResultTarget } from '@/components/athlete-app/TestResultDialog';
 import { useAthleteTestResults, type TestResultRow } from '@/hooks/useAthleteTestResults';
@@ -65,6 +65,7 @@ function SessionCard({
   index,
   isPast,
   log,
+  unfinished,
   canMove,
   isDragging,
   dragHandleProps,
@@ -74,6 +75,8 @@ function SessionCard({
   index: number;
   isPast: boolean;
   log?: SessionLog | null;
+  /** Started but not finished (paused / left mid-workout) */
+  unfinished?: SessionLog | null;
   canMove?: boolean;
   isDragging?: boolean;
   dragHandleProps?: DraggableProvidedDragHandleProps | null;
@@ -86,6 +89,8 @@ function SessionCard({
         isDragging ? 'ring-2 ring-primary border-primary shadow-lg opacity-90' : '',
         log
           ? 'border-green-200 bg-green-50/50'
+          : unfinished
+            ? 'border-amber-200 bg-amber-50/50'
           : isPast
             ? 'opacity-50'
             : ''
@@ -109,11 +114,13 @@ function SessionCard({
         >
           <div className={cn(
             'w-8 h-8 rounded-md flex items-center justify-center shrink-0',
-            log ? 'bg-green-100' : 'bg-primary/10'
+            log ? 'bg-green-100' : unfinished ? 'bg-amber-100' : 'bg-primary/10'
           )}>
             {log
               ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-              : <Dumbbell className="h-3.5 w-3.5 text-primary" />}
+              : unfinished
+                ? <Pause className="h-3.5 w-3.5 text-amber-600" />
+                : <Dumbbell className="h-3.5 w-3.5 text-primary" />}
           </div>
           <div className="min-w-0">
             <p className="font-medium text-sm truncate">{session.name}</p>
@@ -129,6 +136,11 @@ function SessionCard({
                 {log.borgRating !== null && log.durationSeconds
                   ? ` · sRPE: ${log.borgRating * Math.round(log.durationSeconds / 60)} AU`
                   : ''}
+              </p>
+            ) : unfinished ? (
+              <p className="text-xs font-medium text-amber-700 mt-0.5 flex items-center gap-1">
+                <Pause className="h-3 w-3 shrink-0" />
+                {unfinished.pausedAt ? 'Paused' : 'In progress'} · tap to resume
               </p>
             ) : session.intensity ? (
               <div className="mt-1.5">
@@ -148,6 +160,7 @@ function DaySection({
   entry,
   isToday,
   getSessionLog,
+  getUnfinishedLog,
   canMove,
   onEnterTestResult,
   resultFor,
@@ -158,6 +171,7 @@ function DaySection({
   entry: AthleteScheduleEntry | null;
   isToday: boolean;
   getSessionLog: (date: string, sessionId: string) => SessionLog | null;
+  getUnfinishedLog: (date: string, sessionId: string) => SessionLog | null;
   canMove?: boolean;
   onEnterTestResult: (ev: AthleteCalendarEvent, date: string) => void;
   /** The result entered for a scheduled test (null = none yet) */
@@ -342,12 +356,13 @@ function DaySection({
             {hasSessions ? (
               entry!.sessions.map((session, idx) => {
                 const log = getSessionLog(dateStr, session.id);
+                const unfinished = getUnfinishedLog(dateStr, session.id);
                 return (
                   <Draggable
                     key={session.id}
                     draggableId={session.id}
                     index={idx}
-                    isDragDisabled={!canMove || !!log}
+                    isDragDisabled={!canMove || !!log || !!unfinished}
                   >
                     {(dragProvided, dragSnapshot) => (
                       <div
@@ -360,7 +375,8 @@ function DaySection({
                           index={idx}
                           isPast={isPast}
                           log={log}
-                          canMove={canMove}
+                          unfinished={unfinished}
+                          canMove={canMove && !unfinished}
                           isDragging={dragSnapshot.isDragging}
                           dragHandleProps={dragProvided.dragHandleProps}
                         />
@@ -389,7 +405,7 @@ function DaySection({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function AthletePlanPage() {
-  const { connection, schedule, loading, error, getSessionLog, moveSession, submitTestResult, updateTestResult } = useAthleteApp();
+  const { connection, schedule, loading, error, getSessionLog, getUnfinishedLog, moveSession, submitTestResult, updateTestResult } = useAthleteApp();
 
   const _now = new Date();
   const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
@@ -505,6 +521,7 @@ export default function AthletePlanPage() {
                   entry={scheduleMap.get(dateStr) ?? null}
                   isToday={dateStr === today}
                   getSessionLog={getSessionLog}
+                  getUnfinishedLog={getUnfinishedLog}
                   canMove={canMove}
                   onEnterTestResult={openTestSheet}
                   resultFor={resultFor}

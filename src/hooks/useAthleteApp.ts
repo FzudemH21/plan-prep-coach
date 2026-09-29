@@ -132,6 +132,8 @@ export interface SessionLog {
   sessionName: string;
   startedAt: string | null;   // ISO timestamp — set when athlete taps "Start Workout"
   completedAt: string | null; // ISO timestamp — set when athlete finishes and saves
+  /** Set while an unfinished workout is paused (pause / resume) */
+  pausedAt: string | null;
   borgRating: number | null;
   durationSeconds: number | null;
   comment: string | null;
@@ -153,6 +155,38 @@ function mapScheduleRow(row: Record<string, unknown>): AthleteScheduleEntry {
 
 /** How far back the app loads the schedule and session logs (the Plan tab can page back this far) */
 export const SCHEDULE_PAST_DAYS = 182;
+
+/** The athlete's session logs in the schedule window (started, paused and completed workouts) */
+async function fetchSessionLogs(connectionId: string): Promise<SessionLog[]> {
+  const todayLocal = new Date();
+  const fromLocal = new Date(todayLocal); fromLocal.setDate(todayLocal.getDate() - SCHEDULE_PAST_DAYS);
+  const toLocal   = new Date(todayLocal); toLocal.setDate(todayLocal.getDate() + 90);
+  const localStr  = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const baseColumns = 'id, date, session_id, session_name, started_at, completed_at, borg_rating, duration_seconds, comment, sets_logged';
+  const query = (columns: string) => supabase
+    .from('athlete_session_logs')
+    .select(columns)
+    .eq('athlete_connection_id', connectionId)
+    .gte('date', localStr(fromLocal))
+    .lte('date', localStr(toLocal));
+  // paused_at (pause / resume) — without it if the migration hasn't been run yet
+  let res = await query(`${baseColumns}, paused_at`);
+  if (res.error) res = await query(baseColumns);
+  return ((res.data ?? []) as unknown as Record<string, unknown>[]).map(row => ({
+    id: row.id as string,
+    date: row.date as string,
+    sessionId: row.session_id as string,
+    sessionName: row.session_name as string,
+    startedAt: row.started_at as string | null,
+    completedAt: row.completed_at as string | null,
+    pausedAt: (row.paused_at as string | null | undefined) ?? null,
+    borgRating: row.borg_rating as number | null,
+    durationSeconds: row.duration_seconds as number | null,
+    comment: row.comment as string | null,
+    setsLogged: (row.sets_logged as unknown[]) || [],
+  }));
+}
 
 export function useAthleteApp() {
   const { user, loading: authLoading } = useAuth();
@@ -252,29 +286,7 @@ export function useAthleteApp() {
         await refetchSchedule();
 
         // Load session logs (non-fatal — schedule stays usable if this fails)
-        const todayLocal = new Date();
-        const fromLocal = new Date(todayLocal); fromLocal.setDate(todayLocal.getDate() - SCHEDULE_PAST_DAYS);
-        const toLocal   = new Date(todayLocal); toLocal.setDate(todayLocal.getDate() + 90);
-        const localStr  = (d: Date) =>
-          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        const { data: logsData } = await supabase
-          .from('athlete_session_logs')
-          .select('id, date, session_id, session_name, started_at, completed_at, borg_rating, duration_seconds, comment, sets_logged')
-          .eq('athlete_connection_id', conn.id)
-          .gte('date', localStr(fromLocal))
-          .lte('date', localStr(toLocal));
-        setSessionLogs((logsData ?? []).map((row: Record<string, unknown>) => ({
-          id: row.id as string,
-          date: row.date as string,
-          sessionId: row.session_id as string,
-          sessionName: row.session_name as string,
-          startedAt: row.started_at as string | null,
-          completedAt: row.completed_at as string | null,
-          borgRating: row.borg_rating as number | null,
-          durationSeconds: row.duration_seconds as number | null,
-          comment: row.comment as string | null,
-          setsLogged: (row.sets_logged as unknown[]) || [],
-        })));
+        setSessionLogs(await fetchSessionLogs(conn.id));
 
         // Guard: if the effect was cleaned up while we were awaiting above, bail now.
         // This prevents the orphaned load() from subscribing a channel after cleanup
@@ -334,28 +346,7 @@ export function useAthleteApp() {
 
   const refetchLogs = useCallback(async () => {
     if (!connection) return;
-    const todayLocal = new Date();
-    const fromLocal = new Date(todayLocal); fromLocal.setDate(todayLocal.getDate() - SCHEDULE_PAST_DAYS);
-    const toLocal   = new Date(todayLocal); toLocal.setDate(todayLocal.getDate() + 90);
-    const localStr  = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const { data } = await supabase
-      .from('athlete_session_logs')
-      .select('id, date, session_id, session_name, started_at, completed_at, borg_rating, duration_seconds, comment, sets_logged')
-      .eq('athlete_connection_id', connection.id)
-      .gte('date', localStr(fromLocal))
-      .lte('date', localStr(toLocal));
-    setSessionLogs((data ?? []).map((row: Record<string, unknown>) => ({
-      id: row.id as string,
-      date: row.date as string,
-      sessionId: row.session_id as string,
-      sessionName: row.session_name as string,
-      completedAt: row.completed_at as string,
-      borgRating: row.borg_rating as number | null,
-      durationSeconds: row.duration_seconds as number | null,
-      comment: row.comment as string | null,
-      setsLogged: (row.sets_logged as unknown[]) || [],
-    })));
+    setSessionLogs(await fetchSessionLogs(connection.id));
   }, [connection]);
 
   // Only return a log that has been completed — in-progress rows must not
@@ -363,6 +354,12 @@ export function useAthleteApp() {
   const getSessionLog = useCallback((date: string, sessionId: string): SessionLog | null =>
     sessionLogs.find(l => l.date === date && l.sessionId === sessionId && !!l.completedAt) ?? null,
   [sessionLogs]);
+
+  /** A started workout of this session that isn't finished yet (paused, or left mid-workout) */
+  const getUnfinishedLog = useCallback((date: string, sessionId: string): SessionLog | null => {
+    if (sessionLogs.some(l => l.date === date && l.sessionId === sessionId && !!l.completedAt)) return null;
+    return sessionLogs.find(l => l.date === date && l.sessionId === sessionId && !!l.startedAt && !l.completedAt) ?? null;
+  }, [sessionLogs]);
 
   const updateProfile = useCallback(async (patch: AthleteProfileData) => {
     if (!connection) return;
@@ -500,5 +497,5 @@ export function useAthleteApp() {
     if (!data || data.length === 0) throw new Error("This result can't be edited yet - please ask your coach to run the latest database update.");
   }, []);
 
-  return { connection, schedule, sessionLogs, loading, error, isAthlete, getTodayEntry, getUpcomingDays, updateProfile, getSessionLog, refetchLogs, refetchSchedule, moveSession, submitTestResult, updateTestResult };
+  return { connection, schedule, sessionLogs, loading, error, isAthlete, getTodayEntry, getUpcomingDays, updateProfile, getSessionLog, getUnfinishedLog, refetchLogs, refetchSchedule, moveSession, submitTestResult, updateTestResult };
 }

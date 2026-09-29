@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronDown, Check, Dumbbell, RefreshCw,
   CheckCircle2, Timer, Plus, Minus, ArrowUpDown, TrendingUp, TrendingDown,
-  MessageSquare, Send, Loader2, History, Link2,
+  MessageSquare, Send, Loader2, History, Link2, Pause, Play,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -28,10 +28,14 @@ import { useChat } from '@/hooks/useChat';
 import { ExerciseHistorySheet } from '@/components/shared/ExerciseHistorySheet';
 import { useToast } from '@/hooks/use-toast';
 import { checkSessionLock, type SessionLockInfo } from '@/utils/sessionLock';
+import {
+  clearWorkoutProgress, countDoneSets, findUnfinishedWorkout, saveWorkoutProgress, useWorkoutAutosave,
+  type UnfinishedWorkout, type WorkoutProgress,
+} from '@/utils/workoutProgress';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type Phase = 'overview' | 'sectionIntro' | 'active' | 'rest' | 'done';
+type Phase = 'overview' | 'sectionIntro' | 'active' | 'rest' | 'done' | 'paused';
 
 interface SectionData {
   id: string;
@@ -899,9 +903,96 @@ export default function AthleteSessionPage() {
 
   function startWorkoutTimer() {
     if (workoutStartTimeRef.current === null) {
-      workoutStartTimeRef.current = Date.now();
-      setWorkoutElapsed(0);
+      // Continues from the time already done (a resumed workout); 0 for a fresh one
+      workoutStartTimeRef.current = Date.now() - workoutElapsed * 1000;
     }
+  }
+
+  // ── Pause / resume ─────────────────────────────────────────────────────────
+  // The workout's progress is saved on its session log row while it runs (autosave), so leaving
+  // the page or closing the app doesn't lose it; Pause stops the clock and marks it paused.
+  const [resumable, setResumable] = useState<UnfinishedWorkout | null>(null);
+  // Screen to return to on Resume
+  const pausedPhaseRef = useRef<'sectionIntro' | 'active'>('active');
+
+  function elapsedNow(): number {
+    return workoutStartTimeRef.current === null
+      ? workoutElapsed
+      : Math.floor((Date.now() - workoutStartTimeRef.current) / 1000);
+  }
+
+  function buildProgress(resumePhase: 'sectionIntro' | 'active', elapsedSeconds: number): WorkoutProgress {
+    return {
+      v: 1,
+      sectionIdx,
+      phase: resumePhase,
+      elapsedSeconds,
+      loggedValues,
+      completedSets,
+      setCountOverrides,
+      swappedExercises,
+    };
+  }
+
+  const workoutRunning = !!sessionLogId && (['sectionIntro', 'active', 'rest', 'done'] as Phase[]).includes(phase);
+  useWorkoutAutosave(
+    sessionLogId,
+    workoutRunning ? buildProgress(phase === 'sectionIntro' ? 'sectionIntro' : 'active', workoutElapsed) : null,
+  );
+
+  async function pauseWorkout(thenLeave = false) {
+    const elapsed = elapsedNow();
+    const resumePhase = phase === 'sectionIntro' ? 'sectionIntro' : 'active';
+    pausedPhaseRef.current = resumePhase;
+    workoutStartTimeRef.current = null;   // clock stops
+    nextAfterRestRef.current = null;      // a running rest is dropped
+    setWorkoutElapsed(elapsed);
+    setAbandonTarget(null);
+    setPhase('paused');
+    if (sessionLogId) await saveWorkoutProgress(sessionLogId, buildProgress(resumePhase, elapsed), true);
+    if (thenLeave) navigate(-1);
+  }
+
+  function resumeWorkout() {
+    const target = pausedPhaseRef.current;
+    if (target === 'active' || workoutElapsed > 0) workoutStartTimeRef.current = Date.now() - workoutElapsed * 1000;
+    setPhase(target);
+    // paused_at is cleared by the next autosave (running again)
+  }
+
+  // Unfinished workout of this session (paused, or the app was closed mid-workout) → offer Resume
+  const resumeCheckSession = state?.entry.sessions[state.sessionIdx];
+  useEffect(() => {
+    if (!connection?.id || !state?.entry.date || !resumeCheckSession?.id || sessionLogId) return;
+    let cancelled = false;
+    findUnfinishedWorkout(connection.id, state.entry.date, resumeCheckSession.id, 'athlete')
+      .then(u => { if (!cancelled) setResumable(u); })
+      .catch(() => { /* no resume offered */ });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connection?.id, state?.entry.date, resumeCheckSession?.id, sessionLogId]);
+
+  /** Continue a saved workout from where it was left */
+  function resumeSavedWorkout(u: UnfinishedWorkout) {
+    const p = u.progress;
+    setSessionLogId(u.logId);
+    setResumable(null);
+    setLoggedValues(p?.loggedValues ?? {});
+    setCompletedSets(p?.completedSets ?? {});
+    setSetCountOverrides(p?.setCountOverrides ?? {});
+    setSwappedExercises(p?.swappedExercises ?? {});
+    setSectionIdx(Math.min(Math.max(0, p?.sectionIdx ?? 0), Math.max(0, sections.length - 1)));
+    const elapsed = p?.elapsedSeconds ?? 0;
+    setWorkoutElapsed(elapsed);
+    if (sections.length === 0) {
+      workoutStartTimeRef.current = Date.now() - elapsed * 1000;
+      setPhase('done');
+      setBorgSheetOpen(true);
+      return;
+    }
+    const target = p?.phase ?? 'sectionIntro';
+    workoutStartTimeRef.current = target === 'active' || elapsed > 0 ? Date.now() - elapsed * 1000 : null;
+    setPhase(target);
   }
 
   // Initialise all section cards as expanded once sections are available
@@ -1072,6 +1163,7 @@ export default function AthleteSessionPage() {
 
   function handleSaved() {
     setBorgSheetOpen(false);
+    if (sessionLogId) void clearWorkoutProgress(sessionLogId, true);
     refetchLogs().catch(console.error);
     navigate(-1);
   }
@@ -1200,9 +1292,13 @@ export default function AthleteSessionPage() {
   // "In progress") and the workout's progress is cleared.
   async function abandonWorkout(target: 'leave' | 'overview') {
     setAbandonTarget(null);
-    if (sessionLogId) {
-      await supabase.from('athlete_session_logs').delete().eq('id', sessionLogId);
+    // The running workout, or the saved one offered for resuming ("Start over")
+    const logId = sessionLogId ?? resumable?.logId ?? null;
+    if (logId) {
+      await supabase.from('athlete_session_logs').delete().eq('id', logId);
+      void clearWorkoutProgress(logId, false);
       setSessionLogId(null);
+      setResumable(null);
     }
     workoutStartTimeRef.current = null;
     setWorkoutElapsed(0);
@@ -1222,10 +1318,17 @@ export default function AthleteSessionPage() {
           <AlertDialogTitle>Abandon workout?</AlertDialogTitle>
           <AlertDialogDescription>
             Your progress will be lost and the session won't be marked as started.
+            {sessionLogId && phase !== 'paused' && ' To stop for now and finish later, pause the workout instead.'}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Keep going</AlertDialogCancel>
+          {sessionLogId && phase !== 'paused' && (
+            <Button variant="outline" onClick={() => void pauseWorkout(true)}>
+              <Pause className="h-4 w-4 mr-2" />
+              Pause & finish later
+            </Button>
+          )}
           <AlertDialogAction
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             onClick={() => { if (abandonTarget) void abandonWorkout(abandonTarget); }}
@@ -1481,11 +1584,47 @@ export default function AthleteSessionPage() {
               </div>
             </div>
           )}
+          {resumable && !currentLog && (
+            <div className="px-4 pt-3 pb-1">
+              <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-center gap-2.5">
+                <Pause className="h-4 w-4 text-amber-600 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-amber-900">
+                    {resumable.pausedAt ? 'Workout paused' : 'Unfinished workout'}
+                  </p>
+                  <p className="text-xs text-amber-800">
+                    {(() => {
+                      const done = countDoneSets(resumable.progress);
+                      const secs = resumable.progress?.elapsedSeconds ?? 0;
+                      const parts = [`${done} ${done === 1 ? 'set' : 'sets'} done`];
+                      if (secs > 0) parts.push(formatTime(secs));
+                      const when = resumable.pausedAt ?? resumable.startedAt;
+                      parts.push(`since ${formatCompletedAt(when)}`);
+                      return parts.join(' · ');
+                    })()}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="px-4 py-4">
             {currentLog ? (
               <Button className="w-full" size="lg" variant="outline" onClick={() => navigate(-1)}>
                 Close
               </Button>
+            ) : resumable ? (
+              <div className="space-y-1">
+                <Button className="w-full" size="lg" disabled={!!sessionLock} onClick={() => resumeSavedWorkout(resumable)}>
+                  <Play className="h-4 w-4 mr-2" />
+                  Resume Workout
+                </Button>
+                <button
+                  onClick={() => setAbandonTarget('overview')}
+                  className="w-full min-h-[44px] text-sm text-muted-foreground hover:text-foreground active:opacity-60 transition-colors"
+                >
+                  Start over
+                </button>
+              </div>
             ) : (
               <Button className="w-full" size="lg" disabled={!!sessionLock} onClick={async () => {
                 // Hard gate: re-check at tap time to catch race conditions
@@ -1611,7 +1750,16 @@ export default function AthleteSessionPage() {
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <h1 className="flex-1 text-center font-semibold text-base truncate pr-8">{session.name}</h1>
+          <h1 className={cn('flex-1 text-center font-semibold text-base truncate', !sessionLogId && 'pr-8')}>{session.name}</h1>
+          {sessionLogId && (
+            <button
+              onClick={() => void pauseWorkout()}
+              className="w-11 h-11 -mr-2 rounded-full flex items-center justify-center hover:bg-muted active:bg-muted/80 transition-colors shrink-0"
+              aria-label="Pause workout"
+            >
+              <Pause className="h-5 w-5" />
+            </button>
+          )}
         </div>
 
         {/* Section intro body */}
@@ -1694,6 +1842,67 @@ export default function AthleteSessionPage() {
         >
           Skip rest
         </button>
+
+        {sessionLogId && (
+          <Button variant="ghost" className="min-h-[44px] text-muted-foreground" onClick={() => void pauseWorkout()}>
+            <Pause className="h-4 w-4 mr-2" />
+            Pause workout
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  // ── Screen: Paused ─────────────────────────────────────────────────────────
+
+  if (phase === 'paused') {
+    const setsDone = countDoneSets(buildProgress('active', workoutElapsed));
+    const setsTotal = session.exercises.reduce((n, ex) => n + (setCountOverrides[ex.id] ?? getSetCount(ex)), 0);
+    return (
+      <div className="absolute inset-0 flex flex-col bg-background max-w-[480px] mx-auto overflow-hidden">
+        <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
+          <button
+            onClick={() => navigate(-1)}
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors"
+            aria-label="Leave (the workout stays paused)"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <h1 className="flex-1 text-center font-semibold text-base truncate pr-8">{session.name}</h1>
+        </div>
+
+        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-3 text-center">
+          <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mb-2">
+            <Pause className="h-8 w-8 text-amber-600" />
+          </div>
+          <h2 className="text-2xl font-bold">Workout paused</h2>
+          <p className="text-4xl font-bold tabular-nums">{formatTime(workoutElapsed)}</p>
+          <p className="text-sm text-muted-foreground">
+            {setsDone} of {setsTotal} sets done
+            {sections.length > 1 && ` · Section ${sectionIdx + 1} of ${sections.length}`}
+          </p>
+          <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
+            Your progress is saved. You can close the app and resume this workout later.
+          </p>
+        </div>
+
+        <div className="px-4 py-4 border-t space-y-2 shrink-0">
+          <Button className="w-full" size="lg" onClick={resumeWorkout}>
+            <Play className="h-4 w-4 mr-2" />
+            Resume
+          </Button>
+          <Button className="w-full" size="lg" variant="outline" onClick={() => navigate(-1)}>
+            Finish later
+          </Button>
+          <button
+            onClick={() => setAbandonTarget('leave')}
+            className="w-full min-h-[44px] text-sm text-destructive hover:underline active:opacity-60"
+          >
+            Abandon workout
+          </button>
+        </div>
+
+        {abandonDialog}
       </div>
     );
   }
@@ -1728,6 +1937,15 @@ export default function AthleteSessionPage() {
             <Timer className="h-3 w-3 shrink-0" />
             <span>{formatTime(workoutElapsed)}</span>
           </div>
+          {sessionLogId && (
+            <button
+              onClick={() => void pauseWorkout()}
+              className="w-11 h-11 -mr-2 rounded-full flex items-center justify-center hover:bg-muted active:bg-muted/80 transition-colors shrink-0"
+              aria-label="Pause workout"
+            >
+              <Pause className="h-5 w-5" />
+            </button>
+          )}
         </div>
 
         {/* Section progress bar */}
