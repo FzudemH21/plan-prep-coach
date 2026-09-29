@@ -182,7 +182,7 @@ function ThreadView({
                     {/* Text bubble */}
                     {msg.content && (
                       <div className={cn(
-                        'max-w-[75%] px-3 py-2 rounded-2xl text-sm break-words',
+                        'max-w-[75%] px-3 py-2 rounded-2xl text-sm break-words whitespace-pre-wrap',
                         isOwn
                           ? 'bg-primary text-primary-foreground rounded-br-sm'
                           : 'bg-muted text-foreground rounded-bl-sm'

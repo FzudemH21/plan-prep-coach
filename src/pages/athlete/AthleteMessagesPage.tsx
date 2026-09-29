@@ -195,7 +195,7 @@ export default function AthleteMessagesPage() {
                     {msg.content && (
                       <div
                         className={cn(
-                          'max-w-[78%] px-3 py-2 rounded-2xl text-sm break-words',
+                          'max-w-[78%] px-3 py-2 rounded-2xl text-sm break-words whitespace-pre-wrap',
                           isOwn
                             ? 'bg-primary text-primary-foreground rounded-br-sm'
                             : 'bg-muted text-foreground rounded-bl-sm'
@@ -271,7 +271,7 @@ export default function AthleteMessagesPage() {
             onKeyDown={handleKeyDown}
             placeholder="Message your coach..."
             rows={1}
-            className="flex-1 resize-none min-h-[40px] max-h-[120px] text-sm py-2"
+            className="flex-1 resize-none min-h-[40px] max-h-[120px] text-base py-2"
           />
           <Button
             size="icon"

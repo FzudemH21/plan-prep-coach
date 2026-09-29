@@ -91,12 +91,14 @@ export default function CoachMobileAthleteThreadPage() {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
+  // Enter adds a new line (phone keyboard) — messages are only sent with the Send button.
+  // The field grows with its text up to its max height, then scrolls.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [draft]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -208,7 +210,7 @@ export default function CoachMobileAthleteThreadPage() {
                     {msg.content && (
                       <div
                         className={cn(
-                          'max-w-[78%] px-3 py-2 rounded-2xl text-sm break-words',
+                          'max-w-[78%] px-3 py-2 rounded-2xl text-sm break-words whitespace-pre-wrap',
                           isOwn
                             ? 'bg-primary text-primary-foreground rounded-br-sm'
                             : 'bg-muted text-foreground rounded-bl-sm'
@@ -279,10 +281,11 @@ export default function CoachMobileAthleteThreadPage() {
               ref={textareaRef}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={handleKeyDown}
               placeholder={t('coachMobile.messages.messagePlaceholder', { name: athleteName })}
               rows={1}
-              className="flex-1 resize-none min-h-[40px] max-h-[120px] text-sm py-2"
+              enterKeyHint="enter"
+              // 16px text: iOS Safari zooms into inputs with smaller text when they're focused
+              className="flex-1 resize-none min-h-[40px] max-h-[120px] text-base py-2"
             />
             <Button
               size="icon"
