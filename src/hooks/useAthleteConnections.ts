@@ -6,6 +6,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { removeConnectionFiles } from '@/utils/athleteDataDeletion';
 import { useAuth } from '@/hooks/useAuth';
 import type { MonitoringConfig } from '@/types/athlete';
 
@@ -239,8 +240,10 @@ export function useAthleteConnections() {
     return code;
   }, []);
 
-  /** Delete a connection (revoke athlete app access). */
+  /** Delete a connection (revoke athlete app access). Its app data goes with it (database cascade);
+   *  its files are removed first, while the storage policies can still find the connection. */
   const revokeConnection = useCallback(async (connectionId: string) => {
+    await removeConnectionFiles(connectionId);
     const { data, error } = await supabase
       .from('athlete_connections')
       .delete()

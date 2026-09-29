@@ -10,7 +10,8 @@ import { AddAthleteDialog, type NewAthleteData } from '@/components/athletes/Add
 import { DeleteAthleteDialog } from '@/components/athletes/DeleteAthleteDialog';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
-import type { Athlete } from '@/types/athlete';
+import { type Athlete, getAthleteDisplayName } from '@/types/athlete';
+import { useToast } from '@/hooks/use-toast';
 import { SquadDashboard } from '@/components/athletes/SquadDashboard';
 
 interface NavState {
@@ -44,6 +45,7 @@ export default function AthleteDatabase() {
 
   const athleteData = useAthletes();
   const { deleteEventsForAthlete } = useCalendarEvents();
+  const { toast } = useToast();
   const { connections, loading: connectionsLoading, getConnectionForAthlete, syncProfileToConnection } = useAthleteConnections();
 
   // ── Load-time sync: pull athlete-edited profile_data back into the coach blob ──
@@ -162,10 +164,26 @@ export default function AthleteDatabase() {
   const athletePendingDelete = athleteIdPendingDelete ? athleteData.getAthlete(athleteIdPendingDelete) ?? null : null;
 
   const confirmDeleteAthlete = (athleteId: string) => {
-    athleteData.deleteAthlete(athleteId);
+    const name = athletePendingDelete ? getAthleteDisplayName(athletePendingDelete) : 'Athlete';
     deleteEventsForAthlete(athleteId);
     if (selectedAthleteId === athleteId) setSelectedAthleteId(null);
     setAthleteIdPendingDelete(null);
+    athleteData.deleteAthlete(athleteId)
+      .then(({ filesFailed, errors }) => {
+        if (filesFailed === 0 && errors.length === 0) {
+          toast({ title: `${name} deleted`, description: 'All their data and files were removed.' });
+        } else {
+          toast({
+            title: `${name} deleted — some data could not be removed`,
+            description: [
+              filesFailed > 0 ? `${filesFailed} file${filesFailed === 1 ? '' : 's'} left in storage (the latest Supabase migration may not have been run yet; remove them in the Supabase dashboard).` : '',
+              ...errors,
+            ].filter(Boolean).join(' '),
+            variant: 'destructive',
+          });
+        }
+      })
+      .catch(err => toast({ title: 'Deleting failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' }));
   };
 
   const handleArchiveAthlete = (athleteId: string) => {

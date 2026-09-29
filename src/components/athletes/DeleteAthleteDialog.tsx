@@ -32,9 +32,10 @@ export function DeleteAthleteDialog({ athlete, onCancel, onConfirm, onArchive }:
           <AlertDialogDescription asChild>
             <div className="space-y-2 text-sm text-muted-foreground">
               <p>
-                This permanently deletes the athlete's profile, body metrics, performance parameters,
-                calendar assignments, tests & events, and their athlete-app connection (schedule, session logs,
-                check-ins and chat). <strong className="text-foreground">This cannot be undone.</strong>
+                This permanently deletes everything stored for this athlete: profile, body metrics, performance
+                parameters, calendar assignments, tests & events, anamneses with their attachments, and their
+                athlete-app connection (schedule, session logs, test results with photos/videos, check-ins, chat
+                and chat files). <strong className="text-foreground">This cannot be undone.</strong>
               </p>
               {canArchive && (
                 <p>If you just want them out of your active list, archive them instead — nothing is lost and you can restore them any time.</p>

@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { useSupabaseStore } from './useSupabaseStore';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { deleteAthleteCloudData, removeAssignmentScopedLocalData, type AthleteDeletionResult } from '@/utils/athleteDataDeletion';
 import {
   Athlete,
   AthleteGroup,
@@ -178,7 +179,13 @@ export function useAthletes() {
     }));
   }, [setData]);
 
-  const deleteAthlete = useCallback(async (id: string) => {
+  /** Deletes the athlete and everything attached to them: profile, metrics, assignments, the
+   *  per-session data of their calendar in this browser, anamneses + files, and the athlete-app
+   *  connection with all its data and files. */
+  const deleteAthlete = useCallback(async (id: string): Promise<AthleteDeletionResult> => {
+    removeAssignmentScopedLocalData(
+      data.calendarAssignments.filter(ca => ca.athleteId === id).map(ca => ca.id),
+    );
     await setData(prev => ({
       ...prev,
       athletes: prev.athletes.filter(a => a.id !== id),
@@ -186,15 +193,9 @@ export function useAthletes() {
       athletePerformanceParameters: prev.athletePerformanceParameters.filter(pp => pp.athleteId !== id),
       calendarAssignments: prev.calendarAssignments.filter(ca => ca.athleteId !== id),
     }));
-    // Delete the athlete app connection — cascades to all child data (schedule, logs, check-ins …)
-    if (user) {
-      await supabase
-        .from('athlete_connections')
-        .delete()
-        .eq('athlete_local_id', id)
-        .eq('coach_user_id', user.id);
-    }
-  }, [setData, user]);
+    if (!user) return { filesFailed: 0, errors: [] };
+    return deleteAthleteCloudData(user.id, id);
+  }, [setData, user, data.calendarAssignments]);
 
   // ── Biometric Definitions ─────────────────────────────────────────────────
 
