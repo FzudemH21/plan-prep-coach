@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronDown, Check, Dumbbell, RefreshCw,
   CheckCircle2, Timer, Plus, Minus, ArrowUpDown, TrendingUp, TrendingDown,
-  MessageSquare, Send, Loader2, History, Link2, Pause, Play,
+  MessageSquare, Send, Loader2, History, Link2, Pause, Play, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -1347,10 +1347,11 @@ export default function AthleteSessionPage() {
     <AlertDialog open={abandonTarget !== null} onOpenChange={o => { if (!o) setAbandonTarget(null); }}>
       <AlertDialogContent className="sm:max-w-[360px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
         <AlertDialogHeader>
-          <AlertDialogTitle>Abandon workout?</AlertDialogTitle>
+          <AlertDialogTitle>{sessionLogId && phase !== 'paused' ? 'Leave workout?' : 'Abandon workout?'}</AlertDialogTitle>
           <AlertDialogDescription>
-            Your progress will be lost and the session won't be marked as started.
-            {sessionLogId && phase !== 'paused' && ' To stop for now and finish later, pause the workout instead.'}
+            {sessionLogId && phase !== 'paused'
+              ? 'Pause it to finish later — your progress is saved. Abandoning deletes the progress and the session won\'t be marked as started.'
+              : 'Your progress will be lost and the session won\'t be marked as started.'}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -1371,6 +1372,26 @@ export default function AthleteSessionPage() {
       </AlertDialogContent>
     </AlertDialog>
   );
+
+  // Header buttons of a running workout: pause, and exit (leave → pause for later or abandon)
+  const headerActions = sessionLogId ? (
+    <>
+      <button
+        onClick={() => void pauseWorkout()}
+        className="w-11 h-11 rounded-full flex items-center justify-center hover:bg-muted active:bg-muted/80 transition-colors shrink-0"
+        aria-label="Pause workout"
+      >
+        <Pause className="h-5 w-5" />
+      </button>
+      <button
+        onClick={() => setAbandonTarget('leave')}
+        className="w-11 h-11 -mr-2 rounded-full flex items-center justify-center hover:bg-muted active:bg-muted/80 transition-colors shrink-0"
+        aria-label="Leave workout"
+      >
+        <X className="h-5 w-5" />
+      </button>
+    </>
+  ) : null;
 
   if (phase === 'overview') {
     return (
@@ -1723,15 +1744,7 @@ export default function AthleteSessionPage() {
             <ChevronLeft className="h-5 w-5" />
           </button>
           <h1 className={cn('flex-1 text-center font-semibold text-base truncate', !sessionLogId && 'pr-8')}>{session.name}</h1>
-          {sessionLogId && (
-            <button
-              onClick={() => void pauseWorkout()}
-              className="w-11 h-11 -mr-2 rounded-full flex items-center justify-center hover:bg-muted active:bg-muted/80 transition-colors shrink-0"
-              aria-label="Pause workout"
-            >
-              <Pause className="h-5 w-5" />
-            </button>
-          )}
+          {headerActions}
         </div>
 
         {/* Section intro body */}
@@ -1778,6 +1791,15 @@ export default function AthleteSessionPage() {
   if (phase === 'rest') {
     return (
       <div className="absolute inset-0 flex flex-col bg-background items-center justify-center gap-8 px-6 max-w-[480px] mx-auto overflow-hidden">
+        {sessionLogId && (
+          <button
+            onClick={() => setAbandonTarget('leave')}
+            className="absolute top-2 right-2 w-11 h-11 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors"
+            aria-label="Leave workout"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
         <div className="flex flex-col items-center gap-2">
           <Timer className="h-8 w-8 text-primary opacity-70" />
           <p className="text-lg font-semibold text-muted-foreground">Rest</p>
@@ -1821,6 +1843,8 @@ export default function AthleteSessionPage() {
             Pause workout
           </Button>
         )}
+
+        {abandonDialog}
       </div>
     );
   }
@@ -1912,15 +1936,7 @@ export default function AthleteSessionPage() {
             <Timer className="h-3 w-3 shrink-0" />
             <span>{formatTime(workoutElapsed)}</span>
           </div>
-          {sessionLogId && (
-            <button
-              onClick={() => void pauseWorkout()}
-              className="w-11 h-11 -mr-2 rounded-full flex items-center justify-center hover:bg-muted active:bg-muted/80 transition-colors shrink-0"
-              aria-label="Pause workout"
-            >
-              <Pause className="h-5 w-5" />
-            </button>
-          )}
+          {headerActions}
         </div>
 
         {/* Section progress bar */}
@@ -2222,6 +2238,8 @@ export default function AthleteSessionPage() {
             }}
           />
         )}
+
+        {abandonDialog}
 
         {/* Incomplete sets warning */}
         <AlertDialog

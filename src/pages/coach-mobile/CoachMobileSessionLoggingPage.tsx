@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, Check, Dumbbell, RefreshCw,
   CheckCircle2, Timer, History, MessageSquare, ArrowUpDown,
-  TrendingUp, TrendingDown, Send, Loader2, Link2, Lock, Pause, Play,
+  TrendingUp, TrendingDown, Send, Loader2, Link2, Lock, Pause, Play, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -1060,10 +1060,11 @@ export default function CoachMobileSessionLoggingPage() {
     <AlertDialog open={abandonWarning !== false} onOpenChange={o => { if (!o) setAbandonWarning(false); }}>
       <AlertDialogContent className="sm:max-w-[360px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
         <AlertDialogHeader>
-          <AlertDialogTitle>{t('coachMobile.sessionLogging.abandonTitle')}</AlertDialogTitle>
+          <AlertDialogTitle>
+            {canPauseInstead ? t('coachMobile.sessionLogging.leaveTitle') : t('coachMobile.sessionLogging.abandonTitle')}
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            {t('coachMobile.sessionLogging.abandonDesc')}
-            {canPauseInstead && ` ${t('coachMobile.sessionLogging.pauseInsteadHint')}`}
+            {canPauseInstead ? t('coachMobile.sessionLogging.leaveDesc') : t('coachMobile.sessionLogging.abandonDesc')}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -1083,12 +1084,20 @@ export default function CoachMobileSessionLoggingPage() {
     </AlertDialog>
   );
 
+  // Header buttons of a running workout: pause, and exit (leave → pause for later or abandon)
   const pauseButton = sessionLogId ? (
-    <button onClick={() => void pauseWorkout()}
-      className="w-11 h-11 -mr-2 rounded-full flex items-center justify-center hover:bg-muted active:bg-muted/80 transition-colors shrink-0"
-      aria-label={t('coachMobile.sessionLogging.pauseWorkout')}>
-      <Pause className="h-5 w-5" />
-    </button>
+    <>
+      <button onClick={() => void pauseWorkout()}
+        className="w-11 h-11 rounded-full flex items-center justify-center hover:bg-muted active:bg-muted/80 transition-colors shrink-0"
+        aria-label={t('coachMobile.sessionLogging.pauseWorkout')}>
+        <Pause className="h-5 w-5" />
+      </button>
+      <button onClick={() => setAbandonWarning('leave')}
+        className="w-11 h-11 -mr-2 rounded-full flex items-center justify-center hover:bg-muted active:bg-muted/80 transition-colors shrink-0"
+        aria-label={t('coachMobile.sessionLogging.leaveWorkout')}>
+        <X className="h-5 w-5" />
+      </button>
+    </>
   ) : null;
 
   // ── Screen: Overview ───────────────────────────────────────────────────────
@@ -1344,7 +1353,14 @@ export default function CoachMobileSessionLoggingPage() {
 
   if (phase === 'rest') {
     return (
-      <div className="flex flex-col h-full bg-background items-center justify-center gap-8 px-6">
+      <div className="relative flex flex-col h-full bg-background items-center justify-center gap-8 px-6">
+        {sessionLogId && (
+          <button onClick={() => setAbandonWarning('leave')}
+            className="absolute top-2 right-2 w-11 h-11 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors"
+            aria-label={t('coachMobile.sessionLogging.leaveWorkout')}>
+            <X className="h-5 w-5" />
+          </button>
+        )}
         <div className="flex flex-col items-center gap-2">
           <Timer className="h-8 w-8 text-primary opacity-70" />
           <p className="text-lg font-semibold text-muted-foreground">{t('coachMobile.sessionLogging.rest')}</p>
@@ -1363,6 +1379,8 @@ export default function CoachMobileSessionLoggingPage() {
             {t('coachMobile.sessionLogging.pauseWorkout')}
           </Button>
         )}
+
+        {abandonDialog}
       </div>
     );
   }
@@ -1665,6 +1683,8 @@ export default function CoachMobileSessionLoggingPage() {
             </>
           )}
         </div>
+
+        {abandonDialog}
 
         <AlertDialog open={incompleteWarning !== null} onOpenChange={o => { if (!o) setIncompleteWarning(null); }}>
           <AlertDialogContent className="sm:max-w-[360px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
