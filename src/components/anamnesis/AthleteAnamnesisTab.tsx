@@ -42,6 +42,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useCoachProfile } from '@/hooks/useCoachProfile';
 import type { AnamnesisPdfLang } from '@/components/pdf/AnamnesisPDF';
+import { AnamnesisNotesPanel, type NotesChange } from '@/components/anamnesis/AnamnesisNotesPanel';
+import { AnamnesisChangeHistory } from '@/components/anamnesis/AnamnesisChangeHistory';
+import { diffAnamnesis, logAnamnesisChange, type AnamnesisAnswersSnapshot } from '@/utils/anamnesisChangeLog';
 import { useAthleteAnamneses } from '@/hooks/useAthleteAnamneses';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
 import { TemplateEditorDialog } from '@/components/anamnesis/AnamnesisTemplateEditor';
@@ -55,7 +58,8 @@ import { SEX_LABELS, type Athlete } from '@/types/athlete';
 import {
   isAthleteSection,
   type AthleteAnamnesis, type AnamnesisField, type AnamnesisFieldType, type AnamnesisSection, type AnamnesisAttachment,
-  type AnamnesisTemplateDraft, type AnamnesisConsent,
+  type AnamnesisTemplateDraft, type AnamnesisConsent, type AnamnesisNote,
+  noteEntriesOf, notesAsText,
 } from '@/types/anamnesis';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -287,8 +291,12 @@ function buildSummaryPrompt(
     }
   }
 
-  if (record.notes) {
-    parts.push(`Additional Notes:\n${record.notes}`);
+  const notes = noteEntriesOf(record);
+  if (notes.length > 0) {
+    parts.push('Notes from the appointment (dictated notes are speech-to-text and may contain recognition errors):');
+    for (const n of notes) {
+      parts.push(`- [${n.createdAt.slice(0, 16).replace('T', ' ')}${n.source === 'dictated' ? ', dictated' : ''}] ${n.text}`);
+    }
   }
 
   return parts.join('\n');
@@ -305,7 +313,13 @@ interface RecordFormProps {
   consent?: AnamnesisConsent | null;
   formLanguage?: string | null;
   coachUserId: string;
-  onSave: (data: Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  /** Saves the record; resolves with its id (null = not saved) */
+  onSave: (data: Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'createdAt' | 'updatedAt'>) => Promise<string | null>;
+  /** Id of a saved record — notes and the AI summary are saved right away, changes are logged */
+  recordId?: string;
+  onPatch?: (updates: Partial<Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'athleteLocalId' | 'createdAt'>>) => Promise<boolean>;
+  /** Unsaved changes in edit mode (the dialog asks before closing) */
+  onDirtyChange?: (dirty: boolean) => void;
   onDelete?: () => Promise<void>;
   isSaving: boolean;
   isDeleting: boolean;
@@ -320,13 +334,20 @@ function RecordForm({
   formLanguage,
   coachUserId,
   onSave,
+  recordId,
+  onPatch,
+  onDirtyChange,
   onDelete,
   isSaving,
   isDeleting,
 }: RecordFormProps) {
   const { templates, createTemplate, updateTemplate, deleteTemplate } = useAnamnesisTemplates();
   const { profile: coachProfile } = useCoachProfile();
+  const { user } = useAuth();
+  const changedByName = coachProfile?.name || user?.email || '';
   const [printing, setPrinting] = useState(false);
+  // Saved records open read-only; "Edit" switches to the form (no accidental changes)
+  const [mode, setMode] = useState<'view' | 'edit'>(initial ? 'view' : 'edit');
 
   const [showNewTemplate, setShowNewTemplate] = useState(false);
   const [savingNewTemplate, setSavingNewTemplate] = useState(false);
@@ -349,7 +370,7 @@ function RecordForm({
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>(
     initial?.customFieldValues ?? {},
   );
-  const [notes, setNotes] = useState(initial?.notes ?? '');
+  const [noteEntries, setNoteEntries] = useState<AnamnesisNote[]>(() => (initial ? noteEntriesOf(initial) : []));
   const [aiSummary, setAiSummary] = useState<string | null>(initial?.aiSummary ?? null);
   const [generatingSummary, setGeneratingSummary] = useState(false);
   const [attachments, setAttachments] = useState<AnamnesisAttachment[]>(initial?.attachments ?? []);
@@ -357,6 +378,58 @@ function RecordForm({
   const [uploadingFile, setUploadingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Last saved answers — for "Cancel" in edit mode and the change history
+  const [savedAnswers, setSavedAnswers] = useState<(AnamnesisAnswersSnapshot & { templateId: string | null }) | null>(() => (initial
+    ? {
+        conductedAt: initial.conductedAt,
+        templateId: initial.templateId,
+        templateSnapshot: initial.templateSnapshot,
+        customQuestions: initial.customQuestions,
+        fieldValues: initial.fieldValues,
+        customFieldValues: initial.customFieldValues,
+        attachments: initial.attachments ?? [],
+      }
+    : null));
+  // Saved attachments removed in edit mode: their files are deleted only when the edit is saved
+  const [removedPaths, setRemovedPaths] = useState<string[]>([]);
+  const currentAnswers = (): AnamnesisAnswersSnapshot & { templateId: string | null } => ({
+    conductedAt, templateId, templateSnapshot, customQuestions, fieldValues, customFieldValues, attachments,
+  });
+  const dirty = mode === 'edit' && (savedAnswers
+    ? JSON.stringify(currentAnswers()) !== JSON.stringify(savedAnswers)
+    : templateId !== null || customQuestions.length > 0 || attachments.length > 0 || noteEntries.length > 0
+      || Object.values(fieldValues).some((v) => v?.trim()));
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+
+  const discardEdits = () => {
+    if (!savedAnswers) return;
+    const savedPaths = new Set(savedAnswers.attachments.map((a) => a.path));
+    // Files uploaded during this edit are not needed any more
+    attachments.filter((a) => !savedPaths.has(a.path)).forEach((a) => { deleteFile(a.path).catch(() => {}); });
+    setConductedAt(savedAnswers.conductedAt);
+    setTemplateId(savedAnswers.templateId);
+    setTemplateSnapshot(savedAnswers.templateSnapshot);
+    setCustomQuestions(savedAnswers.customQuestions);
+    setFieldValues(savedAnswers.fieldValues);
+    setCustomFieldValues(savedAnswers.customFieldValues);
+    setAttachments(savedAnswers.attachments);
+    setRemovedPaths([]);
+    setMode('view');
+  };
+
+  /** Notes are additions: saved right away for a saved record (and logged), with the record otherwise */
+  const handleNotesChange = async (next: AnamnesisNote[], change: NotesChange): Promise<boolean> => {
+    if (!onPatch || !recordId) { setNoteEntries(next); return true; }
+    const ok = await onPatch({ noteEntries: next, notes: notesAsText(next) });
+    if (!ok) {
+      toast({ title: 'Note not saved', description: 'Please try again.', variant: 'destructive' });
+      return false;
+    }
+    setNoteEntries(next);
+    void logAnamnesisChange(recordId, changedByName, change.summary, change.changes);
+    return true;
+  };
 
   // Load signed URLs for any attachment that doesn't have one yet
   useEffect(() => {
@@ -399,7 +472,9 @@ function RecordForm({
   const handleRemoveAttachment = async (path: string) => {
     setAttachments((prev) => prev.filter((a) => a.path !== path));
     setSignedUrls((prev) => { const next = { ...prev }; delete next[path]; return next; });
-    deleteFile(path).catch(() => {});
+    // A saved attachment stays until the edit is saved (Cancel brings it back)
+    if (savedAnswers?.attachments.some((a) => a.path === path)) setRemovedPaths((prev) => [...prev, path]);
+    else deleteFile(path).catch(() => {});
   };
 
   const handleTemplateChange = (id: string) => {
@@ -494,7 +569,7 @@ function RecordForm({
   const handleGenerateSummary = async () => {
     setGeneratingSummary(true);
     try {
-      const dataSnapshot = {
+      const dataSnapshot: Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'createdAt' | 'updatedAt'> = {
         athleteLocalId,
         templateId,
         templateSnapshot,
@@ -502,20 +577,35 @@ function RecordForm({
         customQuestions,
         fieldValues,
         customFieldValues,
-        notes,
+        notes: '',
+        noteEntries,
         aiSummary: null,
+        attachments,
       };
       const prompt = buildSummaryPrompt(dataSnapshot, athleteName);
       const summary = await sendMessage(
         [{ role: 'user', content: prompt }],
-        `You are an experienced sports science assistant helping a coach document an athlete intake assessment.
-Based on the provided intake data, write a concise professional summary (3–5 sentences) covering:
-the athlete's background and main complaint, relevant health and medical history, key movement screening findings, and the main training implications or priorities.
-Use clear, clinical language suitable for professional documentation. Skip sections with no data.`,
-        'claude-haiku-4-5',
-        512,
+        `You are an experienced sports scientist and physiotherapist documenting an athlete's intake assessment (anamnesis).
+You receive the intake answers (partly filled in by the athlete through an online form) and the coach's notes from the appointment. Dictated notes are speech-to-text and may contain recognition errors — interpret them sensibly, never invent content.
+
+Write a structured summary with exactly these five headings, each as a Markdown "## " heading, with short "- " bullet points below:
+English: Main findings / Relevant history / Training implications / Contraindications & precautions / Open questions
+German: Hauptbefunde / Relevante Vorgeschichte / Konsequenzen für das Training / Kontraindikationen & Vorsichtsmaßnahmen / Offene Fragen
+Write in the language most of the answers and notes are in (German or English), headings included.
+Only use the information given. Where a heading has nothing, write "- None noted" (German: "- Keine Angaben"). Use precise, clinical language suitable for professional documentation.`,
+        'claude-sonnet-4-5',
+        1500,
       );
+      const previous = aiSummary;
       setAiSummary(summary);
+      // A saved record keeps the summary right away (no need to switch to edit mode)
+      if (onPatch && recordId) {
+        const ok = await onPatch({ aiSummary: summary });
+        if (ok) {
+          void logAnamnesisChange(recordId, changedByName, previous ? 'AI summary updated' : 'AI summary created',
+            [{ what: 'AI summary', from: previous ?? '—', to: summary }]);
+        }
+      }
     } catch (err) {
       console.error('[AnamnesisTab] AI summary error', err);
       toast({ title: 'Summary failed', description: 'Could not generate summary.', variant: 'destructive' });
@@ -540,7 +630,7 @@ Use clear, clinical language suitable for professional documentation. Skip secti
           customQuestions={customQuestions}
           fieldValues={fieldValues}
           customFieldValues={customFieldValues}
-          notes={notes}
+          notes={notesAsText(noteEntries)}
           conductedAt={conductedAt}
           consent={consent}
           athlete={{
@@ -572,7 +662,8 @@ Use clear, clinical language suitable for professional documentation. Skip secti
   const printLangs: AnamnesisPdfLang[] = formLanguage === 'en' ? ['en', 'de'] : ['de', 'en'];
 
   const handleSave = async () => {
-    await onSave({
+    const answers = currentAnswers();
+    const id = await onSave({
       athleteLocalId,
       templateId,
       templateSnapshot,
@@ -580,11 +671,31 @@ Use clear, clinical language suitable for professional documentation. Skip secti
       customQuestions,
       fieldValues,
       customFieldValues,
-      notes,
+      notes: notesAsText(noteEntries),
+      noteEntries,
       aiSummary,
       attachments,
     });
+    if (!id) return;
+    removedPaths.forEach((p) => { deleteFile(p).catch(() => {}); });
+    setRemovedPaths([]);
+    if (savedAnswers) {
+      const changes = diffAnamnesis(savedAnswers, answers);
+      if (changes.length > 0) {
+        void logAnamnesisChange(id, changedByName, `Answers edited (${changes.length} change${changes.length === 1 ? '' : 's'})`, changes);
+      }
+    } else {
+      void logAnamnesisChange(id, changedByName, 'Anamnesis created');
+    }
+    setSavedAnswers(answers);
+    setMode('view');
   };
+
+  const conductedLabel = (() => {
+    try { return format(parseISO(`${conductedAt}T12:00:00`), 'd MMM yyyy'); } catch { return conductedAt; }
+  })();
+  const readOnly = mode === 'view';
+  const customWithLabels = customQuestions.filter((f) => f.label.trim());
 
   const allSections: (AnamnesisSection & { isCustom?: boolean })[] = templateSnapshot.sections;
 
@@ -592,6 +703,13 @@ Use clear, clinical language suitable for professional documentation. Skip secti
     <div className="flex flex-col flex-1 min-h-0">
       {/* Sticky meta row */}
       <div className="shrink-0 px-6 pb-4 border-b space-y-3">
+        {readOnly ? (
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+            <span><span className="text-xs text-muted-foreground mr-1.5">Date of session</span>{conductedLabel}</span>
+            <span><span className="text-xs text-muted-foreground mr-1.5">Template</span>{templateSnapshot.name || '—'}</span>
+            <span className="text-xs text-muted-foreground ml-auto">Read-only — click "Edit" to change answers</span>
+          </div>
+        ) : (
         <div className="flex gap-3">
           <div className="flex-1 space-y-1">
             <Label className="text-xs">Date of Session</Label>
@@ -668,6 +786,7 @@ Use clear, clinical language suitable for professional documentation. Skip secti
             ) : null;
           })()}
         </div>
+        )}
       </div>
 
       {/* Scrollable form body */}
@@ -685,6 +804,9 @@ Use clear, clinical language suitable for professional documentation. Skip secti
               <div className="flex items-end justify-between gap-3 border-b pb-1">
                 <h3 className="text-sm font-semibold text-foreground">{section.title}</h3>
                 {/* Whether the athlete fills in this section through the form link — for this anamnesis */}
+                {readOnly ? (
+                  isAthleteSection(section) && <span className="text-xs text-muted-foreground shrink-0">Filled in by athlete</span>
+                ) : (
                 <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer shrink-0">
                   <Checkbox
                     checked={isAthleteSection(section)}
@@ -696,6 +818,7 @@ Use clear, clinical language suitable for professional documentation. Skip secti
                   />
                   Filled in by athlete
                 </label>
+                )}
               </div>
               <div className="space-y-3">
                 {section.fields.map((field) => (
@@ -705,6 +828,7 @@ Use clear, clinical language suitable for professional documentation. Skip secti
                       field={field}
                       value={fieldValues[field.id] ?? ''}
                       onChange={(v) => setFieldValue(field.id, v)}
+                      readOnly={readOnly}
                     />
                   </div>
                 ))}
@@ -713,6 +837,19 @@ Use clear, clinical language suitable for professional documentation. Skip secti
           ))}
 
           {/* Custom questions */}
+          {readOnly ? (
+            customWithLabels.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold border-b pb-1">Custom Questions</h3>
+                {customWithLabels.map((field) => (
+                  <div key={field.id} className="space-y-1">
+                    <Label className="text-xs">{field.label}</Label>
+                    <AnamnesisFieldInput field={field} value={customFieldValues[field.id] ?? ''} onChange={() => {}} readOnly />
+                  </div>
+                ))}
+              </div>
+            )
+          ) : (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Custom Questions</h3>
@@ -750,22 +887,21 @@ Use clear, clinical language suitable for professional documentation. Skip secti
             ))}
           </div>
 
-          {/* Notes */}
-          <div className="space-y-1">
-            <Label className="text-sm font-semibold">Notes</Label>
-            <Textarea
-              className="min-h-[100px] resize-y text-sm"
-              placeholder="Free-form observations, additional context…"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
+          )}
+
+          {/* Notes — typed or dictated; work in the read-only view too */}
+          <AnamnesisNotesPanel
+            entries={noteEntries}
+            onChange={handleNotesChange}
+            coachUserId={coachUserId}
+            athleteLocalId={athleteLocalId}
+          />
 
           {/* Attachments */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label className="text-sm font-semibold">Attachments</Label>
-              <Button
+              {!readOnly && <Button
                 type="button"
                 variant="ghost"
                 size="sm"
@@ -777,7 +913,7 @@ Use clear, clinical language suitable for professional documentation. Skip secti
                   ? <Loader2 className="h-3 w-3 animate-spin" />
                   : <Paperclip className="h-3 w-3" />}
                 {uploadingFile ? 'Uploading…' : 'Add file'}
-              </Button>
+              </Button>}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -789,7 +925,7 @@ Use clear, clinical language suitable for professional documentation. Skip secti
             </div>
             {attachments.length === 0 && !uploadingFile && (
               <p className="text-xs text-muted-foreground">
-                Attach images or documents (max 20 MB each).
+                {readOnly ? 'No attachments.' : 'Attach images or documents (max 20 MB each).'}
               </p>
             )}
             <div className="space-y-1.5">
@@ -833,15 +969,17 @@ Use clear, clinical language suitable for professional documentation. Skip secti
                       </Button>
                     </a>
                   )}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
-                    onClick={() => handleRemoveAttachment(att.path)}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
+                  {!readOnly && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                      onClick={() => handleRemoveAttachment(att.path)}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -870,10 +1008,12 @@ Use clear, clinical language suitable for professional documentation. Skip secti
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Click "Generate" to create a professional summary of the filled-in data.
+                Click "Generate" for a structured summary of the answers and your notes (main findings, history, training implications, contraindications, open questions).
               </p>
             )}
           </div>
+
+          {recordId && <AnamnesisChangeHistory anamnesisId={recordId} />}
         </div>
       </div>
 
@@ -930,14 +1070,28 @@ Use clear, clinical language suitable for professional documentation. Skip secti
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-        <Button
-          size="sm"
-          onClick={handleSave}
-          disabled={isSaving}
-        >
-          {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          Save
-        </Button>
+          {readOnly ? (
+            <Button size="sm" className="gap-1.5" onClick={() => setMode('edit')}>
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
+            </Button>
+          ) : (
+            <>
+              {savedAnswers && (
+                <Button variant="ghost" size="sm" onClick={discardEdits} disabled={isSaving}>
+                  Cancel
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={isSaving}
+              >
+                {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Save
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -1064,6 +1218,14 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
   const [selectedRecord, setSelectedRecord] = useState<AthleteAnamnesis | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  // Unsaved changes in edit mode → ask before the dialog closes
+  const [formDirty, setFormDirty] = useState(false);
+  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
+  const handleDialogOpenChange = (open: boolean) => {
+    if (!open && formDirty) { setConfirmDiscardOpen(true); return; }
+    setSheetOpen(open);
+    if (!open) setFormDirty(false);
+  };
 
   const openNew = () => {
     setSelectedRecord(null);
@@ -1083,26 +1245,28 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
     setSheetOpen(true);
   };
 
-  const handleSave = async (data: Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'createdAt' | 'updatedAt'>) => {
+  /** Resolves with the record's id when saved. An edited record stays open (back in the read-only view). */
+  const handleSave = async (data: Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'createdAt' | 'updatedAt'>): Promise<string | null> => {
     setIsSaving(true);
     try {
       if (selectedRecord) {
         const ok = await updateAnamnesis(selectedRecord.id, data);
         if (ok) {
           toast({ title: 'Anamnesis saved' });
-          setSheetOpen(false);
-        } else {
-          toast({ title: 'Error', description: 'Could not save.', variant: 'destructive' });
+          return selectedRecord.id;
         }
-      } else {
-        const created = await createAnamnesis(data);
-        if (created) {
-          toast({ title: 'Anamnesis created' });
-          setSheetOpen(false);
-        } else {
-          toast({ title: 'Error', description: 'Could not create record.', variant: 'destructive' });
-        }
+        toast({ title: 'Error', description: 'Could not save.', variant: 'destructive' });
+        return null;
       }
+      const created = await createAnamnesis(data);
+      if (created) {
+        toast({ title: 'Anamnesis created' });
+        setFormDirty(false);
+        setSheetOpen(false);
+        return created.id;
+      }
+      toast({ title: 'Error', description: 'Could not create record.', variant: 'destructive' });
+      return null;
     } finally {
       setIsSaving(false);
     }
@@ -1196,7 +1360,7 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
       </div>
 
       {/* Dialog for create / edit */}
-      <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
+      <Dialog open={sheetOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="max-w-[720px] w-full max-h-[90vh] flex flex-col gap-0 p-0">
           <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
             <DialogTitle>
@@ -1275,6 +1439,7 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
                   fieldValues: selectedRecord.fieldValues,
                   customFieldValues: selectedRecord.customFieldValues,
                   notes: selectedRecord.notes,
+                  noteEntries: selectedRecord.noteEntries,
                   aiSummary: selectedRecord.aiSummary,
                   attachments: selectedRecord.attachments ?? [],
                 }
@@ -1286,6 +1451,9 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
             formLanguage={selectedRecord?.formLanguage}
             coachUserId={user?.id ?? ''}
             onSave={handleSave}
+            recordId={selectedRecord?.id}
+            onPatch={selectedRecord ? (updates) => updateAnamnesis(selectedRecord.id, updates) : undefined}
+            onDirtyChange={setFormDirty}
             onDelete={selectedRecord ? handleDelete : undefined}
             isSaving={isSaving}
             isDeleting={isDeleting}
@@ -1303,6 +1471,26 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
         onWithdraw={(id) => updateFormLink(id, 'withdraw')}
       />
       <PrivacyNoticeDialog open={privacyOpen} onClose={() => setPrivacyOpen(false)} privacy={privacy} />
+
+      <AlertDialog open={confirmDiscardOpen} onOpenChange={setConfirmDiscardOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You changed answers in edit mode without saving. Notes and the AI summary are already saved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { setConfirmDiscardOpen(false); setFormDirty(false); setSheetOpen(false); }}
+            >
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

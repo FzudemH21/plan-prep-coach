@@ -62,7 +62,10 @@ export interface AthleteAnamnesis {
   customQuestions: AnamnesisField[];
   fieldValues: Record<string, string>;
   customFieldValues: Record<string, string>;
+  /** Plain-text version of the notes (kept in step with noteEntries — read by the AI drawer, PDF) */
   notes: string;
+  /** Notes added to the anamnesis, typed or dictated (migration 20261010); older records only have `notes` */
+  noteEntries?: AnamnesisNote[];
   aiSummary: string | null;
   attachments: AnamnesisAttachment[];
   /** Online form link: 'sent' = waiting for the athlete, 'submitted' = athlete sent it; null = coach-only record */
@@ -77,6 +80,52 @@ export interface AthleteAnamnesis {
   profileAppliedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** A note on an anamnesis — typed, or dictated (speech-to-text; the audio is not kept) */
+export interface AnamnesisNote {
+  id: string;
+  text: string;
+  createdAt: string;
+  updatedAt?: string;
+  source: 'typed' | 'dictated';
+}
+
+/** The notes of a record — older records only have the plain `notes` text, shown as one note */
+export function noteEntriesOf(rec: { noteEntries?: AnamnesisNote[] | null; notes?: string | null; conductedAt?: string; createdAt?: string }): AnamnesisNote[] {
+  if (rec.noteEntries && rec.noteEntries.length > 0) return rec.noteEntries;
+  const legacy = rec.notes?.trim();
+  if (!legacy) return [];
+  return [{ id: 'legacy-notes', text: legacy, createdAt: rec.createdAt ?? `${rec.conductedAt ?? ''}T12:00:00`, source: 'typed' }];
+}
+
+/** "2026-10-05 14:32 (dictated): …" — one block per note, for the plain `notes` column */
+export function notesAsText(entries: AnamnesisNote[]): string {
+  return entries.map((n) => {
+    const d = new Date(n.createdAt);
+    const stamp = isNaN(d.getTime())
+      ? ''
+      : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const head = [stamp, n.source === 'dictated' ? '(dictated)' : ''].filter(Boolean).join(' ');
+    return head ? `${head}: ${n.text}` : n.text;
+  }).join('\n\n');
+}
+
+/** One change in the change history: what changed, from → to (display text) */
+export interface AnamnesisChange {
+  what: string;
+  from: string;
+  to: string;
+}
+
+/** A saved change of an anamnesis (append-only table anamnesis_change_log) */
+export interface AnamnesisChangeLogEntry {
+  id: string;
+  anamnesisId: string;
+  changedAt: string;
+  changedByName: string;
+  summary: string;
+  changes: AnamnesisChange[];
 }
 
 /** "About you" in the form — the athlete profile fields the athlete confirms or completes */

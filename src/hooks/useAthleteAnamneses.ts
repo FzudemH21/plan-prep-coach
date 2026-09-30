@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import type {
   AthleteAnamnesis, AnamnesisField, AnamnesisTemplateSnapshot, AnamnesisAttachment, AnamnesisConsent, AnamnesisProfileAnswers,
+  AnamnesisNote,
 } from '@/types/anamnesis';
 
 /** Days an anamnesis form link stays open */
@@ -37,6 +38,8 @@ interface DbAnamnesis {
   field_values: Record<string, string>;
   custom_field_values: Record<string, string>;
   notes: string;
+  // Notes list (migration 20261010) — absent before it is run
+  note_entries?: AnamnesisNote[] | null;
   ai_summary: string | null;
   attachments: AnamnesisAttachment[];
   // Form link columns (migration 20261002) — absent before it is run
@@ -64,6 +67,7 @@ function fromDb(row: DbAnamnesis): AthleteAnamnesis {
     fieldValues: row.field_values ?? {},
     customFieldValues: row.custom_field_values ?? {},
     notes: row.notes ?? '',
+    noteEntries: row.note_entries ?? [],
     aiSummary: row.ai_summary ?? null,
     attachments: row.attachments ?? [],
     formToken: row.form_token ?? null,
@@ -116,23 +120,27 @@ export function useAthleteAnamneses(athleteLocalId: string) {
     async (payload: Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'createdAt' | 'updatedAt'>): Promise<AthleteAnamnesis | null> => {
       if (!user) return null;
       try {
-        const { data, error } = await supabase
-          .from('athlete_anamneses')
-          .insert({
-            coach_user_id: user.id,
-            athlete_local_id: payload.athleteLocalId,
-            template_id: payload.templateId,
-            template_snapshot: payload.templateSnapshot,
-            conducted_at: payload.conductedAt,
-            custom_questions: payload.customQuestions,
-            field_values: payload.fieldValues,
-            custom_field_values: payload.customFieldValues,
-            notes: payload.notes,
-            ai_summary: payload.aiSummary,
-            attachments: payload.attachments ?? [],
-          })
-          .select()
-          .single();
+        const values: Record<string, unknown> = {
+          coach_user_id: user.id,
+          athlete_local_id: payload.athleteLocalId,
+          template_id: payload.templateId,
+          template_snapshot: payload.templateSnapshot,
+          conducted_at: payload.conductedAt,
+          custom_questions: payload.customQuestions,
+          field_values: payload.fieldValues,
+          custom_field_values: payload.customFieldValues,
+          notes: payload.notes,
+          ai_summary: payload.aiSummary,
+          attachments: payload.attachments ?? [],
+        };
+        if (payload.noteEntries?.length) values.note_entries = payload.noteEntries;
+        const run = (v: Record<string, unknown>) => supabase.from('athlete_anamneses').insert(v).select().single();
+        let { data, error } = await run(values);
+        // Before migration 20261010 there is no note_entries column (the notes are in `notes` too)
+        if (error && 'note_entries' in values && /note_entries/.test(error.message ?? '')) {
+          const { note_entries: _skipped, ...rest } = values;
+          ({ data, error } = await run(rest));
+        }
 
         if (error) throw error;
         const created = fromDb(data as DbAnamnesis);
@@ -157,15 +165,23 @@ export function useAthleteAnamneses(athleteLocalId: string) {
         if (updates.fieldValues !== undefined) dbUpdates.field_values = updates.fieldValues;
         if (updates.customFieldValues !== undefined) dbUpdates.custom_field_values = updates.customFieldValues;
         if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+        if (updates.noteEntries !== undefined) dbUpdates.note_entries = updates.noteEntries;
         if (updates.aiSummary !== undefined) dbUpdates.ai_summary = updates.aiSummary;
         if (updates.attachments !== undefined) dbUpdates.attachments = updates.attachments;
 
-        const { data, error } = await supabase
+        const run = (values: Record<string, unknown>) => supabase
           .from('athlete_anamneses')
-          .update(dbUpdates)
+          .update(values)
           .eq('id', id)
           .select()
           .single();
+        let { data, error } = await run(dbUpdates);
+        // Before migration 20261010 there is no note_entries column: save the rest (the notes
+        // still go into the plain `notes` text)
+        if (error && 'note_entries' in dbUpdates && /note_entries/.test(error.message ?? '')) {
+          const { note_entries: _skipped, ...rest } = dbUpdates;
+          ({ data, error } = await run(rest));
+        }
 
         if (error) throw error;
         const updated = fromDb(data as DbAnamnesis);
