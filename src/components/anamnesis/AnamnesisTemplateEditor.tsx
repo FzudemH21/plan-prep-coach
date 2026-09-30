@@ -34,7 +34,7 @@ import {
   Plus, Trash2, ChevronUp, ChevronDown, Edit, Loader2, ClipboardList, X,
 } from 'lucide-react';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
-import { DEFAULT_ANAMNESIS_TEMPLATE } from '@/types/anamnesis';
+import { DEFAULT_ANAMNESIS_TEMPLATE, isAthleteSection } from '@/types/anamnesis';
 import type { AnamnesisTemplate, AnamnesisSection, AnamnesisField, AnamnesisFieldType } from '@/types/anamnesis';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -203,7 +203,7 @@ function SectionEditor({
       {/* Who fills in this section: the athlete via the online form link, or the coach */}
       <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer w-fit pl-1">
         <Checkbox
-          checked={!!section.athleteFills}
+          checked={isAthleteSection(section)}
           onCheckedChange={(v) => onChange({ ...section, athleteFills: v === true })}
           className="h-3.5 w-3.5"
         />

@@ -20,9 +20,13 @@ export interface AnamnesisSection {
   id: string;
   title: string;
   fields: AnamnesisField[];
-  /** Filled in by the athlete through the online form link (the rest is for the coach) */
+  /** Filled in by the athlete through the online form link. Default (unset): yes — only an explicit
+   *  false keeps the section for the coach (e.g. movement screening). */
   athleteFills?: boolean;
 }
+
+/** Whether the athlete sees this section in the form link (default: yes) */
+export const isAthleteSection = (section: AnamnesisSection): boolean => section.athleteFills !== false;
 
 export interface AnamnesisTemplate {
   id: string;
@@ -140,6 +144,7 @@ export const DEFAULT_ANAMNESIS_TEMPLATE: Omit<AnamnesisTemplate, 'id' | 'coachUs
     {
       id: 'sec-lower',
       title: 'Movement Screening — Lower Body',
+      athleteFills: false,
       fields: [
         { id: 'f-overhead-squat', label: 'Overhead Squat', fieldType: 'textarea' },
         { id: 'f-thomas-test', label: 'Thomas Test (bilateral)', fieldType: 'textarea' },
@@ -151,6 +156,7 @@ export const DEFAULT_ANAMNESIS_TEMPLATE: Omit<AnamnesisTemplate, 'id' | 'coachUs
     {
       id: 'sec-upper',
       title: 'Movement Screening — Upper Body / Core / Posture',
+      athleteFills: false,
       fields: [
         { id: 'f-cervical', label: 'Cervical Rotation (bilateral)', fieldType: 'textarea' },
         { id: 'f-shoulder-rom', label: 'Shoulder ROM', fieldType: 'textarea' },
@@ -162,6 +168,7 @@ export const DEFAULT_ANAMNESIS_TEMPLATE: Omit<AnamnesisTemplate, 'id' | 'coachUs
     {
       id: 'sec-summary',
       title: 'Summary & Training Focus',
+      athleteFills: false,
       fields: [
         { id: 'f-key-findings', label: 'Key Findings', fieldType: 'textarea' },
         { id: 'f-training-priorities', label: 'Training Priorities / Focus', fieldType: 'textarea' },

@@ -38,13 +38,15 @@ import { useAthleteAnamneses } from '@/hooks/useAthleteAnamneses';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
 import { TemplateEditorDialog } from '@/components/anamnesis/AnamnesisTemplateEditor';
 import { FormLinkBox, PrivacyNoticeDialog, ProfileAnswersBanner, SendFormLinkDialog } from '@/components/anamnesis/AnamnesisFormLink';
-import { useCoachPrivacyNotice } from '@/hooks/useCoachPrivacyNotice';
+import { useCoachPrivacyNotice, isPrivacyNoticeComplete } from '@/hooks/useCoachPrivacyNotice';
+import { Checkbox } from '@/components/ui/checkbox';
 import { sendMessage } from '@/utils/anthropicApi';
 import { uploadAnamnesisFile, deleteFile, getSignedUrl } from '@/lib/storage';
 import { useAuth } from '@/hooks/useAuth';
 import { SEX_LABELS, type Athlete } from '@/types/athlete';
-import type {
-  AthleteAnamnesis, AnamnesisField, AnamnesisFieldType, AnamnesisSection, AnamnesisAttachment,
+import {
+  isAthleteSection,
+  type AthleteAnamnesis, type AnamnesisField, type AnamnesisFieldType, type AnamnesisSection, type AnamnesisAttachment,
 } from '@/types/anamnesis';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -615,7 +617,21 @@ Use clear, clinical language suitable for professional documentation. Skip secti
           {/* Template sections */}
           {allSections.map((section) => (
             <div key={section.id} className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground border-b pb-1">{section.title}</h3>
+              <div className="flex items-end justify-between gap-3 border-b pb-1">
+                <h3 className="text-sm font-semibold text-foreground">{section.title}</h3>
+                {/* Whether the athlete fills in this section through the form link — for this anamnesis */}
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer shrink-0">
+                  <Checkbox
+                    checked={isAthleteSection(section)}
+                    onCheckedChange={(v) => setTemplateSnapshot((prev) => ({
+                      ...prev,
+                      sections: prev.sections.map((s) => (s.id === section.id ? { ...s, athleteFills: v === true } : s)),
+                    }))}
+                    className="h-3.5 w-3.5"
+                  />
+                  Filled in by athlete
+                </label>
+              </div>
               <div className="space-y-3">
                 {section.fields.map((field) => (
                   <div key={field.id} className="space-y-1">
@@ -1106,7 +1122,33 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
           {selectedRecord && (() => {
             const live = anamneses.find(a => a.id === selectedRecord.id) ?? selectedRecord;
             const consent = live.consent;
-            if (live.formStatus !== 'sent' && !consent) return null;
+            if (live.formStatus !== 'sent' && !consent) {
+              const noticeReady = isPrivacyNoticeComplete(privacy.notice);
+              return (
+                <div className="px-6 pb-3 shrink-0 flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5"
+                    disabled={!noticeReady}
+                    onClick={async () => {
+                      const ok = await updateFormLink(live.id, 'renew');
+                      toast(ok
+                        ? { title: 'Form link created', description: 'Copy it from the box above the form.' }
+                        : { title: 'Could not create the link', variant: 'destructive' });
+                    }}
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    Send form link for this anamnesis
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    {noticeReady
+                      ? 'The athlete fills in the sections ticked "Filled in by athlete". Save your changes first.'
+                      : 'Add your privacy notice first (button above the list).'}
+                  </span>
+                </div>
+              );
+            }
             return (
               <div className="px-6 pb-3 space-y-2 shrink-0">
                 <FormLinkBox

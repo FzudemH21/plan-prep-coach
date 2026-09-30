@@ -18,7 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
 import { isPrivacyNoticeComplete, type useCoachPrivacyNotice } from '@/hooks/useCoachPrivacyNotice';
 import { anamnesisFormUrl, FORM_LINK_DAYS } from '@/hooks/useAthleteAnamneses';
-import type { AthleteAnamnesis, AnamnesisTemplateSnapshot, AnamnesisProfileAnswers } from '@/types/anamnesis';
+import { isAthleteSection, type AthleteAnamnesis, type AnamnesisTemplateSnapshot, type AnamnesisProfileAnswers } from '@/types/anamnesis';
 import { ACTIVITY_LEVEL_LABELS, SEX_LABELS, type Athlete } from '@/types/athlete';
 
 // ── Privacy notice settings ───────────────────────────────────────────────────
@@ -203,7 +203,7 @@ export function SendFormLinkDialog({ open, onClose, athleteName, privacy, onCrea
   }, [open, templates]);
 
   const template = templates.find(t => t.id === templateId);
-  const athleteSections = useMemo(() => (template?.sections ?? []).filter(s => s.athleteFills), [template]);
+  const athleteSections = useMemo(() => (template?.sections ?? []).filter(isAthleteSection), [template]);
   const noticeReady = isPrivacyNoticeComplete(notice);
 
   const handleCreate = async () => {
@@ -258,7 +258,7 @@ export function SendFormLinkDialog({ open, onClose, athleteName, privacy, onCrea
                     </p>
                   ) : (
                     <p className="text-xs text-amber-700">
-                      No section of this template is marked "Filled in by the athlete" — edit the template first (the athlete would only see "About you").
+                      Every section of this template is switched off for the athlete — edit the template first (the athlete would only see "About you").
                     </p>
                   )
                 )}
