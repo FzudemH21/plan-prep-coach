@@ -1,3 +1,4 @@
+import { latestNumericValue } from '@/utils/latestParameterValue';
 import { useState, useMemo, useEffect } from "react";
 import {
   Dialog,
@@ -100,15 +101,8 @@ export function AddSmartGoalDialog({
         setUnit(param.unit ?? "");
         // Auto-fill baseline from athlete profile if available
         const athleteParam = athletePerformanceParams.find((pp) => pp.athleticismParameterId === param.id);
-        if (athleteParam?.values?.length) {
-          const latest = athleteParam.values.reduce((a, b) =>
-            new Date(a.recordedAt) > new Date(b.recordedAt) ? a : b
-          );
-          const num = parseFloat(latest.value);
-          if (!isNaN(num)) setBaselineValue(num);
-        } else {
-          setBaselineValue("");
-        }
+        const latest = athleteParam ? latestNumericValue(athleteParam.values) : null;
+        setBaselineValue(latest ?? "");
         setDesiredValue("");
       }
     }
@@ -174,15 +168,10 @@ export function AddSmartGoalDialog({
     setDescription(param.name);
     setUnit(param.unit);
     
-    // Auto-fill baseline if value exists (only for athlete's parameters)
-    if (param.latestValue && param.isFromAthlete) {
-      const numValue = parseFloat(param.latestValue);
-      if (!isNaN(numValue)) {
-        setBaselineValue(numValue);
-      }
-    } else {
-      setBaselineValue("");
-    }
+    // Baseline = the athlete's most recent value of this parameter (decimal comma or point)
+    const athleteParam = athletePerformanceParams.find((pp) => pp.athleticismParameterId === param.athleticismParameterId);
+    const latest = param.isFromAthlete && athleteParam ? latestNumericValue(athleteParam.values) : null;
+    setBaselineValue(latest ?? "");
     setDesiredValue("");
     setComboboxOpen(false);
   };

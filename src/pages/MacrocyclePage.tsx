@@ -1,3 +1,4 @@
+import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +45,8 @@ import { WIZARD_CHAT_ID } from "@/contexts/AIChatContext";
 import { useRAGRetrieval } from "@/hooks/useRAGRetrieval";
 import { useGlobalAIContext } from "@/hooks/useGlobalAIContext";
 import { useAnamnesisAIContext } from "@/hooks/useAnamnesisAIContext";
+import { useAthleteParamsWithSelfReported } from "@/hooks/useSelfReportedValues";
+import { latestNumericValue } from "@/utils/latestParameterValue";
 import { useCoachMemory } from "@/hooks/useCoachMemory";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCalendarEvents } from "@/hooks/useCalendarEvents";
@@ -113,6 +116,13 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const [selectedMethods, setSelectedMethods] = useState<Set<string>>(new Set());
   const { coachMemoryContext } = useCoachMemory({ currentMethods: Array.from(selectedMethods) });
   const anamnesisAIContext = useAnamnesisAIContext(selectedAthleteId ?? null);
+  // The athlete's parameter values — coach-entered and entered by the athlete in the app — for goal
+  // baselines (the most recent value of either)
+  const athleteParamsProfile = useMemo(
+    () => (selectedAthleteId ? getAthletePerformanceParameters(selectedAthleteId) : []),
+    [selectedAthleteId, getAthletePerformanceParameters],
+  );
+  const athleteParamsForGoals = useAthleteParamsWithSelfReported(selectedAthleteId, athleteParamsProfile);
 
   // State for manually added methods with rationale
   const [manuallyAddedMethods, setManuallyAddedMethods] = useState<ManuallyAddedMethod[]>([]);
@@ -129,10 +139,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const derivedSubGoals = useMemo(() => {
     const derived: SubGoal[] = [];
     
-    // Get the selected athlete's performance parameters
-    const athletePerformanceParams = selectedAthleteId 
-      ? getAthletePerformanceParameters(selectedAthleteId) 
-      : [];
+    // Get the selected athlete's performance parameters (incl. results from the athlete app)
+    const athletePerformanceParams = athleteParamsForGoals;
     
     smartGoals.forEach(goal => {
       // Only process goals that are linked to a parameter
@@ -161,17 +169,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             );
             
             // Get the latest recorded value (if any)
-            let preTestValue = 0;
-            if (athleteParam && athleteParam.values.length > 0) {
-              // Sort by recordedAt descending and get the most recent
-              const sortedValues = [...athleteParam.values].sort(
-                (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
-              );
-              const latestValue = parseFloat(sortedValues[0].value);
-              if (!isNaN(latestValue)) {
-                preTestValue = latestValue;
-              }
-            }
+            const preTestValue = athleteParam ? (latestNumericValue(athleteParam.values) ?? 0) : 0;
             
             derived.push({
               id: `derived-${goal.id}-${sourceParam.id}`,
@@ -193,7 +191,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     });
     
     return derived;
-  }, [smartGoals, parametersDataV2.interactions, parametersDataV2.parameters, subGoals, selectedAthleteId, getAthletePerformanceParameters]);
+  }, [smartGoals, parametersDataV2.interactions, parametersDataV2.parameters, subGoals, athleteParamsForGoals]);
 
   // Group sub-goals by parent goal (including derived ones)
   const subGoalsByParent = useMemo(() => {
@@ -786,7 +784,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const selectedAthlete = selectedAthleteId ? athletes.find(a => a.id === selectedAthleteId) : null;
 
   // Get athlete performance parameters for the Add Goal dialog
-  const athletePerformanceParams = selectedAthleteId ? getAthletePerformanceParameters(selectedAthleteId) : [];
+  const athletePerformanceParams = athleteParamsForGoals;
   const athleticismParameters = parametersDataV2?.parameters || [];
   
   // State for create parameter dialog
@@ -3027,12 +3025,28 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         setPlanDuration({ startDate: start, endDate: end, totalDays, totalWeeks });
         break;
       }
-      case "add_goal":
+      case "add_goal": {
+        // Linked to the parameter of that name, with the athlete's most recent value as baseline
+        const param = (parametersDataV2?.parameters ?? []).find(
+          (p) => p.name.trim().toLowerCase() === action.parameterName.trim().toLowerCase()
+        );
+        const athleteParam = param ? athleteParamsForGoals.find((pp) => pp.athleticismParameterId === param.id) : undefined;
+        const baseline = athleteParam ? latestNumericValue(athleteParam.values) ?? 0 : 0;
         setSmartGoals((prev) => [
           ...prev,
-          { id: generateId(), description: action.parameterName, baselineValue: 0, desiredValue: 0, unit: "", percentChange: 0, testDates: [] },
+          {
+            id: generateId(),
+            description: param?.name ?? action.parameterName,
+            baselineValue: baseline,
+            desiredValue: 0,
+            unit: param?.unit ?? "",
+            percentChange: 0,
+            testDates: [],
+            ...(param ? { linkedParameterId: param.id } : {}),
+          },
         ]);
         break;
+      }
       case "remove_goal":
         setSmartGoals((prev) =>
           prev.filter((g) => (g.description || g.specific || "").toLowerCase() !== action.goalName.toLowerCase())

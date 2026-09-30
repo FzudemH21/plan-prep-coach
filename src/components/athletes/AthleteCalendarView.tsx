@@ -1,3 +1,4 @@
+import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isSameMonth, isWithinInterval } from 'date-fns';
 import { parseDateStr } from '@/utils/dateUtils';
@@ -290,7 +291,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       const latest = [...bioEntry.values].sort(
         (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
       )[0];
-      const num = parseFloat(latest.value);
+      const num = (parseMeasuredNumber(latest.value) ?? NaN);
       if (!isNaN(num)) biometricsById.set(def.id, { name: def.name, value: num });
     }
 
@@ -303,7 +304,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       const latest = [...pp.values].sort(
         (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
       )[0];
-      const num = parseFloat(latest.value);
+      const num = (parseMeasuredNumber(latest.value) ?? NaN);
       if (!isNaN(num)) perfParamsById.set(pp.athleticismParameterId, { name: perfDef.name, value: num });
     }
 

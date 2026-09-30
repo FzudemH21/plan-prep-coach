@@ -1,3 +1,4 @@
+import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import React, { useState, useCallback, useEffect, memo, useMemo, useRef } from 'react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -1003,7 +1004,7 @@ export function MasterPlannerColumn({
                 const sorted = [...perfEntry.values].sort(
                   (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
                 );
-                const n = parseFloat(sorted[0].value);
+                const n = (parseMeasuredNumber(sorted[0].value) ?? NaN);
                 if (!isNaN(n)) ctx['e1RM'] = n;
               }
             }
@@ -1019,7 +1020,7 @@ export function MasterPlannerColumn({
               const sorted = [...bioEntry.values].sort(
                 (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
               );
-              const n = parseFloat(sorted[0].value);
+              const n = (parseMeasuredNumber(sorted[0].value) ?? NaN);
               if (!isNaN(n)) ctx[bioDef.name] = n;
             }
             continue;
@@ -1034,7 +1035,7 @@ export function MasterPlannerColumn({
               const sorted = [...perfEntry.values].sort(
                 (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
               );
-              const n = parseFloat(sorted[0].value);
+              const n = (parseMeasuredNumber(sorted[0].value) ?? NaN);
               if (!isNaN(n)) ctx[perfDef.name] = n;
             }
           }

@@ -1,3 +1,4 @@
+import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { useState, useMemo, useEffect } from 'react';
 import { format, differenceInDays, addDays } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -213,7 +214,7 @@ export function AssignProgramDialog({
       let baseline = sg.preTestValue || 0;
       if (sg.parameterLinkedId) {
         const latest = latestAthleteValue(sg.parameterLinkedId);
-        if (latest) baseline = parseFloat(latest.value) || baseline;
+        if (latest) baseline = (parseMeasuredNumber(latest.value) ?? NaN) || baseline;
       }
 
       return {
@@ -236,7 +237,7 @@ export function AssignProgramDialog({
       let baseline = sg.baselineValue || 0;
       if (sg.linkedParameterId) {
         const latest = latestAthleteValue(sg.linkedParameterId);
-        if (latest) baseline = parseFloat(latest.value) || baseline;
+        if (latest) baseline = (parseMeasuredNumber(latest.value) ?? NaN) || baseline;
       }
       reviewed.push({
         id: sg.id,

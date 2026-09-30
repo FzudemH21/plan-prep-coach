@@ -1,3 +1,4 @@
+import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { useState, useMemo, useEffect } from "react";
 import {
   Dialog,
@@ -116,7 +117,7 @@ export function AddSubGoalDialog({
     const athleteParam = athletePerformanceParams?.find((pp) => pp.athleticismParameterId === param.id);
     if (athleteParam?.values?.length) {
       const latest = athleteParam.values[athleteParam.values.length - 1];
-      const num = parseFloat(latest.value);
+      const num = (parseMeasuredNumber(latest.value) ?? NaN);
       if (!isNaN(num)) setPreTestValue(num);
     } else {
       setPreTestValue("");

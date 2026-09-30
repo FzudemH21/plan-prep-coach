@@ -1,3 +1,4 @@
+import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import {
@@ -102,7 +103,7 @@ export function PerformanceValueHistory({
       const sorted = [...param.values].sort(
         (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
       );
-      const val = parseFloat(sorted[0].value);
+      const val = (parseMeasuredNumber(sorted[0].value) ?? NaN);
       return isNaN(val) ? null : val;
     };
 
@@ -148,7 +149,7 @@ export function PerformanceValueHistory({
     return sortedValues.map((v) => ({
       date: format(new Date(v.recordedAt), 'MMM d'),
       fullDate: format(new Date(v.recordedAt), 'MMM d, yyyy'),
-      value: parseFloat(v.value) || 0,
+      value: (parseMeasuredNumber(v.value) ?? NaN) || 0,
       rawValue: v.value,
     }));
   }, [sortedValues]);

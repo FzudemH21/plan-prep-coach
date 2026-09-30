@@ -2,6 +2,7 @@
 // Each tab has a search bar + list → inline detail drill-down (no Sheets).
 // Mobile-first, 390px design.
 
+import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { useState, useMemo } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -83,9 +84,9 @@ function fmtDateShort(iso: string): string {
 
 function toChartData(item: MetricsSnapshotItem) {
   return [...item.values]
-    .filter(v => !isNaN(parseFloat(v.value)))
+    .filter(v => !isNaN((parseMeasuredNumber(v.value) ?? NaN)))
     .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))
-    .map(v => ({ date: fmtDateShort(v.recordedAt), value: parseFloat(v.value) }));
+    .map(v => ({ date: fmtDateShort(v.recordedAt), value: (parseMeasuredNumber(v.value) ?? NaN) }));
 }
 
 function getLatest(item: MetricsSnapshotItem) {
@@ -180,9 +181,9 @@ function MetricDetail({
 
   const chartData = useMemo(() =>
     [...filteredValues]
-      .filter(v => !isNaN(parseFloat(v.value)))
+      .filter(v => !isNaN((parseMeasuredNumber(v.value) ?? NaN)))
       .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))
-      .map(v => ({ date: fmtDateShort(v.recordedAt), value: parseFloat(v.value) })),
+      .map(v => ({ date: fmtDateShort(v.recordedAt), value: (parseMeasuredNumber(v.value) ?? NaN) })),
     [filteredValues],
   );
 

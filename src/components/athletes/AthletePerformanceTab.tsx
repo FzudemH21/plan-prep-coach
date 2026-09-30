@@ -1,3 +1,4 @@
+import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { MetricsSnapshot, MetricsSnapshotItem, AthleteConnection } from '@/hooks/useAthleteConnections';
 import { ExerciseMetricsTab } from '@/components/athletes/ExerciseMetricsTab';
@@ -115,11 +116,11 @@ const parseRecordedAt = (recordedAt: string): Date => parseISO(recordedAt);
 const toChartData = (values: ParameterValue[], range: TimeRange) => {
   const filtered = filterByRange(values, range);
   return filtered
-    .filter(v => !isNaN(parseFloat(v.value)))
+    .filter(v => !isNaN((parseMeasuredNumber(v.value) ?? NaN)))
     .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime())
     .map(v => ({
       date: format(parseRecordedAt(v.recordedAt), 'MMM d'),
-      value: parseFloat(v.value),
+      value: (parseMeasuredNumber(v.value) ?? NaN),
       id: v.id,
     }));
 };

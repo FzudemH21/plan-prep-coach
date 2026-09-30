@@ -1,3 +1,4 @@
+import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -134,7 +135,7 @@ function buildTestsAndEvents(
       const p = athletePerformanceParameters.find(pp => pp.athleticismParameterId === sg.parameterLinkedId);
       if (p?.values.length) {
         const sorted = [...p.values].sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
-        baseline = parseFloat(sorted[0].value) || baseline;
+        baseline = (parseMeasuredNumber(sorted[0].value) ?? NaN) || baseline;
       }
     }
     return {
@@ -158,7 +159,7 @@ function buildTestsAndEvents(
       const p = athletePerformanceParameters.find(pp => pp.athleticismParameterId === sg.linkedParameterId);
       if (p?.values.length) {
         const sorted = [...p.values].sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
-        baseline = parseFloat(sorted[0].value) || baseline;
+        baseline = (parseMeasuredNumber(sorted[0].value) ?? NaN) || baseline;
       }
     }
     reviewed.push({
@@ -615,7 +616,7 @@ export default function CoachMobileAssignProgramPage() {
             const latest = [...bioEntry.values].sort(
               (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
             )[0];
-            const num = parseFloat(latest.value);
+            const num = (parseMeasuredNumber(latest.value) ?? NaN);
             if (!isNaN(num)) biometricsById.set(def.id, { name: def.name, value: num });
           }
 
@@ -627,7 +628,7 @@ export default function CoachMobileAssignProgramPage() {
             const latest = [...pp.values].sort(
               (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
             )[0];
-            const num = parseFloat(latest.value);
+            const num = (parseMeasuredNumber(latest.value) ?? NaN);
             if (!isNaN(num)) perfParamsById.set(pp.athleticismParameterId, { name: perfDef.name, value: num });
           }
 

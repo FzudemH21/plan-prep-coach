@@ -1,6 +1,7 @@
 // Body / Performance / Exercises progress tabs for the coach-mobile athlete profile.
 // All sections are editable by the coach (add values, tag exercise params).
 
+import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { useState, useMemo } from 'react';
 import {
   Search, Plus, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Tag, Trophy,
@@ -194,7 +195,7 @@ function MetricDetail({
       .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))
       .map(v => ({
         date: new Date(v.recordedAt.slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        value: parseFloat(v.value) || null,
+        value: (parseMeasuredNumber(v.value) ?? NaN) || null,
       }))
       .filter(d => d.value !== null),
     [item.values],
