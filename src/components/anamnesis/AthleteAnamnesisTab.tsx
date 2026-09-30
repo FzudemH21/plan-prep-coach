@@ -585,16 +585,24 @@ function RecordForm({
       const prompt = buildSummaryPrompt(dataSnapshot, athleteName);
       const summary = await sendMessage(
         [{ role: 'user', content: prompt }],
-        `You are an experienced sports scientist and physiotherapist documenting an athlete's intake assessment (anamnesis).
-You receive the intake answers (partly filled in by the athlete through an online form) and the coach's notes from the appointment. Dictated notes are speech-to-text and may contain recognition errors — interpret them sensibly, never invent content.
+        `You summarise an athlete's intake assessment (anamnesis) for the coach's documentation.
+You receive the intake answers (partly filled in by the athlete through an online form) and the coach's notes from the appointment.
 
-Write a structured summary with exactly these five headings, each as a Markdown "## " heading, with short "- " bullet points below:
-English: Main findings / Relevant history / Training implications / Contraindications & precautions / Open questions
-German: Hauptbefunde / Relevante Vorgeschichte / Konsequenzen für das Training / Kontraindikationen & Vorsichtsmaßnahmen / Offene Fragen
+Your only task is to SUMMARISE what is written. Strict rules:
+- Use only information that is explicitly stated in the answers or notes. Do not add anything.
+- No interpretation, conclusions, diagnoses, assessments, recommendations or advice of your own.
+- Do NOT derive contraindications, precautions, training consequences or goals from findings. List them only when the answers or notes state them explicitly — then as stated.
+- Keep the meaning and the level of certainty of the source ("suspected", "possibly" stays as it is). Condense wording, keep all facts (values, sides, dates, durations, medications).
+- Dictated notes are speech-to-text: correct obvious recognition errors only where the meaning is unambiguous; otherwise keep the wording.
+
+Structure: exactly these six headings, each as a Markdown "## " heading, with short "- " bullet points below:
+English: Current status & complaints / Relevant history / Findings from the appointment / Contraindications & precautions (as stated) / Goals & training focus (as stated) / Open points (as noted)
+German: Aktueller Stand & Beschwerden / Relevante Vorgeschichte / Befunde aus dem Termin / Kontraindikationen & Vorsichtsmaßnahmen (laut Angaben) / Ziele & Trainingsfokus (laut Angaben) / Offene Punkte (laut Notizen)
 Write in the language most of the answers and notes are in (German or English), headings included.
-Only use the information given. Where a heading has nothing, write "- None noted" (German: "- Keine Angaben"). Use precise, clinical language suitable for professional documentation.`,
+Where nothing is stated for a heading, write "- Not stated" (German: "- Keine Angaben").`,
         'claude-sonnet-4-5',
-        1500,
+        // Room for long notes — at 1,500 tokens the summary was cut off mid-sentence
+        4096,
       );
       const previous = aiSummary;
       setAiSummary(summary);
@@ -1007,7 +1015,7 @@ Only use the information given. Where a heading has nothing, write "- None noted
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Click "Generate" for a structured summary of the answers and your notes (main findings, history, training implications, contraindications, open questions).
+                Click "Generate" for a structured summary of the answers and your notes — only what is stated, nothing added.
               </p>
             )}
           </div>

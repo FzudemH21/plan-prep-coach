@@ -63,6 +63,7 @@ import { useCoachMemory } from '@/hooks/useCoachMemory';
 import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useAthleteAIContext } from '@/hooks/useAthleteAIContext';
+import { useAnamnesisAIContext } from '@/hooks/useAnamnesisAIContext';
 import { IntensityLevel } from '@/types/training';
 import { cn } from '@/lib/utils';
 
@@ -869,6 +870,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   }, [deleteCalendarEvent, getConnectionForAthlete, getEventsForAthlete, athlete.id]);
 
   // Athlete-specific AI context
+  // Anamnesis (answers, notes, AI summary) — the calendar assistant takes health status into account too
+  const anamnesisAIContext = useAnamnesisAIContext(athlete.id);
   const athleteAIContext = useAthleteAIContext({
     athlete,
     performanceParameters: athleteData.athletePerformanceParameters.filter(p => p.athleteId === athlete.id),
@@ -3040,6 +3043,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         globalContext={globalAIContext}
         ragContext={ragContext || undefined}
         coachMemoryContext={coachMemoryContext || undefined}
+        anamnesisContext={anamnesisAIContext || undefined}
         focusedSessionContext={focusedSessionCtx}
         forceOpen={aiOpenTrigger}
         assistantRole={`You are reviewing the training calendar and current status for athlete "${athlete.firstName ?? ''} ${athlete.lastName ?? ''}".
