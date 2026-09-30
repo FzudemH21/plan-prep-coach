@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, X, Send, Mic, MicOff, Loader2, ChevronRight, CheckCircle2, Sparkles, Trash2 } from "lucide-react";
+import { Bot, X, Send, Mic, MicOff, Loader2, ChevronRight, CheckCircle2, Sparkles, Trash2, ChevronsDown, ChevronsUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { sendMessage, type Message, type SystemBlock } from "@/utils/anthropicApi";
 import { compressConversation, COMPRESSION_THRESHOLD } from "@/utils/compressConversation";
@@ -409,7 +409,7 @@ const DEFAULT_ROLE = `## Your role
 - Be objective and direct. If the current plan has weaknesses, gaps, or contradicts evidence — say so clearly and constructively.
 - Do not default to agreement or validation. A good sports scientist pushes back when warranted.
 - Give concrete, actionable suggestions relevant to the current planning step.
-- Match response length to the question, don't default to long. A yes/no question, a quick confirmation, or a simple lookup gets 1-3 sentences — do not pad it with unrequested background or restate what the coach already said. Reserve longer, structured answers (with headers/tables/bullet lists) for requests that genuinely need depth: full periodization rationale, comparing several methods, multi-factor risk analysis, or anything the coach explicitly asks you to explain "in detail" or "why." When in doubt, answer the direct question first in 1-2 sentences, then ask if they want you to go deeper — don't front-load depth nobody asked for. If helpful, ask one focused follow-up question.
+- Answer length: follow the "Response length" section at the very end of these instructions.
 - Understand the coach's philosophy and methods — but do not let it override scientific evidence. If their approach conflicts with consensus, flag it respectfully and explain why.
 - When citing research from the References section, mention the source document name.
 - Always refer to the athlete named in "Current Context" — never reference athletes mentioned in the Coach Background section.
@@ -458,6 +458,34 @@ Before executing ANY request — structural changes, exercise placement, volume 
 
 When you flag an issue: state what the problem is, why it matters physiologically, and what the better alternative is. Keep it to 2–3 sentences. Then still provide the action block if the coach confirms they want to proceed.`;
 
+/** How long the assistant's answers are — chosen by the coach in the chat header */
+export type AnswerLength = 'short' | 'detailed';
+const ANSWER_LENGTH_KEY = 'ppc-ai-answer-length';
+
+function readAnswerLength(): AnswerLength {
+  try { return localStorage.getItem(ANSWER_LENGTH_KEY) === 'detailed' ? 'detailed' : 'short'; } catch { return 'short'; }
+}
+
+/**
+ * Last section of every assistant's instructions (the wizard and the assistants with their own
+ * role, e.g. athlete calendar, databases) — at the end, where it carries the most weight against
+ * the many "flag / explain / cite" instructions above.
+ */
+function responseLengthBlock(length: AnswerLength): string {
+  if (length === 'detailed') {
+    return `## Response length (the coach chose DETAILED answers)
+- Still lead with the answer or recommendation in the first sentence.
+- Then give the reasoning: physiology, evidence (with evidence levels when citing), alternatives and trade-offs, relevant risks for this athlete.
+- Structure longer answers with short headers or bullets. No filler, no preamble, no repetition of the question or context, no closing recap.`;
+  }
+  return `## Response length (critical — the coach chose SHORT answers; this overrides any instruction above about being thorough)
+- Lead with the answer or recommendation in the first sentence. No preamble ("Great question", "Let me…"), no restating the question or the context, no closing summary or recap.
+- Default: 2–5 sentences or up to 5 short bullets — stay under about 120 words. Exceptions: output the coach explicitly asked for (e.g. a full table or plan) and [[APPLY: ...]] blocks, which don't count.
+- Concerns and critique: one sentence each (the problem + the better alternative). Physiology or evidence background only when it changes the decision; evidence levels only when you cite a source.
+- No headers in short answers; a table only when the coach asked for a comparison or overview.
+- If more depth would genuinely help, end with ONE short offer (e.g. "Want the reasoning in detail?") instead of giving it unasked.`;
+}
+
 function buildSystemPrompt(
   coachContext: string,
   wizardContext: string,
@@ -468,6 +496,7 @@ function buildSystemPrompt(
   globalContext?: string,
   focusedSessionContext?: FocusedSessionContext,
   anamnesisContext?: string,
+  answerLength: AnswerLength = 'short',
 ): SystemBlock[] {
   const memoryBlock = coachMemoryContext
     ? `\n\n## Coach's Past Plans (reference only — NOT the plan being built now)\nThese are other, earlier plans by this coach, most recent first; defer to newer patterns when in doubt. Use them only to recognise the coach's habits and preferences. Never treat their athlete, goals, dates, methods, notes or values as belonging to the current plan — the current plan is described only in the "Current Context" section below. If the coach asks about "this plan", answer from the current wizard state, not from here.\n${coachMemoryContext}`
@@ -558,7 +587,9 @@ ${coachContext}${memoryBlock}${ragBlock}${globalBlock}${focusedSessionBlock}
 
 ## ${contextLabel}
 ${wizardContext}
-${anamnesisBlock}`;
+${anamnesisBlock}
+
+${responseLengthBlock(answerLength)}`;
 
   return [
     { type: "text" as const, text: stableText, cache_control: { type: "ephemeral" as const } },
@@ -977,6 +1008,12 @@ export function WizardAIAssistant({
 
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  // Short / Detailed answers — remembered in this browser
+  const [answerLength, setAnswerLength] = useState<AnswerLength>(readAnswerLength);
+  const changeAnswerLength = (length: AnswerLength) => {
+    setAnswerLength(length);
+    try { localStorage.setItem(ANSWER_LENGTH_KEY, length); } catch { /* private mode — just this session */ }
+  };
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef(input);
   useEffect(() => { inputRef.current = input; }, [input]);
@@ -1031,6 +1068,57 @@ export function WizardAIAssistant({
     generateOpener();
   };
 
+  /** One answer for the conversation so far (the last message is the coach's) */
+  const requestReply = async (history: Message[], ragQuery: string, length: AnswerLength): Promise<string> => {
+    // Retrieve fresh, query-relevant chunks for this specific message.
+    // Falls back to the static ragContext prop if retrieval fails or returns nothing.
+    const freshRagContext = await retrieve(ragQuery).catch(() => '');
+    const effectiveRagContext = freshRagContext || ragContext;
+    return sendMessage(
+      history,
+      buildSystemPrompt(
+        coachContext,
+        resolvedChatId === WIZARD_CHAT_ID
+          ? `This conversation continues across all wizard steps of this training program, so earlier messages may have been written on a different step (a message starting with "[Step title]" marks where an older per-step chat began). The coach is now on: ${stepLabel}. Treat decisions from earlier steps as still valid unless the current state below shows otherwise.\n\n${wizardContext}`
+          : wizardContext,
+        !!onApplySuggestion, coachMemoryContext, effectiveRagContext, assistantRole, globalContext, focusedSessionContext, anamnesisContext,
+        length,
+      ),
+      "claude-sonnet-4-5",
+      8192
+    );
+  };
+
+  /** "More detail" / "Shorter": the last answer is rewritten in place (no extra chat bubble) */
+  const rewriteLastAnswer = async (direction: 'more' | 'shorter') => {
+    if (isLoading) return;
+    const history = messagesRef.current;
+    const last = history[history.length - 1];
+    const lastUserIdx = history.map((m) => m.role).lastIndexOf('user');
+    if (!last || last.role !== 'assistant' || lastUserIdx < 0) return;
+    const lastUser = history[lastUserIdx];
+    const instruction = direction === 'more'
+      ? 'Rewrite your last answer in more depth: explain the reasoning, the physiology and the evidence (with evidence levels), alternatives and trade-offs for this athlete. Keep the recommendation itself the same unless the deeper analysis changes it.'
+      : 'Rewrite your last answer much shorter: the answer or recommendation first, only the essentials, at most 3 sentences or 3 bullets. No preamble, no recap.';
+    setIsLoading(true);
+    try {
+      const reply = await requestReply(
+        [...history, { role: 'user' as const, content: `[${instruction} Keep any [[APPLY: ...]] blocks from your last answer unchanged at the end. Reply only with the rewritten answer.]` }],
+        typeof lastUser.content === 'string' ? lastUser.content : '',
+        direction === 'more' ? 'detailed' : 'short',
+      );
+      const current = messagesRef.current;
+      // Only replace when the conversation hasn't moved on meanwhile
+      if (current[current.length - 1] === last) {
+        setChatMessages?.(resolvedChatId, [...current.slice(0, -1), { role: 'assistant' as const, content: reply }]);
+      }
+    } catch (err) {
+      console.error('[WizardAIAssistant] rewrite failed:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const sendUserMessage = async () => {
     if (isLoading) return;
     if (isListening) {
@@ -1046,23 +1134,7 @@ export function WizardAIAssistant({
     setIsLoading(true);
 
     try {
-      // Retrieve fresh, query-relevant chunks for this specific message.
-      // Falls back to the static ragContext prop if retrieval fails or returns nothing.
-      const freshRagContext = await retrieve(text).catch(() => '');
-      const effectiveRagContext = freshRagContext || ragContext;
-
-      const reply = await sendMessage(
-        newMessages,
-        buildSystemPrompt(
-          coachContext,
-          resolvedChatId === WIZARD_CHAT_ID
-            ? `This conversation continues across all wizard steps of this training program, so earlier messages may have been written on a different step (a message starting with "[Step title]" marks where an older per-step chat began). The coach is now on: ${stepLabel}. Treat decisions from earlier steps as still valid unless the current state below shows otherwise.\n\n${wizardContext}`
-            : wizardContext,
-          !!onApplySuggestion, coachMemoryContext, effectiveRagContext, assistantRole, globalContext, focusedSessionContext, anamnesisContext,
-        ),
-        "claude-sonnet-4-5",
-        8192
-      );
+      const reply = await requestReply(newMessages, text, answerLength);
       const withReply: Message[] = [...messagesRef.current, { role: "assistant" as const, content: reply }];
       setChatMessages?.(resolvedChatId, withReply);
 
@@ -1142,6 +1214,21 @@ export function WizardAIAssistant({
                 <p className="text-sm font-semibold leading-none">AI Advisor</p>
                 <p className="text-xs text-muted-foreground mt-0.5 truncate">{stepLabel}</p>
               </div>
+              <div className="flex rounded-md border overflow-hidden shrink-0" role="group" aria-label="Answer length" title="How long the answers are">
+                {(['short', 'detailed'] as const).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => changeAnswerLength(l)}
+                    className={cn(
+                      "px-2 py-0.5 text-xs font-medium transition-colors",
+                      answerLength === l ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted active:bg-muted"
+                    )}
+                  >
+                    {l === 'short' ? 'Short' : 'Detailed'}
+                  </button>
+                ))}
+              </div>
               {onApplySuggestion && (
                 <div className="flex items-center gap-1 text-xs text-primary bg-primary/10 rounded-full px-2 py-0.5 mr-1">
                   <Sparkles className="h-2.5 w-2.5" />
@@ -1202,6 +1289,25 @@ export function WizardAIAssistant({
                         ? <AssistantMessage text={msg.content} onApply={onApplySuggestion} onApplyAll={onApplyAll} />
                         : msg.content
                       }
+                      {/* Rewrite the latest answer — not for the greeting */}
+                      {msg.role === "assistant" && i === messages.length - 1 && i > 0 && !isLoading && (
+                        <div className="flex gap-1 mt-2 -mb-0.5">
+                          <button
+                            type="button"
+                            onClick={() => rewriteLastAnswer('more')}
+                            className="inline-flex items-center gap-1 rounded-md border bg-background/60 px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-background active:bg-background"
+                          >
+                            <ChevronsDown className="h-3 w-3" /> More detail
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => rewriteLastAnswer('shorter')}
+                            className="inline-flex items-center gap-1 rounded-md border bg-background/60 px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-background active:bg-background"
+                          >
+                            <ChevronsUp className="h-3 w-3" /> Shorter
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
