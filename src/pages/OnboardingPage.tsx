@@ -251,7 +251,7 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip, onBack, hideSkipWar
     (text: string) => setInput((prev) => (prev ? `${prev} ${text}` : text)),
     []
   );
-  const { isListening, toggle: toggleMic, isSupported: micSupported, stopListening } =
+  const { isListening, isTranscribing, toggle: toggleMic, isSupported: micSupported, stopListening } =
     useSpeechInput(handleVoiceResult);
 
   // Auto-scroll to bottom whenever messages change
@@ -283,11 +283,9 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip, onBack, hideSkipWar
   const sendUserMessage = async () => {
     if (isLoading) return;
 
-    if (isListening) {
-      stopListening();
-      // Wait briefly for the last speech chunk to be finalized before reading input
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
+    // Still recording: stop — the text lands in the input to check before sending
+    if (isListening) { await stopListening(); return; }
+    if (isTranscribing) return;
 
     const text = inputRef.current.trim();
     if (!text) return;
@@ -397,16 +395,18 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip, onBack, hideSkipWar
               size="icon"
               variant={isListening ? "destructive" : "outline"}
               onClick={toggleMic}
-              disabled={isLoading || isCreating}
+              disabled={isLoading || isCreating || isTranscribing}
               title={isListening ? "Stop recording" : "Start voice input"}
               className={cn(isListening && "animate-pulse")}
             >
-              {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              {isTranscribing
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
             </Button>
           )}
 
           <Input
-            placeholder={isListening ? "Recording…" : "Your answer…"}
+            placeholder={isListening ? "Recording… click the mic to stop" : isTranscribing ? "Turning speech into text…" : "Your answer…"}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}

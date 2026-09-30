@@ -1023,7 +1023,7 @@ export function WizardAIAssistant({
     (text: string) => setInput((prev) => (prev ? `${prev} ${text}` : text)),
     []
   );
-  const { isListening, toggle: toggleMic, isSupported: micSupported, stopListening } =
+  const { isListening, isTranscribing, toggle: toggleMic, isSupported: micSupported, stopListening } =
     useSpeechInput(handleVoiceResult);
 
   // Auto-scroll on new messages
@@ -1121,10 +1121,9 @@ export function WizardAIAssistant({
 
   const sendUserMessage = async () => {
     if (isLoading) return;
-    if (isListening) {
-      stopListening();
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
+    // Still recording: stop — the text lands in the input to check before sending
+    if (isListening) { await stopListening(); return; }
+    if (isTranscribing) return;
     const text = inputRef.current.trim();
     if (!text) return;
 
@@ -1339,15 +1338,17 @@ export function WizardAIAssistant({
                     size="icon"
                     variant={isListening ? "destructive" : "outline"}
                     onClick={toggleMic}
-                    disabled={isLoading}
+                    disabled={isLoading || isTranscribing}
                     className={cn("flex-shrink-0", isListening && "animate-pulse")}
-                    title={isListening ? "Stop recording" : "Voice input"}
+                    title={isListening ? "Stop recording" : isTranscribing ? "Turning speech into text…" : "Voice input"}
                   >
-                    {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                    {isTranscribing
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                   </Button>
                 )}
                 <Input
-                  placeholder={isListening ? "Recording…" : "Ask anything…"}
+                  placeholder={isListening ? "Recording… click the mic to stop" : isTranscribing ? "Turning speech into text…" : "Ask anything…"}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}

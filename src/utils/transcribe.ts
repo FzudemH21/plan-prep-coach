@@ -21,12 +21,14 @@ function extensionFor(mimeType: string): string {
 
 export async function transcribeDictation(
   audio: Blob,
-  opts: { coachUserId: string; athleteLocalId: string; language?: 'de' | 'en' },
+  /** athleteLocalId: the athlete's folder; without one (AI chat, onboarding) the coach's _dictation folder */
+  opts: { coachUserId: string; athleteLocalId?: string; language?: 'de' | 'en' },
 ): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not signed in');
 
-  const path = `anamnesis/${opts.coachUserId}/${opts.athleteLocalId}/dictation_${Date.now()}.${extensionFor(audio.type)}`;
+  const folder = opts.athleteLocalId || '_dictation';
+  const path = `anamnesis/${opts.coachUserId}/${folder}/dictation_${Date.now()}.${extensionFor(audio.type)}`;
   const { error: upErr } = await supabase.storage
     .from('documents')
     .upload(path, audio, { contentType: audio.type || 'audio/webm', upsert: false });

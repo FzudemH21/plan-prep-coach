@@ -1,106 +1,67 @@
-import { useState, useRef, useCallback } from "react";
-
-type SpeechRecognitionCtor = new () => SpeechRecognition;
-
-function getSRCtor(): SpeechRecognitionCtor | null {
-  if (typeof window === "undefined") return null;
-  const w = window as Window & {
-    SpeechRecognition?: SpeechRecognitionCtor;
-    webkitSpeechRecognition?: SpeechRecognitionCtor;
-  };
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
-}
-
 /**
- * Thin wrapper around the Web Speech API.
- * - continuous: keeps listening until manually stopped
- * - auto-restarts on unexpected browser timeouts
- * - ignores onresult events fired after an intentional stop
- * - uses a ref for onResult so the latest callback is always called (no stale closures)
- * @param onResult  called with each new final transcript chunk
- * @param lang      BCP-47 language tag, defaults to "de-DE"
+ * useSpeechInput — voice input for text fields (AI chat, onboarding, athlete notes).
+ *
+ * Records in the browser and turns the recording into text with Mistral Voxtral (EU) — the same
+ * path as the anamnesis dictation (see src/utils/transcribe.ts): the recording is deleted right
+ * after the transcription, only the text is kept. German and English are recognised
+ * automatically. Replaces the browser's own speech recognition, which sent the audio to Google /
+ * Microsoft / Apple, was fixed to German and doesn't exist in Firefox.
+ *
+ * The text arrives after the recording is stopped (a few seconds), not while speaking:
+ * `onResult` is called once with the whole transcript.
  */
-export function useSpeechInput(onResult: (text: string) => void, lang = "de-DE") {
-  const [isListening, setIsListening] = useState(false);
-  const ref = useRef<SpeechRecognition | null>(null);
-  const intentionalStop = useRef(false);
-  const isSupported = getSRCtor() !== null;
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
+import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
+import { transcribeDictation } from "@/utils/transcribe";
+
+export function useSpeechInput(onResult: (text: string) => void) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const recorder = useVoiceRecorder();
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   // Always point to the latest onResult — prevents stale closures on re-renders
   const onResultRef = useRef(onResult);
   onResultRef.current = onResult;
 
+  const isSupported =
+    typeof window !== "undefined" &&
+    !!navigator.mediaDevices?.getUserMedia &&
+    typeof MediaRecorder !== "undefined";
+  const isListening = recorder.state === "recording";
+
+  useEffect(() => {
+    if (recorder.error) toast({ title: "Voice input", description: recorder.error, variant: "destructive" });
+  }, [recorder.error, toast]);
+
   const startListening = useCallback(() => {
-    const SR = getSRCtor();
-    if (!SR || ref.current) return;
+    if (isTranscribing) return;
+    void recorder.start();
+  }, [recorder, isTranscribing]);
 
-    intentionalStop.current = false;
-
-    const makeRecognition = (): SpeechRecognition => {
-      const recognition = new SR();
-      recognition.lang = lang;
-      recognition.continuous = true;
-      recognition.interimResults = true;
-
-      recognition.onresult = (e: SpeechRecognitionEvent) => {
-        if (intentionalStop.current) return;
-        const transcript = Array.from(e.results)
-          .slice(e.resultIndex)
-          .filter((r) => r.isFinal)
-          .map((r) => r[0].transcript)
-          .join("");
-        // Always call the latest onResult via ref — never a stale closure
-        if (transcript) onResultRef.current(transcript);
-      };
-
-      recognition.onend = () => {
-        if (!intentionalStop.current) {
-          // Browser timed out due to silence — restart automatically
-          ref.current = null;
-          const next = makeRecognition();
-          ref.current = next;
-          setTimeout(() => {
-            if (!intentionalStop.current) {
-              try { next.start(); } catch { /* ignore race-condition start errors */ }
-            } else {
-              ref.current = null;
-              setIsListening(false);
-            }
-          }, 150);
-          return;
-        }
-        ref.current = null;
-        setIsListening(false);
-      };
-
-      recognition.onerror = (e: SpeechRecognitionErrorEvent) => {
-        const error = (e as { error?: string }).error ?? "";
-        if (error === "no-speech" || error === "network") return;
-        intentionalStop.current = true;
-        ref.current = null;
-        setIsListening(false);
-      };
-
-      return recognition;
-    };
-
-    const recognition = makeRecognition();
-    ref.current = recognition;
-    recognition.start();
-    setIsListening(true);
-  }, [lang]);
-
-  const stopListening = useCallback(() => {
-    intentionalStop.current = true;
-    ref.current?.stop();
-    ref.current = null;
-    setIsListening(false);
-  }, []);
+  /** Stops the recording; resolves once the text has been handed to onResult */
+  const stopListening = useCallback(async () => {
+    const audio = await recorder.stop();
+    if (!audio || audio.size === 0 || !user) return;
+    setIsTranscribing(true);
+    try {
+      const text = await transcribeDictation(audio, { coachUserId: user.id });
+      if (text) onResultRef.current(text);
+      else toast({ title: "Voice input", description: "No speech was recognised. Please try again." });
+    } catch (err) {
+      console.error("[useSpeechInput] transcription failed", err);
+      toast({ title: "Voice input", description: "The recording could not be turned into text.", variant: "destructive" });
+    } finally {
+      setIsTranscribing(false);
+    }
+  }, [recorder, user, toast]);
 
   const toggle = useCallback(() => {
-    if (isListening) stopListening();
+    if (isListening) void stopListening();
     else startListening();
   }, [isListening, startListening, stopListening]);
 
-  return { isListening, startListening, stopListening, toggle, isSupported };
+  return { isListening, isTranscribing, startListening, stopListening, toggle, isSupported };
 }

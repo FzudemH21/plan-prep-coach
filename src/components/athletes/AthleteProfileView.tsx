@@ -171,7 +171,7 @@ export function AthleteProfileView({
     (text: string) => setNewNoteText((prev) => (prev ? `${prev} ${text}` : text)),
     []
   );
-  const { isListening: isListeningNote, toggle: toggleNoteMic, isSupported: noteMicSupported } =
+  const { isListening: isListeningNote, isTranscribing: isTranscribingNote, toggle: toggleNoteMic, isSupported: noteMicSupported } =
     useSpeechInput(handleVoiceNoteResult);
 
   const { data: parametersData } = useParametersDataV2();
@@ -614,7 +614,7 @@ export function AthleteProfileView({
                 <Textarea
                   value={newNoteText}
                   onChange={(e) => setNewNoteText(e.target.value)}
-                  placeholder={isListeningNote ? 'Recording…' : 'Add a note…'}
+                  placeholder={isListeningNote ? 'Recording… click "Stop" when done' : isTranscribingNote ? 'Turning speech into text…' : 'Add a note…'}
                   className="min-h-[80px] resize-y"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); handleAddNote(); }
@@ -627,12 +627,15 @@ export function AthleteProfileView({
                       size="sm"
                       variant={isListeningNote ? 'destructive' : 'outline'}
                       onClick={toggleNoteMic}
+                      disabled={isTranscribingNote}
                       className={cn('h-8', isListeningNote && 'animate-pulse')}
                       title={isListeningNote ? 'Stop recording' : 'Voice input'}
                     >
-                      {isListeningNote
-                        ? <><MicOff className="h-3.5 w-3.5 mr-1.5" />Recording…</>
-                        : <><Mic className="h-3.5 w-3.5 mr-1.5" />Voice</>
+                      {isTranscribingNote
+                        ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Transcribing…</>
+                        : isListeningNote
+                          ? <><MicOff className="h-3.5 w-3.5 mr-1.5" />Stop</>
+                          : <><Mic className="h-3.5 w-3.5 mr-1.5" />Voice</>
                       }
                     </Button>
                   )}
