@@ -440,15 +440,16 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
     athleteData.removePerformanceParameter(pp.id);
   }, [resolvedSelected, athleteData]);
 
-  const handleAddBiometric = () => {
+  const handleAddBiometric = async () => {
     if (selectedBiometricDefId === 'new') {
       if (!newBiometricName.trim()) return;
-      const def = athleteData.createBiometricDefinition({
+      // Wait for the new metric — adding it before it exists added nothing to the athlete
+      const def = await athleteData.createBiometricDefinition({
         name: newBiometricName.trim(),
         type: newBiometricType,
         unit: newBiometricType === 'quantitative' ? newBiometricUnit || null : null,
       });
-      athleteData.addBiometricToAthlete(athlete.id, def.id);
+      await athleteData.addBiometricToAthlete(athlete.id, def.id);
     } else if (selectedBiometricDefId) {
       athleteData.addBiometricToAthlete(athlete.id, selectedBiometricDefId);
     }

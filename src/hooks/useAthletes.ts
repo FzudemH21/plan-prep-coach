@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSupabaseStore } from './useSupabaseStore';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -131,11 +131,18 @@ export function useAthletes() {
     if (!isLoading) setAthleteNamesForAI(data.athletes);
   }, [isLoading, data.athletes]);
 
+  // Changes build on the latest data, not on the data of the last render: two changes in a row
+  // (e.g. create a biometric, then add it to the athlete) used to both start from the same old
+  // state, so the second overwrote the first.
+  const latestRawRef = useRef(rawData);
+  latestRawRef.current = rawData;
   const setData = useCallback(
     async (updater: (prev: AthleteDatabase) => AthleteDatabase) => {
-      await setRawData(updater(migrateData(rawData)));
+      const next = updater(migrateData(latestRawRef.current));
+      latestRawRef.current = next;
+      await setRawData(next);
     },
-    [rawData, setRawData],
+    [setRawData],
   );
 
   // ── Groups ────────────────────────────────────────────────────────────────

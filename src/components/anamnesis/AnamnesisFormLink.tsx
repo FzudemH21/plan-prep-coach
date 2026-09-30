@@ -30,22 +30,24 @@ export function PrivacyNoticeEditor({ privacy, onSaved, onCancel }: {
   onSaved?: () => void;
   onCancel?: () => void;
 }) {
-  const { notice, companyName, contactEmail, loading, save } = privacy;
+  const { notice, companyName, profileEmail, loading, save } = privacy;
   const { toast } = useToast();
   const [noticeDe, setNoticeDe] = useState('');
   const [noticeEn, setNoticeEn] = useState('');
+  const [noticeEmail, setNoticeEmail] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!notice) return;
     setNoticeDe(notice.noticeDe);
     setNoticeEn(notice.noticeEn);
+    setNoticeEmail(notice.contactEmail);
   }, [notice]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await save({ noticeDe, noticeEn });
+      await save({ noticeDe, noticeEn, contactEmail: noticeEmail });
       toast({ title: 'Privacy notice saved' });
       onSaved?.();
     } catch (err) {
@@ -58,16 +60,30 @@ export function PrivacyNoticeEditor({ privacy, onSaved, onCancel }: {
   if (loading) {
     return <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
   }
-  const dirty = noticeDe !== (notice?.noticeDe ?? '') || noticeEn !== (notice?.noticeEn ?? '');
+  const dirty = noticeDe !== (notice?.noticeDe ?? '') || noticeEn !== (notice?.noticeEn ?? '')
+    || noticeEmail.trim() !== (notice?.contactEmail ?? '');
+  const emailValid = !noticeEmail.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(noticeEmail.trim());
+  const effectiveEmail = noticeEmail.trim() || profileEmail;
   return (
     <div className="space-y-4">
       <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
         <p><span className="text-muted-foreground">Company:</span> {companyName || <span className="text-amber-700">not set — add the business name under Report Branding</span>}</p>
-        <p><span className="text-muted-foreground">Contact email:</span> {contactEmail || <span className="text-amber-700">not set — add it under Personal Information</span>}</p>
+        <p><span className="text-muted-foreground">Contact email:</span> {effectiveEmail || <span className="text-amber-700">not set — enter one below or under Personal Information</span>}</p>
         <p className="text-xs text-muted-foreground">
-          From your Coach Profile (Settings). Both appear in the consent text of the form.
+          Company from your Coach Profile (Report Branding). Both appear in the consent text of the form.
           {notice && notice.version > 0 && ` Notice version ${notice.version}${notice.updatedAt ? ` (${format(parseISO(notice.updatedAt), 'd MMM yyyy')})` : ''}; changing the texts creates a new version.`}
         </p>
+      </div>
+      <div className="space-y-1.5">
+        <Label>Contact email for the privacy notice</Label>
+        <Input
+          type="email"
+          value={noticeEmail}
+          onChange={e => setNoticeEmail(e.target.value)}
+          placeholder={profileEmail ? `Empty = ${profileEmail} (your profile's contact email)` : 'e.g. datenschutz@your-company.de'}
+        />
+        <p className="text-xs text-muted-foreground">Where athletes can withdraw their consent. Leave empty to use the contact email of your profile.</p>
+        {!emailValid && <p className="text-xs text-destructive">Please enter a valid email address.</p>}
       </div>
       <div className="space-y-1.5">
         <Label>Privacy notice — German</Label>
@@ -79,7 +95,7 @@ export function PrivacyNoticeEditor({ privacy, onSaved, onCancel }: {
       </div>
       <div className="flex justify-end gap-2">
         {onCancel && <Button variant="outline" onClick={onCancel}>Cancel</Button>}
-        <Button onClick={handleSave} disabled={saving || !dirty}>
+        <Button onClick={handleSave} disabled={saving || !dirty || !emailValid}>
           {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Save privacy notice
         </Button>
       </div>
