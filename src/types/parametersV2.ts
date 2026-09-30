@@ -41,6 +41,10 @@ export interface ParameterMethodV2 {
 
 export interface ParametersDatabaseV2 {
   parameters: ParameterV2[];
+  /** Body metrics already added from the old athlete-database list (ids). A body metric deleted
+   *  on purpose stays deleted; one dropped by a save from an outdated copy is restored (the list is
+   *  saved together with the parameters, so it is dropped along with them). */
+  importedBiometricIds?: string[];
   interactions: ParameterInteraction[];
   parameterMethods: ParameterMethodV2[];
   lastUpdated: string;

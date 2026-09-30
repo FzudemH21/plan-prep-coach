@@ -115,8 +115,14 @@ export function useParametersDataV2() {
     const base = pendingRef.current;
     const existing = new Set(base.parameters.map((p) => p.id));
     const fresh = parameters.filter((p) => !existing.has(p.id));
-    if (fresh.length === 0) return 0;
-    const next = { ...base, parameters: [...base.parameters, ...fresh] };
+    const imported = new Set(base.importedBiometricIds ?? []);
+    const newlyMarked = parameters.filter((p) => p.isBiometric && !imported.has(p.id));
+    if (fresh.length === 0 && newlyMarked.length === 0) return 0;
+    const next: ParametersDatabaseV2 = {
+      ...base,
+      parameters: [...base.parameters, ...fresh],
+      importedBiometricIds: [...imported, ...newlyMarked.map((p) => p.id)],
+    };
     pendingRef.current = next;
     await saveData(next);
     return fresh.length;

@@ -29,9 +29,12 @@ export function useBiometricsMigration() {
     if (started.current) return;
     if (athletes.isLoading || params.isLoading || !calendar.isLoaded || !params.data) return;
     if (athletes.biometricsMigrated) {
-      // Already moved — make sure every moved body metric exists in the parameter database
+      // Already moved — body metrics dropped from the parameter database by a save from an outdated
+      // copy are added again (dropped together with their "imported" mark); ones the coach deleted
+      // on purpose keep their mark and stay deleted
       const known = new Set(params.data.parameters.map(p => p.id));
-      const missing = athletes.movedBiometricDefinitions.filter(d => !known.has(d.id));
+      const imported = new Set(params.data.importedBiometricIds ?? []);
+      const missing = athletes.movedBiometricDefinitions.filter(d => !known.has(d.id) && !imported.has(d.id));
       started.current = true;
       if (missing.length === 0) return;
       params.importParameters(biometricDefinitionsAsParameters(missing, new Date().toISOString()))

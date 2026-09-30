@@ -26,6 +26,10 @@ import { useAuth } from '@/hooks/useAuth';
 const _fetchedKeys = new Set<string>();
 // Callbacks registered by secondary instances waiting for the first fetch.
 const _pendingCallbacks = new Map<string, Array<(data: unknown) => void>>();
+// Tables whose first fetch has finished — only then is `isLoading` false. Before, an instance that
+// started from the localStorage cache reported "loaded" while the fetch was still running, and the
+// fetched (newer or older) data then replaced what had been built on the cache in the meantime.
+const _loadedKeys = new Set<string>();
 
 // ─── Cross-instance sync ──────────────────────────────────────────────────────
 // Every mounted hook instance of a table registers here. When one instance saves (or the
@@ -129,13 +133,13 @@ export function useSupabaseStore<T>({
     // Another instance is already fetching (or has fetched) this table.
     if (_fetchedKeys.has(fetchKey)) {
       const cached = readCache<T>(cacheKey);
-      if (cached !== null) {
-        // Cache already populated by first instance — use it immediately.
-        setData(cached);
+      if (_loadedKeys.has(fetchKey)) {
+        // First fetch done — the cache holds its result (or newer saves)
+        if (cached !== null) setData(cached);
         setIsLoading(false);
       } else {
-        // First fetch still in-flight. Subscribe to be notified when data lands.
-        // Callback receives resolved data (or null when no row existed).
+        // First fetch still in flight: show the cache meanwhile, but stay "loading" until it lands
+        if (cached !== null) setData(cached);
         const callbacks = _pendingCallbacks.get(fetchKey) ?? [];
         callbacks.push((loaded) => {
           if (loaded !== null) setData(loaded as T);
@@ -204,7 +208,10 @@ export function useSupabaseStore<T>({
           }
         }
       } finally {
+        _loadedKeys.add(fetchKey);
         setIsLoading(false);
+        // Every mounted instance gets the fetched data (not only this one and the waiting ones)
+        if (resolvedData !== null) notifyInstances(tableName, resolvedData, receiveRef.current);
         // Notify any instances that were waiting for this fetch to complete.
         const waiting = _pendingCallbacks.get(fetchKey);
         if (waiting) {
