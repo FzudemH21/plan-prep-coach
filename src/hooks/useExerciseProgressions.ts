@@ -82,10 +82,12 @@ function buildCrossLinkRows(
 export function useExerciseProgressions(exerciseId: string | null) {
   const { user } = useAuth();
   const [progressions, setProgressions] = useState<ExerciseProgression[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
+  const [loading, setLoading] = useState(!!exerciseId);
 
   const fetch = useCallback(async () => {
-    if (!exerciseId || !user) return;
+    if (!exerciseId) { setLoading(false); return; }
+    if (!user) return;
     setLoading(true);
     const { data, error } = await supabase
       .from('exercise_progressions')

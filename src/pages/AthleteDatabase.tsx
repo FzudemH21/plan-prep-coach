@@ -211,6 +211,7 @@ export default function AthleteDatabase() {
       {/* Sidebar */}
       <div className="w-80 shrink-0">
         <AthleteGroupSidebar
+          loading={athleteData.isLoading}
           groups={athleteData.groups}
           athletes={athleteData.athletes}
           archivedAthletes={athleteData.getArchivedAthletes()}

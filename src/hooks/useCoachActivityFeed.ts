@@ -57,7 +57,8 @@ function wellnessComposite(scores: (number | null)[]): number | null {
 
 export function useCoachActivityFeed(connections: AthleteConnection[]) {
   const [items, setItems] = useState<FeedItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
+  const [loading, setLoading] = useState(true);
   const [readIds, setReadIds] = useState<Set<string>>(loadReadIds);
 
   const connectedIds = connections

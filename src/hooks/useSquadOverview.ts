@@ -169,10 +169,11 @@ export function useSquadOverview(
   }, [connKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [summaries, setSummaries] = useState<AthleteSquadSummary[]>([]);
-  const [loading, setLoading]     = useState(false);
+  // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
+  const [loading, setLoading]     = useState(!!connKey);
 
   useEffect(() => {
-    if (!connKey) { setSummaries([]); return; }
+    if (!connKey) { setSummaries([]); setLoading(false); return; }
 
     let cancelled = false;
 

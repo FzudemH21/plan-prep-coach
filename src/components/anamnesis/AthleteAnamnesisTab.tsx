@@ -1043,9 +1043,11 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
       <div className="flex items-center justify-between px-1 py-2 shrink-0">
         <div>
           <p className="text-xs text-muted-foreground">
-            {anamneses.length > 0
-              ? `${anamneses.length} record${anamneses.length !== 1 ? 's' : ''}`
-              : 'No records yet'}
+            {loading
+              ? 'Loading…'
+              : anamneses.length > 0
+                ? `${anamneses.length} record${anamneses.length !== 1 ? 's' : ''}`
+                : 'No records yet'}
           </p>
         </div>
         <div className="flex items-center gap-2">

@@ -51,13 +51,14 @@ export function useAthleteExerciseMetrics(
 ) {
   const [rawLogs, setRawLogs] = useState<RawSessionLog[]>([]);
   const [paramTags, setParamTags] = useState<Record<string, ParamTags>>({});
-  const [logsLoading, setLogsLoading] = useState(false);
-  const [tagsLoading, setTagsLoading] = useState(false);
+  // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
+  const [logsLoading, setLogsLoading] = useState(!!connectionId);
+  const [tagsLoading, setTagsLoading] = useState(!!coachUserId);
 
   // ── Fetch completed session logs (athlete reads own rows via RLS) ──────────
 
   useEffect(() => {
-    if (!connectionId) { setRawLogs([]); return; }
+    if (!connectionId) { setRawLogs([]); setLogsLoading(false); return; }
     let cancelled = false;
     setLogsLoading(true);
     supabase
@@ -78,7 +79,7 @@ export function useAthleteExerciseMetrics(
   // ── Fetch coach's param tags (athlete RLS allows SELECT on coach's rows) ───
 
   useEffect(() => {
-    if (!coachUserId) { setParamTags({}); return; }
+    if (!coachUserId) { setParamTags({}); setTagsLoading(false); return; }
     let cancelled = false;
     setTagsLoading(true);
     supabase

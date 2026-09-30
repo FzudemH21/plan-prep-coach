@@ -39,6 +39,7 @@ import {
   User,
   UserPlus,
   Users,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Athlete, AthleteGroup, getAthleteDisplayName } from '@/types/athlete';
@@ -46,6 +47,8 @@ import { Athlete, AthleteGroup, getAthleteDisplayName } from '@/types/athlete';
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface AthleteGroupSidebarProps {
+  /** Athletes still loading — a spinner instead of "No athletes yet" */
+  loading?: boolean;
   groups: AthleteGroup[];
   athletes: Athlete[];
   archivedAthletes: Athlete[];
@@ -219,6 +222,7 @@ function ArchiveSection({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function AthleteGroupSidebar({
+  loading = false,
   groups,
   athletes,
   archivedAthletes,
@@ -337,7 +341,11 @@ export function AthleteGroupSidebar({
           {/* ── ATHLETES TAB ── */}
           {sidebarTab === 'athletes' && (
             <>
-              {sortedActiveAthletes.length === 0 && archivedAthletes.length === 0 ? (
+              {loading && sortedActiveAthletes.length === 0 && archivedAthletes.length === 0 ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : sortedActiveAthletes.length === 0 && archivedAthletes.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <p className="text-sm">No athletes yet</p>
                   <p className="text-xs mt-1">Click + to add your first athlete</p>

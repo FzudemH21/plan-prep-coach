@@ -84,10 +84,12 @@ function fromDb(row: DbAnamnesis): AthleteAnamnesis {
 export function useAthleteAnamneses(athleteLocalId: string) {
   const { user } = useAuth();
   const [anamneses, setAnamneses] = useState<AthleteAnamnesis[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
+  const [loading, setLoading] = useState(!!athleteLocalId);
 
   const fetchAnamneses = useCallback(async () => {
-    if (!user || !athleteLocalId) return;
+    if (!athleteLocalId) { setLoading(false); return; }
+    if (!user) return;
     setLoading(true);
     try {
       const { data, error } = await supabase

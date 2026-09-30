@@ -44,7 +44,8 @@ let inflight: Promise<void> | null = null;
 export function useAnamnesisTemplates() {
   const { user } = useAuth();
   const [templates, setTemplates] = useState<AnamnesisTemplate[]>(shared);
-  const [loading, setLoading] = useState(false);
+  // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
+  const [loading, setLoading] = useState(shared.length === 0);
 
   useEffect(() => {
     subscribers.add(setTemplates);
@@ -54,7 +55,7 @@ export function useAnamnesisTemplates() {
 
   const fetchTemplates = useCallback(async () => {
     if (!user) return;
-    if (inflight) { await inflight; return; }
+    if (inflight) { await inflight; setLoading(false); return; }
     setLoading(true);
     inflight = (async () => {
       try {

@@ -21,7 +21,8 @@ interface Props {
 
 export function ExerciseHistorySheet({ open, onClose, exerciseName, athleteConnectionId, prefetchedEntries }: Props) {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -34,7 +35,7 @@ export function ExerciseHistorySheet({ open, onClose, exerciseName, athleteConne
     }
 
     // Fallback: fetch per-exercise (used when parent doesn't prefetch, e.g. mobile).
-    if (!exerciseName || !athleteConnectionId) return;
+    if (!exerciseName || !athleteConnectionId) { setLoading(false); return; }
     setLoading(true);
     setEntries([]);
     supabase

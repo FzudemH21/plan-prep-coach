@@ -64,12 +64,14 @@ interface UseChatOptions {
 export function useChat({ connectionId, callerRole }: UseChatOptions) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
+  const [loading, setLoading] = useState(!!connectionId);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // ── Load history ────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!connectionId || !user) return;
+    if (!connectionId) { setLoading(false); return; }
+    if (!user) return;
 
     let cancelled = false;
     setLoading(true);

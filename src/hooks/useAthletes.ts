@@ -227,6 +227,8 @@ export function useAthletes() {
   // same id (the definitions themselves are added to the parameter database by the caller first —
   // see useBiometricsMigration). Runs once; the old lists are kept in biometricsMigration.
   const biometricsMigrated = !!data.biometricsMigration;
+  /** The body-metric definitions as they were before the move (backup) */
+  const movedBiometricDefinitions = data.biometricsMigration?.definitions ?? [];
   const moveBiometricsToParameters = useCallback(async () => {
     await setData(prev => {
       if (prev.biometricsMigration) return prev;
@@ -430,6 +432,7 @@ export function useAthletes() {
     calendarAssignments: data.calendarAssignments,
     isLoading,
     biometricsMigrated,
+    movedBiometricDefinitions,
     moveBiometricsToParameters,
 
     parameterDefinitions,

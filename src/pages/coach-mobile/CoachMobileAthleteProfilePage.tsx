@@ -307,10 +307,11 @@ function formatDayHeader(dateStr: string): { weekday: string; dateLabel: string 
 
 function useAthleteSchedule(connectionId: string | null) {
   const [schedule, setSchedule] = useState<AthleteScheduleEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
+  const [loading, setLoading] = useState(!!connectionId);
 
   useEffect(() => {
-    if (!connectionId) return;
+    if (!connectionId) { setLoading(false); return; }
     setLoading(true);
 
     const today = new Date();

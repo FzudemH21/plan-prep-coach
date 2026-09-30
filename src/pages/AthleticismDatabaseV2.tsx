@@ -31,7 +31,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Search, Edit2, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Filter, X } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Filter, X, Loader2 } from 'lucide-react';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useToast } from '@/hooks/use-toast';
@@ -75,6 +75,7 @@ export default function AthleticismDatabaseV2() {
     removeParameterMethod,
     getMethodsForParameter,
     saveData,
+    isLoading: parametersLoading,
   } = useParametersDataV2();
   const { data: toolboxData } = useToolboxData();
 
@@ -827,7 +828,9 @@ export default function AthleticismDatabaseV2() {
                 {filteredParameters.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
-                      {parameterSearch || selectedCategories.length > 0
+                      {parametersLoading
+                        ? <Loader2 className="h-5 w-5 animate-spin mx-auto" />
+                        : parameterSearch || selectedCategories.length > 0
                         ? 'No parameters match your filters.'
                         : 'No parameters yet. Click "Add Parameter" to create one.'}
                     </TableCell>

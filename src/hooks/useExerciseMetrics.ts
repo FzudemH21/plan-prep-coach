@@ -91,7 +91,8 @@ const LEGACY_LS_PREFIX = 'exercise_param_tags_';
 export function useExerciseMetrics(connectionId: string | null) {
   const { user } = useAuth();
   const [rawLogs, setRawLogs] = useState<RawSessionLog[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
+  const [loading, setLoading] = useState(!!connectionId);
   const [paramTags, setParamTagsState] = useState<Record<string, ParamTags>>({});
 
   // ── Load param tags from Supabase (with localStorage migration) ────────────
@@ -178,7 +179,7 @@ export function useExerciseMetrics(connectionId: string | null) {
   // ── Fetch session logs ─────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!connectionId) { setRawLogs([]); return; }
+    if (!connectionId) { setRawLogs([]); setLoading(false); return; }
     let cancelled = false;
     setLoading(true);
     supabase

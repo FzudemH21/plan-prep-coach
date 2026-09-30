@@ -8,8 +8,10 @@
  *
  * Order: 1. parameters added to the parameter database, 2. values moved in the athlete database
  * (marks it migrated, keeps the old lists as a backup), 3. calendar test links "bio:{id}" → "{id}".
- * Mounted in the coach layouts; runs once all three stores have loaded, and never again after the
- * athlete database is marked migrated. Safe to run twice (existing ids are skipped).
+ * Mounted in the coach layouts; runs once all three stores have loaded. After the move it only
+ * repairs: body metrics from the backup that are missing in the parameter database (e.g. a save
+ * from an outdated copy of the parameter database dropped them) are added again. Safe to run twice
+ * (existing ids are skipped).
  */
 import { useEffect, useRef } from 'react';
 import { useAthletes } from '@/hooks/useAthletes';
@@ -26,7 +28,17 @@ export function useBiometricsMigration() {
   useEffect(() => {
     if (started.current) return;
     if (athletes.isLoading || params.isLoading || !calendar.isLoaded || !params.data) return;
-    if (athletes.biometricsMigrated) return;
+    if (athletes.biometricsMigrated) {
+      // Already moved — make sure every moved body metric exists in the parameter database
+      const known = new Set(params.data.parameters.map(p => p.id));
+      const missing = athletes.movedBiometricDefinitions.filter(d => !known.has(d.id));
+      started.current = true;
+      if (missing.length === 0) return;
+      params.importParameters(biometricDefinitionsAsParameters(missing, new Date().toISOString()))
+        .then(n => console.info(`[biometrics] restored ${n} body metrics in the parameter database`))
+        .catch(err => console.error('[biometrics] restoring body metrics failed', err));
+      return;
+    }
     started.current = true;
     (async () => {
       await params.importParameters(biometricDefinitionsAsParameters(athletes.biometricDefinitions, new Date().toISOString()));

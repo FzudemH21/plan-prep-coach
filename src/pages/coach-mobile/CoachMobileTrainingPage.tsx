@@ -28,18 +28,21 @@ interface DayEntry {
 export default function CoachMobileTrainingPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { connections } = useAthleteConnections();
+  const { connections, loading: connectionsLoading } = useAthleteConnections();
   const { athletes } = useAthletes();
   const [dayEntries, setDayEntries] = useState<DayEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
+  const [loading, setLoading] = useState(true);
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const todayLabel = format(new Date(), 'EEEE, MMMM d');
 
   useEffect(() => {
+    if (connectionsLoading) return;
     const connected = connections.filter(c => c.connectedAt);
     if (connected.length === 0) {
       setDayEntries([]);
+      setLoading(false);
       return;
     }
     setLoading(true);
@@ -78,7 +81,7 @@ export default function CoachMobileTrainingPage() {
         setDayEntries(entries);
         setLoading(false);
       });
-  }, [connections, todayStr]);
+  }, [connections, connectionsLoading, todayStr]);
 
   const training = dayEntries.filter(e => e.entry && e.entry.sessions.length > 0);
   const rest     = dayEntries.filter(e => !e.entry || e.entry.sessions.length === 0);

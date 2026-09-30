@@ -78,10 +78,11 @@ export function zScore(composite: number, stats: WellnessStats): number | null {
 
 export function useAthleteCheckins(athleteId: string | null, days = 90) {
   const [checkins, setCheckins] = useState<AthleteCheckin[]>([]);
-  const [loading, setLoading]   = useState(false);
+  // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
+  const [loading, setLoading]   = useState(!!athleteId);
 
   const load = useCallback(async () => {
-    if (!athleteId) { setCheckins([]); return; }
+    if (!athleteId) { setCheckins([]); setLoading(false); return; }
     setLoading(true);
     const from = new Date();
     from.setDate(from.getDate() - days);
