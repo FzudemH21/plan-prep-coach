@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
-import type { AthleteProfileData } from '@/hooks/useAthleteConnections';
+import { profileDataPatch } from '@/utils/athleteProfileSync';
 import { AthleteGroupSidebar } from '@/components/athletes/AthleteGroupSidebar';
 import { AthleteProfileView } from '@/components/athletes/AthleteProfileView';
 import { AddAthleteDialog, type NewAthleteData } from '@/components/athletes/AddAthleteDialog';
@@ -98,29 +98,12 @@ export default function AthleteDatabase() {
     updates: Partial<Omit<Athlete, 'id' | 'createdAt'>>,
   ) => {
     await athleteData.updateAthlete(athlete.id, updates);
+    // Profile fields also go into the athlete-app copy — the load-time sync above would otherwise
+    // put the old values back on the next load. Only the changed fields, on top of the current copy.
     const connection = getConnectionForAthlete(athlete.id);
     if (connection) {
-      // Only patch the fields that the coach actually changed — preserve any
-      // athlete-set values (e.g. sex set during onboarding) for fields not in `updates`.
-      const merged = { ...athlete, ...updates };
-      const patch: Partial<AthleteProfileData> = {};
-      if ('firstName' in updates) patch.firstName = merged.firstName ?? undefined;
-      if ('middleName' in updates) patch.middleName = merged.middleName;
-      if ('lastName' in updates) patch.lastName = merged.lastName ?? undefined;
-      if ('birthday' in updates) patch.birthday = merged.birthday;
-      if ('sex' in updates) patch.sex = merged.sex;
-      if ('sports' in updates || 'sport' in updates) {
-        patch.sports = merged.sports ?? (merged.sport ? [merged.sport] : []);
-      }
-      if ('team' in updates) patch.team = merged.team;
-      if ('occupation' in updates) patch.occupation = merged.occupation;
-      if ('dailyActivityLevel' in updates) patch.dailyActivityLevel = merged.dailyActivityLevel;
-
-      if (Object.keys(patch).length > 0) {
-        // Merge patch on top of what the athlete already set — never clobber unchanged fields
-        const newProfileData: AthleteProfileData = { ...connection.profileData, ...patch };
-        syncProfileToConnection(connection.id, newProfileData).catch(console.error);
-      }
+      const patch = profileDataPatch(athlete, updates);
+      if (Object.keys(patch).length > 0) syncProfileToConnection(connection.id, patch).catch(console.error);
     }
   }, [athleteData, getConnectionForAthlete, syncProfileToConnection]);
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(navState.openAthleteId ?? null);

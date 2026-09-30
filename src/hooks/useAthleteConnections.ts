@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { removeConnectionFiles } from '@/utils/athleteDataDeletion';
+import { patchConnectionProfileData } from '@/utils/athleteProfileSync';
 import { useAuth } from '@/hooks/useAuth';
 import type { MonitoringConfig } from '@/types/athlete';
 
@@ -135,16 +136,13 @@ export function useAthleteConnections() {
     return conn;
   }, [user]);
 
-  /** Sync coach-edited athlete profile fields to the shared profile_data column. */
+  /** Sync coach-edited fields into the shared profile_data column: `patch` is merged onto the
+   *  current server copy (see patchConnectionProfileData), never a whole copy from this page. */
   const syncProfileToConnection = useCallback(async (
     connectionId: string,
-    profileData: AthleteProfileData,
+    patch: Partial<AthleteProfileData>,
   ) => {
-    const { error } = await supabase
-      .from('athlete_connections')
-      .update({ profile_data: profileData })
-      .eq('id', connectionId);
-    if (error) throw error;
+    const profileData = await patchConnectionProfileData(connectionId, patch);
     setConnections(prev =>
       prev.map(c => c.id === connectionId ? { ...c, profileData } : c)
     );
@@ -177,37 +175,23 @@ export function useAthleteConnections() {
   /** Save the monitoring check-in configuration for an athlete.
    *  Stored inside profile_data to avoid requiring a schema migration. */
   const updateMonitoringConfig = useCallback(async (connectionId: string, config: MonitoringConfig | null) => {
-    const conn = connections.find(c => c.id === connectionId);
-    if (!conn) return;
-    const newProfileData: AthleteProfileData = { ...conn.profileData, monitoringConfig: config };
-    const { error } = await supabase
-      .from('athlete_connections')
-      .update({ profile_data: newProfileData })
-      .eq('id', connectionId);
-    if (error) throw error;
+    const newProfileData = await patchConnectionProfileData(connectionId, { monitoringConfig: config });
     setConnections(prev =>
       prev.map(c => c.id === connectionId
         ? { ...c, monitoringConfig: config, profileData: newProfileData }
         : c)
     );
-  }, [connections]);
+  }, []);
 
   /** Enable or disable the Messages tab for an athlete. Stored in profile_data. */
   const updateChatEnabled = useCallback(async (connectionId: string, enabled: boolean) => {
-    const conn = connections.find(c => c.id === connectionId);
-    if (!conn) return;
-    const newProfileData: AthleteProfileData = { ...conn.profileData, chatEnabled: enabled };
-    const { error } = await supabase
-      .from('athlete_connections')
-      .update({ profile_data: newProfileData })
-      .eq('id', connectionId);
-    if (error) throw error;
+    const newProfileData = await patchConnectionProfileData(connectionId, { chatEnabled: enabled });
     setConnections(prev =>
       prev.map(c => c.id === connectionId
         ? { ...c, chatEnabled: enabled, profileData: newProfileData }
         : c)
     );
-  }, [connections]);
+  }, []);
 
   /** Enable or disable session rearranging for an athlete. */
   const updateAllowRearrangeWorkouts = useCallback(async (connectionId: string, enabled: boolean) => {
@@ -260,18 +244,11 @@ export function useAthleteConnections() {
     connectionId: string,
     snapshot: MetricsSnapshot,
   ) => {
-    const conn = connections.find(c => c.id === connectionId);
-    if (!conn) return;
-    const newProfileData: AthleteProfileData = { ...conn.profileData, metricsSnapshot: snapshot };
-    const { error } = await supabase
-      .from('athlete_connections')
-      .update({ profile_data: newProfileData })
-      .eq('id', connectionId);
-    if (error) throw error;
+    const newProfileData = await patchConnectionProfileData(connectionId, { metricsSnapshot: snapshot });
     setConnections(prev =>
       prev.map(c => c.id === connectionId ? { ...c, profileData: newProfileData } : c)
     );
-  }, [connections]);
+  }, []);
 
   /** Get the connection for a specific athlete (by their local id in the coach's blob). */
   const getConnectionForAthlete = useCallback(

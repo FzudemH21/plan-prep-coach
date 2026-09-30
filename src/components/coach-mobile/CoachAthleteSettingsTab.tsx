@@ -14,6 +14,8 @@ import {
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import type { AthleteConnection } from '@/hooks/useAthleteConnections';
 import { useAthletes } from '@/hooks/useAthletes';
+import { syncAthleteProfileToApp } from '@/utils/athleteProfileSync';
+import type { Athlete } from '@/types/athlete';
 import { useTranslation } from 'react-i18next';
 
 // ── Toggle row ────────────────────────────────────────────────────────────────
@@ -83,12 +85,15 @@ export function CoachAthleteSettingsTab({ athleteId, connection }: Props) {
   const handleProfileSave = async () => {
     setProfileSaving(true);
     try {
-      await updateAthlete(athleteId, {
+      const updates: Partial<Omit<Athlete, 'id' | 'createdAt'>> = {
         birthday: profileForm.birthday || undefined,
-        sex: profileForm.sex || undefined,
+        sex: (profileForm.sex || undefined) as Athlete['sex'],
         team: profileForm.team || undefined,
         sports: profileForm.sport ? [profileForm.sport] : [],
-      });
+      };
+      await updateAthlete(athleteId, updates);
+      // Also into the athlete-app copy — the desktop load-time sync would otherwise undo it
+      if (athlete) await syncAthleteProfileToApp(athlete, updates).catch(console.error);
       setProfileEditing(false);
     } finally {
       setProfileSaving(false);

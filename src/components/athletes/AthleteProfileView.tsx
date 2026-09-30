@@ -71,7 +71,7 @@ import { SportTagInput } from './SportTagInput';
 
 interface AthleteProfileViewProps {
   athlete: Athlete;
-  onUpdateAthlete: (updates: Partial<Omit<Athlete, 'id' | 'createdAt'>>) => void;
+  onUpdateAthlete: (updates: Partial<Omit<Athlete, 'id' | 'createdAt'>>) => void | Promise<void>;
   /** Opens the shared delete confirmation (owned by the page) — never deletes directly. */
   onDeleteAthlete: () => void;
   groups: AthleteGroup[];
@@ -785,7 +785,9 @@ export function AthleteProfileView({
             athlete={athlete}
             autoOpenNew={openNewAnamnesis}
             onAutoOpenHandled={onNewAnamnesisOpened}
-            onUpdateAthlete={(updates) => athleteData.updateAthlete(athlete.id, updates)}
+            // Through the page's update: it also writes the athlete-app copy of the profile, which
+            // would otherwise put the old values back on the next load
+            onUpdateAthlete={async (updates) => { await onUpdateAthlete(updates); }}
           />
         </TabsContent>
 

@@ -497,7 +497,7 @@ function BrandingCard() {
     const coachBranding = { logoBase64, welcomeMessage, businessName };
     await Promise.all(
       connections.map((conn) =>
-        syncProfileToConnection(conn.id, { ...conn.profileData, coachBranding })
+        syncProfileToConnection(conn.id, { coachBranding })
       )
     );
     setDirty(false);
