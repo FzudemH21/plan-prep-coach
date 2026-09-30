@@ -6,6 +6,7 @@ import { IntensityLevel } from '@/types/training';
 import { TrainingDay } from '@/types/daily-intensity';
 import { toggleSuperset, cleanupSupersetsOnExerciseDelete } from '@/utils/supersetUtils';
 import { useToast } from '@/hooks/use-toast';
+import type { SessionLibraryEntry } from '@/types/sessionLibrary';
 
 interface CopiedSession {
   exercises: ExerciseDistribution[];
@@ -895,15 +896,8 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     toast({ title: "Session copied", description: `${sessionExercises.length} exercise(s) copied` });
   }, [exerciseDistribution, sessionSections, supersets, trainingDays, dailyIntensityData, toast]);
 
-  const handlePasteSession = useCallback((targetDate: string) => {
-    if (!copiedSession) return;
-    
-    const targetDayExercises = exerciseDistribution.filter(ex => ex.dayDate === targetDate);
-    const maxSessionIndex = targetDayExercises.length > 0
-      ? Math.max(...targetDayExercises.map(ex => ex.sessionIndex))
-      : -1;
-    const newSessionIndex = maxSessionIndex + 1;
-    
+  /** Puts a session (a copied one or one from the session library) on a day at newSessionIndex */
+  const insertSession = useCallback((targetDate: string, copiedSession: CopiedSession, newSessionIndex: number) => {
     // Calculate initial splitState for target day
     const currentSplitState = daySplitStates[targetDate] ?? 0;
     const newSplitState = Math.max(currentSplitState, newSessionIndex + 1);
@@ -1040,10 +1034,75 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         }
       }
     } catch { /* ignore */ }
+  }, [daySplitStates]);
+
+  const handlePasteSession = useCallback((targetDate: string) => {
+    if (!copiedSession) return;
+
+    const targetDayExercises = exerciseDistribution.filter(ex => ex.dayDate === targetDate);
+    const maxSessionIndex = targetDayExercises.length > 0
+      ? Math.max(...targetDayExercises.map(ex => ex.sessionIndex))
+      : -1;
+    insertSession(targetDate, copiedSession, maxSessionIndex + 1);
 
     toast({ title: "Session pasted", description: `${copiedSession.exercises.length} exercise(s) pasted` });
     setCopiedSession(null);
-  }, [copiedSession, exerciseDistribution, daySplitStates, toast]);
+  }, [copiedSession, exerciseDistribution, insertSession, toast]);
+
+  /**
+   * Adds a session from the session library to a day, as a new session after the existing ones.
+   * Its exercises keep their own planned values (the library stores them per exercise; older
+   * entries in parameterValues) — they are ad-hoc here, not linked to the plan's periodization
+   * table. Returns the new session's index.
+   */
+  const handleAddSessionFromLibrary = useCallback((targetDate: string, entry: SessionLibraryEntry): number => {
+    const dayIndexes = exerciseDistribution.filter(ex => ex.dayDate === targetDate).map(ex => ex.sessionIndex);
+    const newSessionIndex = Math.max(
+      daySplitStates[targetDate] ?? 0,
+      dayIndexes.length > 0 ? Math.max(...dayIndexes) + 1 : 0,
+    );
+    const legacyParams = entry.parameterValues?.[entry.id]?.[0];
+    const exercises: ExerciseDistribution[] = entry.exercises.map(ex => {
+      // Stored as [methodId][sessionIndex][exerciseId] → { param: value } (one level deeper than the type says)
+      const legacyForMethod = legacyParams?.[ex.methodId]?.[0] as unknown as Record<string, Record<string, string | number>> | undefined;
+      const planned = {
+        ...(legacyForMethod?.[ex.exerciseId] ?? {}),
+        ...(ex.adhocPlannedParams ?? {}),
+        ...(ex.parameterOverrides ?? {}),
+      };
+      return {
+        ...ex,
+        parameterSource: 'toolbox' as const,
+        adhocPlannedParams: Object.keys(planned).length > 0 ? planned : ex.adhocPlannedParams,
+      };
+    });
+    // Supersets: the library keeps them only as supersetId on the exercises
+    const supersetMap: CopiedSession['supersets'] = {};
+    exercises.forEach(ex => {
+      if (!ex.supersetId) return;
+      const sectionKey = ex.sectionId ?? '__unsectioned__';
+      supersetMap[sectionKey] = supersetMap[sectionKey] ?? {};
+      supersetMap[sectionKey][ex.supersetId] = [...(supersetMap[sectionKey][ex.supersetId] ?? []), ex.id];
+    });
+    const targetDay = trainingDays.find(d => d.date === targetDate);
+    // Keep the day's intensity unless it is a rest day (legacy 'off' or Borg 0)
+    const dayIntensity = targetDay?.intensity && !['off', '0'].includes(String(targetDay.intensity))
+      ? targetDay.intensity
+      : undefined;
+    insertSession(targetDate, {
+      exercises,
+      sections: entry.sections,
+      supersets: supersetMap,
+      sourceDate: targetDate,
+      sessionIndex: newSessionIndex,
+      sessionName: entry.name,
+      sourceMesocycleId: targetDay?.mesocycleId,
+      sourceMicrocycleId: targetDay?.microcycleId,
+      sourceIntensity: dayIntensity,
+    }, newSessionIndex);
+    toast({ title: 'Session added', description: `"${entry.name}" · ${exercises.length} exercise(s)` });
+    return newSessionIndex;
+  }, [exerciseDistribution, daySplitStates, trainingDays, insertSession, toast]);
 
   // === Day Management Handlers ===
   
@@ -2250,6 +2309,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     
     // Session handlers
     handleAddSession,
+    handleAddSessionFromLibrary,
     handleDeleteSession,
     handleCopySession,
     handlePasteSession,

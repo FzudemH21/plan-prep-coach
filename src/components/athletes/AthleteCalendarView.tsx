@@ -53,6 +53,8 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { AthleteCalendarWeekRow } from './AthleteCalendarWeekRow';
 import { AthleteCalendarDay, AthleteCalendarSession } from './AthleteCalendarDayCell';
 import { WorkoutSessionSheet } from '@/components/microcycle-planning/WorkoutSessionSheet';
+import { SessionLibraryPickerDialog } from '@/components/session-library/SessionLibraryPickerDialog';
+import type { SessionLibraryEntry } from '@/types/sessionLibrary';
 import { CompletedSessionSheet, CoachSessionLog } from './CompletedSessionSheet';
 import { MasterPlannerGrid } from '@/components/microcycle-planning/MasterPlannerGrid';
 import { WizardAIAssistant, FocusedSessionContext, ApplySuggestion } from '@/components/wizard/WizardAIAssistant';
@@ -1710,6 +1712,16 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     setShowAssignDialog(true);
   };
 
+  // Session library picker: the day the chosen session goes to
+  const [libraryPickDate, setLibraryPickDate] = useState<string | null>(null);
+  const handleAddFromLibrary = (entry: SessionLibraryEntry) => {
+    if (!libraryPickDate || !selectedAssignmentId) return;
+    const newIdx = editing.handleAddSessionFromLibrary(libraryPickDate, entry);
+    // A log left at this position by a removed session must not attach to the new one
+    void unlinkSessionLogs([libraryPickDate], undefined, { [libraryPickDate]: newIdx });
+    setLibraryPickDate(null);
+  };
+
   const handleAddSession = (date: Date) => {
     const dateString = format(date, 'yyyy-MM-dd');
     if (!selectedAssignmentId) return;
@@ -2794,6 +2806,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                       onSessionClick={handleSessionClick}
                       onDayClick={handleDayClick}
                       onAddSession={handleAddSession}
+                      onAddSessionFromLibrary={selectedAssignmentId ? (date: Date) => setLibraryPickDate(format(date, 'yyyy-MM-dd')) : undefined}
                       onDeleteAssignment={handleDeleteAssignmentById}
                       // Week operations
                       copiedWeek={editing.copiedWeek}
@@ -2886,6 +2899,13 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <SessionLibraryPickerDialog
+        open={libraryPickDate !== null}
+        onOpenChange={(o) => { if (!o) setLibraryPickDate(null); }}
+        dayLabel={libraryPickDate ? format(new Date(`${libraryPickDate}T12:00:00`), 'EEE, d MMM') : undefined}
+        onPick={handleAddFromLibrary}
+      />
 
       {/* Workout Session Sheet for viewing/editing sessions */}
       {selectedSessionInfo && selectedSessionInfo.dayDate && selectedSessionInfo.assignmentId !== undefined && (

@@ -46,6 +46,7 @@ interface AthleteCalendarWeekRowProps {
   onSessionClick?: (dayDate: string, sessionIndex: number, assignmentId: string) => void;
   onDayClick?: (date: Date) => void;
   onAddSession?: (date: Date) => void;
+  onAddSessionFromLibrary?: (date: Date) => void;
   onDeleteAssignment?: (assignmentId: string) => void;
   // Week operations
   copiedWeek?: CopiedWeekInfo | null;
@@ -88,6 +89,7 @@ export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow
   onSessionClick,
   onDayClick,
   onAddSession,
+  onAddSessionFromLibrary,
   onDeleteAssignment,
   copiedWeek,
   onCopyWeek,
@@ -199,6 +201,7 @@ export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow
             onSessionClick={onSessionClick}
             onDayClick={onDayClick}
             onAddSession={onAddSession}
+            onAddSessionFromLibrary={onAddSessionFromLibrary}
             onDeleteAssignment={onDeleteAssignment}
             copiedDay={copiedDay}
             onCopyDay={onCopyDay}

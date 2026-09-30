@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
-import { Dumbbell, Trophy, Calendar, Plus, MoreVertical, Trash2, CalendarPlus, Copy, ClipboardPaste, Settings, GripVertical, CheckCircle2, PlayCircle } from 'lucide-react';
+import { Dumbbell, Trophy, Calendar, Plus, MoreVertical, Trash2, CalendarPlus, Copy, ClipboardPaste, Settings, GripVertical, CheckCircle2, PlayCircle, Library } from 'lucide-react';
 import { IntensityLevel } from '@/types/training';
 import {
   DropdownMenu,
@@ -67,6 +67,8 @@ interface AthleteCalendarDayCellProps {
   onSessionClick?: (dayDate: string, sessionIndex: number, assignmentId: string) => void;
   onDayClick?: (date: Date) => void;
   onAddSession?: (date: Date) => void;
+  /** Adds a session from the session library (opens the picker) */
+  onAddSessionFromLibrary?: (date: Date) => void;
   onDeleteAssignment?: (assignmentId: string) => void;
   // Day operations
   copiedDay?: CopiedDayInfo | null;
@@ -100,6 +102,7 @@ export function AthleteCalendarDayCell({
   onSessionClick,
   onDayClick,
   onAddSession,
+  onAddSessionFromLibrary,
   onDeleteAssignment,
   copiedDay,
   onCopyDay,
@@ -326,7 +329,18 @@ export function AthleteCalendarDayCell({
                     }}
                   >
                     <Plus className="mr-2 h-4 w-4" />
-                    Add session
+                    Add new session
+                  </DropdownMenuItem>
+                )}
+                {onAddSessionFromLibrary && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddSessionFromLibrary(day.date);
+                    }}
+                  >
+                    <Library className="mr-2 h-4 w-4" />
+                    Add from session library
                   </DropdownMenuItem>
                 )}
 
@@ -650,8 +664,14 @@ export function AthleteCalendarDayCell({
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => onAddSession?.(day.date)}>
                           <Dumbbell className="mr-2 h-4 w-4" />
-                          Add Session
+                          Add new session
                         </DropdownMenuItem>
+                        {onAddSessionFromLibrary && (
+                          <DropdownMenuItem onClick={() => onAddSessionFromLibrary(day.date)}>
+                            <Library className="mr-2 h-4 w-4" />
+                            Add from session library
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                     
