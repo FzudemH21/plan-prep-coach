@@ -11,6 +11,7 @@ interface DbTemplate {
   coach_user_id: string;
   name: string;
   sections: AnamnesisSection[];
+  intro_text?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -21,6 +22,7 @@ function fromDb(row: DbTemplate): AnamnesisTemplate {
     coachUserId: row.coach_user_id,
     name: row.name,
     sections: row.sections ?? [],
+    introText: row.intro_text ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -95,12 +97,13 @@ export function useAnamnesisTemplates() {
   }, [fetchTemplates]);
 
   const createTemplate = useCallback(
-    async (name: string, sections: AnamnesisSection[]): Promise<AnamnesisTemplate | null> => {
+    async (name: string, sections: AnamnesisSection[], introText?: string): Promise<AnamnesisTemplate | null> => {
       if (!user) return null;
       try {
         const { data, error } = await supabase
           .from('anamnesis_templates')
-          .insert({ coach_user_id: user.id, name, sections })
+          // intro_text only when there is one (the column comes with migration 20261007)
+          .insert({ coach_user_id: user.id, name, sections, ...(introText?.trim() ? { intro_text: introText.trim() } : {}) })
           .select()
           .single();
 
@@ -117,11 +120,17 @@ export function useAnamnesisTemplates() {
   );
 
   const updateTemplate = useCallback(
-    async (id: string, updates: { name?: string; sections?: AnamnesisSection[] }): Promise<boolean> => {
+    async (id: string, updates: { name?: string; sections?: AnamnesisSection[]; introText?: string }): Promise<boolean> => {
       try {
+        const { introText, ...rest } = updates;
+        const current = shared.find((t) => t.id === id);
+        // intro_text only when it is set or changes (the column comes with migration 20261007)
+        const introChange = introText !== undefined && (introText.trim() || current?.introText)
+          ? { intro_text: introText.trim() || null }
+          : {};
         const { data, error } = await supabase
           .from('anamnesis_templates')
-          .update({ ...updates, updated_at: new Date().toISOString() })
+          .update({ ...rest, ...introChange, updated_at: new Date().toISOString() })
           .eq('id', id)
           .select()
           .single();

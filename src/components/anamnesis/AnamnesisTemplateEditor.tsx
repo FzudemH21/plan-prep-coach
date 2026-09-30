@@ -35,7 +35,8 @@ import {
 } from 'lucide-react';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
 import { DEFAULT_ANAMNESIS_TEMPLATE, isAthleteSection } from '@/types/anamnesis';
-import type { AnamnesisTemplate, AnamnesisSection, AnamnesisField, AnamnesisFieldType } from '@/types/anamnesis';
+import type { AnamnesisTemplate, AnamnesisTemplateDraft, AnamnesisSection, AnamnesisField, AnamnesisFieldType } from '@/types/anamnesis';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -250,18 +251,20 @@ export function TemplateEditorDialog({
   onDelete,
   isDeleting,
 }: {
-  initial: { name: string; sections: AnamnesisSection[] };
+  initial: { name: string; sections: AnamnesisSection[]; introText?: string };
   open: boolean;
   onClose: () => void;
-  onSave: (name: string, sections: AnamnesisSection[]) => Promise<void>;
+  onSave: (draft: AnamnesisTemplateDraft) => Promise<void>;
   isSaving: boolean;
-  onSaveAsNew?: (name: string, sections: AnamnesisSection[]) => Promise<void>;
+  onSaveAsNew?: (draft: AnamnesisTemplateDraft) => Promise<void>;
   isSavingAsNew?: boolean;
   onDelete?: () => Promise<void>;
   isDeleting?: boolean;
 }) {
   const [name, setName] = useState(initial.name);
   const [sections, setSections] = useState<AnamnesisSection[]>(initial.sections);
+  const [introText, setIntroText] = useState(initial.introText ?? '');
+  const draft = (): AnamnesisTemplateDraft => ({ name, sections, introText });
 
   // Reset local state when dialog opens
   const handleOpenChange = (o: boolean) => {
@@ -299,6 +302,16 @@ export function TemplateEditorDialog({
             placeholder="e.g. General Anamnesis, Rehab Assessment"
             className="h-9"
           />
+          <Label className="text-sm mt-3 mb-1 block">Introduction for the form link <span className="text-muted-foreground font-normal">(optional)</span></Label>
+          <Textarea
+            value={introText}
+            onChange={(e) => setIntroText(e.target.value)}
+            placeholder="e.g. Hi! Before our first appointment, please answer a few questions about your health and training — it takes about 10 minutes."
+            className="min-h-[72px] text-sm resize-y"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Shown on the start screen when the athlete opens the link. Leave empty for the standard text. The number of questions, the expiry date and "answers are saved" are added automatically.
+          </p>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto px-6">
@@ -363,7 +376,7 @@ export function TemplateEditorDialog({
           {onSaveAsNew && (
             <Button
               variant="outline"
-              onClick={() => onSaveAsNew(name, sections)}
+              onClick={() => onSaveAsNew(draft())}
               disabled={!name.trim() || isSaving || isSavingAsNew || isDeleting}
             >
               {isSavingAsNew && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -371,7 +384,7 @@ export function TemplateEditorDialog({
             </Button>
           )}
           <Button
-            onClick={() => onSave(name, sections)}
+            onClick={() => onSave(draft())}
             disabled={!name.trim() || isSaving || isSavingAsNew || isDeleting}
           >
             {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -407,9 +420,9 @@ export function AnamnesisTemplateEditor() {
     setIsCreating(true);
   };
 
-  const handleSaveNew = async (name: string, sections: AnamnesisSection[]) => {
+  const handleSaveNew = async ({ name, sections, introText }: AnamnesisTemplateDraft) => {
     setIsSaving(true);
-    const created = await createTemplate(name, sections);
+    const created = await createTemplate(name, sections, introText);
     setIsSaving(false);
     if (created) {
       toast({ title: 'Template created', description: `"${name}" is ready to use.` });
@@ -419,10 +432,10 @@ export function AnamnesisTemplateEditor() {
     }
   };
 
-  const handleSaveEdit = async (name: string, sections: AnamnesisSection[]) => {
+  const handleSaveEdit = async ({ name, sections, introText }: AnamnesisTemplateDraft) => {
     if (!editingTemplate) return;
     setIsSaving(true);
-    const ok = await updateTemplate(editingTemplate.id, { name, sections });
+    const ok = await updateTemplate(editingTemplate.id, { name, sections, introText });
     setIsSaving(false);
     if (ok) {
       toast({ title: 'Template saved' });
@@ -432,9 +445,9 @@ export function AnamnesisTemplateEditor() {
     }
   };
 
-  const handleSaveEditAsNew = async (name: string, sections: AnamnesisSection[]) => {
+  const handleSaveEditAsNew = async ({ name, sections, introText }: AnamnesisTemplateDraft) => {
     setIsSavingAsNew(true);
-    const created = await createTemplate(name, sections);
+    const created = await createTemplate(name, sections, introText);
     setIsSavingAsNew(false);
     if (created) {
       toast({ title: 'Template created', description: `"${name}" saved as a new template.` });
@@ -575,7 +588,7 @@ export function AnamnesisTemplateEditor() {
       {editingTemplate && (
         <TemplateEditorDialog
           key={editingTemplate.id}
-          initial={{ name: editingTemplate.name, sections: editingTemplate.sections }}
+          initial={{ name: editingTemplate.name, sections: editingTemplate.sections, introText: editingTemplate.introText }}
           open
           onClose={() => setEditingTemplate(null)}
           onSave={handleSaveEdit}

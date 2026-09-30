@@ -228,7 +228,7 @@ export function SendFormLinkDialog({ open, onClose, athleteName, privacy, onCrea
     if (!template) return;
     setCreating(true);
     try {
-      const rec = await onCreate(template.id, { name: template.name, sections: template.sections });
+      const rec = await onCreate(template.id, { name: template.name, sections: template.sections, ...(template.introText ? { introText: template.introText } : {}) });
       setCreated(rec);
     } catch (err) {
       toast({ title: 'Could not create the link', description: err instanceof Error ? err.message : String(err), variant: 'destructive' });

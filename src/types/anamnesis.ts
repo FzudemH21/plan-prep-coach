@@ -33,6 +33,8 @@ export interface AnamnesisTemplate {
   coachUserId: string;
   name: string;
   sections: AnamnesisSection[];
+  /** Start-screen text of the online form link; empty = the standard text */
+  introText?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -40,6 +42,14 @@ export interface AnamnesisTemplate {
 export interface AnamnesisTemplateSnapshot {
   name: string;
   sections: AnamnesisSection[];
+  introText?: string;
+}
+
+/** What the template editor saves */
+export interface AnamnesisTemplateDraft {
+  name: string;
+  sections: AnamnesisSection[];
+  introText: string;
 }
 
 export interface AthleteAnamnesis {

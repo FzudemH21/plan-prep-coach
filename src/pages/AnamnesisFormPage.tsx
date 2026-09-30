@@ -14,6 +14,11 @@
  *
  * The form's own texts are German or English (browser language, switchable); the questions appear
  * as the coach wrote them.
+ *
+ * Branding from the coach profile: the logo in the header (large on the start screen) and the
+ * accent colour for buttons, progress bar and selected answers. The start screen shows the
+ * template's own introduction text when there is one; the notes about saving, number of questions
+ * and expiry date are always added.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -39,6 +44,11 @@ interface FormData {
   language?: Lang | null;
   companyName?: string;
   contactEmail?: string;
+  /** The template's own start-screen text (empty = standard text) */
+  introText?: string | null;
+  /** Coach branding: logo (data URL) and accent colour (hex) */
+  logo?: string | null;
+  brandColor?: string | null;
   noticeDe?: string;
   noticeEn?: string;
 }
@@ -55,7 +65,8 @@ const PROFILE_STEPS: ProfileStep[] = ['name', 'birthday', 'sex', 'sports', 'occu
 const TEXT = {
   de: {
     title: 'Anamnese',
-    intro: (company: string) => `Bitte beantworte ein paar Fragen für ${company}. Es kommt immer nur eine Frage auf einmal. Deine Antworten werden gespeichert – du kannst den Link bis zum Absenden jederzeit wieder öffnen und weitermachen.`,
+    intro: (company: string) => `Bitte beantworte ein paar Fragen für ${company}. Es kommt immer nur eine Frage auf einmal.`,
+    savedNote: 'Deine Antworten werden gespeichert – du kannst den Link bis zum Absenden jederzeit wieder öffnen und weitermachen.',
     openUntil: (d: string) => `Der Link ist gültig bis ${d}.`,
     duration: (n: number) => `${n} Fragen · ca. ${Math.max(2, Math.round(n / 3))} Minuten`,
     start: 'Los geht’s', continue: 'Weitermachen',
@@ -100,7 +111,8 @@ const TEXT = {
   },
   en: {
     title: 'Anamnesis',
-    intro: (company: string) => `Please answer a few questions for ${company}. You'll see one question at a time. Your answers are saved — you can reopen this link and continue any time until you submit.`,
+    intro: (company: string) => `Please answer a few questions for ${company}. You'll see one question at a time.`,
+    savedNote: 'Your answers are saved — you can reopen this link and continue any time until you submit.',
     openUntil: (d: string) => `This link is valid until ${d}.`,
     duration: (n: number) => `${n} questions · about ${Math.max(2, Math.round(n / 3))} minutes`,
     start: 'Start', continue: 'Continue',
@@ -147,6 +159,26 @@ const TEXT = {
 
 function browserLang(): Lang {
   return typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('de') ? 'de' : 'en';
+}
+
+/** "#e2522b" → "12 76% 53%" (the HSL form the theme's colour variables use); null if not a hex colour */
+function hexToHslVar(hex: string): { hsl: string; light: number } | null {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0, s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h *= 60;
+  }
+  // Perceived brightness decides whether text on the colour is white or dark
+  const light = 0.299 * r + 0.587 * g + 0.114 * b;
+  return { hsl: `${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`, light };
 }
 
 /** Full years between a yyyy-MM-dd birthday and today */
@@ -256,6 +288,21 @@ export default function AnamnesisFormPage() {
 
   useEffect(() => () => { if (advanceTimer.current) clearTimeout(advanceTimer.current); }, []);
 
+  // Coach's accent colour for the whole page (dialogs render outside the page root, so on <html>)
+  useEffect(() => {
+    const color = form?.brandColor ? hexToHslVar(form.brandColor) : null;
+    if (!color) return;
+    const root = document.documentElement;
+    const vars: Record<string, string> = {
+      '--primary': color.hsl,
+      '--ring': color.hsl,
+      '--primary-foreground': color.light > 0.6 ? '0 0% 9%' : '0 0% 100%',
+    };
+    const before = Object.fromEntries(Object.keys(vars).map(k => [k, root.style.getPropertyValue(k)]));
+    Object.entries(vars).forEach(([k, v]) => root.style.setProperty(k, v));
+    return () => Object.entries(before).forEach(([k, v]) => (v ? root.style.setProperty(k, v) : root.style.removeProperty(k)));
+  }, [form?.brandColor]);
+
   // ── Steps ──────────────────────────────────────────────────────────────────
   const steps = useMemo<Step[]>(() => [
     { kind: 'welcome' },
@@ -351,8 +398,14 @@ export default function AnamnesisFormPage() {
     </div>
   );
 
+  const brand = form?.logo ? (
+    <img src={form.logo} alt={form.companyName || ''} className="h-8 max-w-[180px] object-contain object-left" />
+  ) : (
+    <span className="text-sm font-medium text-muted-foreground truncate">{form?.companyName}</span>
+  );
+
   /** Full screen with its own scroll area (page scrolling is locked app-wide) */
-  const screen = (content: React.ReactNode, footer?: React.ReactNode, progress?: number) => (
+  const screen = (content: React.ReactNode, footer?: React.ReactNode, progress?: number, hideBrand = false) => (
     <div className="fixed inset-0 flex flex-col bg-background">
       {progress !== undefined && (
         <div className="h-1 bg-muted shrink-0">
@@ -360,7 +413,7 @@ export default function AnamnesisFormPage() {
         </div>
       )}
       <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2.5 max-w-[640px] w-full mx-auto">
-        <span className="text-sm text-muted-foreground truncate">{form?.companyName}</span>
+        <div className="min-w-0 flex items-center">{hideBrand ? null : brand}</div>
         {langSwitch}
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
@@ -400,9 +453,17 @@ export default function AnamnesisFormPage() {
     const firstOpen = steps.findIndex((s, i) => i > 0 && s.kind !== 'consent' && !isAnswered(s));
     return screen(
       <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+        {form.logo ? (
+          <img src={form.logo} alt={form.companyName || ''} className="h-16 max-w-[240px] object-contain object-left" />
+        ) : form.companyName ? (
+          <p className="text-sm font-semibold uppercase tracking-wider text-primary">{form.companyName}</p>
+        ) : null}
         <h1 className="text-3xl font-semibold">{t.title}</h1>
-        <p className="text-base text-muted-foreground leading-relaxed">{t.intro(company)}</p>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base leading-relaxed whitespace-pre-wrap">
+          {form.introText?.trim() || t.intro(company)}
+        </p>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          {t.savedNote}<br />
           {t.duration(questionCount)}{expiresLabel ? ` · ${t.openUntil(expiresLabel)}` : ''}
         </p>
         <Button className="h-14 px-8 text-lg gap-2" onClick={() => goTo(hasAnswers && firstOpen > 0 ? firstOpen : 1)}>
@@ -410,6 +471,9 @@ export default function AnamnesisFormPage() {
           <ArrowRight className="h-5 w-5" />
         </Button>
       </div>,
+      undefined,
+      undefined,
+      true,
     );
   }
 

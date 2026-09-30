@@ -32,8 +32,16 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   Plus, Trash2, Loader2, ClipboardList, Sparkles, ChevronRight, X,
-  ChevronUp, ChevronDown, Pencil, Paperclip, FileText, FileImage, ExternalLink, Send, ShieldCheck,
+  ChevronUp, ChevronDown, Pencil, Paperclip, FileText, FileImage, ExternalLink, Send, ShieldCheck, Printer,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useCoachProfile } from '@/hooks/useCoachProfile';
+import type { AnamnesisPdfLang } from '@/components/pdf/AnamnesisPDF';
 import { useAthleteAnamneses } from '@/hooks/useAthleteAnamneses';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
 import { TemplateEditorDialog } from '@/components/anamnesis/AnamnesisTemplateEditor';
@@ -47,6 +55,7 @@ import { SEX_LABELS, type Athlete } from '@/types/athlete';
 import {
   isAthleteSection,
   type AthleteAnamnesis, type AnamnesisField, type AnamnesisFieldType, type AnamnesisSection, type AnamnesisAttachment,
+  type AnamnesisTemplateDraft, type AnamnesisConsent,
 } from '@/types/anamnesis';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -291,6 +300,10 @@ interface RecordFormProps {
   initial: Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'createdAt' | 'updatedAt'> | null;
   athleteLocalId: string;
   athleteName: string;
+  /** For the printed PDF: the athlete's details, and consent / language of a form-link record */
+  athlete?: Athlete;
+  consent?: AnamnesisConsent | null;
+  formLanguage?: string | null;
   coachUserId: string;
   onSave: (data: Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   onDelete?: () => Promise<void>;
@@ -302,6 +315,9 @@ function RecordForm({
   initial,
   athleteLocalId,
   athleteName,
+  athlete,
+  consent,
+  formLanguage,
   coachUserId,
   onSave,
   onDelete,
@@ -309,6 +325,8 @@ function RecordForm({
   isDeleting,
 }: RecordFormProps) {
   const { templates, createTemplate, updateTemplate, deleteTemplate } = useAnamnesisTemplates();
+  const { profile: coachProfile } = useCoachProfile();
+  const [printing, setPrinting] = useState(false);
 
   const [showNewTemplate, setShowNewTemplate] = useState(false);
   const [savingNewTemplate, setSavingNewTemplate] = useState(false);
@@ -388,15 +406,15 @@ function RecordForm({
     const t = templates.find((x) => x.id === id);
     if (!t) return;
     setTemplateId(id);
-    setTemplateSnapshot({ name: t.name, sections: t.sections });
+    setTemplateSnapshot({ name: t.name, sections: t.sections, ...(t.introText ? { introText: t.introText } : {}) });
     setFieldValues({});
     setCustomFieldValues({});
     setAiSummary(null);
   };
 
-  const handleSaveNewTemplate = async (name: string, sections: AnamnesisSection[]) => {
+  const handleSaveNewTemplate = async ({ name, sections, introText }: AnamnesisTemplateDraft) => {
     setSavingNewTemplate(true);
-    const created = await createTemplate(name, sections);
+    const created = await createTemplate(name, sections, introText);
     setSavingNewTemplate(false);
     if (created) {
       setShowNewTemplate(false);
@@ -404,20 +422,20 @@ function RecordForm({
     }
   };
 
-  const handleSaveEditTemplate = async (name: string, sections: AnamnesisSection[]) => {
+  const handleSaveEditTemplate = async ({ name, sections, introText }: AnamnesisTemplateDraft) => {
     if (!templateId) return;
     setSavingEditTemplate(true);
-    const ok = await updateTemplate(templateId, { name, sections });
+    const ok = await updateTemplate(templateId, { name, sections, introText });
     setSavingEditTemplate(false);
     if (ok) {
       setShowEditTemplate(false);
-      setTemplateSnapshot({ name, sections });
+      setTemplateSnapshot({ name, sections, ...(introText.trim() ? { introText: introText.trim() } : {}) });
     }
   };
 
-  const handleSaveEditAsNewTemplate = async (name: string, sections: AnamnesisSection[]) => {
+  const handleSaveEditAsNewTemplate = async ({ name, sections, introText }: AnamnesisTemplateDraft) => {
     setSavingEditAsNew(true);
-    const created = await createTemplate(name, sections);
+    const created = await createTemplate(name, sections, introText);
     setSavingEditAsNew(false);
     if (created) {
       setShowEditTemplate(false);
@@ -506,6 +524,53 @@ Use clear, clinical language suitable for professional documentation. Skip secti
     }
   };
 
+  /** PDF of what is in the form right now (also unsaved changes) — for the first appointment */
+  const handlePrint = async (lang: AnamnesisPdfLang) => {
+    setPrinting(true);
+    try {
+      const [{ pdf }, { AnamnesisPDF }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/components/pdf/AnamnesisPDF'),
+      ]);
+      const blob = await pdf(
+        <AnamnesisPDF
+          lang={lang}
+          templateName={templateSnapshot.name}
+          sections={templateSnapshot.sections}
+          customQuestions={customQuestions}
+          fieldValues={fieldValues}
+          customFieldValues={customFieldValues}
+          notes={notes}
+          conductedAt={conductedAt}
+          consent={consent}
+          athlete={{
+            name: athleteName,
+            birthday: athlete?.birthday,
+            sex: athlete?.sex,
+            sports: athlete?.sports?.length ? athlete.sports : athlete?.sport ? [athlete.sport] : [],
+            occupation: athlete?.occupation,
+          }}
+          branding={coachProfile?.branding}
+          coachName={coachProfile?.name}
+        />,
+      ).toBlob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${lang === 'de' ? 'Anamnese' : 'Anamnesis'}_${athleteName.replace(/[^\p{L}\p{N}]+/gu, '_')}_${conductedAt}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[AnamnesisTab] PDF error', err);
+      toast({ title: 'PDF failed', description: 'Could not create the PDF.', variant: 'destructive' });
+    } finally {
+      setPrinting(false);
+    }
+  };
+  const printLangs: AnamnesisPdfLang[] = formLanguage === 'en' ? ['en', 'de'] : ['de', 'en'];
+
   const handleSave = async () => {
     await onSave({
       athleteLocalId,
@@ -590,7 +655,7 @@ Use clear, clinical language suitable for professional documentation. Skip secti
             return t ? (
               <TemplateEditorDialog
                 key={`edit-${templateId}`}
-                initial={{ name: t.name, sections: t.sections }}
+                initial={{ name: t.name, sections: t.sections, introText: t.introText }}
                 open
                 onClose={() => setShowEditTemplate(false)}
                 onSave={handleSaveEditTemplate}
@@ -843,6 +908,28 @@ Use clear, clinical language suitable for professional documentation. Skip secti
         ) : (
           <div />
         )}
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={printing || templateSnapshot.sections.length === 0}
+                title="Worksheet for the appointment: answers given so far, space to write for everything else"
+              >
+                {printing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
+                Print PDF
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="z-[100]">
+              {printLangs.map((l) => (
+                <DropdownMenuItem key={l} onClick={() => handlePrint(l)}>
+                  {l === 'de' ? 'German labels (Deutsch)' : 'English labels'}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         <Button
           size="sm"
           onClick={handleSave}
@@ -851,6 +938,7 @@ Use clear, clinical language suitable for professional documentation. Skip secti
           {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
           Save
         </Button>
+        </div>
       </div>
     </div>
   );
@@ -1193,6 +1281,9 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
               : null}
             athleteLocalId={athlete.id}
             athleteName={athleteName}
+            athlete={athlete}
+            consent={selectedRecord ? (anamneses.find(a => a.id === selectedRecord.id) ?? selectedRecord).consent : null}
+            formLanguage={selectedRecord?.formLanguage}
             coachUserId={user?.id ?? ''}
             onSave={handleSave}
             onDelete={selectedRecord ? handleDelete : undefined}
