@@ -60,6 +60,8 @@ interface AddParameterDialogV2Props {
     unit?: string;
     category?: string;
     applicableSports?: string[];
+    /** Body measurement rather than a performance metric */
+    isBiometric?: boolean;
     interactions: PendingInteraction[];
     methods: PendingMethod[];
   }) => void;
@@ -162,6 +164,7 @@ export function AddParameterDialogV2({
   const [unit, setUnit] = useState('');
   const [category, setCategory] = useState('');
   const [applicableSports, setApplicableSports] = useState<string[]>([]);
+  const [isBiometric, setIsBiometric] = useState(false);
   
   // Separate pending interactions for each section
   const [pendingContributesTo, setPendingContributesTo] = useState<PendingInteraction[]>([]);
@@ -303,6 +306,7 @@ export function AddParameterDialogV2({
       unit: unit || undefined,
       category: category || undefined,
       applicableSports: applicableSports.length > 0 ? applicableSports : undefined,
+      isBiometric: isBiometric || undefined,
       interactions: allInteractions,
       methods: pendingMethods,
     });
@@ -489,6 +493,27 @@ export function AddParameterDialogV2({
                   </PopoverContent>
                 </Popover>
               </div>
+            </div>
+
+            {/* Biometric (body measurement) or performance metric */}
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <div className="flex gap-2">
+                {([false, true] as const).map((bio) => (
+                  <Button
+                    key={String(bio)}
+                    type="button"
+                    size="sm"
+                    variant={isBiometric === bio ? 'default' : 'outline'}
+                    onClick={() => setIsBiometric(bio)}
+                  >
+                    {bio ? 'Biometric' : 'Performance metric'}
+                  </Button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Biometrics (e.g. waist circumference, body fat) are listed under Body Metrics in the athlete profile and in the goal and test pickers.
+              </p>
             </div>
 
             {/* Applicable Sports */}

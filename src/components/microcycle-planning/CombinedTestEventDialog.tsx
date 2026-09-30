@@ -120,9 +120,15 @@ export function CombinedTestEventDialog({
   }, [open, hasItems]);
 
   // Group parameters by category for the dropdown
+  const biometricParameters = useMemo(
+    () => allParameters.filter(p => p.isBiometric).sort((a, b) => a.name.localeCompare(b.name)),
+    [allParameters],
+  );
+
   const parametersByCategory = useMemo(() => {
     const grouped: Record<string, ParameterV2[]> = {};
     allParameters.forEach((param) => {
+      if (param.isBiometric) return; // listed under Body Metrics
       const cat = param.category || 'Other';
       if (!grouped[cat]) {
         grouped[cat] = [];
@@ -607,8 +613,28 @@ export function CombinedTestEventDialog({
                             ))}
                         </CommandList>
                           {/* Body Metrics group */}
-                          {biometricDefinitions.length > 0 && (
+                          {(biometricDefinitions.length > 0 || biometricParameters.length > 0) && (
                             <CommandGroup heading="Body Metrics">
+                              {/* Parameters marked "Biometric" in the parameter database */}
+                              {biometricParameters.map((param) => (
+                                <CommandItem
+                                  key={param.id}
+                                  value={param.name}
+                                  onSelect={() => handleParameterSelect(param)}
+                                  className="cursor-pointer"
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      newName === param.name ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {param.name}
+                                  {param.unit && (
+                                    <span className="text-muted-foreground ml-1">({param.unit})</span>
+                                  )}
+                                </CommandItem>
+                              ))}
                               {biometricDefinitions.map((def) => (
                                 <CommandItem
                                   key={`bio:${def.id}`}

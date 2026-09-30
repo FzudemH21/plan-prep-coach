@@ -170,6 +170,7 @@ export function EditParameterDialogV2({
   const [applicableSports, setApplicableSports] = useState<string[]>(parameter.applicableSports ?? []);
   const [testInstructions, setTestInstructions] = useState(parameter.testInstructions ?? '');
   const [testVideoUrl, setTestVideoUrl] = useState(parameter.testVideoUrl ?? '');
+  const [isBiometric, setIsBiometric] = useState(!!parameter.isBiometric);
   
   // Popover states
   const [contributesToSearchOpen, setContributesToSearchOpen] = useState(false);
@@ -226,6 +227,7 @@ export function EditParameterDialogV2({
     setApplicableSports(parameter.applicableSports ?? []);
     setTestInstructions(parameter.testInstructions ?? '');
     setTestVideoUrl(parameter.testVideoUrl ?? '');
+    setIsBiometric(!!parameter.isBiometric);
   }, [parameter]);
 
   // Get available parameters for "Contributes To" (exclude self and already linked as target)
@@ -504,6 +506,27 @@ export function EditParameterDialogV2({
                       </PopoverContent>
                     </Popover>
                   </div>
+                </div>
+
+                {/* Biometric (body measurement) or performance metric */}
+                <div className="space-y-2">
+                  <Label>Type</Label>
+                  <div className="flex gap-2">
+                    {([false, true] as const).map((bio) => (
+                      <Button
+                        key={String(bio)}
+                        type="button"
+                        size="sm"
+                        variant={isBiometric === bio ? 'default' : 'outline'}
+                        onClick={() => { setIsBiometric(bio); onUpdateParameter({ isBiometric: bio || undefined }); }}
+                      >
+                        {bio ? 'Biometric' : 'Performance metric'}
+                      </Button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Biometrics (e.g. waist circumference, body fat) are listed under Body Metrics in the athlete profile and in the goal and test pickers.
+                  </p>
                 </div>
 
                 {/* Applicable Sports */}

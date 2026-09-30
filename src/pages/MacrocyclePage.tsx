@@ -800,6 +800,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     name: string;
     unit?: string;
     category?: string;
+    isBiometric?: boolean;
     interactions: any[];
     methods: any[];
   }) => {
@@ -808,6 +809,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       name: paramData.name,
       unit: paramData.unit,
       category: paramData.category,
+      isBiometric: paramData.isBiometric,
     });
     const newParamId = newParam?.id;
     

@@ -216,8 +216,13 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
   const [selectedAthleticismParamId, setSelectedAthleticismParamId] = useState('');
   const [performanceComboOpen, setPerformanceComboOpen] = useState(false);
 
-  const { data: athleticismData } = useParametersDataV2();
+  const { data: athleticismData, addParameter } = useParametersDataV2();
   const athleticismParameters = athleticismData?.parameters || [];
+  /** Parameters marked "Biometric" in the parameter database show under Body Metrics */
+  const isBiometricParam = useCallback(
+    (paramId: string) => !!athleticismParameters.find(p => p.id === paramId)?.isBiometric,
+    [athleticismParameters],
+  );
 
   const athleteBiometrics = useMemo(
     () => athleteData.getAthleteBiometrics(athlete.id),
@@ -238,7 +243,15 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
 
   const availableAthleticismParams = useMemo(
     () => athleticismParameters.filter(
-      p => !athletePerformanceParams.some(pp => pp.athleticismParameterId === p.id)
+      p => !p.isBiometric && !athletePerformanceParams.some(pp => pp.athleticismParameterId === p.id)
+    ),
+    [athleticismParameters, athletePerformanceParams]
+  );
+
+  /** Biometric parameters (parameter database) not tracked for this athlete yet */
+  const availableBiometricParams = useMemo(
+    () => athleticismParameters.filter(
+      p => p.isBiometric && !athletePerformanceParams.some(pp => pp.athleticismParameterId === p.id)
     ),
     [athleticismParameters, athletePerformanceParams]
   );
@@ -253,14 +266,18 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
     });
   }, [athleteBiometrics, search, athleteData]);
 
-  const filteredPerformance = useMemo(() => {
+  const filterParams = useCallback((biometric: boolean) => {
     const q = search.trim().toLowerCase();
-    if (!q) return athletePerformanceParams;
     return athletePerformanceParams.filter(pp => {
+      if (isBiometricParam(pp.athleticismParameterId) !== biometric) return false;
+      if (!q) return true;
       const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
       return param?.name.toLowerCase().includes(q);
     });
-  }, [athletePerformanceParams, search, athleticismParameters]);
+  }, [athletePerformanceParams, search, athleticismParameters, isBiometricParam]);
+  const filteredPerformance = useMemo(() => filterParams(false), [filterParams]);
+  /** Tracked parameters marked "Biometric" — listed with the body metrics */
+  const filteredBiometricParams = useMemo(() => filterParams(true), [filterParams]);
 
   // ── Self-reported test results (entered by athlete in athlete app) ───────────
   const { updateMetricsSnapshot } = useAthleteConnections();
@@ -311,8 +328,19 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
   // after updateMetricsSnapshot updates the local connection object reference.
   useEffect(() => {
     if (!connection) return;
+    const paramItem = (pp: typeof athletePerformanceParams[number]): MetricsSnapshotItem | null => {
+      const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
+      if (!param) return null;
+      return {
+        parameterId: pp.athleticismParameterId,
+        name: param.name,
+        unit: param.unit ?? null,
+        category: param.category ?? undefined,
+        values: pp.values.map(v => ({ value: v.value, recordedAt: v.recordedAt })),
+      };
+    };
     const snapshot: MetricsSnapshot = {
-      bodyMetrics: athleteBiometrics
+      bodyMetrics: [...athleteBiometrics
         .map((ab): MetricsSnapshotItem | null => {
           const def = athleteData.biometricDefinitions.find(d => d.id === ab.biometricDefinitionId);
           if (!def) return null;
@@ -323,24 +351,20 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
           };
         })
         .filter((x): x is MetricsSnapshotItem => x !== null),
+        // Parameters marked "Biometric" are body metrics in the athlete app too
+        ...athletePerformanceParams
+          .filter(pp => isBiometricParam(pp.athleticismParameterId))
+          .map(paramItem)
+          .filter((x): x is MetricsSnapshotItem => x !== null)],
       performanceParams: athletePerformanceParams
-        .map((pp): MetricsSnapshotItem | null => {
-          const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
-          if (!param) return null;
-          return {
-            parameterId: pp.athleticismParameterId,
-            name: param.name,
-            unit: param.unit ?? null,
-            category: param.category ?? undefined,
-            values: pp.values.map(v => ({ value: v.value, recordedAt: v.recordedAt })),
-          };
-        })
+        .filter(pp => !isBiometricParam(pp.athleticismParameterId))
+        .map(paramItem)
         .filter((x): x is MetricsSnapshotItem => x !== null),
       updatedAt: new Date().toISOString(),
     };
     updateMetricsSnapshot(connection.id, snapshot).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [athleteBiometrics, athletePerformanceParams, connection?.id]);
+  }, [athleteBiometrics, athletePerformanceParams, connection?.id, isBiometricParam]);
 
   // Keep selected item in sync; only resolve if it matches the active tab
   const resolvedSelected = useMemo<SelectedItem | null>(() => {
@@ -351,12 +375,13 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
       if (!ab) return null;
       return { kind: 'biometric', ab, def: selected.def };
     } else {
-      if (topTab !== 'performance') return null;
+      // Biometric parameters are shown (and selected) under the Body Metrics tab
+      if (topTab !== (isBiometricParam(selected.pp.athleticismParameterId) ? 'bio' : 'performance')) return null;
       const pp = athletePerformanceParams.find(x => x.id === selected.pp.id);
       if (!pp) return null;
       return { kind: 'performance', pp, param: selected.param };
     }
-  }, [selected, topTab, athleteBiometrics, athletePerformanceParams]);
+  }, [selected, topTab, athleteBiometrics, athletePerformanceParams, isBiometricParam]);
 
   const selectedValues: ParameterValue[] = useMemo(() => {
     if (!resolvedSelected) return [];
@@ -443,13 +468,17 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
   const handleAddBiometric = async () => {
     if (selectedBiometricDefId === 'new') {
       if (!newBiometricName.trim()) return;
-      // Wait for the new metric — adding it before it exists added nothing to the athlete
-      const def = await athleteData.createBiometricDefinition({
+      // A new body metric is a parameter marked "Biometric" in the parameter database — one place
+      // for all metrics; it can be scheduled as a test and filled in from the athlete app
+      const created = await addParameter({
         name: newBiometricName.trim(),
-        type: newBiometricType,
-        unit: newBiometricType === 'quantitative' ? newBiometricUnit || null : null,
+        unit: newBiometricUnit.trim() || undefined,
+        category: 'Body Metrics',
+        isBiometric: true,
       });
-      await athleteData.addBiometricToAthlete(athlete.id, def.id);
+      await athleteData.addPerformanceParameter(athlete.id, created.id);
+    } else if (selectedBiometricDefId.startsWith('param:')) {
+      await athleteData.addPerformanceParameter(athlete.id, selectedBiometricDefId.slice('param:'.length));
     } else if (selectedBiometricDefId) {
       athleteData.addBiometricToAthlete(athlete.id, selectedBiometricDefId);
     }
@@ -764,7 +793,7 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
         {topTab === 'bio' && (
           <ScrollArea className="flex-1">
             <ColumnHeaders />
-            {filteredBiometrics.length === 0 ? (
+            {filteredBiometrics.length === 0 && filteredBiometricParams.length === 0 ? (
               <p className="text-xs text-muted-foreground px-3 py-2.5">
                 {search ? 'No matches.' : 'No metrics tracked yet.'}
               </p>
@@ -789,6 +818,23 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
                 );
               })
             )}
+            {filteredBiometricParams.map(pp => {
+              const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
+              if (!param) return null;
+              const latest = getLatestValue(withSelfReported(pp.values, selfReportedMap.get(pp.athleticismParameterId)));
+              const isSel = resolvedSelected?.kind === 'performance' && resolvedSelected.pp.id === pp.id;
+              return (
+                <MetricRow
+                  key={pp.id}
+                  name={param.name}
+                  unit={param.unit}
+                  latestValue={latest}
+                  isSelected={isSel}
+                  onSelect={() => setSelected({ kind: 'performance', pp, param })}
+                  onRemove={() => handleRemovePerformance(pp)}
+                />
+              );
+            })}
           </ScrollArea>
         )}
 
@@ -851,6 +897,11 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
                       {def.name}{def.unit ? ` (${def.unit})` : ''}
                     </SelectItem>
                   ))}
+                  {availableBiometricParams.map(param => (
+                    <SelectItem key={`param:${param.id}`} value={`param:${param.id}`}>
+                      {param.name}{param.unit ? ` (${param.unit})` : ''}
+                    </SelectItem>
+                  ))}
                   <SelectItem value="new">+ Create custom metric</SelectItem>
                 </SelectContent>
               </Select>
@@ -866,25 +917,16 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Type</Label>
-                  <Select value={newBiometricType} onValueChange={v => setNewBiometricType(v as 'text' | 'quantitative')}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="quantitative">Quantitative (number)</SelectItem>
-                      <SelectItem value="text">Text (qualitative)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Unit (optional)</Label>
+                  <Input
+                    placeholder="e.g., cm, mmHg, bpm"
+                    value={newBiometricUnit}
+                    onChange={e => setNewBiometricUnit(e.target.value)}
+                  />
                 </div>
-                {newBiometricType === 'quantitative' && (
-                  <div className="space-y-2">
-                    <Label>Unit (optional)</Label>
-                    <Input
-                      placeholder="e.g., mmHg, bpm"
-                      value={newBiometricUnit}
-                      onChange={e => setNewBiometricUnit(e.target.value)}
-                    />
-                  </div>
-                )}
+                <p className="text-xs text-muted-foreground">
+                  Added to your parameter database as a biometric — available for every athlete, as a test and as a goal.
+                </p>
               </>
             )}
           </div>

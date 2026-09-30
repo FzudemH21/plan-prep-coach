@@ -13,6 +13,9 @@ export interface ParameterV2 {
   testInstructions?: string;
   /** Demo video (YouTube or any link) for the test — shown with the instructions */
   testVideoUrl?: string;
+  /** Body measurement (waist circumference, body fat …) rather than a performance metric — listed under
+   *  Body Metrics in the athlete profile and in the goal / test pickers */
+  isBiometric?: boolean;
   createdAt: string;
 }
 

@@ -92,8 +92,10 @@ export function useAthleteTestResults(connection: AthleteConnection | null) {
     const candidates: Array<{ value: string; recordedAt: string }> = [];
     const own = latestOwn.get(parameterId);
     if (own) candidates.push(own);
-    connection?.profileData?.metricsSnapshot?.performanceParams
-      ?.find(item => item.parameterId === parameterId)
+    const snapshot = connection?.profileData?.metricsSnapshot;
+    // Biometric parameters (e.g. waist circumference) are in the body metrics of the snapshot
+    [...(snapshot?.performanceParams ?? []), ...(snapshot?.bodyMetrics ?? [])]
+      .find(item => item.parameterId === parameterId)
       ?.values.forEach(v => candidates.push(v));
     if (candidates.length === 0) return null;
     const newest = candidates.reduce((a, b) => (new Date(a.recordedAt) > new Date(b.recordedAt) ? a : b));

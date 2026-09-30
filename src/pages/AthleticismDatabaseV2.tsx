@@ -605,6 +605,7 @@ export default function AthleticismDatabaseV2() {
     unit?: string;
     category?: string;
     applicableSports?: string[];
+    isBiometric?: boolean;
     interactions: { targetParameterId: string; direction: InteractionDirection; strength: InteractionStrength }[];
     methods: { methodId: string; rationale?: string }[];
   }) => {
@@ -615,6 +616,7 @@ export default function AthleticismDatabaseV2() {
       unit: parameterData.unit,
       category: parameterData.category,
       applicableSports: parameterData.applicableSports,
+      isBiometric: parameterData.isBiometric,
       createdAt: new Date().toISOString(),
     };
 
@@ -852,6 +854,11 @@ export default function AthleticismDatabaseV2() {
                               <span className="font-normal text-muted-foreground ml-1">
                                 ({parameter.unit})
                               </span>
+                            )}
+                            {parameter.isBiometric && (
+                              <Badge variant="outline" className="ml-2 text-xs font-normal border-teal-300 text-teal-700 bg-teal-50">
+                                Biometric
+                              </Badge>
                             )}
                           </div>
                         </TableCell>
