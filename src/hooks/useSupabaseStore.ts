@@ -98,7 +98,7 @@ export function useSupabaseStore<T>({
   defaultValue,
   migrate,
 }: UseSupabaseStoreOptions<T>): [T, (newData: T) => Promise<void>, boolean] {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   // Cache key — separate from the legacy key so we never accidentally wipe it
   const cacheKey = `${legacyKey}_sb_cache`;
@@ -122,7 +122,10 @@ export function useSupabaseStore<T>({
 
   useEffect(() => {
     if (!user) {
-      setIsLoading(false);
+      // While the login is still being checked there is no user yet — that is not "loaded"
+      // (reporting it made callers act on the empty default data). Only a finished check
+      // without a user (logged out) ends the loading.
+      if (!authLoading) setIsLoading(false);
       return;
     }
     if (loadedForUser.current === user.id) return;
@@ -221,7 +224,7 @@ export function useSupabaseStore<T>({
         }
       }
     })();
-  }, [user?.id, tableName, legacyKey, cacheKey, migrate]);
+  }, [user?.id, authLoading, tableName, legacyKey, cacheKey, migrate]);
 
   // Optimistic save: state + cache first, Supabase in background
   const save = useCallback(

@@ -14,6 +14,7 @@
  * (existing ids are skipped).
  */
 import { useEffect, useRef } from 'react';
+import { useAuth } from '@/hooks/useAuth';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useCalendarEvents } from '@/hooks/useCalendarEvents';
@@ -24,9 +25,12 @@ export function useBiometricsMigration() {
   const params = useParametersDataV2();
   const calendar = useCalendarEvents();
   const started = useRef(false);
+  const { user } = useAuth();
 
   useEffect(() => {
     if (started.current) return;
+    // Only on the coach's real data: signed in and every store loaded from the server
+    if (!user) return;
     if (athletes.isLoading || params.isLoading || !calendar.isLoaded || !params.data) return;
     if (athletes.biometricsMigrated) {
       // Already moved — body metrics dropped from the parameter database by a save from an outdated
@@ -52,5 +56,5 @@ export function useBiometricsMigration() {
       // Not retried in this session (it would repeat on every render); the next page load retries
       console.error('[biometrics] migration failed — will retry on next load', err);
     });
-  }, [athletes, params, calendar]);
+  }, [athletes, params, calendar, user]);
 }
