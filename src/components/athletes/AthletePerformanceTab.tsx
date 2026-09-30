@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { MetricsSnapshot, MetricsSnapshotItem, AthleteConnection } from '@/hooks/useAthleteConnections';
 import { ExerciseMetricsTab } from '@/components/athletes/ExerciseMetricsTab';
 import { format, subDays, parseISO } from 'date-fns';
@@ -61,6 +61,7 @@ import {
   Search,
   Dumbbell,
   Download,
+  Pencil,
 } from 'lucide-react';
 import { exportPerformanceXLSX } from '@/utils/xlsxExport';
 import {
@@ -205,6 +206,14 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
   const [newValue, setNewValue] = useState('');
   const [newDate, setNewDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [newNote, setNewNote] = useState('');
+  // Editing a measurement in the history (coach-entered values)
+  const [editingValueId, setEditingValueId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editNote, setEditNote] = useState('');
+  // A newly added metric opens with the cursor in "Value" (set to its id, cleared once focused)
+  const [focusValueFor, setFocusValueFor] = useState<string | null>(null);
+  const valueInputRef = useRef<HTMLInputElement>(null);
 
   // Add dialogs
   const [showAddBiometric, setShowAddBiometric] = useState(false);
@@ -451,6 +460,42 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
     }
   }, [resolvedSelected, athleteData]);
 
+  const startEditValue = (v: ParameterValue) => {
+    setEditingValueId(v.id);
+    setEditValue(v.value);
+    setEditDate(format(parseRecordedAt(v.recordedAt), 'yyyy-MM-dd'));
+    setEditNote(v.note ?? '');
+  };
+
+  const handleSaveEditValue = useCallback((v: ParameterValue) => {
+    if (!resolvedSelected || !editValue.trim()) return;
+    // Keep the original time when the date is unchanged
+    const sameDay = format(parseRecordedAt(v.recordedAt), 'yyyy-MM-dd') === editDate;
+    const patch = {
+      value: editValue.trim(),
+      recordedAt: sameDay || !editDate ? v.recordedAt : new Date(`${editDate}T12:00:00`).toISOString(),
+      note: editNote.trim() || undefined,
+    };
+    if (resolvedSelected.kind === 'biometric') {
+      athleteData.updateBiometricValue(resolvedSelected.ab.id, v.id, patch);
+    } else {
+      athleteData.updatePerformanceParameterValue(resolvedSelected.pp.id, v.id, patch);
+    }
+    setEditingValueId(null);
+  }, [resolvedSelected, editValue, editDate, editNote, athleteData]);
+
+  // Selecting another metric ends an open edit
+  const selectedKey = resolvedSelected ? (resolvedSelected.kind === 'biometric' ? resolvedSelected.ab.id : resolvedSelected.pp.id) : null;
+  useEffect(() => { setEditingValueId(null); }, [selectedKey]);
+
+  // Newly added metric: cursor straight into "Value"
+  useEffect(() => {
+    if (!focusValueFor || focusValueFor !== selectedKey) return;
+    const t = setTimeout(() => valueInputRef.current?.focus(), 50);
+    setFocusValueFor(null);
+    return () => clearTimeout(t);
+  }, [focusValueFor, selectedKey]);
+
   const handleRemoveBiometric = useCallback((ab: AthleteBiometric) => {
     if (resolvedSelected?.kind === 'biometric' && resolvedSelected.ab.id === ab.id) {
       setSelected(null);
@@ -465,6 +510,16 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
     athleteData.removePerformanceParameter(pp.id);
   }, [resolvedSelected, athleteData]);
 
+  /** Select a just-added metric and put the cursor into "Value" */
+  const selectNew = (item: SelectedItem) => {
+    setSearch('');
+    setSelected(item);
+    setNewValue('');
+    setNewNote('');
+    setNewDate(format(new Date(), 'yyyy-MM-dd'));
+    setFocusValueFor(item.kind === 'biometric' ? item.ab.id : item.pp.id);
+  };
+
   const handleAddBiometric = async () => {
     if (selectedBiometricDefId === 'new') {
       if (!newBiometricName.trim()) return;
@@ -476,11 +531,17 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
         category: 'Body Metrics',
         isBiometric: true,
       });
-      await athleteData.addPerformanceParameter(athlete.id, created.id);
+      const pp = await athleteData.addPerformanceParameter(athlete.id, created.id);
+      selectNew({ kind: 'performance', pp, param: created });
     } else if (selectedBiometricDefId.startsWith('param:')) {
-      await athleteData.addPerformanceParameter(athlete.id, selectedBiometricDefId.slice('param:'.length));
+      const paramId = selectedBiometricDefId.slice('param:'.length);
+      const pp = await athleteData.addPerformanceParameter(athlete.id, paramId);
+      const param = athleticismParameters.find(p => p.id === paramId);
+      if (param) selectNew({ kind: 'performance', pp, param });
     } else if (selectedBiometricDefId) {
-      athleteData.addBiometricToAthlete(athlete.id, selectedBiometricDefId);
+      const ab = await athleteData.addBiometricToAthlete(athlete.id, selectedBiometricDefId);
+      const def = athleteData.getBiometricDefinition(selectedBiometricDefId);
+      if (def) selectNew({ kind: 'biometric', ab, def });
     }
     setShowAddBiometric(false);
     setSelectedBiometricDefId('');
@@ -488,9 +549,11 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
     setNewBiometricUnit('');
   };
 
-  const handleAddPerformance = () => {
+  const handleAddPerformance = async () => {
     if (!selectedAthleticismParamId) return;
-    athleteData.addPerformanceParameter(athlete.id, selectedAthleticismParamId);
+    const pp = await athleteData.addPerformanceParameter(athlete.id, selectedAthleticismParamId);
+    const param = athleticismParameters.find(p => p.id === selectedAthleticismParamId);
+    if (param) selectNew({ kind: 'performance', pp, param });
     setShowAddPerformance(false);
     setSelectedAthleticismParamId('');
     setPerformanceComboOpen(false);
@@ -624,6 +687,7 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
                 <div className="space-y-1 flex-1">
                   <Label className="text-xs">Value{selectedUnit ? ` (${selectedUnit})` : ''}</Label>
                   <Input
+                    ref={valueInputRef}
                     value={newValue}
                     onChange={e => setNewValue(e.target.value)}
                     placeholder={isQuantitative ? '0.0' : 'Enter value'}
@@ -652,7 +716,48 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
               <div className="space-y-2">
                 <h4 className="text-sm font-medium">History</h4>
                 <div className="border rounded-lg divide-y">
-                  {sortedHistory.map(v => (
+                  {sortedHistory.map(v => editingValueId === v.id ? (
+                    <div key={v.id} className="px-4 py-3 text-sm space-y-2 bg-muted/30">
+                      <div className="flex gap-2 items-end">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Date</Label>
+                          <Input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} className="h-8 text-sm w-36" />
+                        </div>
+                        <div className="space-y-1 flex-1">
+                          <Label className="text-xs">Value{selectedUnit ? ` (${selectedUnit})` : ''}</Label>
+                          <Input
+                            autoFocus
+                            value={editValue}
+                            onChange={e => setEditValue(e.target.value)}
+                            className="h-8 text-sm"
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleSaveEditValue(v);
+                              if (e.key === 'Escape') setEditingValueId(null);
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Note <span className="font-normal">(optional)</span></Label>
+                        <Input
+                          value={editNote}
+                          onChange={e => setEditNote(e.target.value)}
+                          placeholder="Testing conditions, remarks…"
+                          className="h-8 text-sm"
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') handleSaveEditValue(v);
+                            if (e.key === 'Escape') setEditingValueId(null);
+                          }}
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditingValueId(null)}>Cancel</Button>
+                        <Button size="sm" className="h-7 text-xs gap-1" onClick={() => handleSaveEditValue(v)} disabled={!editValue.trim()}>
+                          <Check className="h-3 w-3" /> Save
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
                     <div key={v.id} className={cn(
                       'px-4 py-2.5 text-sm group',
                       v.selfReported ? 'bg-amber-50/40' : '',
@@ -669,14 +774,26 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
                             Self-reported
                           </span>
                         ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-                            onClick={() => handleDeleteValue(v.id)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                          <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                              onClick={() => startEditValue(v)}
+                              title="Edit measurement"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDeleteValue(v.id)}
+                              title="Delete measurement"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                         )}
                       </div>
                       {v.note && (
@@ -754,7 +871,8 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
       <div className="flex flex-1 min-h-0">
 
       {/* ── Left panel ────────────────────────────────────────────────────── */}
-      <div className="w-80 shrink-0 border-r flex flex-col">
+      {/* Rows truncate long names: the scroll area's inner wrapper is a block, not the default table (which grew to the full text width and pushed Value / Updated out of view) */}
+      <div className="w-96 shrink-0 border-r flex flex-col">
 
         {/* Search + Add */}
         <div className="p-3 border-b flex items-center gap-2 shrink-0">
@@ -791,7 +909,7 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
 
         {/* List area */}
         {topTab === 'bio' && (
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 [&>[data-radix-scroll-area-viewport]>div]:!block">
             <ColumnHeaders />
             {filteredBiometrics.length === 0 && filteredBiometricParams.length === 0 ? (
               <p className="text-xs text-muted-foreground px-3 py-2.5">
@@ -839,7 +957,7 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
         )}
 
         {topTab === 'performance' && (
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 [&>[data-radix-scroll-area-viewport]>div]:!block">
             <ColumnHeaders />
             {filteredPerformance.length === 0 ? (
               <p className="text-xs text-muted-foreground px-3 py-2.5">

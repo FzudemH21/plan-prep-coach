@@ -16,6 +16,13 @@ import {
   AthleteCalendarAssignment,
 } from '@/types/athlete';
 
+/** What can be changed on a measurement after the fact */
+export type ParameterValuePatch = Partial<Pick<ParameterValue, 'value' | 'recordedAt' | 'note'>>;
+
+function applyValuePatch(v: ParameterValue, patch: ParameterValuePatch): ParameterValue {
+  return { ...v, ...patch };
+}
+
 interface AthleteDatabase {
   groups: AthleteGroup[];
   athletes: Athlete[];
@@ -287,12 +294,14 @@ export function useAthletes() {
     return newValue;
   }, [setData]);
 
-  const updateBiometricValue = useCallback(async (athleteBiometricId: string, valueId: string, newValue: string) => {
+  /** Change a measurement: a new value (string), or value / date / note together */
+  const updateBiometricValue = useCallback(async (athleteBiometricId: string, valueId: string, change: string | ParameterValuePatch) => {
+    const patch = typeof change === 'string' ? { value: change } : change;
     await setData(prev => ({
       ...prev,
       athleteBiometrics: prev.athleteBiometrics.map(ab =>
         ab.id === athleteBiometricId
-          ? { ...ab, values: ab.values.map(v => v.id === valueId ? { ...v, value: newValue } : v) }
+          ? { ...ab, values: ab.values.map(v => v.id === valueId ? applyValuePatch(v, patch) : v) }
           : ab
       ),
     }));
@@ -332,12 +341,14 @@ export function useAthletes() {
     return newValue;
   }, [setData]);
 
-  const updatePerformanceParameterValue = useCallback(async (performanceParameterId: string, valueId: string, newValue: string) => {
+  /** Change a measurement: a new value (string), or value / date / note together */
+  const updatePerformanceParameterValue = useCallback(async (performanceParameterId: string, valueId: string, change: string | ParameterValuePatch) => {
+    const patch = typeof change === 'string' ? { value: change } : change;
     await setData(prev => ({
       ...prev,
       athletePerformanceParameters: prev.athletePerformanceParameters.map(pp =>
         pp.id === performanceParameterId
-          ? { ...pp, values: pp.values.map(v => v.id === valueId ? { ...v, value: newValue } : v) }
+          ? { ...pp, values: pp.values.map(v => v.id === valueId ? applyValuePatch(v, patch) : v) }
           : pp
       ),
     }));
