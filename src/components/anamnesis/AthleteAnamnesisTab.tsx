@@ -630,7 +630,6 @@ Only use the information given. Where a heading has nothing, write "- None noted
           customQuestions={customQuestions}
           fieldValues={fieldValues}
           customFieldValues={customFieldValues}
-          notes={notesAsText(noteEntries)}
           conductedAt={conductedAt}
           consent={consent}
           athlete={{

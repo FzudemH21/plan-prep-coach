@@ -4,7 +4,9 @@
  * Header with the coach's logo / business name, the athlete's details, then every section of the
  * anamnesis: answers already given (e.g. by the athlete through the form link) are printed in a
  * grey box with two lines for notes below; open questions get space to write — lines for text,
- * tick boxes for choices and yes/no. Ends with a lined notes page area. Labels in German or
+ * tick boxes for choices and yes/no. Ends with an empty lined notes area — the worksheet is for
+ * before / during the appointment, so saved notes are not printed (they belong in the report).
+ * Labels in German or
  * English; the questions appear as written in the template.
  *
  * Loaded on demand (like TrainingPlanPDF) — do not import @react-pdf/renderer at the top level of
@@ -34,7 +36,6 @@ export interface AnamnesisPdfProps {
   customQuestions: AnamnesisField[];
   fieldValues: Record<string, string>;
   customFieldValues: Record<string, string>;
-  notes: string;
   /** yyyy-MM-dd */
   conductedAt: string;
   consent?: AnamnesisConsent | null;
@@ -255,8 +256,7 @@ export function AnamnesisPDF(props: AnamnesisPdfProps) {
         {/* Notes — a page's worth of lines (may continue on the next page) */}
         <View>
           <SectionTitle title={t.notes} accent={accent} />
-          {props.notes.trim() ? <Text style={[s.answer, { marginBottom: 4 }]}>{props.notes}</Text> : null}
-          <Lines count={props.notes.trim() ? 18 : 24} />
+          <Lines count={24} />
         </View>
 
         {/* Footer */}
