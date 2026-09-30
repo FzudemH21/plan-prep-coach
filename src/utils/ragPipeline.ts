@@ -15,6 +15,7 @@
  */
 
 import * as pdfjsLib from 'pdfjs-dist';
+import { ensureAthleteNamesLoaded, pseudonymizeText } from '@/utils/pseudonymize';
 import { supabase } from '@/lib/supabase';
 
 // ── pdfjs worker ──────────────────────────────────────────────────────────────
@@ -118,6 +119,8 @@ export function chunkText(
 export async function embedText(text: string): Promise<number[]> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
+  // No athlete names to the embedding provider either
+  await ensureAthleteNamesLoaded();
 
   const response = await fetch(PROXY_URL, {
     method: 'POST',
@@ -129,7 +132,7 @@ export async function embedText(text: string): Promise<number[]> {
     },
     body: JSON.stringify({
       model: EMBEDDING_MODEL,
-      input: text.slice(0, 8000), // safety trim — model supports up to 8192 tokens
+      input: pseudonymizeText(text).slice(0, 8000), // safety trim — model supports up to 8192 tokens
     }),
   });
 

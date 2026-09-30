@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { ensureAthleteNamesLoaded, pseudonymizeRequest, restoreNames } from '@/utils/pseudonymize';
 
 export interface Message {
   role: "user" | "assistant";
@@ -18,9 +19,11 @@ export interface FileAttachment {
 const PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL as string}/functions/v1/ai-proxy`;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-async function proxyFetch(body: unknown): Promise<Response> {
+/** Every AI request goes through here — athlete names are replaced by labels before sending */
+async function proxyFetch(body: Record<string, unknown>): Promise<Response> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
+  await ensureAthleteNamesLoaded();
 
   return fetch(PROXY_URL, {
     method: 'POST',
@@ -29,7 +32,7 @@ async function proxyFetch(body: unknown): Promise<Response> {
       'Authorization': `Bearer ${session.access_token}`,
       'apikey': ANON_KEY,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(pseudonymizeRequest(body)),
   });
 }
 
@@ -43,7 +46,8 @@ async function extractText(response: Response): Promise<string> {
   };
   const textBlock = data.content.find((b) => b.type === 'text');
   if (!textBlock) throw new Error('No text in API response');
-  return textBlock.text;
+  // The reply refers to "Athlete A" etc. — show the real names in the app
+  return restoreNames(textBlock.text);
 }
 
 export type SystemBlock = { type: "text"; text: string; cache_control?: { type: "ephemeral" } };

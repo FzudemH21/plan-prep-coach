@@ -1,8 +1,9 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useSupabaseStore } from './useSupabaseStore';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { deleteAthleteCloudData, removeAssignmentScopedLocalData, type AthleteDeletionResult } from '@/utils/athleteDataDeletion';
+import { setAthleteNamesForAI } from '@/utils/pseudonymize';
 import {
   Athlete,
   AthleteGroup,
@@ -123,6 +124,12 @@ export function useAthletes() {
   });
 
   const data = useMemo(() => migrateData(rawData), [rawData]);
+
+  // Athlete names are replaced by labels in every AI request — keep the list current
+  // (only once loaded: the empty default would hide the names until the next change)
+  useEffect(() => {
+    if (!isLoading) setAthleteNamesForAI(data.athletes);
+  }, [isLoading, data.athletes]);
 
   const setData = useCallback(
     async (updater: (prev: AthleteDatabase) => AthleteDatabase) => {
