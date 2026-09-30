@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { useSupabaseStore } from './useSupabaseStore';
+import { toParameterId } from '@/utils/parameterRef';
 
 export interface CalendarEvent {
   id: string;
@@ -22,7 +23,7 @@ type CalendarEventsStore = Record<string, CalendarEvent[]>;
 let latestStore: CalendarEventsStore | null = null;
 
 export function useCalendarEvents() {
-  const [store, setStore] = useSupabaseStore<CalendarEventsStore>({
+  const [store, setStore, isLoading] = useSupabaseStore<CalendarEventsStore>({
     tableName: 'calendar_events',
     legacyKey: 'calendarEvents',
     defaultValue: {},
@@ -58,6 +59,7 @@ export function useCalendarEvents() {
     async (athleteId: string, event: Omit<CalendarEvent, 'id'>): Promise<CalendarEvent> => {
       const newEvent: CalendarEvent = {
         ...event,
+        parameterId: toParameterId(event.parameterId),
         id: `ce-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       };
       await write(cur => ({ ...cur, [athleteId]: [...(cur[athleteId] || []), newEvent] }));
@@ -72,6 +74,7 @@ export function useCalendarEvents() {
       if (events.length === 0) return [];
       const newEvents: CalendarEvent[] = events.map((event, i) => ({
         ...event,
+        parameterId: toParameterId(event.parameterId),
         id: `ce-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`,
       }));
       await write(cur => ({ ...cur, [athleteId]: [...(cur[athleteId] || []), ...newEvents] }));
@@ -112,5 +115,25 @@ export function useCalendarEvents() {
     [write],
   );
 
-  return { getEventsForDate, getEventsForAthlete, addEvent, addEvents, deleteEvent, updateEvent, deleteEventsForAthlete };
+  /** Old "bio:{id}" test links → the biometric parameter's id (body metrics moved to the parameter database) */
+  const normalizeParameterRefs = useCallback(async (): Promise<number> => {
+    let changed = 0;
+    await write(cur => {
+      const next: CalendarEventsStore = {};
+      for (const [athleteId, events] of Object.entries(cur)) {
+        next[athleteId] = events.map(e => {
+          if (!e.parameterId?.startsWith('bio:')) return e;
+          changed++;
+          return { ...e, parameterId: toParameterId(e.parameterId) };
+        });
+      }
+      return next;
+    });
+    return changed;
+  }, [write]);
+
+  return {
+    getEventsForDate, getEventsForAthlete, addEvent, addEvents, deleteEvent, updateEvent, deleteEventsForAthlete,
+    normalizeParameterRefs, isLoaded: !isLoading,
+  };
 }

@@ -8,12 +8,15 @@ import { useCoachActivityFeed } from '@/hooks/useCoachActivityFeed';
 import { CoachNotificationSheet } from '@/components/coach-mobile/CoachNotificationSheet';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useBiometricsMigration } from '@/hooks/useBiometricsMigration';
 
 export function CoachMobileLayout() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { profile } = useCoachProfile();
+  // One-time move of body metrics into the parameter database
+  useBiometricsMigration();
 
   const NAV = [
     { label: t('coachMobile.nav.athletes'), icon: Users, path: '/coach-mobile/athletes' },

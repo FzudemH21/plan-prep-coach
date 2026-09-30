@@ -108,6 +108,15 @@ export function useParametersDataV2() {
     return newParameter;
   }, [data, saveData]);
 
+  /** Add complete parameters with their own ids (skips ids that already exist) — e.g. the body
+   *  metrics moved over from the athlete database, which keep their ids so references stay valid. */
+  const importParameters = useCallback(async (parameters: ParameterV2[]) => {
+    const existing = new Set(data.parameters.map((p) => p.id));
+    const fresh = parameters.filter((p) => !existing.has(p.id));
+    if (fresh.length === 0) return;
+    await saveData({ ...data, parameters: [...data.parameters, ...fresh] });
+  }, [data, saveData]);
+
   /** Add many parameters in a single save — avoids stale-closure overwrites from sequential calls. */
   const addParametersBulk = useCallback(async (parameters: Array<Omit<ParameterV2, 'id' | 'createdAt'>>) => {
     const now = new Date().toISOString();
@@ -259,6 +268,7 @@ export function useParametersDataV2() {
     isLoading,
     addParameter,
     addParametersBulk,
+    importParameters,
     updateParameter,
     deleteParameter,
     addInteraction,

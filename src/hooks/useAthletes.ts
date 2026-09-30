@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { deleteAthleteCloudData, removeAssignmentScopedLocalData, type AthleteDeletionResult } from '@/utils/athleteDataDeletion';
 import { setAthleteNamesForAI } from '@/utils/pseudonymize';
+import { mergeBiometricValues } from '@/utils/biometricsMigration';
 import {
   Athlete,
   AthleteGroup,
@@ -22,6 +23,13 @@ interface AthleteDatabase {
   athleteBiometrics: AthleteBiometric[];
   athletePerformanceParameters: AthletePerformanceParameter[];
   calendarAssignments: AthleteCalendarAssignment[];
+  /** Set once body metrics were moved to the parameter database (as parameters marked "Biometric",
+   *  same ids; values → athletePerformanceParameters). Keeps the old lists as a backup. */
+  biometricsMigration?: {
+    migratedAt: string;
+    definitions: BiometricDefinition[];
+    athleteBiometrics: AthleteBiometric[];
+  };
 }
 
 interface LegacyAthleteDatabase {
@@ -55,13 +63,16 @@ const migrateData = (data: LegacyAthleteDatabase | AthleteDatabase): AthleteData
     parameterDefinitionId: ab.parameterDefinitionId || ab.biometricDefinitionId,
   }));
 
+  // After the move to the parameter database the old lists stay empty (no default re-seeding)
+  const biometricsMigration = (data as AthleteDatabase).biometricsMigration;
   return {
     groups: data.groups || [],
     athletes: (data.athletes || []).map(a => ({ ...a, groupIds: a.groupIds ?? [] })),
-    biometricDefinitions: ensureDefaultBiometrics((data as AthleteDatabase).biometricDefinitions || []),
-    athleteBiometrics: biometrics,
+    biometricDefinitions: biometricsMigration ? [] : ensureDefaultBiometrics((data as AthleteDatabase).biometricDefinitions || []),
+    athleteBiometrics: biometricsMigration ? [] : biometrics,
     athletePerformanceParameters: (data as AthleteDatabase).athletePerformanceParameters || [],
     calendarAssignments: (data as AthleteDatabase).calendarAssignments || [],
+    ...(biometricsMigration ? { biometricsMigration } : {}),
   };
 };
 
@@ -210,6 +221,28 @@ export function useAthletes() {
     if (!user) return { filesFailed: 0, errors: [] };
     return deleteAthleteCloudData(user.id, id);
   }, [setData, user, data.calendarAssignments]);
+
+  // ── Move body metrics to the parameter database ───────────────────────────
+  // Each athlete's body-metric values become performance-parameter values of the parameter with the
+  // same id (the definitions themselves are added to the parameter database by the caller first —
+  // see useBiometricsMigration). Runs once; the old lists are kept in biometricsMigration.
+  const biometricsMigrated = !!data.biometricsMigration;
+  const moveBiometricsToParameters = useCallback(async () => {
+    await setData(prev => {
+      if (prev.biometricsMigration) return prev;
+      return {
+        ...prev,
+        athletePerformanceParameters: mergeBiometricValues(prev.athletePerformanceParameters, prev.athleteBiometrics),
+        biometricDefinitions: [],
+        athleteBiometrics: [],
+        biometricsMigration: {
+          migratedAt: new Date().toISOString(),
+          definitions: prev.biometricDefinitions,
+          athleteBiometrics: prev.athleteBiometrics,
+        },
+      };
+    });
+  }, [setData]);
 
   // ── Biometric Definitions ─────────────────────────────────────────────────
 
@@ -396,6 +429,8 @@ export function useAthletes() {
     athletePerformanceParameters: data.athletePerformanceParameters,
     calendarAssignments: data.calendarAssignments,
     isLoading,
+    biometricsMigrated,
+    moveBiometricsToParameters,
 
     parameterDefinitions,
     athleteParameters,

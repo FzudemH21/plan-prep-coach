@@ -273,8 +273,10 @@ export function CombinedTestEventDialog({
                   const linkedParam = linkedParamId && !isBioId(linkedParamId)
                     ? allParameters.find(p => p.id === linkedParamId)
                     : null;
+                  // Old "bio:" links: the old body-metric list, else the parameter with that id (moved)
                   const linkedBioDef = linkedParamId && isBioId(linkedParamId)
                     ? biometricDefinitions.find(d => d.id === bioDefId(linkedParamId))
+                      ?? allParameters.find(p => p.id === bioDefId(linkedParamId))
                     : null;
                   const displayUnit = linkedParam?.unit || linkedBioDef?.unit || testData?.unit || '';
                   

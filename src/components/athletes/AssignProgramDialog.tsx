@@ -41,6 +41,7 @@ import { SubGoal, Event as TrainingEvent } from '@/types/training';
 import { recalculateMesocycleDates } from '@/utils/dateShifting';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { toParameterId } from '@/utils/parameterRef';
 
 interface AssignProgramDialogProps {
   open: boolean;
@@ -182,10 +183,14 @@ export function AssignProgramDialog({
       : 0;
 
     /** The athlete's latest value for a parameter — coach-recorded or self-reported in the app */
-    const latestAthleteValue = (parameterId: string) => latestValueOf(withSelfReported(
-      stableAthleteParams.find(pp => pp.athleticismParameterId === parameterId)?.values ?? [],
-      selfReportedResults.get(parameterId),
-    ));
+    // Old "bio:{id}" goal links → the biometric parameter with that id (body metrics moved)
+    const latestAthleteValue = (ref: string) => {
+      const parameterId = toParameterId(ref);
+      return latestValueOf(withSelfReported(
+        stableAthleteParams.find(pp => pp.athleticismParameterId === parameterId)?.values ?? [],
+        [...(selfReportedResults.get(parameterId) ?? []), ...(selfReportedResults.get(`bio:${parameterId}`) ?? [])],
+      ));
+    };
 
     /** Program test/event date -> assigned date (null when its microcycle isn't assigned) */
     const placeDate = (d: string): string | null => {

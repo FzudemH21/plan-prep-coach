@@ -692,7 +692,8 @@ export function CoachAthleteProgressTab({ athleteId, connectionId }: Props) {
 
   // ── Performance items ─────────────────────────────────────────────────────
 
-  const perfItems = useMemo((): MetricItem[] =>
+  // Parameters marked "Biometric" are listed under Body (their values are performance values)
+  const allParamItems = useMemo((): Array<MetricItem & { biometric: boolean }> =>
     getAthletePerformanceParameters(athleteId).map(pp => {
       const def = paramDb.parameters.find(p => p.id === pp.athleticismParameterId);
       const sorted = [...pp.values].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt));
@@ -703,13 +704,16 @@ export function CoachAthleteProgressTab({ athleteId, connectionId }: Props) {
         latestValue: sorted[0]?.value ?? null,
         latestDate: sorted[0]?.recordedAt?.slice(0, 10) ?? null,
         values: sorted,
+        biometric: !!def?.isBiometric,
       };
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [athleteId, athletePerformanceParameters, paramDb.parameters, getAthletePerformanceParameters],
   );
+  const perfItems = useMemo(() => allParamItems.filter(i => !i.biometric), [allParamItems]);
+  const bodyParamItems = useMemo(() => allParamItems.filter(i => i.biometric), [allParamItems]);
 
-  const selectedPerf = perfItems.find(i => i.id === selectedPerfId) ?? null;
+  const selectedPerf = allParamItems.find(i => i.id === selectedPerfId) ?? null;
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
@@ -718,6 +722,10 @@ export function CoachAthleteProgressTab({ athleteId, connectionId }: Props) {
   const filteredBody = !inDetail && search
     ? bodyItems.filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
     : bodyItems;
+
+  const filteredBodyParams = !inDetail && search
+    ? bodyParamItems.filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
+    : bodyParamItems;
 
   const filteredPerf = !inDetail && search
     ? perfItems.filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
@@ -778,11 +786,16 @@ export function CoachAthleteProgressTab({ athleteId, connectionId }: Props) {
       {/* ── Body ── */}
       {section === 'body' && !inDetail && (
         <div className="rounded-xl border bg-card divide-y px-4">
-          {filteredBody.length === 0
+          {filteredBody.length === 0 && filteredBodyParams.length === 0
             ? <p className="text-sm text-muted-foreground py-8 text-center">{t('coachMobile.athleteProgress.noBodyMetrics')}</p>
-            : filteredBody.map(item => (
-              <MetricRow key={item.id} item={item} onClick={() => setSelectedBioId(item.id)} />
-            ))}
+            : <>
+              {filteredBody.map(item => (
+                <MetricRow key={item.id} item={item} onClick={() => setSelectedBioId(item.id)} />
+              ))}
+              {filteredBodyParams.map(item => (
+                <MetricRow key={item.id} item={item} onClick={() => setSelectedPerfId(item.id)} />
+              ))}
+            </>}
         </div>
       )}
       {section === 'body' && selectedBio && selectedBioObj && (
@@ -805,7 +818,8 @@ export function CoachAthleteProgressTab({ athleteId, connectionId }: Props) {
             ))}
         </div>
       )}
-      {section === 'performance' && selectedPerf && (
+      {/* Performance values — also biometric parameters opened from Body */}
+      {selectedPerf && (
         <MetricDetail
           item={selectedPerf}
           onBack={() => setSelectedPerfId(null)}

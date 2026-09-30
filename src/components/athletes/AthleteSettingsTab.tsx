@@ -624,17 +624,13 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
     setCreating(true);
     try {
       let id: string;
-      if (createSource === 'biometric') {
-        const created = await athleteData.createBiometricDefinition({
-          name: newName.trim(),
-          type: 'quantitative',
-          unit: newUnit.trim() || null,
-        });
-        id = created.id;
-      } else {
-        const created = await addParameter({ name: newName.trim(), unit: newUnit.trim() || undefined });
-        id = created.id;
-      }
+      // Body metrics are parameters marked "Biometric" in the parameter database
+      const created = await addParameter({
+        name: newName.trim(),
+        unit: newUnit.trim() || undefined,
+        ...(createSource === 'biometric' ? { category: 'Body Metrics', isBiometric: true } : {}),
+      });
+      id = created.id;
       setSelectedParam({ id, name: newName.trim(), unit: newUnit.trim() || undefined, source: createSource });
       setAddStep('configure');
     } catch (e) {
@@ -698,11 +694,12 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
   // ── Search ────────────────────────────────────────────────────────────────
 
   const query = paramSearch.toLowerCase();
-  const biometricMatches = athleteData.biometricDefinitions.filter(b =>
-    b.type === 'quantitative' && b.name.toLowerCase().includes(query)
-  );
+  const biometricMatches = [
+    ...athleteData.biometricDefinitions.filter(b => b.type === 'quantitative'),
+    ...(paramDb?.parameters ?? []).filter(p => p.isBiometric).map(p => ({ id: p.id, name: p.name, unit: p.unit ?? null })),
+  ].filter(b => b.name.toLowerCase().includes(query));
   const performanceMatches = (paramDb?.parameters ?? []).filter(p =>
-    p.name.toLowerCase().includes(query)
+    !p.isBiometric && p.name.toLowerCase().includes(query)
   );
   const hasAny = biometricMatches.length > 0 || performanceMatches.length > 0;
 

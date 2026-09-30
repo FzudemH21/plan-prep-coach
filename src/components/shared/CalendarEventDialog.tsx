@@ -78,18 +78,33 @@ export function CalendarEventDialog({
   const [createParamDialogOpen, setCreateParamDialogOpen] = useState(false);
 
   const parameters = parametersData?.parameters || [];
+  // Body metrics are parameters marked "Biometric"; the old separate list is empty once moved
+  // (useBiometricsMigration) and only used until then
   const biometricDefinitions = athleteData.biometricDefinitions;
+  const performanceParams = parameters.filter(p => !p.isBiometric);
+  const biometricParams = parameters.filter(p => p.isBiometric);
 
-  // `bio:${defId}` prefix identifies body-metric parameters in the shared parameterId field
+  // `bio:${defId}` prefix identifies body metrics of the old list; after the move the parameter with
+  // that id is the same metric
   const isBioId = (id: string | null) => id?.startsWith('bio:') ?? false;
   const bioDefId = (id: string) => id.slice(4); // strip 'bio:' prefix
+  /** Name + unit of an old "bio:" reference — the old list, else the parameter with that id */
+  const bioMetric = (id: string): { name: string; unit?: string } | undefined => {
+    const def = biometricDefinitions.find(d => d.id === bioDefId(id));
+    if (def) return { name: def.name, unit: def.unit ?? undefined };
+    const param = parameters.find(p => p.id === bioDefId(id));
+    return param ? { name: param.name, unit: param.unit } : undefined;
+  };
 
   /** Latest value of a parameter: coach-recorded (profile) or self-reported by the athlete */
   const latestRecordedValue = (paramId: string) => {
-    const recorded = isBioId(paramId)
-      ? athleteBiometrics.find(b => b.biometricDefinitionId === bioDefId(paramId))?.values ?? []
-      : athletePerformanceParameters.find(p => p.athleticismParameterId === paramId)?.values ?? [];
-    return latestValueOf(withSelfReported(recorded, selfReported.get(paramId)));
+    const id = isBioId(paramId) ? bioDefId(paramId) : paramId;
+    const recorded = [
+      ...(athleteBiometrics.find(b => b.biometricDefinitionId === id)?.values ?? []),
+      ...(athletePerformanceParameters.find(p => p.athleticismParameterId === id)?.values ?? []),
+    ];
+    const own = [...(selfReported.get(id) ?? []), ...(selfReported.get(`bio:${id}`) ?? [])];
+    return latestValueOf(withSelfReported(recorded, own));
   };
 
   // Load baseline value from athlete profile when parameter changes
@@ -102,10 +117,7 @@ export function CalendarEventDialog({
 
   // Resolve display name + unit for whatever is selected
   const selectedParameter = isBioId(selectedParameterId ?? '')
-    ? (() => {
-        const def = biometricDefinitions.find(d => d.id === bioDefId(selectedParameterId!));
-        return def ? { name: def.name, unit: def.unit ?? undefined } : undefined;
-      })()
+    ? bioMetric(selectedParameterId!)
     : parameters.find(p => p.id === selectedParameterId);
 
   const resetForm = () => {
@@ -120,9 +132,7 @@ export function CalendarEventDialog({
   const handleAdd = () => {
     if (type === 'test') {
       if (!selectedParameterId) return;
-      const testTitle = isBioId(selectedParameterId)
-        ? (biometricDefinitions.find(d => d.id === bioDefId(selectedParameterId))?.name ?? '')
-        : (selectedParameter?.name ?? '');
+      const testTitle = selectedParameter?.name ?? '';
       if (!testTitle) return;
       onAdd(type, testTitle, notes.trim() || undefined, selectedParameterId, targetValue.trim() || undefined);
     } else {
@@ -167,8 +177,8 @@ export function CalendarEventDialog({
   const getTestDisplayName = (ev: CalendarEvent): string => {
     if (ev.parameterId) {
       if (isBioId(ev.parameterId)) {
-        const def = biometricDefinitions.find(d => d.id === bioDefId(ev.parameterId!));
-        if (def) return def.name;
+        const metric = bioMetric(ev.parameterId);
+        if (metric) return metric.name;
       } else {
         const param = parameters.find(p => p.id === ev.parameterId);
         if (param) return param.name;
@@ -216,7 +226,7 @@ export function CalendarEventDialog({
                                 Target: {ev.targetValue}
                                 {ev.parameterId && (() => {
                                   const unit = isBioId(ev.parameterId)
-                                    ? biometricDefinitions.find(d => d.id === bioDefId(ev.parameterId!))?.unit
+                                    ? bioMetric(ev.parameterId)?.unit
                                     : parameters.find(p => p.id === ev.parameterId)?.unit;
                                   return unit ? ` ${unit}` : '';
                                 })()}
@@ -320,9 +330,9 @@ export function CalendarEventDialog({
                             <CommandInput placeholder="Search parameters..." />
                             <CommandList>
                               <CommandEmpty>No parameters found.</CommandEmpty>
-                              {parameters.length > 0 && (
+                              {performanceParams.length > 0 && (
                                 <CommandGroup heading="Performance Parameters">
-                                  {parameters.map(p => (
+                                  {performanceParams.map(p => (
                                     <CommandItem
                                       key={p.id}
                                       value={p.name}
@@ -338,10 +348,24 @@ export function CalendarEventDialog({
                                   ))}
                                 </CommandGroup>
                               )}
-                              {biometricDefinitions.length > 0 && (
+                              {(biometricDefinitions.length > 0 || biometricParams.length > 0) && (
                                 <>
                                   <CommandSeparator />
                                   <CommandGroup heading="Body Metrics">
+                                    {biometricParams.map(p => (
+                                      <CommandItem
+                                        key={p.id}
+                                        value={p.name}
+                                        onSelect={() => {
+                                          setSelectedParameterId(p.id);
+                                          setParameterComboOpen(false);
+                                        }}
+                                      >
+                                        <Check className={cn('mr-2 h-4 w-4', selectedParameterId === p.id ? 'opacity-100' : 'opacity-0')} />
+                                        {p.name}
+                                        {p.unit && <span className="ml-1 text-muted-foreground text-xs">({p.unit})</span>}
+                                      </CommandItem>
+                                    ))}
                                     {biometricDefinitions.map(def => (
                                       <CommandItem
                                         key={def.id}

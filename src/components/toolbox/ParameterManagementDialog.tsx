@@ -183,11 +183,16 @@ export function ParameterManagementDialog({
 
   const { biometricDefinitions } = useAthletes();
   const { data: paramsV2Data } = useParametersDataV2();
+  // Body metrics for formulas: parameters marked "Biometric" (same ids as the old body-metric list,
+  // so existing formula references still resolve) + the old list until it has been moved
   const quantitativeBiometrics = useMemo(
-    () => biometricDefinitions.filter(b => b.type === 'quantitative'),
-    [biometricDefinitions],
+    () => [
+      ...biometricDefinitions.filter(b => b.type === 'quantitative'),
+      ...(paramsV2Data?.parameters ?? []).filter(p => p.isBiometric).map(p => ({ id: p.id, name: p.name, unit: p.unit ?? null })),
+    ],
+    [biometricDefinitions, paramsV2Data],
   );
-  const performanceParams = useMemo(() => paramsV2Data?.parameters ?? [], [paramsV2Data]);
+  const performanceParams = useMemo(() => (paramsV2Data?.parameters ?? []).filter(p => !p.isBiometric), [paramsV2Data]);
 
   const handleReorderParameters = (reorderedParameters: ToolboxEntry[]) => {
     onUpdateParameters(reorderedParameters);

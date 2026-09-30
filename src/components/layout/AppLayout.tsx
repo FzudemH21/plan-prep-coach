@@ -8,6 +8,7 @@ import { useAthleteConnections } from "@/hooks/useAthleteConnections";
 import { useUnreadCounts } from "@/hooks/useChat";
 import { useCoachProfile } from "@/hooks/useCoachProfile";
 import { CoachActivityBell } from "./CoachActivityBell";
+import { useBiometricsMigration } from "@/hooks/useBiometricsMigration";
 
 interface AppLayoutProps {
   children?: React.ReactNode;
@@ -16,6 +17,8 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const [navOpen, setNavOpen] = useState(false);
   const navigate = useNavigate();
+  // One-time move of body metrics into the parameter database
+  useBiometricsMigration();
 
   const { connections } = useAthleteConnections();
   const connectionIds = useMemo(() => connections.map((c) => c.id), [connections]);
