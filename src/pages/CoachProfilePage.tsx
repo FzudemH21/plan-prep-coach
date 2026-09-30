@@ -24,10 +24,14 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useCoachProfile } from "@/hooks/useCoachProfile";
 import { useAthleteConnections } from "@/hooks/useAthleteConnections";
+import { useAuth } from "@/hooks/useAuth";
+import { useCoachPrivacyNotice } from "@/hooks/useCoachPrivacyNotice";
+import { PrivacyNoticeEditor } from "@/components/anamnesis/AnamnesisFormLink";
 import { DocumentsSection } from "@/components/coach/DocumentsSection";
 import { TrainingPlanEnricher } from "@/components/coach/TrainingPlanEnricher";
 import {
   Save,
+  ShieldCheck,
   MessageSquarePlus,
   AlertTriangle,
   UserCircle,
@@ -243,15 +247,13 @@ function ProfileTab() {
     if (!file) return;
     const base64 = await resizeImageToBase64(file, 200);
     setAvatarBase64(base64);
-    if (profile) {
-      saveProfile({ ...profile, name, sports, structured: { philosophy, methods, targetGroup, experience }, summary, avatarBase64: base64 });
-    }
+    if (profile) saveProfile({ avatarBase64: base64 });
   };
 
   const handleSave = () => {
     if (!profile) return;
+    // Only this tab's fields — branding etc. stay as saved
     saveProfile({
-      ...profile,
       name,
       sports,
       structured: { philosophy, methods, targetGroup, experience },
@@ -457,14 +459,22 @@ function BrandingCard() {
   );
   const [dirty, setDirty] = useState(false);
 
-  // Sync with profile once it loads from Supabase
+  // Sync with profile once it loads from Supabase. Branding lost from the profile (an older save
+  // overwrote it) is recovered from the copy synced to the athletes' app connections — name, logo
+  // and welcome message; the accent color isn't in that copy.
+  const recoveredFromApp = !profile?.branding
+    ? connections.map((c) => c.profileData?.coachBranding).find((b) => b && (b.businessName || b.logoBase64 || b.welcomeMessage))
+    : undefined;
   useEffect(() => {
-    if (!profile?.branding) return;
-    setBusinessName(profile.branding.businessName ?? "");
-    setPrimaryColor(profile.branding.primaryColor ?? "#2563eb");
-    setWelcomeMessage(profile.branding.welcomeMessage ?? "");
-    setLogoBase64(profile.branding.logoBase64);
-  }, [profile]);
+    const b = profile?.branding ?? recoveredFromApp;
+    if (!b) return;
+    setBusinessName(b.businessName ?? "");
+    setPrimaryColor(profile?.branding?.primaryColor ?? "#2563eb");
+    setWelcomeMessage(b.welcomeMessage ?? "");
+    setLogoBase64(b.logoBase64);
+    if (!profile?.branding) setDirty(true); // recovered values still need saving
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile, recoveredFromApp?.businessName, recoveredFromApp?.logoBase64, recoveredFromApp?.welcomeMessage]);
 
   const handleLogoUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -480,7 +490,6 @@ function BrandingCard() {
   const handleSave = async () => {
     if (!profile) return;
     await saveProfile({
-      ...profile,
       branding: { logoBase64, primaryColor, businessName, welcomeMessage },
     });
     // Sync logo + welcome message to every athlete connection so the
@@ -610,10 +619,136 @@ function BrandingCard() {
           </p>
         </div>
 
-        <Button size="sm" onClick={handleSave} disabled={!dirty || !profile || connectionsLoading}>
+        {recoveredFromApp && (
+          <p className="text-xs text-amber-700">
+            Your branding was missing from your profile and has been restored from the athlete app. Check it (the accent color needs to be set again) and save.
+          </p>
+        )}
+        <Button size="sm" onClick={handleSave} disabled={!dirty || connectionsLoading}>
           <Save className="h-4 w-4 mr-2" />
           {t('branding.save')}
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Personal information (inside Settings tab)
+// ─────────────────────────────────────────────
+
+function PersonalInfoCard() {
+  const { t } = useTranslation();
+  const { profile, saveProfile } = useCoachProfile();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [name, setName] = useState(profile?.name ?? "");
+  const [contactEmail, setContactEmail] = useState(profile?.contactEmail ?? "");
+  const [avatarBase64, setAvatarBase64] = useState(profile?.avatarBase64 ?? "");
+  const [dirty, setDirty] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!profile) return;
+    setName(profile.name ?? "");
+    setContactEmail(profile.contactEmail ?? "");
+    setAvatarBase64(profile.avatarBase64 ?? "");
+    setDirty(false);
+  }, [profile]);
+
+  const handlePhoto = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setAvatarBase64(await resizeImageToBase64(file, 200));
+    setDirty(true);
+  };
+
+  const emailValid = !contactEmail.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim());
+
+  const handleSave = async () => {
+    await saveProfile({ name: name.trim(), contactEmail: contactEmail.trim(), avatarBase64 });
+    setDirty(false);
+    toast({ title: t('settings.personal.saved') });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <User className="h-4 w-4" />
+          {t('settings.personal.title')}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-2">
+            <Image className="h-3.5 w-3.5 text-muted-foreground" />
+            {t('settings.personal.profilePicture')}
+          </Label>
+          <div className="flex items-center gap-3">
+            <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center border overflow-hidden">
+              {avatarBase64
+                ? <img src={avatarBase64} alt="" className="h-full w-full object-cover" />
+                : <User className="h-8 w-8 text-muted-foreground" />}
+            </div>
+            <Button variant="outline" size="sm" onClick={() => photoInputRef.current?.click()} disabled={!profile}>
+              {t('settings.personal.uploadPicture')}
+            </Button>
+            {avatarBase64 && (
+              <Button variant="ghost" size="sm" onClick={() => { setAvatarBase64(""); setDirty(true); }}>
+                {t('coachProfile.identity.removePhoto')}
+              </Button>
+            )}
+            <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label>{t('settings.personal.name')}</Label>
+          <Input placeholder="Your name" value={name} onChange={(e) => { setName(e.target.value); setDirty(true); }} disabled={!profile} />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-2">
+            <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+            {t('settings.personal.contactEmail')}
+          </Label>
+          <Input
+            type="email"
+            placeholder={user?.email ?? "your@email.com"}
+            value={contactEmail}
+            onChange={(e) => { setContactEmail(e.target.value); setDirty(true); }}
+            disabled={!profile}
+          />
+          <p className="text-xs text-muted-foreground">{t('settings.personal.contactEmailHint')}</p>
+          {!emailValid && <p className="text-xs text-destructive">{t('settings.personal.emailInvalid')}</p>}
+        </div>
+        <Button size="sm" onClick={handleSave} disabled={!dirty || !profile || !emailValid}>
+          <Save className="h-4 w-4 mr-2" />
+          {t('settings.personal.save')}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Privacy notice for the anamnesis form link (inside Settings tab)
+// ─────────────────────────────────────────────
+
+function PrivacyNoticeCard() {
+  const { t } = useTranslation();
+  const privacy = useCoachPrivacyNotice();
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <ShieldCheck className="h-4 w-4" />
+          {t('settings.privacy.title')}
+        </CardTitle>
+        <CardDescription>{t('settings.privacy.desc')}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <PrivacyNoticeEditor privacy={privacy} />
       </CardContent>
     </Card>
   );
@@ -633,46 +768,10 @@ function SettingsTab() {
       <BrandingCard />
 
       {/* Personal data */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <User className="h-4 w-4" />
-            {t('settings.personal.title')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1.5">
-            <Label className="flex items-center gap-2">
-              <Image className="h-3.5 w-3.5 text-muted-foreground" />
-              {t('settings.personal.profilePicture')}
-            </Label>
-            <div className="flex items-center gap-3">
-              <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center border">
-                <User className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <Button variant="outline" size="sm" disabled>
-                {t('settings.personal.uploadPicture')}
-                <ComingSoon />
-              </Button>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t('settings.personal.name')}</Label>
-            <Input placeholder="Your name" disabled />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="flex items-center gap-2">
-              <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-              {t('settings.personal.email')}
-            </Label>
-            <Input type="email" placeholder="your@email.com" disabled />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {t('settings.personal.hint')}{" "}
-            <ComingSoon />
-          </p>
-        </CardContent>
-      </Card>
+      <PersonalInfoCard />
+
+      {/* Privacy notice shown in the anamnesis form link */}
+      <PrivacyNoticeCard />
 
       {/* Security */}
       <Card>

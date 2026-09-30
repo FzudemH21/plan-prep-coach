@@ -1123,7 +1123,7 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
             const live = anamneses.find(a => a.id === selectedRecord.id) ?? selectedRecord;
             const consent = live.consent;
             if (live.formStatus !== 'sent' && !consent) {
-              const noticeReady = isPrivacyNoticeComplete(privacy.notice);
+              const noticeReady = isPrivacyNoticeComplete(privacy);
               return (
                 <div className="px-6 pb-3 shrink-0 flex flex-wrap items-center gap-2">
                   <Button
@@ -1144,7 +1144,7 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
                   <span className="text-xs text-muted-foreground">
                     {noticeReady
                       ? 'The athlete fills in the sections ticked "Filled in by athlete". Save your changes first.'
-                      : 'Add your privacy notice first (button above the list).'}
+                      : 'Add your privacy notice first (button above the list), plus business name and contact email in your Coach Profile.'}
                   </span>
                 </div>
               );

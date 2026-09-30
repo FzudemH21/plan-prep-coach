@@ -39,6 +39,8 @@ export interface CoachProfile {
   branding?: CoachBranding;
   /** Base64 data-URL of the coach's profile photo (JPEG, resized to ≤200px) */
   avatarBase64?: string;
+  /** Email athletes can contact (e.g. to withdraw consent) — shown in the anamnesis form */
+  contactEmail?: string;
 }
 
 // ─── Cache helpers (sync, no network) ─────────────────────────────────────────
@@ -194,19 +196,29 @@ export function useCoachProfile() {
     })();
   }, [user?.id]);
 
-  // ── saveProfile — optimistic: state + cache first, Supabase in background ─────
+  // ── saveProfile — changes only the fields passed ──────────────────────────────
+  // Merged into the latest saved profile (Supabase, else cache), not written wholesale: a tab or
+  // device holding an older copy (e.g. from before the branding was set) used to overwrite newer
+  // fields with its stale ones — saving the Profile tab wiped the branding.
+  // Optimistic: state + cache first, Supabase after.
   const saveProfile = useCallback(
-    async (newProfile: CoachProfile): Promise<void> => {
-      setProfileState(newProfile);
-      writeCache(newProfile);
+    async (changes: Partial<CoachProfile>): Promise<void> => {
+      const optimistic = { ...(readCache() ?? {}), ...changes } as CoachProfile;
+      setProfileState(optimistic);
+      writeCache(optimistic);
       broadcastProfileUpdate();
       if (!user) {
         console.warn("[useCoachProfile] saveProfile: user is null — saved to cache only, will sync after auth resolves");
         return;
       }
-      console.log("[useCoachProfile] saveProfile: upserting to Supabase for user", user.id, "profile:", newProfile);
       try {
-        await upsertRow(user.id, newProfile);
+        const { data: row } = await supabase.from("coach_profiles").select("*").eq("user_id", user.id).maybeSingle();
+        const latest = row ? rowToProfile(row as Record<string, unknown>) : readCache();
+        const merged = { ...(latest ?? {}), ...changes } as CoachProfile;
+        await upsertRow(user.id, merged);
+        setProfileState(merged);
+        writeCache(merged);
+        broadcastProfileUpdate();
       } catch (err) {
         console.error("[useCoachProfile] save error:", err);
       }

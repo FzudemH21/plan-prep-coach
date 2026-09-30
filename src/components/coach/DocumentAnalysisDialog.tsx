@@ -286,8 +286,7 @@ export function DocumentAnalysisDialog({
         structured:  mergedStructured,
         summary:     await mergeSummaries(base?.summary ?? "", extracted.summary ?? ""),
         completedAt: new Date().toISOString(),
-        // Preserve branding if already set
-        ...(base?.branding ? { branding: base.branding } : {}),
+        // Branding and other fields stay as saved — saveProfile only changes the fields passed
       };
       await saveProfile(merged);
       handleClose();

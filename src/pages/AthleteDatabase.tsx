@@ -124,6 +124,11 @@ export default function AthleteDatabase() {
     }
   }, [athleteData, getConnectionForAthlete, syncProfileToConnection]);
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(navState.openAthleteId ?? null);
+  // Opened again from elsewhere (e.g. a notification) while already on this page
+  useEffect(() => {
+    if (navState.openAthleteId) setSelectedAthleteId(navState.openAthleteId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [groupForNewAthlete, setGroupForNewAthlete] = useState<string | null>(null);
   /** Set right after "Continue with anamnesis" — the profile jumps to the Anamnesis tab and opens a new record. */

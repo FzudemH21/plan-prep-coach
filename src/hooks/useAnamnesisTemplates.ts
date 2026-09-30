@@ -26,47 +26,69 @@ function fromDb(row: DbTemplate): AnamnesisTemplate {
   };
 }
 
+// ── Shared list ───────────────────────────────────────────────────────────────
+// One list for every component that uses the hook (record form, send-link dialog, template
+// editor …): an edit anywhere shows everywhere at once. Before, each component kept its own copy
+// loaded on mount, so e.g. the send-link dialog built links from an outdated template.
+let shared: AnamnesisTemplate[] = [];
+const subscribers = new Set<(t: AnamnesisTemplate[]) => void>();
+function publish(next: AnamnesisTemplate[]) {
+  shared = next;
+  subscribers.forEach((fn) => fn(next));
+}
+/** One fetch at a time — parallel mounts would otherwise each seed the default template */
+let inflight: Promise<void> | null = null;
+
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useAnamnesisTemplates() {
   const { user } = useAuth();
-  const [templates, setTemplates] = useState<AnamnesisTemplate[]>([]);
+  const [templates, setTemplates] = useState<AnamnesisTemplate[]>(shared);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    subscribers.add(setTemplates);
+    setTemplates(shared);
+    return () => { subscribers.delete(setTemplates); };
+  }, []);
 
   const fetchTemplates = useCallback(async () => {
     if (!user) return;
+    if (inflight) { await inflight; return; }
     setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('anamnesis_templates')
-        .select('*')
-        .eq('coach_user_id', user.id)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      const fetched = (data as DbTemplate[]).map(fromDb);
-      if (fetched.length === 0) {
-        // First-time use: seed the default template as a real editable record
-        const { data: seeded } = await supabase
+    inflight = (async () => {
+      try {
+        const { data, error } = await supabase
           .from('anamnesis_templates')
-          .insert({
-            coach_user_id: user.id,
-            name: DEFAULT_ANAMNESIS_TEMPLATE.name,
-            sections: DEFAULT_ANAMNESIS_TEMPLATE.sections,
-          })
-          .select()
-          .single();
-        setTemplates(seeded ? [fromDb(seeded as DbTemplate)] : []);
-      } else {
-        setTemplates(fetched);
+          .select('*')
+          .eq('coach_user_id', user.id)
+          .order('created_at', { ascending: true });
+
+        if (error) throw error;
+        const fetched = (data as DbTemplate[]).map(fromDb);
+        if (fetched.length === 0) {
+          // First-time use: seed the default template as a real editable record
+          const { data: seeded } = await supabase
+            .from('anamnesis_templates')
+            .insert({
+              coach_user_id: user.id,
+              name: DEFAULT_ANAMNESIS_TEMPLATE.name,
+              sections: DEFAULT_ANAMNESIS_TEMPLATE.sections,
+            })
+            .select()
+            .single();
+          publish(seeded ? [fromDb(seeded as DbTemplate)] : []);
+        } else {
+          publish(fetched);
+        }
+      } catch (err) {
+        console.error('[useAnamnesisTemplates] fetch error', err);
       }
-    } catch (err) {
-      console.error('[useAnamnesisTemplates] fetch error', err);
-    } finally {
-      setLoading(false);
-    }
+    })();
+    try { await inflight; } finally { inflight = null; setLoading(false); }
   }, [user]);
 
+  // Fresh from the database whenever a component using the list mounts (dialogs mount on open)
   useEffect(() => {
     fetchTemplates();
   }, [fetchTemplates]);
@@ -83,7 +105,7 @@ export function useAnamnesisTemplates() {
 
         if (error) throw error;
         const created = fromDb(data as DbTemplate);
-        setTemplates((prev) => [...prev, created]);
+        publish([...shared, created]);
         return created;
       } catch (err) {
         console.error('[useAnamnesisTemplates] create error', err);
@@ -105,7 +127,7 @@ export function useAnamnesisTemplates() {
 
         if (error) throw error;
         const updated = fromDb(data as DbTemplate);
-        setTemplates((prev) => prev.map((t) => (t.id === id ? updated : t)));
+        publish(shared.map((t) => (t.id === id ? updated : t)));
         return true;
       } catch (err) {
         console.error('[useAnamnesisTemplates] update error', err);
@@ -119,7 +141,7 @@ export function useAnamnesisTemplates() {
     try {
       const { error } = await supabase.from('anamnesis_templates').delete().eq('id', id);
       if (error) throw error;
-      setTemplates((prev) => prev.filter((t) => t.id !== id));
+      publish(shared.filter((t) => t.id !== id));
       return true;
     } catch (err) {
       console.error('[useAnamnesisTemplates] delete error', err);

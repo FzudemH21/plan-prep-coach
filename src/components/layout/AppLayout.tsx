@@ -7,6 +7,7 @@ import { NavigationSidebar } from "./NavigationSidebar";
 import { useAthleteConnections } from "@/hooks/useAthleteConnections";
 import { useUnreadCounts } from "@/hooks/useChat";
 import { useCoachProfile } from "@/hooks/useCoachProfile";
+import { CoachActivityBell } from "./CoachActivityBell";
 
 interface AppLayoutProps {
   children?: React.ReactNode;
@@ -55,7 +56,9 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
 
           <div className="flex items-center space-x-2">
-              {/* Notification bell */}
+              {/* Athlete activity: anamnesis forms, completed sessions, check-ins */}
+              <CoachActivityBell connections={connections} />
+              {/* Messages */}
               <Button
                 variant="outline"
                 size="sm"

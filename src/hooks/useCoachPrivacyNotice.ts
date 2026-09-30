@@ -1,48 +1,45 @@
 /**
- * useCoachPrivacyNotice — the coach's privacy notice (DE + EN) shown in the anamnesis form link,
- * with the company name and contact used in the consent texts. Every change of the notice texts
- * raises the version; consents store the version the athlete agreed to.
+ * useCoachPrivacyNotice — the coach's privacy notice (DE + EN) shown in the anamnesis form link.
+ *
+ * The company name (Report Branding) and the contact email (Personal Information) come from the
+ * coach profile — one place for them; the form reads them from there too (migration 20261004).
+ * Copies are written with the notice as a fallback. Every change of the notice texts raises the
+ * version; consents store the version the athlete agreed to.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useCoachProfile } from '@/hooks/useCoachProfile';
 
 export interface CoachPrivacyNotice {
-  companyName: string;
-  contactEmail: string;
   noticeDe: string;
   noticeEn: string;
   version: number;
   updatedAt: string | null;
 }
 
-const EMPTY: CoachPrivacyNotice = { companyName: '', contactEmail: '', noticeDe: '', noticeEn: '', version: 0, updatedAt: null };
-
-/** Ready for the form: company, contact and both notice texts are there */
-export function isPrivacyNoticeComplete(n: CoachPrivacyNotice | null): boolean {
-  return !!n && !!n.companyName.trim() && !!n.contactEmail.trim() && !!n.noticeDe.trim() && !!n.noticeEn.trim();
-}
+const EMPTY: CoachPrivacyNotice = { noticeDe: '', noticeEn: '', version: 0, updatedAt: null };
 
 export function useCoachPrivacyNotice() {
   const { user } = useAuth();
+  const { profile } = useCoachProfile();
   const [notice, setNotice] = useState<CoachPrivacyNotice | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
+  const companyName = profile?.branding?.businessName?.trim() ?? '';
+  const contactEmail = profile?.contactEmail?.trim() ?? '';
 
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
     (async () => {
-      const { data, error: err } = await supabase
+      const { data } = await supabase
         .from('coach_privacy_notices')
-        .select('company_name, contact_email, notice_de, notice_en, version, updated_at')
+        .select('notice_de, notice_en, version, updated_at')
         .eq('coach_user_id', user.id)
         .maybeSingle();
       if (cancelled) return;
-      if (err) setError(err.message);
       setNotice(data ? {
-        companyName: data.company_name as string,
-        contactEmail: data.contact_email as string,
         noticeDe: data.notice_de as string,
         noticeEn: data.notice_en as string,
         version: data.version as number,
@@ -53,29 +50,35 @@ export function useCoachPrivacyNotice() {
     return () => { cancelled = true; };
   }, [user]);
 
-  const save = useCallback(async (next: Omit<CoachPrivacyNotice, 'version' | 'updatedAt'>): Promise<void> => {
+  const save = useCallback(async (texts: { noticeDe: string; noticeEn: string }): Promise<void> => {
     if (!user) throw new Error('Not signed in');
     const current = notice ?? EMPTY;
-    const textChanged = next.noticeDe !== current.noticeDe || next.noticeEn !== current.noticeEn
-      || next.companyName !== current.companyName || next.contactEmail !== current.contactEmail;
-    const version = current.version === 0 ? 1 : textChanged ? current.version + 1 : current.version;
+    const changed = texts.noticeDe !== current.noticeDe || texts.noticeEn !== current.noticeEn;
+    const version = current.version === 0 ? 1 : changed ? current.version + 1 : current.version;
     const now = new Date().toISOString();
-    const { error: err } = await supabase.from('coach_privacy_notices').upsert({
+    const { error } = await supabase.from('coach_privacy_notices').upsert({
       coach_user_id: user.id,
-      company_name: next.companyName.trim(),
-      contact_email: next.contactEmail.trim(),
-      notice_de: next.noticeDe,
-      notice_en: next.noticeEn,
+      company_name: companyName,
+      contact_email: contactEmail,
+      notice_de: texts.noticeDe,
+      notice_en: texts.noticeEn,
       version,
       updated_at: now,
     }, { onConflict: 'coach_user_id' });
-    if (err) {
-      throw new Error(/coach_privacy_notices/i.test(err.message)
+    if (error) {
+      throw new Error(/coach_privacy_notices/i.test(error.message)
         ? 'Saving needs the latest Supabase migration (20261002_anamnesis_form_link.sql).'
-        : err.message);
+        : error.message);
     }
-    setNotice({ ...next, companyName: next.companyName.trim(), contactEmail: next.contactEmail.trim(), version, updatedAt: now });
-  }, [user, notice]);
+    setNotice({ ...texts, version, updatedAt: now });
+  }, [user, notice, companyName, contactEmail]);
 
-  return { notice, loading, error, save };
+  return { notice, companyName, contactEmail, loading, save };
+}
+
+export type CoachPrivacyNoticeState = ReturnType<typeof useCoachPrivacyNotice>;
+
+/** Ready for the form: company, contact email and both notice texts are there */
+export function isPrivacyNoticeComplete(p: CoachPrivacyNoticeState): boolean {
+  return !!p.companyName && !!p.contactEmail && !!p.notice?.noticeDe.trim() && !!p.notice?.noticeEn.trim();
 }

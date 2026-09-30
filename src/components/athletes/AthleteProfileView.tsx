@@ -104,6 +104,8 @@ export function AthleteProfileView({
 
   // Controlled tab state — Radix unmounts inactive panels so flex-1 layout is unaffected
   const [activeTab, setActiveTab] = useState(defaultTab ?? 'monitoring');
+  // A tab requested later (e.g. opened from a notification while this profile is shown)
+  useEffect(() => { if (defaultTab) setActiveTab(defaultTab); }, [defaultTab]);
   const settingsScrollRef = useRef<HTMLDivElement>(null);
   const prevActiveTabRef = useRef(activeTab);
   useLayoutEffect(() => {

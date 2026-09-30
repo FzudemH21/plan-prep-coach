@@ -146,7 +146,9 @@
     "saved": "Branding saved"
   },
   "settings": {
-    "language": { "title": "Language" },
+    "language": {
+      "title": "Language"
+    },
     "theme": {
       "title": "Theme",
       "options": "Light / Dark / System",
@@ -158,7 +160,11 @@
       "uploadPicture": "Upload picture",
       "name": "Name",
       "email": "Email",
-      "hint": "Personal information will be available once login is enabled."
+      "contactEmail": "Contact email for athletes",
+      "contactEmailHint": "Shown to athletes in the anamnesis form, e.g. to withdraw their consent. Can differ from your login email.",
+      "emailInvalid": "Please enter a valid email address.",
+      "save": "Save",
+      "saved": "Personal information saved"
     },
     "security": {
       "title": "Security",
@@ -178,7 +184,13 @@
       "invoices": "Invoices",
       "pastTransactions": "Past transactions"
     },
-    "app": { "title": "App Settings" }
+    "app": {
+      "title": "App Settings"
+    },
+    "privacy": {
+      "title": "Privacy notice (anamnesis form)",
+      "desc": "Shown to athletes before they consent in the anamnesis form link, in German and English."
+    }
   },
   "auth": {
     "tagline": "Evidence-informed training planning",

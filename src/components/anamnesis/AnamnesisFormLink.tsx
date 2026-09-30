@@ -1,6 +1,6 @@
 /**
  * Coach side of the anamnesis form link:
- * - PrivacyNoticeDialog: the company name, contact and privacy notice (DE + EN) the form shows
+ * - PrivacyNoticeEditor / PrivacyNoticeDialog: the privacy notice (DE + EN) the form shows
  * - SendFormLinkDialog: pick a template → a record waiting for the athlete + its link
  * - FormLinkBox: the link of a waiting record (copy, share, renew, withdraw)
  * - ProfileAnswersBanner: take the athlete's "About you" answers over into the profile
@@ -16,43 +16,38 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
-import { isPrivacyNoticeComplete, type useCoachPrivacyNotice } from '@/hooks/useCoachPrivacyNotice';
+import { isPrivacyNoticeComplete, type CoachPrivacyNoticeState } from '@/hooks/useCoachPrivacyNotice';
 import { anamnesisFormUrl, FORM_LINK_DAYS } from '@/hooks/useAthleteAnamneses';
 import { isAthleteSection, type AthleteAnamnesis, type AnamnesisTemplateSnapshot, type AnamnesisProfileAnswers } from '@/types/anamnesis';
 import { ACTIVITY_LEVEL_LABELS, SEX_LABELS, type Athlete } from '@/types/athlete';
 
-// ── Privacy notice settings ───────────────────────────────────────────────────
+// ── Privacy notice ────────────────────────────────────────────────────────────
 
-export type CoachPrivacyNoticeState = ReturnType<typeof useCoachPrivacyNotice>;
-
-/** `privacy` = the caller's useCoachPrivacyNotice(), so a save shows up there at once */
-export function PrivacyNoticeDialog({ open, onClose, privacy }: {
-  open: boolean;
-  onClose: () => void;
+/** The notice texts, with company name + contact email shown from the coach profile.
+ *  Used in the Coach Profile settings and in the dialog of the anamnesis tab. */
+export function PrivacyNoticeEditor({ privacy, onSaved, onCancel }: {
   privacy: CoachPrivacyNoticeState;
+  onSaved?: () => void;
+  onCancel?: () => void;
 }) {
-  const { notice, loading, save } = privacy;
+  const { notice, companyName, contactEmail, loading, save } = privacy;
   const { toast } = useToast();
-  const [companyName, setCompanyName] = useState('');
-  const [contactEmail, setContactEmail] = useState('');
   const [noticeDe, setNoticeDe] = useState('');
   const [noticeEn, setNoticeEn] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!open || !notice) return;
-    setCompanyName(notice.companyName);
-    setContactEmail(notice.contactEmail);
+    if (!notice) return;
     setNoticeDe(notice.noticeDe);
     setNoticeEn(notice.noticeEn);
-  }, [open, notice]);
+  }, [notice]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await save({ companyName, contactEmail, noticeDe, noticeEn });
+      await save({ noticeDe, noticeEn });
       toast({ title: 'Privacy notice saved' });
-      onClose();
+      onSaved?.();
     } catch (err) {
       toast({ title: 'Could not save', description: err instanceof Error ? err.message : String(err), variant: 'destructive' });
     } finally {
@@ -60,46 +55,54 @@ export function PrivacyNoticeDialog({ open, onClose, privacy }: {
     }
   };
 
+  if (loading) {
+    return <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+  }
+  const dirty = noticeDe !== (notice?.noticeDe ?? '') || noticeEn !== (notice?.noticeEn ?? '');
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
+        <p><span className="text-muted-foreground">Company:</span> {companyName || <span className="text-amber-700">not set — add the business name under Report Branding</span>}</p>
+        <p><span className="text-muted-foreground">Contact email:</span> {contactEmail || <span className="text-amber-700">not set — add it under Personal Information</span>}</p>
+        <p className="text-xs text-muted-foreground">
+          From your Coach Profile (Settings). Both appear in the consent text of the form.
+          {notice && notice.version > 0 && ` Notice version ${notice.version}${notice.updatedAt ? ` (${format(parseISO(notice.updatedAt), 'd MMM yyyy')})` : ''}; changing the texts creates a new version.`}
+        </p>
+      </div>
+      <div className="space-y-1.5">
+        <Label>Privacy notice — German</Label>
+        <Textarea className="min-h-[180px] text-sm" value={noticeDe} onChange={e => setNoticeDe(e.target.value)} placeholder="Paste the German privacy notice (Datenschutzhinweise)…" />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Privacy notice — English</Label>
+        <Textarea className="min-h-[180px] text-sm" value={noticeEn} onChange={e => setNoticeEn(e.target.value)} placeholder="Paste the English privacy notice…" />
+      </div>
+      <div className="flex justify-end gap-2">
+        {onCancel && <Button variant="outline" onClick={onCancel}>Cancel</Button>}
+        <Button onClick={handleSave} disabled={saving || !dirty}>
+          {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Save privacy notice
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** `privacy` = the caller's useCoachPrivacyNotice(), so a save shows up there at once */
+export function PrivacyNoticeDialog({ open, onClose, privacy }: {
+  open: boolean;
+  onClose: () => void;
+  privacy: CoachPrivacyNoticeState;
+}) {
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent className="max-w-[760px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" />Privacy notice for the anamnesis form</DialogTitle>
           <DialogDescription>
-            Shown to athletes before they consent in the form link. The company name and email also appear in the consent text.
-            {notice && notice.version > 0 && ` Current version: ${notice.version}${notice.updatedAt ? ` (${format(parseISO(notice.updatedAt), 'd MMM yyyy')})` : ''}. Changing the texts creates a new version.`}
+            Shown to athletes before they consent in the form link. Also editable in Coach Profile → Settings.
           </DialogDescription>
         </DialogHeader>
-        {loading ? (
-          <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-        ) : (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Company name</Label>
-                <Input value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="e.g. Hanika & Laivina GbR" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Contact email (for withdrawing consent)</Label>
-                <Input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Privacy notice — German</Label>
-              <Textarea className="min-h-[180px] text-sm" value={noticeDe} onChange={e => setNoticeDe(e.target.value)} placeholder="Paste the German privacy notice (Datenschutzhinweise)…" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Privacy notice — English</Label>
-              <Textarea className="min-h-[180px] text-sm" value={noticeEn} onChange={e => setNoticeEn(e.target.value)} placeholder="Paste the English privacy notice…" />
-            </div>
-          </div>
-        )}
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving || loading || !companyName.trim()}>
-            {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Save
-          </Button>
-        </DialogFooter>
+        <PrivacyNoticeEditor privacy={privacy} onSaved={onClose} onCancel={onClose} />
       </DialogContent>
     </Dialog>
   );
@@ -189,7 +192,6 @@ export function SendFormLinkDialog({ open, onClose, athleteName, privacy, onCrea
   onWithdraw: (id: string) => Promise<boolean>;
 }) {
   const { templates, loading } = useAnamnesisTemplates();
-  const { notice } = privacy;
   const { toast } = useToast();
   const [templateId, setTemplateId] = useState('');
   const [creating, setCreating] = useState(false);
@@ -204,7 +206,7 @@ export function SendFormLinkDialog({ open, onClose, athleteName, privacy, onCrea
 
   const template = templates.find(t => t.id === templateId);
   const athleteSections = useMemo(() => (template?.sections ?? []).filter(isAthleteSection), [template]);
-  const noticeReady = isPrivacyNoticeComplete(notice);
+  const noticeReady = isPrivacyNoticeComplete(privacy);
 
   const handleCreate = async () => {
     if (!template) return;
@@ -266,7 +268,7 @@ export function SendFormLinkDialog({ open, onClose, athleteName, privacy, onCrea
               {!noticeReady && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 space-y-2">
                   <p className="text-sm text-amber-900">
-                    Before sending, add your privacy notice (German and English), company name and contact email — the athlete must read it and consent in the form.
+                    Before sending, add your privacy notice (German and English), plus the business name (Report Branding) and contact email (Personal Information) in your Coach Profile — the athlete must read the notice and consent in the form.
                   </p>
                   <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setPrivacyOpen(true)}>
                     <ShieldCheck className="h-3.5 w-3.5" />Add privacy notice
