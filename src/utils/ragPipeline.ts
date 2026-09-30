@@ -7,7 +7,7 @@
  *   1. Fetch file from Supabase Storage → base64 / arraybuffer
  *   2. Extract plain text (PDF → pdfjs-dist, plain text → direct)
  *   3. Chunk text into overlapping segments
- *   4. Embed each chunk via OpenAI text-embedding-3-small
+ *   4. Embed the chunks via Mistral mistral-embed (EU provider; several chunks per request)
  *   5. Upsert chunks + vectors into the document_chunks Supabase table
  *
  * Supports: PDF, plain text (.txt, .md)
@@ -27,7 +27,10 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const EMBEDDING_MODEL = 'text-embedding-3-small';
+/** Mistral's embedding model — 1024 dimensions (migration 20261008 sized the vector column to it) */
+const EMBEDDING_MODEL = 'mistral-embed';
+/** Chunks per embedding request (~400 words each — well within the request limit) */
+const EMBED_BATCH = 8;
 const CHUNK_SIZE = 400;    // target words per chunk
 const CHUNK_OVERLAP = 50;  // words of overlap between consecutive chunks
 
@@ -115,50 +118,83 @@ export function chunkText(
 
 // ── Embedding ─────────────────────────────────────────────────────────────────
 
-/** Embed a single string via OpenAI text-embedding-3-small (proxied server-side). */
-export async function embedText(text: string): Promise<number[]> {
+/**
+ * Embed several strings in one request via Mistral mistral-embed (proxied server-side, key never in
+ * the browser). Retries with a growing pause when the rate limit is hit.
+ */
+export async function embedTexts(texts: string[]): Promise<number[][]> {
+  if (texts.length === 0) return [];
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
   // No athlete names to the embedding provider either
   await ensureAthleteNamesLoaded();
 
-  const response = await fetch(PROXY_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`,
-      'apikey': ANON_KEY,
-      'x-target': 'openai',
-    },
-    body: JSON.stringify({
-      model: EMBEDDING_MODEL,
-      input: pseudonymizeText(text).slice(0, 8000), // safety trim — model supports up to 8192 tokens
-    }),
+  const body = JSON.stringify({
+    model: EMBEDDING_MODEL,
+    input: texts.map(t => pseudonymizeText(t).slice(0, 8000)), // safety trim — model limit is 8k tokens
   });
 
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Embedding proxy error ${response.status}: ${err}`);
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': ANON_KEY,
+        'x-target': 'mistral-embed',
+      },
+      body,
+    });
+
+    if (response.status === 429 && attempt < 4) {
+      await new Promise(r => setTimeout(r, 1000 * 2 ** attempt));
+      continue;
+    }
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Embedding proxy error ${response.status}: ${err}`);
+    }
+
+    const data = await response.json() as { data: Array<{ embedding: number[]; index?: number }> };
+    return [...data.data]
+      .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+      .map(d => d.embedding);
   }
-
-  const data = await response.json() as {
-    data: Array<{ embedding: number[] }>;
-  };
-
-  return data.data[0].embedding;
 }
 
-/** Embed multiple texts in parallel (batched to avoid rate limits). */
-async function embedBatch(texts: string[], batchSize = 10): Promise<number[][]> {
-  const results: number[][] = [];
+/** Embed a single string (e.g. a search query) */
+export async function embedText(text: string): Promise<number[]> {
+  const [embedding] = await embedTexts([text]);
+  return embedding;
+}
 
-  for (let i = 0; i < texts.length; i += batchSize) {
-    const batch = texts.slice(i, i + batchSize);
-    const embeddings = await Promise.all(batch.map(embedText));
-    results.push(...embeddings);
+/**
+ * Re-embeds this coach's stored chunks that have no embedding yet — after the switch to Mistral
+ * (migration 20261008 emptied the old OpenAI vectors; the chunk texts stayed). Chunks are
+ * processed in small batches; returns how many were embedded. Safe to run again.
+ */
+export async function embedMissingChunks(userId: string): Promise<number> {
+  let done = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from('document_chunks')
+      .select('id, content')
+      .eq('user_id', userId)
+      .is('embedding', null)
+      .limit(EMBED_BATCH);
+    if (error) throw new Error(`[ragPipeline] Reading chunks failed: ${error.message}`);
+    const rows = (data ?? []) as Array<{ id: string; content: string }>;
+    if (rows.length === 0) return done;
+    const embeddings = await embedTexts(rows.map(r => r.content));
+    for (let i = 0; i < rows.length; i++) {
+      const { error: upErr } = await supabase
+        .from('document_chunks')
+        .update({ embedding: embeddings[i] })
+        .eq('id', rows[i].id);
+      if (upErr) throw new Error(`[ragPipeline] Saving embedding failed: ${upErr.message}`);
+    }
+    done += rows.length;
   }
-
-  return results;
 }
 
 // ── Supabase storage ──────────────────────────────────────────────────────────
@@ -241,13 +277,11 @@ export async function ingestDocument(opts: IngestDocumentOptions): Promise<Inges
     onProgress?.(40);
 
     // 4. Embed (with incremental progress)
-    const BATCH = 10;
     const embeddings: number[][] = [];
-    for (let i = 0; i < chunks.length; i += BATCH) {
-      const batch = chunks.slice(i, i + BATCH);
-      const batchEmbeddings = await Promise.all(batch.map(embedText));
+    for (let i = 0; i < chunks.length; i += EMBED_BATCH) {
+      const batchEmbeddings = await embedTexts(chunks.slice(i, i + EMBED_BATCH));
       embeddings.push(...batchEmbeddings);
-      const pct = 40 + Math.round(((i + BATCH) / chunks.length) * 50);
+      const pct = 40 + Math.round(((i + EMBED_BATCH) / chunks.length) * 50);
       onProgress?.(Math.min(pct, 90));
     }
 

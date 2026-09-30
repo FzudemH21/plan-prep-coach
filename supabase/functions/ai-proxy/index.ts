@@ -36,17 +36,18 @@ Deno.serve(async (req: Request) => {
   const target = req.headers.get('x-target') ?? 'anthropic';
   const body = await req.text();
 
-  if (target === 'openai') {
-    const openaiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openaiKey) {
-      return new Response('Server misconfigured', { status: 500, headers: CORS_HEADERS });
+  // Embeddings for document search (RAG): Mistral, EU. (Replaced OpenAI.)
+  if (target === 'mistral-embed') {
+    const mistralKey = Deno.env.get('MISTRAL_API_KEY');
+    if (!mistralKey) {
+      return new Response('Server misconfigured: MISTRAL_API_KEY missing', { status: 500, headers: CORS_HEADERS });
     }
 
-    const upstream = await fetch('https://api.openai.com/v1/embeddings', {
+    const upstream = await fetch('https://api.mistral.ai/v1/embeddings', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openaiKey}`,
+        'Authorization': `Bearer ${mistralKey}`,
       },
       body,
     });

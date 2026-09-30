@@ -9,8 +9,10 @@
  *   const ragContext = await retrieve("how should I structure sprint periodization?");
  *   // Pass ragContext to WizardAIAssistant as the ragContext prop
  *
- * isAvailable: false when the OpenAI key is not configured or the user is not
- * authenticated — callers can use this to conditionally show a "RAG active" badge.
+ * isAvailable: false when the user is not authenticated — callers can use this to
+ * conditionally show a "RAG active" badge.
+ *
+ * Embeddings: Mistral mistral-embed (see ragPipeline.embedTexts).
  */
 
 import { useCallback } from 'react';
@@ -22,12 +24,15 @@ import { useAuth } from '@/hooks/useAuth';
 
 /**
  * Minimum cosine similarity score to include a chunk (0–1).
- * text-embedding-3-small runs "hot" — even unrelated prose commonly scores
- * 0.25-0.35, so a 0.30 floor let loosely-related chunks from a completely
- * different protocol document (e.g. patella tendon rehab bleeding into a
- * hamstring tendinopathy answer) through as if they were relevant context.
+ * mistral-embed scores run high overall (unrelated text of the same language often lands well
+ * above 0.5), so a fixed floor alone doesn't separate "relevant" from "same topic area". Two
+ * filters: an absolute floor, and only chunks close to the best match (RELATIVE_WINDOW) — so a
+ * clearly matching protocol doesn't get loosely related chunks from other documents mixed in
+ * (e.g. patella tendon rehab bleeding into a hamstring tendinopathy answer).
+ * Tuned by looking at the "[useRAGRetrieval] similarities" debug log on real questions.
  */
-const MATCH_THRESHOLD = 0.45;
+const MATCH_THRESHOLD = 0.6;
+const RELATIVE_WINDOW = 0.12;
 
 /** Maximum number of chunks to inject per query. */
 const MATCH_COUNT = 15;
@@ -78,8 +83,11 @@ export function useRAGRetrieval() {
           return '';
         }
 
-        const chunks = (data as ChunkRow[] | null) ?? [];
-        if (chunks.length === 0) return '';
+        const matches = (data as ChunkRow[] | null) ?? [];
+        if (matches.length === 0) return '';
+        const best = Math.max(...matches.map(c => c.similarity));
+        const chunks = matches.filter(c => c.similarity >= best - RELATIVE_WINDOW);
+        console.debug('[useRAGRetrieval] similarities', matches.map(c => `${c.document_name} ${c.similarity.toFixed(3)}`), `kept ${chunks.length}`);
 
         // 3. Format chunks into an injectable string block. The "=== SOURCE DOCUMENT"
         // header is deliberately loud and repeated per chunk (even for consecutive
