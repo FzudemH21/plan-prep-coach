@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, BookOpen, Check, GripVertical, Trash2, MessageCircle, Trophy, Calendar, ClipboardCheck } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, BookOpen, Check, GripVertical, Trash2, MessageCircle, Trophy, Calendar, ClipboardCheck, Loader2 } from 'lucide-react';
 import { CoachAthleteProgressTab } from '@/components/coach-mobile/CoachAthleteProgressTab';
 import { CoachAthleteSettingsTab } from '@/components/coach-mobile/CoachAthleteSettingsTab';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
@@ -412,7 +412,7 @@ export default function CoachMobileAthleteProfilePage() {
   const athlete = athletes.find(a => a.id === athleteId);
   const connection = connections.find(c => c.athleteLocalId === athleteId);
   const { schedule, setSchedule, loading: schedLoading } = useAthleteSchedule(connection?.id ?? null);
-  const { entries: sessionLibraryEntries } = useSessionLibrary();
+  const { entries: sessionLibraryEntries, isLoading: sessionLibraryLoading } = useSessionLibrary();
   const { toast } = useToast();
 
   // ── Session logs for the visible week — keyed by "date|sessionId" ─────────
@@ -1814,7 +1814,8 @@ export default function CoachMobileAthleteProfilePage() {
             <button
               onClick={() => {
                 setDayActionsMenuDate(null);
-                if (sessionLibraryEntries.length > 0) {
+                // While the library is still loading, offer the choice (the list shows a spinner)
+                if (sessionLibraryEntries.length > 0 || sessionLibraryLoading) {
                   setSessionSourcePickerOpen(true);
                 } else {
                   setNewSessionDialogOpen(true);
@@ -2071,7 +2072,11 @@ export default function CoachMobileAthleteProfilePage() {
           </SheetHeader>
           <div className="overflow-y-auto flex-1 px-4">
             <div className="space-y-2 pb-4">
-              {sessionLibraryEntries.length === 0 ? (
+              {sessionLibraryLoading && sessionLibraryEntries.length === 0 ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : sessionLibraryEntries.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
                   {t('coachMobile.athleteProfile.noLibrarySessions')}
                 </p>

@@ -121,11 +121,12 @@ export async function propagateExerciseRename(exerciseId: string, newName: strin
   try { renameInLocalStorage(exerciseId, newName); } catch (err) { console.warn('[exerciseRename] local:', err); }
   window.dispatchEvent(new CustomEvent<ExerciseRenamedDetail>(EXERCISE_RENAMED_EVENT, { detail: { exerciseId, newName } }));
 
-  // 2. Saved programs and programming templates (all of them, assigned or not)
+  // 2. Saved programs, programming templates (all of them, assigned or not) and the session library
   const rename = <T,>(current: T) => renameExerciseInValue(current, exerciseId, newName);
   await Promise.all([
     updateSupabaseStoreData('training_programs', 'trainingPrograms', rename).catch(err => console.warn('[exerciseRename] programs:', err)),
     updateSupabaseStoreData('programming_templates', 'programTemplates', rename).catch(err => console.warn('[exerciseRename] templates:', err)),
+    updateSupabaseStoreData('session_library', 'ppc-session-library', rename).catch(err => console.warn('[exerciseRename] session library:', err)),
   ]);
 
   // 3. Athlete schedules of assigned programs

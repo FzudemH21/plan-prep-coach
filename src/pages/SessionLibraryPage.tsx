@@ -12,6 +12,7 @@ import {
   MoreHorizontal,
   Settings2,
   X,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -212,6 +213,7 @@ export default function SessionLibraryPage() {
     updateEntry,
     deleteEntry,
     duplicateEntry,
+    isLoading: libraryLoading,
   } = useSessionLibrary();
   const { data: toolboxData } = useToolboxData();
 
@@ -439,7 +441,11 @@ export default function SessionLibraryPage() {
       </div>
 
       {/* Table — always shown when columns exist; blank state only when both empty */}
-      {entries.length === 0 && columns.length === 0 ? (
+      {libraryLoading && entries.length === 0 ? (
+        <div className="flex justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : entries.length === 0 && columns.length === 0 ? (
         <div className="text-center py-16 space-y-3">
           <BookmarkPlus className="h-10 w-10 text-muted-foreground mx-auto" />
           <h3 className="text-lg font-semibold">{t('sessionLibrary.empty.title')}</h3>

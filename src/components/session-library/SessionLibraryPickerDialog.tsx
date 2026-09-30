@@ -3,7 +3,7 @@
  * the athlete calendar. Searchable by session name, section and exercise names.
  */
 import { useMemo, useState } from 'react';
-import { Library, Search } from 'lucide-react';
+import { Library, Loader2, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useSessionLibrary } from '@/hooks/useSessionLibrary';
@@ -18,7 +18,7 @@ interface SessionLibraryPickerDialogProps {
 }
 
 export function SessionLibraryPickerDialog({ open, onOpenChange, dayLabel, onPick }: SessionLibraryPickerDialogProps) {
-  const { entries } = useSessionLibrary();
+  const { entries, isLoading } = useSessionLibrary();
   const [query, setQuery] = useState('');
 
   const filtered = useMemo(() => {
@@ -60,7 +60,11 @@ export function SessionLibraryPickerDialog({ open, onOpenChange, dayLabel, onPic
         )}
 
         <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 space-y-1.5">
-          {entries.length === 0 ? (
+          {isLoading && entries.length === 0 ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : entries.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
               Your session library is empty. Save a session to the library from the session view first.
             </p>
