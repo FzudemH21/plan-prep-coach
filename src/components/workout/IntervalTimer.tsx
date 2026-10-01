@@ -3,8 +3,10 @@
  * coach-mobile logging.
  *
  * IntervalLauncher sits above the set table: "Start intervals" from the next set that isn't done,
- * with each set's values (what the athlete typed, else the plan). IntervalTimer runs full screen
- * through all remaining sets: Get ready → WORK → REST → … → WORK (last rep) → REST BETWEEN SETS →
+ * with each set's values (what the athlete typed, else the plan). IntervalTimer first shows an
+ * overview of the whole run (sets, work / rest with intensities, rest between sets, total time);
+ * after "Start" it runs through on its own — nothing to tap until the end — through all remaining
+ * sets: Get ready → WORK → REST → … → WORK (last rep) → REST BETWEEN SETS →
  * next set … → done. The rest between sets is the parameter flagged as rest (with its intensity
  * role); without one (or without a time value) the timer covers one set per start.
  *
@@ -78,7 +80,7 @@ export interface IntervalSetResult {
   setRestSeconds: number | null;
 }
 
-type Phase = 'ready' | 'work' | 'rest' | 'setRest' | 'done';
+type Phase = 'overview' | 'ready' | 'work' | 'rest' | 'setRest' | 'done';
 
 interface IntervalTimerProps {
   exerciseName: string;
@@ -89,7 +91,7 @@ interface IntervalTimerProps {
 }
 
 function IntervalTimer({ exerciseName, sets, totalSets, onFinish }: IntervalTimerProps) {
-  const [phase, setPhase] = useState<Phase>('ready');
+  const [phase, setPhase] = useState<Phase>('overview');
   const [setPos, setSetPos] = useState(0);
   const [rep, setRep] = useState(1);
   const [remainingMs, setRemainingMs] = useState(READY_SECONDS * 1000);
@@ -174,7 +176,7 @@ function IntervalTimer({ exerciseName, sets, totalSets, onFinish }: IntervalTime
 
   // Clock
   useEffect(() => {
-    if (paused || phase === 'done') return;
+    if (paused || phase === 'done' || phase === 'overview') return;
     const id = setInterval(() => {
       const left = endsAt.current - Date.now();
       setRemainingMs(Math.max(0, left));
@@ -198,6 +200,18 @@ function IntervalTimer({ exerciseName, sets, totalSets, onFinish }: IntervalTime
   }, []);
 
   useEffect(() => () => { void audio.current?.close().catch(() => {}); }, []);
+
+  const begin = () => {
+    beep(440, 120);
+    endsAt.current = Date.now() + READY_SECONDS * 1000;
+    phaseStartedAt.current = Date.now();
+    setRemainingMs(READY_SECONDS * 1000);
+    setPhase('ready');
+  };
+
+  // Whole run: reps × work + rests between reps + rests between sets
+  const totalSeconds = sets.reduce((sum, p) =>
+    sum + p.reps * p.workSeconds + (p.reps - 1) * p.restSeconds + (p.setRestSeconds ?? 0), 0);
 
   const togglePause = () => {
     if (paused) {
@@ -261,7 +275,7 @@ function IntervalTimer({ exerciseName, sets, totalSets, onFinish }: IntervalTime
         <div className="shrink-0 flex items-center justify-between px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-2">
           <div className="min-w-0">
             <p className="text-sm opacity-80 truncate">{exerciseName}</p>
-            <p className="text-xs opacity-70">{setLabel}</p>
+            {phase !== 'overview' && <p className="text-xs opacity-70">{setLabel}</p>}
           </div>
           <button
             type="button"
@@ -276,7 +290,43 @@ function IntervalTimer({ exerciseName, sets, totalSets, onFinish }: IntervalTime
 
         {/* Main */}
         <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">
-          {phase === 'done' ? (
+          {phase === 'overview' ? (
+            <div className="w-full max-w-sm text-left space-y-3 overflow-y-auto max-h-full py-2">
+              <div>
+                <p className="text-2xl font-bold">{sets.length > 1 ? `Sets ${sets[0].setIdx + 1}–${sets[sets.length - 1].setIdx + 1}` : `Set ${sets[0].setIdx + 1}`}</p>
+                <p className="text-sm text-muted-foreground">About {Math.max(1, Math.round(totalSeconds / 60))} min · runs through on its own once started</p>
+              </div>
+              <ol className="space-y-2">
+                {sets.map((p, i) => (
+                  <li key={p.setIdx} className="space-y-1.5">
+                    <div className="rounded-lg border p-3 space-y-1">
+                      <p className="text-sm font-semibold">Set {p.setIdx + 1} · {p.reps} {p.reps === 1 ? 'rep' : 'reps'}</p>
+                      <p className="text-sm flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-red-600 shrink-0" />
+                        Work {clock(p.workSeconds)}{p.workIntensity ? ` @ ${p.workIntensity}` : ''}
+                        {p.workTargets && p.workTargets.length > 0 ? ` · ${p.workTargets.join(' · ')}` : ''}
+                      </p>
+                      {p.reps > 1 && (
+                        <p className="text-sm flex items-center gap-2">
+                          <span className="h-2.5 w-2.5 rounded-full bg-emerald-600 shrink-0" />
+                          Rest {clock(p.restSeconds)}{p.restIntensity ? ` @ ${p.restIntensity}` : ''} between reps
+                        </p>
+                      )}
+                    </div>
+                    {p.setRestSeconds !== null && i < sets.length - 1 && (
+                      <p className="text-sm flex items-center gap-2 px-3">
+                        <span className="h-2.5 w-2.5 rounded-full bg-sky-700 shrink-0" />
+                        Rest between sets {clock(p.setRestSeconds)}{p.setRestIntensity ? ` @ ${p.setRestIntensity}` : ''}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ol>
+              <p className="text-xs text-muted-foreground">
+                A beep and vibration at every switch. You can pause, skip or change a phase by −5 / +5 / +15 s at any time.
+              </p>
+            </div>
+          ) : phase === 'done' ? (
             <>
               <p className="text-4xl font-bold">{done.length > 1 ? `${done.length} sets done` : 'Set done'}</p>
               <div className="text-base opacity-85 space-y-0.5">
@@ -326,7 +376,15 @@ function IntervalTimer({ exerciseName, sets, totalSets, onFinish }: IntervalTime
 
         {/* Controls */}
         <div className="shrink-0 px-6 pt-2 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-          {phase === 'done' ? (
+          {phase === 'overview' ? (
+            <button
+              type="button"
+              onClick={begin}
+              className="w-full h-14 rounded-xl bg-primary text-primary-foreground text-lg font-semibold flex items-center justify-center gap-2 active:scale-[0.98]"
+            >
+              <Play className="h-5 w-5" /> Start
+            </button>
+          ) : phase === 'done' ? (
             <button
               type="button"
               onClick={() => onFinish(done)}
