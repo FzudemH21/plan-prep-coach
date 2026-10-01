@@ -1,11 +1,13 @@
 /**
  * IntervalModeSettings — method editor section "Interval timer in the athlete app" (e.g. HIIT).
  *
- * The coach says which parameter is the work duration, the rest between reps, the number of reps
- * and (optionally) the work / rest intensity. The choice is stored as a role on each parameter
- * (ToolboxEntry.intervalRole), so it travels with the method (copy, rename) and reaches the athlete
- * app through the schedule sync. Values always come from the plan (periodization table / session).
- * The rest between sets stays the parameter flagged as rest.
+ * The coach says which parameter is which (labelled like the usual interval parameters): Work
+ * Duration / Intensity, Inter-Rep Rest Duration / Intensity, Inter-Set Rest Duration / Intensity
+ * and Reps. The choices are stored as a role on each parameter (ToolboxEntry.intervalRole), so they
+ * travel with the method (copy, rename) and reach the athlete app through the schedule sync.
+ * Inter-Set Rest Duration is the parameter flagged as rest (isRestParameter) — choosing it here
+ * sets that flag, so it stays one setting (also used by the normal rest timer between sets).
+ * Values always come from the plan (periodization table / session).
  */
 import { Timer } from 'lucide-react';
 import { Label } from '@/components/ui/label';
@@ -14,13 +16,18 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { IntervalRole, ToolboxEntry } from '@/types/toolbox';
 
-const ROLES: Array<{ role: IntervalRole; label: string; hint: string; required: boolean }> = [
-  { role: 'work', label: 'Work duration', hint: 'e.g. Work Duration', required: true },
-  { role: 'rest', label: 'Rest between reps', hint: 'e.g. Inter-Rep Rest Duration', required: true },
-  { role: 'reps', label: 'Repetitions', hint: 'e.g. Reps', required: true },
-  { role: 'workIntensity', label: 'Work intensity', hint: 'optional, e.g. Work Intensity', required: false },
-  { role: 'restIntensity', label: 'Rest intensity', hint: 'optional, e.g. Inter-Rep Rest Intensity', required: false },
-  { role: 'setRestIntensity', label: 'Rest intensity between sets', hint: 'optional, e.g. Inter-Set Rest Intensity', required: false },
+/** 'setRest' is not a role but the method's rest flag */
+type FieldKey = IntervalRole | 'setRest';
+
+// In pairs: duration | intensity per phase, then the reps
+const FIELDS: Array<{ key: FieldKey; label: string; required: boolean }> = [
+  { key: 'work', label: 'Work Duration', required: true },
+  { key: 'workIntensity', label: 'Work Intensity', required: false },
+  { key: 'rest', label: 'Inter-Rep Rest Duration', required: true },
+  { key: 'restIntensity', label: 'Inter-Rep Rest Intensity', required: false },
+  { key: 'setRest', label: 'Inter-Set Rest Duration', required: false },
+  { key: 'setRestIntensity', label: 'Inter-Set Rest Intensity', required: false },
+  { key: 'reps', label: 'Reps', required: true },
 ];
 
 const NONE = '__none__';
@@ -34,8 +41,8 @@ function suggest(params: ToolboxEntry[], role: IntervalRole): string | undefined
     case 'reps': return name(/^reps?\b|repetitions/i);
     case 'workIntensity': return name(/work.*intensity|^intensity/i);
     case 'restIntensity': return name(/(inter.?rep|between reps).*intensity|^(rest|recovery).*intensity/i);
-    case 'workTarget': return undefined;
     case 'setRestIntensity': return name(/(inter.?set|between sets).*intensity/i);
+    case 'workTarget': return undefined;
   }
 }
 
@@ -46,29 +53,44 @@ interface IntervalModeSettingsProps {
 
 export function IntervalModeSettings({ parameters, onChange }: IntervalModeSettingsProps) {
   const enabled = parameters.some(p => p.intervalRole);
-  const idFor = (role: IntervalRole) => parameters.find(p => p.intervalRole === role)?.id;
-  const missing = ROLES.filter(r => r.required && !idFor(r.role));
-  // Work and rest run as a countdown — they need a time unit (s / min); e.g. 400 m can't be timed
+  const restFlagged = parameters.find(p => p.isRestParameter);
+  const idFor = (key: FieldKey) => (key === 'setRest'
+    ? restFlagged?.id
+    : parameters.find(p => p.intervalRole === key)?.id);
+  const missing = FIELDS.filter(f => f.required && !idFor(f.key));
+  // Durations run as a countdown — they need a time unit (s / min); e.g. 400 m can't be timed
   const TIME = new Set(['s', 'sec', 'min', 'h']);
-  const notTime = (['work', 'rest'] as const)
-    .map(role => parameters.find(p => p.intervalRole === role))
+  const durationParams = [
+    parameters.find(p => p.intervalRole === 'work'),
+    parameters.find(p => p.intervalRole === 'rest'),
+    restFlagged,
+  ];
+  const notTime = durationParams
     .filter((p): p is ToolboxEntry => !!p && p.parameterType === 'quantitative' && p.options.length > 0
       && !p.options.some(u => TIME.has(u.trim().toLowerCase())))
     .map(p => p.parameterName);
-  // Duration / count parameters only — qualitative ones (e.g. Mode: Rowing) can't drive a timer
   const options = parameters.filter(p => !p.isFrequencyParameter && !p.isCalculated);
 
   // "Show during work": orientation only (distance, pace, stroke rate …) — any parameter without
-  // another role, several at once
-  const targetOptions = options.filter(p => !p.intervalRole || p.intervalRole === 'workTarget');
+  // another job: no role, not the rest between sets, not the set count
+  const targetOptions = options.filter(p =>
+    (!p.intervalRole || p.intervalRole === 'workTarget') && !p.isRestParameter && !p.isSetParameter);
   const toggleTarget = (entryId: string, on: boolean) => {
     onChange(parameters.map(p => (p.id === entryId ? { ...p, intervalRole: on ? 'workTarget' : undefined } : p)));
   };
 
-  const setRole = (role: IntervalRole, entryId: string | undefined) => {
+  const setField = (key: FieldKey, entryId: string | undefined) => {
+    if (key === 'setRest') {
+      // The method's rest flag — exactly one parameter (or none)
+      onChange(parameters.map(p => {
+        if (p.id === entryId) return { ...p, isRestParameter: true, intervalRole: undefined };
+        return p.isRestParameter ? { ...p, isRestParameter: false } : p;
+      }));
+      return;
+    }
     onChange(parameters.map(p => {
-      if (p.id === entryId) return { ...p, intervalRole: role };
-      if (p.intervalRole === role) return { ...p, intervalRole: undefined };
+      if (p.id === entryId) return { ...p, intervalRole: key };
+      if (p.intervalRole === key) return { ...p, intervalRole: undefined };
       return p;
     }));
   };
@@ -80,12 +102,25 @@ export function IntervalModeSettings({ parameters, onChange }: IntervalModeSetti
     }
     // Pre-fill obvious matches by name — shown in the selects for the coach to check
     const assigned = new Map<string, IntervalRole>();
-    for (const { role } of ROLES) {
-      const id = suggest(options, role);
-      if (id && !assigned.has(id)) assigned.set(id, role);
+    for (const { key } of FIELDS) {
+      if (key === 'setRest') continue;
+      const id = suggest(options.filter(p => !p.isRestParameter), key);
+      if (id && !assigned.has(id)) assigned.set(id, key);
     }
-    if (assigned.size === 0 && options[0]) assigned.set(options[0].id, 'work');
+    if (assigned.size === 0) {
+      const first = options.find(p => !p.isRestParameter);
+      if (first) assigned.set(first.id, 'work');
+    }
     onChange(parameters.map(p => (assigned.has(p.id) ? { ...p, intervalRole: assigned.get(p.id) } : p)));
+  };
+
+  /** What else a parameter is used for — shown next to it in the selects */
+  const usedAs = (p: ToolboxEntry, key: FieldKey): string => {
+    if (key !== 'setRest' && p.isRestParameter) return ' (Inter-Set Rest Duration)';
+    if (p.intervalRole && p.intervalRole !== key && p.intervalRole !== 'workTarget') {
+      return ` (${FIELDS.find(f => f.key === p.intervalRole)?.label ?? 'in use'})`;
+    }
+    return '';
   };
 
   return (
@@ -94,42 +129,40 @@ export function IntervalModeSettings({ parameters, onChange }: IntervalModeSetti
         <div className="space-y-0.5">
           <Label className="text-sm flex items-center gap-1.5"><Timer className="h-3.5 w-3.5" />Interval timer in the athlete app</Label>
           <p className="text-xs text-muted-foreground">
-            For interval training (e.g. HIIT): the athlete starts a timer per set — work, rest between reps, repeat.
-            The values come from the plan; the rest between sets stays the parameter marked as rest.
+            For interval training (e.g. HIIT): one start runs through all sets — work, rest between reps, rest between sets.
+            The values come from the plan.
           </p>
         </div>
         <Switch checked={enabled} onCheckedChange={toggle} />
       </div>
       {enabled && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
-          {ROLES.map(({ role, label, hint, required }) => (
-            <div key={role} className="space-y-1">
+          {FIELDS.map(({ key, label, required }) => (
+            <div key={key} className="space-y-1">
               <Label className="text-xs">
                 {label}{required && <span className="text-destructive ml-0.5">*</span>}
               </Label>
-              <Select value={idFor(role) ?? NONE} onValueChange={v => setRole(role, v === NONE ? undefined : v)}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={hint} /></SelectTrigger>
+              <Select value={idFor(key) ?? NONE} onValueChange={v => setField(key, v === NONE ? undefined : v)}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={required ? 'Choose…' : 'None'} /></SelectTrigger>
                 <SelectContent className="z-[300]">
                   <SelectItem value={NONE} className="text-sm text-muted-foreground">{required ? 'Choose…' : 'None'}</SelectItem>
                   {options.map(p => (
                     <SelectItem key={p.id} value={p.id} className="text-sm">
-                      {p.parameterName}
-                      {p.intervalRole && p.intervalRole !== role ? ' (in use)' : ''}
+                      {p.parameterName}{usedAs(p, key)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {key === 'setRest' && (
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  {restFlagged
+                    ? 'The method\'s rest parameter — also the normal rest timer between sets.'
+                    : 'None: the timer runs one set per start.'}
+                </p>
+              )}
             </div>
           ))}
         </div>
-      )}
-      {enabled && (
-        <p className="text-xs text-muted-foreground">
-          Rest between sets:{' '}
-          {parameters.find(p => p.isRestParameter)
-            ? <><span className="font-medium text-foreground">{parameters.find(p => p.isRestParameter)!.parameterName}</span> (the parameter marked as rest) — the timer runs through all sets with it.</>
-            : <span className="text-amber-700">no parameter is marked as rest — the timer runs one set per start.</span>}
-        </p>
       )}
       {enabled && targetOptions.length > 0 && (
         <div className="space-y-1.5">
@@ -155,7 +188,7 @@ export function IntervalModeSettings({ parameters, onChange }: IntervalModeSetti
       )}
       {enabled && missing.length > 0 && (
         <p className="text-xs text-amber-700">
-          Choose {missing.map(m => m.label.toLowerCase()).join(', ')} — until then the athlete app shows no timer.
+          Choose {missing.map(m => m.label).join(', ')} — until then the athlete app shows no timer.
         </p>
       )}
     </div>
