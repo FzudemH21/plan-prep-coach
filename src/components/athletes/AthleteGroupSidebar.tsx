@@ -40,6 +40,7 @@ import {
   UserPlus,
   Users,
   Loader2,
+  LayoutGrid,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Athlete, AthleteGroup, getAthleteDisplayName } from '@/types/athlete';
@@ -241,6 +242,7 @@ export function AthleteGroupSidebar({
   onUnarchiveAthlete,
   selectedGroupId,
   onSelectGroup,
+  onShowSquad,
 }: AthleteGroupSidebarProps) {
   const [sidebarTab, setSidebarTab] = useState<'athletes' | 'groups'>('athletes');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -337,6 +339,22 @@ export function AthleteGroupSidebar({
       {/* ── Content ── */}
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-1">
+
+          {/* Back to the overview of all athletes (squad dashboard) — from any athlete or group */}
+          {onShowSquad && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'w-full justify-start gap-2 h-8 font-medium',
+                !selectedAthleteId && !selectedGroupId && 'bg-accent',
+              )}
+              onClick={onShowSquad}
+            >
+              <LayoutGrid className="h-3.5 w-3.5 shrink-0" />
+              All athletes
+            </Button>
+          )}
 
           {/* ── ATHLETES TAB ── */}
           {sidebarTab === 'athletes' && (
