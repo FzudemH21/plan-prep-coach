@@ -1072,8 +1072,10 @@ export default function AthleteSessionPage() {
   }, [phase, restSecondsLeft]);
 
   function startRest(seconds: number, next: () => void) {
+    // No rest planned (e.g. after the interval timer, which already ran every planned rest)
+    if (seconds <= 0) { nextAfterRestRef.current = null; next(); return; }
     nextAfterRestRef.current = next;
-    setRestSecondsLeft(Math.max(1, seconds));
+    setRestSecondsLeft(seconds);
     setPhase('rest');
   }
 
@@ -1198,12 +1200,12 @@ export default function AthleteSessionPage() {
     added.forEach(i => autoFillPlanned(ex, i));
     const newCS = { ...completedSets, [exerciseId]: [...doneArr, ...added] };
     setCompletedSets(newCS);
-    const restSecs = getRestSeconds(ex);
+    // The interval timer ran every planned rest (between reps and sets); after its last set no rest
+    // is planned — on to the next exercise / section without the app's rest timer
     if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
-      continueAfterSection(newCS, restSecs);
+      continueAfterSection(newCS, 0);
     } else {
-      if (!isSupersetRoundComplete(exerciseId, Math.max(...added), newCS, currentSection!)) { setPhase('active'); return; }
-      startRest(restSecs, () => setPhase('active'));
+      setPhase('active');
     }
   }
 
@@ -1243,7 +1245,8 @@ export default function AthleteSessionPage() {
    *  skipped via the section navigation) — or finish when every section is done */
   function continueAfterSection(cs: Record<string, number[]>, restSecs: number) {
     const next = nextUnfinishedSection(sectionCompleteFlags(cs), sectionIdx);
-    if (next === null) startRest(restSecs, () => { setPhase('done'); setBorgSheetOpen(true); });
+    // After the last set of the workout there is nothing to rest for — straight to the finish
+    if (next === null) { setPhase('done'); setBorgSheetOpen(true); }
     else startRest(restSecs, () => { setSectionIdx(next); setPhase('sectionIntro'); });
   }
 
