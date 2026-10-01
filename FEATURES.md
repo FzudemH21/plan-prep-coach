@@ -117,7 +117,7 @@ These features extend the existing Athlete Profile page in the coach web app.
 | Masterplanner view – Athlete Calendar | Day 1, Day 2… per weekday |
 | Tests & Events in Athlete Calendar + sync with Wizard | |
 | Document upload + sharing with athletes | Upload, folders, drag & drop, Supabase Storage, inline viewer, AI analysis, per-document per-athlete sharing |
-| Programming Templates | Templates per method, Load Template dialog with preview, save as new template |
+| Programming Templates | Templates per method, Load Template dialog with preview, save as new template. **Save as template from the periodization table (2026-10-01):** every method row in Phase 2 Step 4 has a "Save as template" button (always visible) — name + scope (whole plan or one mesocycle) → the method's current values become a new template (same logic as the AI's `save_as_template`). Before, only an edited copy of an existing template could be saved, and the template button only appeared once the method already had a template. |
 | Column reordering in databases | Drag & drop |
 | Circuit Builder | Library creation & editing, ↻ icon, drag & drop into sessions, editable in session card and exercise distribution, save & add to library, duplicate-name conflict resolution |
 | Outcome Annotation for completed plans | PlanReviewDialog, stored per assignment, feeds Analysis tab |

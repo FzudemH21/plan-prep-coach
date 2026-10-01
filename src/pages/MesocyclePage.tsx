@@ -45,7 +45,7 @@ import { CrossMesocycleCopyDialog } from "@/components/ui/cross-mesocycle-copy-d
 import { CrossMesocycleMicrocycleCopyDialog } from "@/components/ui/cross-mesocycle-microcycle-copy-dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle, Trophy, LayoutTemplate } from "lucide-react";
+import { Target, Calendar as CalendarIcon, Bot, GripVertical, CalendarDays, Info, ChevronDown, Trash2, Copy, AlertCircle, Trophy, LayoutTemplate, BookmarkPlus } from "lucide-react";
 import { ResourcesButton } from "@/components/programs/ResourcesButton";
 import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
 import { AutoSaveIndicator } from "@/components/programs/AutoSaveIndicator";
@@ -108,6 +108,8 @@ export default function MesocyclePage() {
   const [isClearParametersDialogOpen, setIsClearParametersDialogOpen] = useState(false);
   const [isClearAllExercisesDialogOpen, setIsClearAllExercisesDialogOpen] = useState(false);
   const [loadTemplateDialog, setLoadTemplateDialog] = useState<{ open: boolean; methodName: string; lookupName: string }>({ open: false, methodName: '', lookupName: '' });
+  // "Save as template" from the periodization table: the method's current values → a new template
+  const [saveTemplateDialog, setSaveTemplateDialog] = useState<{ open: boolean; methodName: string; name: string; scope: string }>({ open: false, methodName: '', name: '', scope: '__all__' });
   
   // Daily intensity planning state — lifted to shared WizardDataContext
   const { macrocycleData, setMacrocycleData, trainingDays, setTrainingDays, dailyIntensityData, setDailyIntensityData } = useWizardData();
@@ -3623,6 +3625,21 @@ export default function MesocyclePage() {
                                                        <Columns className="h-4 w-4" />
                                                      </Button>
                                                    )}
+                                                   {/* Save the method's current periodization as a programming template */}
+                                                   <Button
+                                                     variant="ghost"
+                                                     size="sm"
+                                                     className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground hover:bg-muted"
+                                                     onClick={() => setSaveTemplateDialog({
+                                                       open: true,
+                                                       methodName: baseMethodName,
+                                                       name: macrocycleData?.planName ? `${subCategory} – ${macrocycleData.planName}` : subCategory,
+                                                       scope: '__all__',
+                                                     })}
+                                                     title="Save as template"
+                                                   >
+                                                     <BookmarkPlus className="h-4 w-4" />
+                                                   </Button>
                                                    {/* Load Template button - visible for base and category-split rows */}
                                                    {methodTemplates.length > 0 && (
                                                      <Button
@@ -5682,6 +5699,62 @@ export default function MesocyclePage() {
             />
             <DialogFooter>
               <Button variant="outline" onClick={() => setNotesDialogOpen(false)}>Done</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Save as Template Dialog — the method's current values from the periodization table */}
+        <Dialog open={saveTemplateDialog.open} onOpenChange={(open) => setSaveTemplateDialog(prev => ({ ...prev, open }))}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><BookmarkPlus className="h-4 w-4" />Save as template</DialogTitle>
+              <DialogDescription>
+                Saves the current values of <span className="font-medium text-foreground">{saveTemplateDialog.methodName}</span> from the periodization table as a programming template for this method. You can load it in other plans with "Load template".
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-1">
+              <div className="space-y-1">
+                <Label className="text-xs">Template name</Label>
+                <Input
+                  autoFocus
+                  value={saveTemplateDialog.name}
+                  onChange={e => setSaveTemplateDialog(prev => ({ ...prev, name: e.target.value }))}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && saveTemplateDialog.name.trim()) {
+                      handleAISaveAsTemplate(saveTemplateDialog.methodName, saveTemplateDialog.name.trim(), saveTemplateDialog.scope === '__all__' ? undefined : saveTemplateDialog.scope);
+                      setSaveTemplateDialog(prev => ({ ...prev, open: false }));
+                    }
+                  }}
+                />
+              </div>
+              {mesocycles.length > 1 && (
+                <div className="space-y-1">
+                  <Label className="text-xs">Microcycles</Label>
+                  <Select value={saveTemplateDialog.scope} onValueChange={v => setSaveTemplateDialog(prev => ({ ...prev, scope: v }))}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">Whole plan ({totalPlanMicrocycles} microcycles)</SelectItem>
+                      {mesocycles.map((m, i) => (
+                        <SelectItem key={m.id} value={m.name || `Mesocycle ${i + 1}`}>
+                          {m.name || `Mesocycle ${i + 1}`} ({(m.microcycles || []).length} microcycles)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSaveTemplateDialog(prev => ({ ...prev, open: false }))}>Cancel</Button>
+              <Button
+                disabled={!saveTemplateDialog.name.trim()}
+                onClick={() => {
+                  handleAISaveAsTemplate(saveTemplateDialog.methodName, saveTemplateDialog.name.trim(), saveTemplateDialog.scope === '__all__' ? undefined : saveTemplateDialog.scope);
+                  setSaveTemplateDialog(prev => ({ ...prev, open: false }));
+                }}
+              >
+                Save template
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
