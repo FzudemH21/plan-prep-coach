@@ -378,18 +378,26 @@ export async function syncAthleteSchedule(
   // Set-count parameter per method (toolbox isSetParameter, not a rest parameter) — for methods
   // whose set count isn't literally called "Sets"
   const toolboxSetParamMap = new Map<string, string>();
+  // Methods with a parameter flagged "rest" in the Training Toolbox — only those count then (the
+  // name is no evidence: "Inter-Rep Rest Intensity" is not the rest between sets)
+  const methodsWithRestFlag = new Set(
+    (toolboxEntries ?? []).filter(e => e.isRestParameter).map(e => (e.subCategory ? `${e.category} - ${e.subCategory}` : e.category)),
+  );
   if (toolboxEntries) {
     const grouped = new Map<string, string[]>();
     for (const entry of toolboxEntries) {
       const key = entry.subCategory
         ? `${entry.category} - ${entry.subCategory}`
         : entry.category;
-      // Track rest parameter name for this method key.
-      // Use the explicit flag first; fall back to name heuristic for legacy toolbox entries
-      // where isRestParameter was not set (e.g. tagged only as isSetParameter before the fix).
+      // Rest parameter (drives the rest timer between sets) = the toolbox flag. Only for legacy
+      // methods without any flagged parameter: a set parameter named like rest (tagged only as
+      // isSetParameter before the flag existed). Before, every "…Rest…" name counted and the last
+      // one won — e.g. "Inter-Set Rest Intensity" instead of "Inter-Set Rest Duration".
       const REST_NAME = /rest|pause|recovery/i;
-      if (entry.isRestParameter || REST_NAME.test(entry.parameterName)) {
-        toolboxRestMap.set(key, entry.parameterName);
+      const isRest = entry.isRestParameter
+        || (!methodsWithRestFlag.has(key) && !!entry.isSetParameter && REST_NAME.test(entry.parameterName));
+      if (isRest) {
+        if (!toolboxRestMap.has(key)) toolboxRestMap.set(key, entry.parameterName);
       } else if (entry.isSetParameter && !toolboxSetParamMap.has(key)) {
         toolboxSetParamMap.set(key, entry.parameterName);
       }
@@ -399,7 +407,7 @@ export async function syncAthleteSchedule(
       // Frequency and true set-count params are structural so always excluded.
       // Rest params are excluded from athlete column display inside getParamColumns instead.
       if (!entry.showInGridByDefault || entry.isFrequencyParameter) continue;
-      if (entry.isSetParameter && !entry.isRestParameter && !REST_NAME.test(entry.parameterName)) continue;
+      if (entry.isSetParameter && !isRest) continue;
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)!.push(entry.parameterName);
     }
@@ -568,12 +576,12 @@ export async function syncAthleteSchedule(
       const methodEntries = (toolboxEntries ?? []).filter(te =>
         (te.subCategory ? `${te.category} - ${te.subCategory}` : te.category) === baseMethodKey);
       const entryFor = (name: string) => methodEntries.find(te => te.parameterName === name);
-      const REST_NAME = /rest|pause|recovery/i;
+      const restName = toolboxRestMap.get(baseMethodKey);
       const isStructural = (name: string) => {
         const te = entryFor(name);
         if (te?.isFrequencyParameter || /^frequency/i.test(name)) return true;
         if (/^sets?$/i.test(name)) return true;
-        if (te?.isSetParameter && !te.isRestParameter && !REST_NAME.test(name)) return true;
+        if (te?.isSetParameter && name !== restName) return true;
         return false;
       };
       // Also parameters without a planned value (e.g. Weight when the intensity is prescribed via

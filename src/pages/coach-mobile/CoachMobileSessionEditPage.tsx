@@ -75,13 +75,14 @@ function getSetCount(ex: ExerciseSummary): number {
  * the user fills in the first set of one param.
  */
 function getParamColumns(ex: ExerciseSummary): string[] {
-  const REST_RE = /rest|pause|recovery/i;
+  // Only the rest parameter flagged in the Training Toolbox (restParamName) is left out — not
+  // everything named "…rest…" (e.g. rest between reps in intervals is a normal column)
 
   // visibleParams are the columns the coach chose (per exercise, synced from the session sheet) —
   // show them all, also those without a planned value yet (e.g. Weight when the intensity is
   // prescribed via RiR: the athlete enters the weight while logging)
   if (ex.visibleParams && ex.visibleParams.length > 0) {
-    const candidates = ex.visibleParams.filter(p => p !== ex.restParamName && !REST_RE.test(p));
+    const candidates = ex.visibleParams.filter(p => p !== ex.restParamName);
     if (candidates.length > 0) return candidates;
   }
 
@@ -93,7 +94,7 @@ function getParamColumns(ex: ExerciseSummary): string[] {
       const m = key.match(/^(.+)_set\d+$/);
       if (m) bases.add(m[1]);
     }
-    const candidates = Array.from(bases).filter(p => p !== ex.restParamName && !REST_RE.test(p));
+    const candidates = Array.from(bases).filter(p => p !== ex.restParamName);
     if (candidates.length > 0) return candidates;
   }
 
@@ -121,7 +122,8 @@ function initSectionNotesMap(exercises: ExerciseSummary[]): Record<string, strin
 
 /** Collect all candidate param names an exercise could display. */
 function getCandidateParams(ex: ExerciseSummary, toolboxEntries: ToolboxEntry[]): string[] {
-  const REST_RE = /rest|pause|recovery/i;
+  // Only the rest parameter flagged in the Training Toolbox (restParamName) is left out — not
+  // everything named "…rest…" (e.g. rest between reps in intervals is a normal column)
   const params = new Set<string>();
 
   if (ex.visibleParams) {
@@ -145,7 +147,7 @@ function getCandidateParams(ex: ExerciseSummary, toolboxEntries: ToolboxEntry[])
     }
   }
   return Array.from(params).filter(
-    p => p !== ex.restParamName && !REST_RE.test(p) && !/^sets?$/i.test(p) && !/_unit$/i.test(p),
+    p => p !== ex.restParamName && !/^sets?$/i.test(p) && !/_unit$/i.test(p),
   );
 }
 

@@ -104,8 +104,10 @@ function getParamColumns(ex: ExerciseSummary): string[] {
     return ['Reps'];
   }
 
-  const REST_RE = /rest|pause|recovery/i;
-  candidates = candidates.filter(p => p !== ex.restParamName && !REST_RE.test(p));
+  // The rest parameter flagged in the Training Toolbox (restParamName) is not a log column — it
+  // drives the timer and shows above the table. Other "…rest…" parameters (e.g. rest between reps
+  // in intervals) are ordinary columns: the flag decides, not the name.
+  candidates = candidates.filter(p => p !== ex.restParamName);
 
   // The coach chose these columns — show them all, also those without a planned value (e.g. Weight
   // when the intensity is prescribed via RiR: the athlete's weight is entered while logging)
@@ -171,6 +173,8 @@ function getRestSeconds(ex: ExerciseSummary): number {
     if (secs !== null) return secs;
   }
 
+  // Only for exercises without a flagged rest parameter (older data): a key named like rest
+  if (ex.restParamName) return 90;
   const REST = /rest|pause|recovery/i;
   for (const key of Object.keys(ex.plannedParams)) {
     if (/_set\d+$/.test(key) || key.endsWith('_unit')) continue;

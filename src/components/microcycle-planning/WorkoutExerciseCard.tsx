@@ -233,7 +233,8 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
             ? String(exercise.parameters[`${name}_unit`])
             : undefined,
           isSetParameter: toolboxEntry?.isSetParameter || /^sets?$/i.test(name) || /ground contacts/i.test(name),
-          isRestParameter: toolboxEntry?.isRestParameter || /rest|pause|recovery/i.test(name),
+          // The toolbox flag decides; the name only when the toolbox doesn't know the parameter
+          isRestParameter: toolboxEntry ? !!toolboxEntry.isRestParameter : /rest|pause|recovery/i.test(name),
           isFrequencyParameter: toolboxEntry?.isFrequencyParameter || false,
           defaultValue: undefined,
           showInGridByDefault: toolboxEntry?.showInGridByDefault ?? true,
@@ -526,7 +527,7 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
                         const unitOptions = toolboxEntry?.parameterType === 'quantitative' ? toolboxEntry.options : [];
                         if (!unit && unitOptions.length > 0) unit = unitOptions[0];
                         if (param.isRestParameter) {
-                          return <TableHead key={param.name}>{`${param.name} [s]`}</TableHead>;
+                          return <TableHead key={param.name}>{`${param.name} [${unit || 's'}]`}</TableHead>;
                         }
                         // Several units in the Training Toolbox → the unit is chosen here, for this
                         // exercise (saved as its own override, like its values)

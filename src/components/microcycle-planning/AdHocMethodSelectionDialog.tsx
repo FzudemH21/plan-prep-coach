@@ -118,7 +118,8 @@ export function AdHocMethodSelectionDialog({
       type: entry.parameterType,
       options: entry.options,
       isSetParameter: entry.isSetParameter || false,
-      isRestParameter: entry.isRestParameter || /rest|pause|recovery/i.test(entry.parameterName),
+      // The toolbox flag decides, not the name
+      isRestParameter: !!entry.isRestParameter,
       isFrequencyParameter: entry.isFrequencyParameter || false,
       showInGridByDefault: entry.showInGridByDefault ?? false,
       unit: entry.parameterType === 'quantitative' && entry.options.length > 0

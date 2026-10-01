@@ -68,8 +68,9 @@ function buildParamMeta(
             : undefined,
         isSetParameter:
           toolboxEntry?.isSetParameter || /^sets?$/i.test(name) || /ground contacts/i.test(name),
+        // The toolbox flag decides; the name only when the toolbox doesn't know the parameter
         isRestParameter:
-          toolboxEntry?.isRestParameter || /rest|pause|recovery/i.test(name),
+          toolboxEntry ? !!toolboxEntry.isRestParameter : /rest|pause|recovery/i.test(name),
         isFrequencyParameter: toolboxEntry?.isFrequencyParameter || false,
         showInGridByDefault: toolboxEntry?.showInGridByDefault ?? true,
         isCalculated: toolboxEntry?.isCalculated ?? false, // mirrors WorkoutExerciseCard
