@@ -2,16 +2,19 @@
  * Interval timer for methods with interval roles (Training Toolbox), e.g. HIIT — athlete app and
  * coach-mobile logging.
  *
- * IntervalLauncher sits above the set table: "Start intervals" for the next set that isn't done,
- * with that set's values (what the athlete typed, else the plan). IntervalTimer runs full screen:
- * Get ready → WORK → REST → … → WORK (no rest after the last rep), with the rep counter, intensity,
- * a beep + vibration at every switch and short ticks in the last 3 seconds. The time is computed
- * from timestamps, so a throttled phone doesn't drift; the screen is kept awake while it runs.
+ * IntervalLauncher sits above the set table: "Start intervals" from the next set that isn't done,
+ * with each set's values (what the athlete typed, else the plan). IntervalTimer runs full screen
+ * through all remaining sets: Get ready → WORK → REST → … → WORK (last rep) → REST BETWEEN SETS →
+ * next set … → done. The rest between sets is the parameter flagged as rest (with its intensity
+ * role); without one (or without a time value) the timer covers one set per start.
+ *
  * The timer always runs on time (the stimulus is time at an intensity); parameters marked "show
- * during work" (e.g. distance, pace) are shown for orientation only. The athlete can shorten or
- * extend the running phase (−5 / +5 / +15 s); when it is done, the actual average work / rest
- * time per rep goes into the set's values if it differs from the plan, then the set is ticked off
- * (which starts the normal rest between sets).
+ * during work" (e.g. distance, pace) are shown for orientation only. Rep / set counters, intensity,
+ * a beep + vibration at every switch and ticks in the last 3 s; the time is computed from
+ * timestamps (no drift on a throttled phone) and the screen is kept awake. The athlete can shorten
+ * or extend the running phase (−5 / +5 / +15 s). Finished sets — also when stopped early — are
+ * ticked off together, with the actual average work / rest time per rep and the actual rest
+ * between sets written into the set's values where they differ from the plan.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -21,6 +24,7 @@ import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import type { ExerciseSummary } from '@/hooks/useAthleteApp';
 
 const READY_SECONDS = 5;
+const ADJUSTMENTS = [-5, 5, 15];
 
 /** Time units of the Training Toolbox (its unit list is fixed) → seconds per unit */
 const TIME_UNITS: Record<string, number> = { s: 1, sec: 1, min: 60, h: 3600 };
@@ -39,53 +43,70 @@ function toSeconds(raw: string, unit?: string): number | null {
   return Math.round(n * factor);
 }
 
+/** Seconds → the parameter's unit ("125" s, "2.1" min) */
+function fromSeconds(seconds: number, unit?: string): string {
+  const u = (unit ?? '').trim().toLowerCase();
+  if (u === 'min') return String(Math.round((seconds / 60) * 10) / 10);
+  if (u === 'h') return String(Math.round((seconds / 3600) * 100) / 100);
+  return String(seconds);
+}
+
 function clock(totalSeconds: number): string {
-  const s = Math.max(0, totalSeconds);
+  const s = Math.max(0, Math.round(totalSeconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-export interface IntervalPlan {
-  setNumber: number;
+export interface IntervalSetPlan {
+  setIdx: number;
   reps: number;
   workSeconds: number;
   restSeconds: number;
+  /** Rest after this set (null for the last set of the run) */
+  setRestSeconds: number | null;
   workIntensity?: string;
   restIntensity?: string;
+  setRestIntensity?: string;
   /** Shown during work for orientation, e.g. "400 m" */
   workTargets?: string[];
 }
 
-/** What was actually done: average seconds per rep (rest: null with a single rep) */
-export interface IntervalActuals {
+/** What was actually done in a finished set: average seconds per rep, rest after the set */
+export interface IntervalSetResult {
+  setIdx: number;
   avgWorkSeconds: number;
   avgRestSeconds: number | null;
+  setRestSeconds: number | null;
 }
 
-type Phase = 'ready' | 'work' | 'rest' | 'done';
+type Phase = 'ready' | 'work' | 'rest' | 'setRest' | 'done';
 
 interface IntervalTimerProps {
   exerciseName: string;
-  plan: IntervalPlan;
-  onComplete: (actuals: IntervalActuals) => void;
-  onCancel: () => void;
+  sets: IntervalSetPlan[];
+  totalSets: number;
+  /** Finished sets with their actual times — after the last set or when stopped early */
+  onFinish: (results: IntervalSetResult[]) => void;
 }
 
-const ADJUSTMENTS = [-5, 5, 15];
-
-function IntervalTimer({ exerciseName, plan, onComplete, onCancel }: IntervalTimerProps) {
+function IntervalTimer({ exerciseName, sets, totalSets, onFinish }: IntervalTimerProps) {
   const [phase, setPhase] = useState<Phase>('ready');
+  const [setPos, setSetPos] = useState(0);
   const [rep, setRep] = useState(1);
   const [remainingMs, setRemainingMs] = useState(READY_SECONDS * 1000);
   const [paused, setPaused] = useState(false);
   const endsAt = useRef(Date.now() + READY_SECONDS * 1000);
   const lastTick = useRef<number | null>(null);
   const audio = useRef<AudioContext | null>(null);
-  // Actual times: when the phase started, paused time in it, totals of the finished phases
+  // Actual times: start of the running phase, paused time in it, per set the finished phases
   const phaseStartedAt = useRef(Date.now());
   const pausedSince = useRef<number | null>(null);
   const pausedInPhase = useRef(0);
-  const workDoneMs = useRef(0);
-  const restDoneMs = useRef(0);
+  const workMs = useRef<number[]>(sets.map(() => 0));
+  const restMs = useRef<number[]>(sets.map(() => 0));
+  const setRestMs = useRef<Array<number | null>>(sets.map(() => null));
+  const finishedSets = useRef(0);
+
+  const current = sets[Math.min(setPos, sets.length - 1)];
 
   const beep = useCallback((freq: number, ms: number) => {
     try {
@@ -106,8 +127,9 @@ function IntervalTimer({ exerciseName, plan, onComplete, onCancel }: IntervalTim
     } catch { /* no sound — the vibration and the screen still change */ }
   }, []);
 
-  const startPhase = useCallback((next: Phase, nextRep: number) => {
+  const startPhase = useCallback((next: Phase, nextSetPos: number, nextRep: number) => {
     setPhase(next);
+    setSetPos(nextSetPos);
     setRep(nextRep);
     lastTick.current = null;
     phaseStartedAt.current = Date.now();
@@ -119,24 +141,36 @@ function IntervalTimer({ exerciseName, plan, onComplete, onCancel }: IntervalTim
       navigator.vibrate?.([200, 100, 200, 100, 400]);
       return;
     }
-    const seconds = next === 'work' ? plan.workSeconds : plan.restSeconds;
+    const plan = sets[nextSetPos];
+    const seconds = next === 'work' ? plan.workSeconds : next === 'rest' ? plan.restSeconds : (plan.setRestSeconds ?? 0);
     endsAt.current = Date.now() + seconds * 1000;
     setRemainingMs(seconds * 1000);
     beep(next === 'work' ? 880 : 520, 350);
     navigator.vibrate?.(next === 'work' ? [300] : [150, 80, 150]);
-  }, [plan.workSeconds, plan.restSeconds, beep]);
+  }, [sets, beep]);
 
   const advance = useCallback(() => {
     // Time actually spent in the finished phase (without pauses) — skipping counts as done
     const now = Date.now();
     const pausedNow = pausedSince.current !== null ? now - pausedSince.current : 0;
     const spent = Math.max(0, now - phaseStartedAt.current - pausedInPhase.current - pausedNow);
-    if (phase === 'work') workDoneMs.current += spent;
-    if (phase === 'rest') restDoneMs.current += spent;
-    if (phase === 'ready') startPhase('work', 1);
-    else if (phase === 'work') startPhase(rep >= plan.reps ? 'done' : 'rest', rep);
-    else if (phase === 'rest') startPhase('work', rep + 1);
-  }, [phase, rep, plan.reps, startPhase]);
+    if (phase === 'ready') { startPhase('work', 0, 1); return; }
+    if (phase === 'work') {
+      workMs.current[setPos] += spent;
+      if (rep < current.reps) { startPhase('rest', setPos, rep); return; }
+      // Last rep of the set
+      finishedSets.current = setPos + 1;
+      if (setPos + 1 < sets.length) {
+        if (current.setRestSeconds && current.setRestSeconds > 0) startPhase('setRest', setPos, rep);
+        else startPhase('work', setPos + 1, 1);
+      } else {
+        startPhase('done', setPos, rep);
+      }
+      return;
+    }
+    if (phase === 'rest') { restMs.current[setPos] += spent; startPhase('work', setPos, rep + 1); return; }
+    if (phase === 'setRest') { setRestMs.current[setPos] = spent; startPhase('work', setPos + 1, 1); }
+  }, [phase, setPos, rep, current, sets.length, startPhase]);
 
   // Clock
   useEffect(() => {
@@ -189,21 +223,36 @@ function IntervalTimer({ exerciseName, plan, onComplete, onCancel }: IntervalTim
     }
   };
 
-  const actuals = (): IntervalActuals => ({
-    avgWorkSeconds: Math.round(workDoneMs.current / 1000 / plan.reps),
-    avgRestSeconds: plan.reps > 1 ? Math.round(restDoneMs.current / 1000 / (plan.reps - 1)) : null,
-  });
+  /** The finished sets (all sets when done, else those completed before stopping) */
+  const results = (): IntervalSetResult[] =>
+    sets.slice(0, finishedSets.current).map((plan, i) => ({
+      setIdx: plan.setIdx,
+      avgWorkSeconds: Math.round(workMs.current[i] / 1000 / plan.reps),
+      avgRestSeconds: plan.reps > 1 ? Math.round(restMs.current[i] / 1000 / (plan.reps - 1)) : null,
+      setRestSeconds: setRestMs.current[i] !== null ? Math.round(setRestMs.current[i]! / 1000) : null,
+    }));
 
   const seconds = Math.ceil(remainingMs / 1000);
-  const total = phase === 'work' ? plan.workSeconds : phase === 'rest' ? plan.restSeconds : READY_SECONDS;
+  const total = phase === 'work' ? current.workSeconds
+    : phase === 'rest' ? current.restSeconds
+      : phase === 'setRest' ? (current.setRestSeconds ?? 1)
+        : READY_SECONDS;
   const progress = phase === 'done' ? 1 : 1 - remainingMs / (total * 1000);
-  const intensity = phase === 'work' ? plan.workIntensity : phase === 'rest' ? plan.restIntensity : undefined;
+  const intensity = phase === 'work' ? current.workIntensity
+    : phase === 'rest' ? current.restIntensity
+      : phase === 'setRest' ? current.setRestIntensity
+        : undefined;
+  const setLabel = `Set ${current.setIdx + 1} / ${totalSets}`;
+  const nextSet = sets[setPos + 1];
+  const done = results();
 
   const tone = phase === 'work'
     ? 'bg-red-600 text-white'
     : phase === 'rest'
       ? 'bg-emerald-600 text-white'
-      : 'bg-background text-foreground';
+      : phase === 'setRest'
+        ? 'bg-sky-700 text-white'
+        : 'bg-background text-foreground';
 
   return createPortal(
     <div className="fixed inset-0 z-[400] flex justify-center bg-black/60">
@@ -212,13 +261,14 @@ function IntervalTimer({ exerciseName, plan, onComplete, onCancel }: IntervalTim
         <div className="shrink-0 flex items-center justify-between px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-2">
           <div className="min-w-0">
             <p className="text-sm opacity-80 truncate">{exerciseName}</p>
-            <p className="text-xs opacity-70">Set {plan.setNumber}</p>
+            <p className="text-xs opacity-70">{setLabel}</p>
           </div>
           <button
             type="button"
-            onClick={onCancel}
+            onClick={() => onFinish(results())}
             className="h-11 w-11 rounded-full flex items-center justify-center active:bg-black/10"
             aria-label="Stop intervals"
+            title="Stop — finished sets are ticked off"
           >
             <X className="h-6 w-6" />
           </button>
@@ -228,33 +278,46 @@ function IntervalTimer({ exerciseName, plan, onComplete, onCancel }: IntervalTim
         <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">
           {phase === 'done' ? (
             <>
-              <p className="text-4xl font-bold">Set done</p>
-              <p className="text-base opacity-80">
-                {plan.reps} × {clock(actuals().avgWorkSeconds)} work
-                {actuals().avgRestSeconds !== null ? ` / ${clock(actuals().avgRestSeconds!)} rest` : ''} (average)
-              </p>
+              <p className="text-4xl font-bold">{done.length > 1 ? `${done.length} sets done` : 'Set done'}</p>
+              <div className="text-base opacity-85 space-y-0.5">
+                {done.map(r => (
+                  <p key={r.setIdx}>
+                    Set {r.setIdx + 1}: {clock(r.avgWorkSeconds)} work
+                    {r.avgRestSeconds !== null ? ` / ${clock(r.avgRestSeconds)} rest` : ''}
+                  </p>
+                ))}
+                <p className="text-xs opacity-75 pt-1">average per rep</p>
+              </div>
             </>
           ) : (
             <>
               <p className="text-2xl font-bold tracking-widest">
-                {phase === 'ready' ? 'GET READY' : phase === 'work' ? 'WORK' : 'REST'}
+                {phase === 'ready' ? 'GET READY' : phase === 'work' ? 'WORK' : phase === 'rest' ? 'REST' : 'REST BETWEEN SETS'}
               </p>
               <p className="text-8xl font-bold tabular-nums leading-none">{clock(seconds)}</p>
               {intensity && <p className="text-2xl font-semibold">@ {intensity}</p>}
-              {phase !== 'rest' && plan.workTargets && plan.workTargets.length > 0 && (
-                <p className="text-xl font-medium opacity-90">{plan.workTargets.join(' · ')}</p>
+              {(phase === 'work' || phase === 'ready') && current.workTargets && current.workTargets.length > 0 && (
+                <p className="text-xl font-medium opacity-90">{current.workTargets.join(' · ')}</p>
               )}
               <p className="text-lg opacity-80">
-                {phase === 'ready' ? `${plan.reps} × ${clock(plan.workSeconds)} / ${clock(plan.restSeconds)} rest` : `Rep ${rep} / ${plan.reps}`}
+                {phase === 'ready'
+                  ? `${current.reps} × ${clock(current.workSeconds)} / ${clock(current.restSeconds)} rest`
+                  : phase === 'setRest'
+                    ? `Next: set ${(nextSet?.setIdx ?? current.setIdx) + 1}`
+                    : `Rep ${rep} / ${current.reps}`}
               </p>
               <div className="w-full max-w-xs h-2 rounded-full bg-black/15 overflow-hidden">
                 <div className="h-full bg-current opacity-80" style={{ width: `${Math.min(100, Math.max(0, progress * 100))}%` }} />
               </div>
-              {phase !== 'ready' && (
+              {(phase === 'work' || phase === 'rest') && (
                 <p className="text-sm opacity-75">
-                  {phase === 'work'
-                    ? rep < plan.reps ? `Next: rest ${clock(plan.restSeconds)}` : 'Last rep'
-                    : `Next: work ${clock(plan.workSeconds)}`}
+                  {phase === 'rest'
+                    ? `Next: work ${clock(current.workSeconds)}`
+                    : rep < current.reps
+                      ? `Next: rest ${clock(current.restSeconds)}`
+                      : nextSet
+                        ? current.setRestSeconds ? `Next: rest between sets ${clock(current.setRestSeconds)}` : `Next: set ${nextSet.setIdx + 1}`
+                        : 'Last rep'}
                 </p>
               )}
             </>
@@ -266,46 +329,46 @@ function IntervalTimer({ exerciseName, plan, onComplete, onCancel }: IntervalTim
           {phase === 'done' ? (
             <button
               type="button"
-              onClick={() => onComplete(actuals())}
+              onClick={() => onFinish(done)}
               className="w-full h-14 rounded-xl bg-primary text-primary-foreground text-lg font-semibold active:scale-[0.98]"
             >
-              Done — tick off set {plan.setNumber}
+              Done — tick off {done.length > 1 ? `${done.length} sets` : `set ${done[0]?.setIdx + 1}`}
             </button>
           ) : (
-            <div className="flex items-center justify-center gap-6">
-              <button
-                type="button"
-                onClick={togglePause}
-                className="h-20 w-20 rounded-full bg-black/15 flex items-center justify-center active:scale-95"
-                aria-label={paused ? 'Resume' : 'Pause'}
-              >
-                {paused ? <Play className="h-9 w-9" /> : <Pause className="h-9 w-9" />}
-              </button>
-              <button
-                type="button"
-                onClick={advance}
-                className="h-14 w-14 rounded-full bg-black/10 flex items-center justify-center active:scale-95"
-                aria-label="Skip to the next phase"
-              >
-                <SkipForward className="h-6 w-6" />
-              </button>
-            </div>
-          )}
-          {phase !== 'done' && (
-            <div className="flex items-center justify-center gap-2 mt-4">
-              {ADJUSTMENTS.map(sec => (
+            <>
+              <div className="flex items-center justify-center gap-6">
                 <button
-                  key={sec}
                   type="button"
-                  onClick={() => adjust(sec)}
-                  className="h-11 min-w-[64px] px-3 rounded-full bg-black/10 text-sm font-semibold tabular-nums active:scale-95"
+                  onClick={togglePause}
+                  className="h-20 w-20 rounded-full bg-black/15 flex items-center justify-center active:scale-95"
+                  aria-label={paused ? 'Resume' : 'Pause'}
                 >
-                  {sec > 0 ? `+${sec}` : `−${Math.abs(sec)}`} s
+                  {paused ? <Play className="h-9 w-9" /> : <Pause className="h-9 w-9" />}
                 </button>
-              ))}
-            </div>
+                <button
+                  type="button"
+                  onClick={advance}
+                  className="h-14 w-14 rounded-full bg-black/10 flex items-center justify-center active:scale-95"
+                  aria-label="Skip to the next phase"
+                >
+                  <SkipForward className="h-6 w-6" />
+                </button>
+              </div>
+              <div className="flex items-center justify-center gap-2 mt-4">
+                {ADJUSTMENTS.map(sec => (
+                  <button
+                    key={sec}
+                    type="button"
+                    onClick={() => adjust(sec)}
+                    className="h-11 min-w-[64px] px-3 rounded-full bg-black/10 text-sm font-semibold tabular-nums active:scale-95"
+                  >
+                    {sec > 0 ? `+${sec}` : `−${Math.abs(sec)}`} s
+                  </button>
+                ))}
+              </div>
+              {paused && <p className="text-center text-sm mt-3 opacity-80">Paused</p>}
+            </>
           )}
-          {paused && phase !== 'done' && <p className="text-center text-sm mt-3 opacity-80">Paused</p>}
         </div>
       </div>
     </div>,
@@ -319,89 +382,120 @@ interface IntervalLauncherProps {
   doneSets: number[];
   /** What the set shows for a parameter: the athlete's value, else the planned one */
   valueFor: (setIdx: number, param: string) => string;
-  /** Writes a value into the set (the actual work / rest time when it differs from the plan) */
+  /** Writes a value into a set (the actual times when they differ from the plan) */
   onLogValue: (setIdx: number, param: string, value: string) => void;
-  onCompleteSet: (setIdx: number) => void;
+  /** Ticks off several sets at once (finished in the timer) */
+  onCompleteSets: (setIdxs: number[]) => void;
 }
 
-/** Seconds → the parameter's unit ("125" s, "2.1" min) */
-function fromSeconds(seconds: number, unit?: string): string {
-  const u = (unit ?? '').trim().toLowerCase();
-  if (u === 'min') return String(Math.round((seconds / 60) * 10) / 10);
-  if (u === 'h') return String(Math.round((seconds / 3600) * 100) / 100);
-  return String(seconds);
-}
-
-/** "Start intervals" for the next set that isn't done — only for methods with an interval timer */
-export function IntervalLauncher({ exercise, setCount, doneSets, valueFor, onLogValue, onCompleteSet }: IntervalLauncherProps) {
-  const [running, setRunning] = useState<IntervalPlan | null>(null);
+/** "Start intervals" from the next set that isn't done — only for methods with an interval timer */
+export function IntervalLauncher({ exercise, setCount, doneSets, valueFor, onLogValue, onCompleteSets }: IntervalLauncherProps) {
+  const [running, setRunning] = useState<IntervalSetPlan[] | null>(null);
   const spec = exercise.interval;
   if (!spec) return null;
 
-  const nextSet = Array.from({ length: setCount }, (_, i) => i).find(i => !doneSets.includes(i));
-  if (nextSet === undefined) return null;
+  const open = Array.from({ length: setCount }, (_, i) => i).filter(i => !doneSets.includes(i));
+  if (open.length === 0) return null;
 
   const unit = (p: string) => {
     const u = exercise.plannedParams?.[`${p}_unit`];
     return u ? String(u) : undefined;
   };
-  const withUnit = (p?: string) => {
+  const withUnit = (setIdx: number, p?: string) => {
     if (!p) return undefined;
-    const v = valueFor(nextSet, p);
+    const v = valueFor(setIdx, p);
     if (!v) return undefined;
     const u = unit(p);
     return u ? `${v} ${u}` : v;
   };
-  const reps = parseMeasuredNumber(valueFor(nextSet, spec.reps));
-  const work = toSeconds(valueFor(nextSet, spec.work), unit(spec.work));
-  const rest = toSeconds(valueFor(nextSet, spec.rest), unit(spec.rest));
-  const ready = reps !== null && reps >= 1 && work !== null && rest !== null;
-  // Work or rest given as a distance etc. (e.g. 400 m) — the timer only runs on durations
+  const setRestOf = (setIdx: number) => (spec.setRest ? toSeconds(valueFor(setIdx, spec.setRest), unit(spec.setRest)) : null);
+  const planFor = (setIdx: number): IntervalSetPlan | null => {
+    const reps = parseMeasuredNumber(valueFor(setIdx, spec.reps));
+    const work = toSeconds(valueFor(setIdx, spec.work), unit(spec.work));
+    const rest = toSeconds(valueFor(setIdx, spec.rest), unit(spec.rest));
+    if (reps === null || reps < 1 || work === null || rest === null) return null;
+    return {
+      setIdx,
+      reps: Math.round(reps),
+      workSeconds: work,
+      restSeconds: rest,
+      setRestSeconds: null,
+      workIntensity: withUnit(setIdx, spec.workIntensity),
+      restIntensity: withUnit(setIdx, spec.restIntensity),
+      setRestIntensity: withUnit(setIdx, spec.setRestIntensity),
+      workTargets: (spec.workTargets ?? []).map(p => withUnit(setIdx, p)).filter((t): t is string => !!t),
+    };
+  };
+
+  // The run: from the next open set through the following ones while each has its values — with
+  // a rest between sets; without one the timer covers one set per start
+  const first = planFor(open[0]);
+  const runPlans: IntervalSetPlan[] = [];
+  if (first) {
+    runPlans.push(first);
+    for (const idx of open.slice(1)) {
+      const prev = runPlans[runPlans.length - 1];
+      const between = setRestOf(prev.setIdx);
+      const next = planFor(idx);
+      if (!between || !next) break;
+      prev.setRestSeconds = between;
+      runPlans.push(next);
+    }
+  }
+
   const notTime = [spec.work, spec.rest].filter(p => !isTimeUnit(unit(p)));
+
+  const finish = (results: IntervalSetResult[]) => {
+    const plans = running ?? [];
+    for (const r of results) {
+      const plan = plans.find(p => p.setIdx === r.setIdx);
+      if (!plan) continue;
+      // The time actually spent (extended / shortened / skipped) — the coach sees the real exposure
+      if (Math.abs(r.avgWorkSeconds - plan.workSeconds) >= 1) onLogValue(r.setIdx, spec.work, fromSeconds(r.avgWorkSeconds, unit(spec.work)));
+      if (r.avgRestSeconds !== null && Math.abs(r.avgRestSeconds - plan.restSeconds) >= 1) {
+        onLogValue(r.setIdx, spec.rest, fromSeconds(r.avgRestSeconds, unit(spec.rest)));
+      }
+      if (spec.setRest && r.setRestSeconds !== null && plan.setRestSeconds && Math.abs(r.setRestSeconds - plan.setRestSeconds) >= 1) {
+        onLogValue(r.setIdx, spec.setRest, fromSeconds(r.setRestSeconds, unit(spec.setRest)));
+      }
+    }
+    if (results.length > 0) onCompleteSets(results.map(r => r.setIdx));
+    setRunning(null);
+  };
+
+  const label = (() => {
+    if (!first) {
+      return notTime.length > 0
+        ? `Interval timer needs a time (s / min) for ${notTime.join(' and ')}`
+        : 'Interval timer: enter reps, work and rest time first';
+    }
+    const sets = runPlans.length > 1
+      ? `Sets ${runPlans[0].setIdx + 1}–${runPlans[runPlans.length - 1].setIdx + 1}`
+      : `Set ${first.setIdx + 1}`;
+    const between = runPlans.length > 1 && runPlans[0].setRestSeconds ? ` · ${clock(runPlans[0].setRestSeconds)} between sets` : '';
+    return `Start intervals · ${sets}: ${first.reps} × ${clock(first.workSeconds)} / ${clock(first.restSeconds)} rest${between}`;
+  })();
 
   return (
     <>
       <button
         type="button"
-        disabled={!ready}
-        onClick={() => ready && setRunning({
-          setNumber: nextSet + 1,
-          reps: Math.round(reps!),
-          workSeconds: work!,
-          restSeconds: rest!,
-          workIntensity: withUnit(spec.workIntensity),
-          restIntensity: withUnit(spec.restIntensity),
-          workTargets: (spec.workTargets ?? []).map(withUnit).filter((t): t is string => !!t),
-        })}
+        disabled={!first}
+        onClick={() => first && setRunning(runPlans)}
         className={cn(
-          'w-full mb-2 flex items-center justify-center gap-2 rounded-xl border-2 py-3 text-sm font-semibold transition-all active:scale-[0.98]',
-          ready ? 'border-primary bg-primary/5 text-primary hover:bg-primary/10' : 'border-dashed text-muted-foreground',
+          'w-full mb-2 flex items-center justify-center gap-2 rounded-xl border-2 px-3 py-3 text-sm font-semibold transition-all active:scale-[0.98]',
+          first ? 'border-primary bg-primary/5 text-primary hover:bg-primary/10' : 'border-dashed text-muted-foreground',
         )}
       >
-        <Timer className="h-4 w-4" />
-        {ready
-          ? `Start intervals · Set ${nextSet + 1}: ${Math.round(reps!)} × ${clock(work!)} / ${clock(rest!)} rest`
-          : notTime.length > 0
-            ? `Interval timer needs a time (s / min) for ${notTime.join(' and ')}`
-            : 'Interval timer: enter reps, work and rest time first'}
+        <Timer className="h-4 w-4 shrink-0" />
+        <span className="text-left">{label}</span>
       </button>
       {running && (
         <IntervalTimer
           exerciseName={exercise.name}
-          plan={running}
-          onCancel={() => setRunning(null)}
-          onComplete={(actual) => {
-            const setIdx = running.setNumber - 1;
-            // The time actually spent (extended / shortened / skipped) — the coach sees the real exposure
-            if (Math.abs(actual.avgWorkSeconds - running.workSeconds) >= 1) {
-              onLogValue(setIdx, spec.work, fromSeconds(actual.avgWorkSeconds, unit(spec.work)));
-            }
-            if (actual.avgRestSeconds !== null && Math.abs(actual.avgRestSeconds - running.restSeconds) >= 1) {
-              onLogValue(setIdx, spec.rest, fromSeconds(actual.avgRestSeconds, unit(spec.rest)));
-            }
-            onCompleteSet(setIdx);
-            setRunning(null);
-          }}
+          sets={running}
+          totalSets={setCount}
+          onFinish={finish}
         />
       )}
     </>

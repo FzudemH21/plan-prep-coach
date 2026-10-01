@@ -493,12 +493,14 @@ interface SetTableProps {
   completedSets: Record<string, number[]>;
   onLogValue: (exId: string, setIdx: number, paramName: string, val: string) => void;
   onCompleteSet: (exId: string, setIdx: number) => void;
+  /** Several sets at once — from the interval timer */
+  onCompleteSets: (exId: string, setIdxs: number[]) => void;
   onMarkAll: (exId: string) => void;
   /** Values logged the last time this exercise was done — hints in empty fields */
   previous?: PreviousExerciseValues;
 }
 
-function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue, onCompleteSet, onMarkAll, previous }: SetTableProps) {
+function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue, onCompleteSet, onCompleteSets, onMarkAll, previous }: SetTableProps) {
   const columns = getParamColumns(exercise);
   const layout = setTableLayout(columns.length);
   const doneArr = completedSets[exercise.id] ?? [];
@@ -523,7 +525,7 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
         return l !== undefined && l !== '' ? l : getPlannedValue(exercise, p, i);
       }}
       onLogValue={(i, p, v) => onLogValue(exercise.id, i, p, v)}
-      onCompleteSet={(i) => onCompleteSet(exercise.id, i)}
+      onCompleteSets={(idxs) => onCompleteSets(exercise.id, idxs)}
     />
     <div className={layout.wrapper}>
       <table className={layout.table}>
@@ -1178,6 +1180,26 @@ export default function AthleteSessionPage() {
         return;
       }
       // Between rounds (or standalone set) — fire the rest timer
+      startRest(restSecs, () => setPhase('active'));
+    }
+  }
+
+  /** Ticks off several sets at once (finished in the interval timer, which also ran the rest
+   *  between them) — then the same flow as after a single set */
+  function handleCompleteSets(exerciseId: string, setIdxs: number[]) {
+    const ex = currentSection?.exercises.find(e => e.id === exerciseId);
+    if (!ex) return;
+    const doneArr = completedSets[exerciseId] ?? [];
+    const added = setIdxs.filter(i => !doneArr.includes(i));
+    if (added.length === 0) return;
+    added.forEach(i => autoFillPlanned(ex, i));
+    const newCS = { ...completedSets, [exerciseId]: [...doneArr, ...added] };
+    setCompletedSets(newCS);
+    const restSecs = getRestSeconds(ex);
+    if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
+      continueAfterSection(newCS, restSecs);
+    } else {
+      if (!isSupersetRoundComplete(exerciseId, Math.max(...added), newCS, currentSection!)) { setPhase('active'); return; }
       startRest(restSecs, () => setPhase('active'));
     }
   }
@@ -2129,6 +2151,7 @@ export default function AthleteSessionPage() {
                           completedSets={completedSets}
                           onLogValue={handleLogValue}
                           onCompleteSet={handleCompleteSet}
+                          onCompleteSets={handleCompleteSets}
                           onMarkAll={handleMarkAll}
                           previous={previousValues.get(ex.name.toLowerCase())}
                         />

@@ -20,6 +20,7 @@ const ROLES: Array<{ role: IntervalRole; label: string; hint: string; required: 
   { role: 'reps', label: 'Repetitions', hint: 'e.g. Reps', required: true },
   { role: 'workIntensity', label: 'Work intensity', hint: 'optional, e.g. Work Intensity', required: false },
   { role: 'restIntensity', label: 'Rest intensity', hint: 'optional, e.g. Inter-Rep Rest Intensity', required: false },
+  { role: 'setRestIntensity', label: 'Rest intensity between sets', hint: 'optional, e.g. Inter-Set Rest Intensity', required: false },
 ];
 
 const NONE = '__none__';
@@ -32,8 +33,9 @@ function suggest(params: ToolboxEntry[], role: IntervalRole): string | undefined
     case 'rest': return name(/(inter.?rep|between reps).*(rest|pause|recovery)|(rest|pause|recovery).*(rep)/i);
     case 'reps': return name(/^reps?\b|repetitions/i);
     case 'workIntensity': return name(/work.*intensity|^intensity/i);
-    case 'restIntensity': return name(/(rest|recovery).*intensity/i);
+    case 'restIntensity': return name(/(inter.?rep|between reps).*intensity|^(rest|recovery).*intensity/i);
     case 'workTarget': return undefined;
+    case 'setRestIntensity': return name(/(inter.?set|between sets).*intensity/i);
   }
 }
 
@@ -120,6 +122,14 @@ export function IntervalModeSettings({ parameters, onChange }: IntervalModeSetti
             </div>
           ))}
         </div>
+      )}
+      {enabled && (
+        <p className="text-xs text-muted-foreground">
+          Rest between sets:{' '}
+          {parameters.find(p => p.isRestParameter)
+            ? <><span className="font-medium text-foreground">{parameters.find(p => p.isRestParameter)!.parameterName}</span> (the parameter marked as rest) — the timer runs through all sets with it.</>
+            : <span className="text-amber-700">no parameter is marked as rest — the timer runs one set per start.</span>}
+        </p>
       )}
       {enabled && targetOptions.length > 0 && (
         <div className="space-y-1.5">

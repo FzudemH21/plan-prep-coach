@@ -28,7 +28,7 @@ export interface ToolboxEntry {
 /** Roles of a method's parameters in the interval timer: work + rest between reps + reps are needed.
  *  workTarget: shown during work for orientation only (e.g. distance, pace, stroke rate) — the timer
  *  always runs on time (the stimulus is the time at an intensity); several parameters can have it. */
-export type IntervalRole = 'work' | 'rest' | 'reps' | 'workIntensity' | 'restIntensity' | 'workTarget';
+export type IntervalRole = 'work' | 'rest' | 'reps' | 'workIntensity' | 'restIntensity' | 'workTarget' | 'setRestIntensity';
 
 /** The interval timer of a method: which parameter holds what (parameter names) */
 export interface IntervalSpec {
@@ -39,6 +39,10 @@ export interface IntervalSpec {
   restIntensity?: string;
   /** Shown during work for orientation (e.g. "400 m"), no effect on the timing */
   workTargets?: string[];
+  /** Rest between sets: the parameter flagged as rest (isRestParameter) — the timer runs through
+   *  all sets with it; without one, one set per start */
+  setRest?: string;
+  setRestIntensity?: string;
 }
 
 /** The interval timer of one method's parameters — undefined when work, rest or reps has no parameter */
@@ -54,6 +58,8 @@ export function intervalSpecFor(methodEntries: ToolboxEntry[]): IntervalSpec | u
     workIntensity: by('workIntensity'),
     restIntensity: by('restIntensity'),
     ...(workTargets.length > 0 ? { workTargets } : {}),
+    setRest: methodEntries.find(e => e.isRestParameter)?.parameterName,
+    setRestIntensity: by('setRestIntensity'),
   };
 }
 
