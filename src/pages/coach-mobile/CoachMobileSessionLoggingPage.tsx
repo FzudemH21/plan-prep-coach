@@ -437,6 +437,7 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
         const l = loggedValues[exercise.id]?.[i]?.[p];
         return l !== undefined && l !== '' ? l : getPlannedValue(exercise, p, i);
       }}
+      onLogValue={(i, p, v) => onLogValue(exercise.id, i, p, v)}
       onCompleteSet={(i) => onCompleteSet(exercise.id, i)}
     />
     <div className={layout.wrapper}>
@@ -916,11 +917,21 @@ export default function CoachMobileSessionLoggingPage() {
 
   function autoFillPlanned(ex: ExerciseSummary, setIdx: number) {
     const cols = getParamColumns(ex);
-    cols.forEach(col => {
-      const already = loggedValues[ex.id]?.[setIdx]?.[col];
-      if (already !== undefined && already !== '') return;
-      const planned = getPlannedValue(ex, col, setIdx);
-      if (planned) handleLogValue(ex.id, setIdx, col, planned);
+    // Decided on the latest values (functional update), not the render's copy: a value written in
+    // the same moment (e.g. the actual time from the interval timer) must not be overwritten
+    setLoggedValues(prev => {
+      let next = prev;
+      for (const col of cols) {
+        const already = next[ex.id]?.[setIdx]?.[col];
+        if (already !== undefined && already !== '') continue;
+        const planned = getPlannedValue(ex, col, setIdx);
+        if (!planned) continue;
+        next = {
+          ...next,
+          [ex.id]: { ...(next[ex.id] ?? {}), [setIdx]: { ...(next[ex.id]?.[setIdx] ?? {}), [col]: planned } },
+        };
+      }
+      return next;
     });
   }
 

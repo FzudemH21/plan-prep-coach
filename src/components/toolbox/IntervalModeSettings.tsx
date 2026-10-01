@@ -10,6 +10,7 @@
 import { Timer } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { IntervalRole, ToolboxEntry } from '@/types/toolbox';
 
@@ -32,6 +33,7 @@ function suggest(params: ToolboxEntry[], role: IntervalRole): string | undefined
     case 'reps': return name(/^reps?\b|repetitions/i);
     case 'workIntensity': return name(/work.*intensity|^intensity/i);
     case 'restIntensity': return name(/(rest|recovery).*intensity/i);
+    case 'workTarget': return undefined;
   }
 }
 
@@ -44,8 +46,22 @@ export function IntervalModeSettings({ parameters, onChange }: IntervalModeSetti
   const enabled = parameters.some(p => p.intervalRole);
   const idFor = (role: IntervalRole) => parameters.find(p => p.intervalRole === role)?.id;
   const missing = ROLES.filter(r => r.required && !idFor(r.role));
+  // Work and rest run as a countdown — they need a time unit (s / min); e.g. 400 m can't be timed
+  const TIME = new Set(['s', 'sec', 'min', 'h']);
+  const notTime = (['work', 'rest'] as const)
+    .map(role => parameters.find(p => p.intervalRole === role))
+    .filter((p): p is ToolboxEntry => !!p && p.parameterType === 'quantitative' && p.options.length > 0
+      && !p.options.some(u => TIME.has(u.trim().toLowerCase())))
+    .map(p => p.parameterName);
   // Duration / count parameters only — qualitative ones (e.g. Mode: Rowing) can't drive a timer
   const options = parameters.filter(p => !p.isFrequencyParameter && !p.isCalculated);
+
+  // "Show during work": orientation only (distance, pace, stroke rate …) — any parameter without
+  // another role, several at once
+  const targetOptions = options.filter(p => !p.intervalRole || p.intervalRole === 'workTarget');
+  const toggleTarget = (entryId: string, on: boolean) => {
+    onChange(parameters.map(p => (p.id === entryId ? { ...p, intervalRole: on ? 'workTarget' : undefined } : p)));
+  };
 
   const setRole = (role: IntervalRole, entryId: string | undefined) => {
     onChange(parameters.map(p => {
@@ -104,6 +120,28 @@ export function IntervalModeSettings({ parameters, onChange }: IntervalModeSetti
             </div>
           ))}
         </div>
+      )}
+      {enabled && targetOptions.length > 0 && (
+        <div className="space-y-1.5">
+          <Label className="text-xs">Show during work <span className="text-muted-foreground font-normal">(orientation only, e.g. distance, pace, stroke rate — the timer always runs on time)</span></Label>
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+            {targetOptions.map(p => (
+              <label key={p.id} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <Checkbox
+                  checked={p.intervalRole === 'workTarget'}
+                  onCheckedChange={v => toggleTarget(p.id, v === true)}
+                  className="h-3.5 w-3.5"
+                />
+                {p.parameterName}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+      {enabled && notTime.length > 0 && (
+        <p className="text-xs text-amber-700">
+          {notTime.join(' and ')} {notTime.length === 1 ? 'has' : 'have'} no time unit (s / min) — the timer counts down durations, so it won't run for distances.
+        </p>
       )}
       {enabled && missing.length > 0 && (
         <p className="text-xs text-amber-700">
