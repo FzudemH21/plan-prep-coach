@@ -3,7 +3,8 @@
  * coach-mobile logging.
  *
  * IntervalLauncher sits above the set table: "Start intervals" from the next set that isn't done,
- * with each set's values (what the athlete typed, else the plan). IntervalTimer first shows an
+ * with each set's planned values (what the athlete typed only where nothing is planned — logged
+ * results such as the actual times must never become the next prescription). IntervalTimer first shows an
  * overview of the whole run (sets, work / rest with intensities, rest between sets, total time);
  * after "Start" it runs through on its own — nothing to tap until the end — through all remaining
  * sets: Get ready → WORK → REST → … → WORK (last rep) → REST BETWEEN SETS →
@@ -438,7 +439,7 @@ interface IntervalLauncherProps {
   exercise: ExerciseSummary;
   setCount: number;
   doneSets: number[];
-  /** What the set shows for a parameter: the athlete's value, else the planned one */
+  /** A set's value for a parameter: the planned one, else what the athlete typed */
   valueFor: (setIdx: number, param: string) => string;
   /** Writes a value into a set (the actual times when they differ from the plan) */
   onLogValue: (setIdx: number, param: string, value: string) => void;

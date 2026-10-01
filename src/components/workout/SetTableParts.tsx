@@ -56,16 +56,31 @@ export function RestPrescription({ exercise }: { exercise: ExerciseSummary }) {
   );
 }
 
-/** Class names for the set table — sideways scrolling with pinned columns above 3 parameter columns */
+/** Width of a parameter column when the table scrolls sideways */
+const WIDE_COL_PX = 88;
+
+/**
+ * Class names for the set table — sideways scrolling with pinned columns above 3 parameter columns.
+ * Scrolling: fixed column widths (inputs would otherwise take their natural ~170 px), and the pinned
+ * "#" / tick cells get the same tint as their row (solid background + an inset shadow in the row's
+ * colour) — a plain white cell looked like a block lying over the tinted rows.
+ */
 export function setTableLayout(columnCount: number) {
   const wide = columnCount > 3;
+  const headTint = 'shadow-[inset_0_0_0_999px_hsl(var(--muted)/0.3)]';
+  const doneTint = 'shadow-[inset_0_0_0_999px_hsl(var(--primary)/0.05)]';
   return {
     wide,
     wrapper: cn('rounded-lg border bg-background', wide && 'overflow-x-auto overscroll-x-contain'),
-    table: cn('text-sm', wide ? 'min-w-full w-max table-auto' : 'w-full table-fixed'),
-    paramCell: wide ? 'min-w-[76px]' : '',
-    pinLeft: wide ? 'sticky left-0 z-10 bg-background' : '',
-    pinRight: wide ? 'sticky right-0 z-10 bg-background' : '',
+    table: cn('text-sm table-fixed', wide ? 'min-w-full' : 'w-full'),
+    tableStyle: wide ? { width: `${28 + columnCount * WIDE_COL_PX + 48}px` } : undefined,
+    paramCell: wide ? 'w-[88px]' : '',
+    /** Header cells */
+    pinLeft: wide ? cn('sticky left-0 z-10 bg-background', headTint) : '',
+    pinRight: wide ? cn('sticky right-0 z-10 bg-background', headTint) : '',
+    /** Body cells — tinted like a finished row */
+    pinLeftCell: (done: boolean) => (wide ? cn('sticky left-0 z-10 bg-background', done && doneTint) : ''),
+    pinRightCell: (done: boolean) => (wide ? cn('sticky right-0 z-10 bg-background', done && doneTint) : ''),
   };
 }
 

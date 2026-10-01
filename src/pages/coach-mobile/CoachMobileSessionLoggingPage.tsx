@@ -436,14 +436,17 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
       setCount={setCount}
       doneSets={doneArr}
       valueFor={(i, p) => {
-        const l = loggedValues[exercise.id]?.[i]?.[p];
-        return l !== undefined && l !== '' ? l : getPlannedValue(exercise, p, i);
+        // The plan first: logged results (e.g. the actual times the timer wrote) must never become
+        // the next prescription; the athlete's value only when nothing is planned
+        const planned = getPlannedValue(exercise, p, i);
+        if (planned) return planned;
+        return loggedValues[exercise.id]?.[i]?.[p] ?? '';
       }}
       onLogValue={(i, p, v) => onLogValue(exercise.id, i, p, v)}
       onCompleteSets={(idxs) => onCompleteSets(exercise.id, idxs)}
     />
     <div className={layout.wrapper}>
-      <table className={layout.table}>
+      <table className={layout.table} style={layout.tableStyle}>
         <thead>
           <tr className="border-b bg-muted/30">
             <th className={cn('text-center py-2 px-1 text-xs text-muted-foreground font-semibold w-7', layout.pinLeft)}>#</th>
@@ -473,7 +476,7 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
             const isDone = doneArr.includes(setIdx);
             return (
               <tr key={setIdx} className={cn('border-b last:border-0 transition-colors', isDone && 'bg-primary/5')}>
-                <td className={cn('text-center py-2 px-1 text-muted-foreground font-medium tabular-nums', layout.pinLeft)}>{setIdx + 1}</td>
+                <td className={cn('text-center py-2 px-1 text-muted-foreground font-medium tabular-nums', layout.pinLeftCell(isDone))}>{setIdx + 1}</td>
                 {columns.map(col => {
                   const planned = getPlannedValue(exercise, col, setIdx);
                   const logged = loggedValues[exercise.id]?.[setIdx]?.[col];
@@ -494,7 +497,7 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
                     </td>
                   );
                 })}
-                <td className={cn('py-1.5 pr-1 text-center', layout.pinRight)}>
+                <td className={cn('py-1.5 pr-1 text-center', layout.pinRightCell(isDone))}>
                   <button onClick={() => onCompleteSet(exercise.id, setIdx)}
                     className={cn(
                       'w-8 h-8 rounded-full flex items-center justify-center mx-auto transition-all active:scale-95',
