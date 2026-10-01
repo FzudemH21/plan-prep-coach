@@ -446,6 +446,30 @@ export async function syncAthleteSchedule(
     return !isNaN(n) && n > 0 ? n : undefined;
   }
 
+  /**
+   * "{name}_unit" for every quantitative parameter of the exercise's method that has none stored.
+   * The session sheet shows the method's first unit option in the header without storing it
+   * (e.g. "Work Duration [s]" — only one unit, so nothing to pick); without this the athlete app
+   * and coach mobile showed no unit for such columns.
+   */
+  function withDefaultUnits(
+    params: Record<string, string | number> | undefined,
+    methodId: string | undefined,
+  ): Record<string, string | number> | undefined {
+    if (!params) return params;
+    const base = stripSplitSuffix(methodId ?? '');
+    let out = params;
+    for (const te of toolboxEntries ?? []) {
+      if ((te.subCategory ? `${te.category} - ${te.subCategory}` : te.category) !== base) continue;
+      if (te.parameterType !== 'quantitative' || !(te.options?.length > 0)) continue;
+      const key = `${te.parameterName}_unit`;
+      if (out[key] !== undefined && out[key] !== '') continue;
+      if (out === params) out = { ...params };
+      out[key] = te.options[0];
+    }
+    return out;
+  }
+
   // Helper: get planned params for an exercise
   function getPlannedParams(ex: ExerciseEntry): {
     plannedSets: number | undefined;
@@ -735,7 +759,9 @@ export async function syncAthleteSchedule(
           .filter(ex => ex.dayDate === td.date && ex.sessionIndex === i)
           .sort((a, b) => a.order - b.order)
           .map(ex => {
-            const { plannedSets, plannedParams, formulaComputedParams, visibleParams, restParamName } = getPlannedParams(ex);
+            const planned = getPlannedParams(ex);
+            const { plannedSets, formulaComputedParams, visibleParams, restParamName } = planned;
+            const plannedParams = withDefaultUnits(planned.plannedParams, ex.methodId);
 
             // Section info
             let sectionName: string | undefined;

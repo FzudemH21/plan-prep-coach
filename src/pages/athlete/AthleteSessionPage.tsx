@@ -1,3 +1,4 @@
+import { RestPrescription, SwipeHint, setTableLayout } from '@/components/workout/SetTableParts';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -495,6 +496,7 @@ interface SetTableProps {
 
 function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue, onCompleteSet, onMarkAll, previous }: SetTableProps) {
   const columns = getParamColumns(exercise);
+  const layout = setTableLayout(columns.length);
   const doneArr = completedSets[exercise.id] ?? [];
   const allDone = doneArr.length >= setCount &&
     Array.from({ length: setCount }, (_, i) => i).every(i => doneArr.includes(i));
@@ -505,24 +507,25 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
     : [];
 
   return (
-    // Fixed layout: parameter columns share the phone's width (no sideways scrolling); labels wrap
+    // Up to 3 parameter columns share the phone's width; with more, the table scrolls sideways (SetTableParts)
     <div>
-    <div className="rounded-lg border bg-background">
-      <table className="w-full table-fixed text-sm">
+    <RestPrescription exercise={exercise} />
+    <div className={layout.wrapper}>
+      <table className={layout.table}>
         <thead>
           <tr className="border-b bg-muted/30">
-            <th className="text-center py-2 px-1 text-xs text-muted-foreground font-semibold w-7">#</th>
+            <th className={cn('text-center py-2 px-1 text-xs text-muted-foreground font-semibold w-7', layout.pinLeft)}>#</th>
             {columns.map(col => {
               const unit = exercise.plannedParams?.[`${col}_unit`] as string | undefined;
               return (
-                <th key={col} className="text-center py-2 px-1 text-xs leading-tight text-muted-foreground font-semibold break-words align-bottom">
+                <th key={col} className={cn('text-center py-2 px-1 text-xs leading-tight text-muted-foreground font-semibold break-words align-bottom', layout.paramCell)}>
                   {col}
                   {unit && <span className="block font-normal">({unit})</span>}
                 </th>
               );
             })}
             {/* Mark-all / unmark-all header button — always tappable */}
-            <th className="w-11 py-2 text-center">
+            <th className={cn('w-11 py-2 text-center', layout.pinRight)}>
               <button
                 onClick={() => onMarkAll(exercise.id)}
                 title={allDone ? 'Unmark all sets' : 'Mark all sets done'}
@@ -543,7 +546,7 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
             const isDone = doneArr.includes(setIdx);
             return (
               <tr key={setIdx} className={cn('border-b last:border-0 transition-colors', isDone && 'bg-primary/5')}>
-                <td className="text-center py-2 px-2 text-muted-foreground font-medium tabular-nums">
+                <td className={cn('text-center py-2 px-2 text-muted-foreground font-medium tabular-nums', layout.pinLeft)}>
                   {setIdx + 1}
                 </td>
                 {columns.map(col => {
@@ -553,7 +556,7 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
                   // planned value so the athlete can see targets without re-typing them.
                   const displayValue = (logged !== undefined && logged !== '') ? logged : planned;
                   return (
-                    <td key={col} className="py-1.5 px-1">
+                    <td key={col} className={cn('py-1.5 px-1', layout.paramCell)}>
                       <input
                         type="text"
                         inputMode="decimal"
@@ -574,7 +577,7 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
                   );
                 })}
                 {/* Tick button — tapping a done set un-ticks it (misclick recovery) */}
-                <td className="py-1.5 pr-1 text-center">
+                <td className={cn('py-1.5 pr-1 text-center', layout.pinRight)}>
                   <button
                     onClick={() => onCompleteSet(exercise.id, setIdx)}
                     className={cn(
@@ -593,6 +596,7 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
         </tbody>
       </table>
     </div>
+      <SwipeHint show={layout.wide} />
       {previous && hintColumns.length > 0 && (
         <p className="text-xs text-muted-foreground mt-1.5">
           Faded {hintColumns.join(', ')}: your values from last time ({formatDate(previous.date)})
