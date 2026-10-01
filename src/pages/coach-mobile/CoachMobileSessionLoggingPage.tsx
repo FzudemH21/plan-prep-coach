@@ -1,3 +1,4 @@
+import { IntervalLauncher } from '@/components/workout/IntervalTimer';
 import { RestPrescription, SwipeHint, setTableLayout } from '@/components/workout/SetTableParts';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -428,6 +429,16 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
     <div>
     {/* Fixed layout: parameter columns share the phone's width (no sideways scrolling); labels wrap */}
     <RestPrescription exercise={exercise} />
+    <IntervalLauncher
+      exercise={exercise}
+      setCount={setCount}
+      doneSets={doneArr}
+      valueFor={(i, p) => {
+        const l = loggedValues[exercise.id]?.[i]?.[p];
+        return l !== undefined && l !== '' ? l : getPlannedValue(exercise, p, i);
+      }}
+      onCompleteSet={(i) => onCompleteSet(exercise.id, i)}
+    />
     <div className={layout.wrapper}>
       <table className={layout.table}>
         <thead>

@@ -25,6 +25,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
+import { IntervalModeSettings } from './IntervalModeSettings';
 
 // Predefined units for quantitative parameters — no custom units allowed
 const PREDEFINED_UNITS = [
@@ -549,6 +550,9 @@ export function ParameterManagementDialog({
               className="resize-none text-sm"
             />
           </div>
+
+          {/* Interval timer in the athlete app (e.g. HIIT): which parameter is work / rest / reps */}
+          <IntervalModeSettings parameters={parameters} onChange={onUpdateParameters} />
 
           <div className="space-y-6">
             {/* Warning Box for Missing Parameters */}

@@ -5,6 +5,7 @@
  * produced during plan assignment. Called after handleAssignProgram writes to
  * localStorage, so the athlete app can read sessions directly from Supabase.
  */
+import { intervalSpecFor, type IntervalSpec } from '@/types/toolbox';
 import { supabase } from '@/lib/supabase';
 import { getExerciseVisibility, sessionMetaKey, type SessionVisibilityData } from '@/utils/parameterVisibility';
 import { AthleteCalendarAssignment } from '@/types/athlete';
@@ -92,6 +93,8 @@ export interface ExerciseSummary {
   formulaComputedParams?: Record<string, string | number>;
   visibleParams?: string[];  // param names the coach marked showInAthleteApp
   restParamName?: string;    // name of the rest/pause parameter for this exercise's method
+  /** Interval timer of the exercise's method (Training Toolbox interval roles) */
+  interval?: IntervalSpec;
   /** True when the coach ticked "Each side" — athlete performs the exercise on each side separately */
   eachSide?: boolean;
   /** True when plannedParams were directly edited on the mobile coach app.
@@ -452,6 +455,14 @@ export async function syncAthleteSchedule(
         : undefined);
     const n = key !== undefined && params[key] !== '' ? Number(params[key]) : NaN;
     return !isNaN(n) && n > 0 ? n : undefined;
+  }
+
+  /** The method's interval timer (parameters with an interval role in the Training Toolbox) */
+  function intervalForMethod(methodId: string | undefined): IntervalSpec | undefined {
+    const base = stripSplitSuffix(methodId ?? '');
+    if (!base) return undefined;
+    return intervalSpecFor((toolboxEntries ?? []).filter(te =>
+      (te.subCategory ? `${te.category} - ${te.subCategory}` : te.category) === base));
   }
 
   /**
@@ -824,6 +835,8 @@ export async function syncAthleteSchedule(
               formulaComputedParams,
               visibleParams,
               restParamName,
+              // Interval timer in the athlete app (e.g. HIIT) — undefined for other methods / circuits
+              interval: ex.isCircuit ? undefined : intervalForMethod(ex.methodId),
               eachSide: ex.eachSide ?? false,
             };
           });

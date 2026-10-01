@@ -1,3 +1,4 @@
+import type { IntervalSpec } from '@/types/toolbox';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -73,6 +74,8 @@ export interface ExerciseSummary {
   formulaComputedParams?: Record<string, string | number>;
   visibleParams?: string[];
   restParamName?: string;
+  /** Interval timer of the exercise's method (Training Toolbox interval roles), e.g. HIIT */
+  interval?: IntervalSpec;
   /** True when the coach ticked "Each side" — athlete performs on each side separately */
   eachSide?: boolean;
   /** True when plannedParams were directly edited on the mobile coach app.
