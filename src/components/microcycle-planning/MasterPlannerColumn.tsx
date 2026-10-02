@@ -202,21 +202,15 @@ interface MasterPlannerColumnProps {
   athleteBiometrics?: import('@/types/athlete').AthleteBiometric[];
 }
 
-// Helper to format parameter names nicely
+// Parameter names as written in the Training Toolbox (as in the session sheet) — only shortened
+// for space. The capitalisation stays: re-casing every word turned "RiR" into "Rir" and
+// "Inter-Rep" into "Inter-rep".
 const formatParamName = (name: string): string => {
   return name
     .replace(/_/g, ' ')
     .replace(/per week/gi, '/wk')
-    .replace(/between/gi, 'b/w')
-    .replace(/percent/gi, '%')
-    .split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ')
-    .replace(/1rm/gi, '1RM')
-    .replace(/ S$/, 's')
-    .replace(/ M$/, 'm')
-    .replace(/ Min$/, ' min')
-    .replace(/ Ms$/, ' ms');
+    .replace(/between/gi, 'b/w')
+    .replace(/percent/gi, '%');
 };
 
 // Props interface for EditableParamInput - defined OUTSIDE the component
@@ -820,8 +814,49 @@ export function MasterPlannerColumn({
     );
   }, [supersets, day.dateString]);
 
+  /** A circuit has no parameter grid of its own: rounds, rest and its exercises in order */
+  const renderCircuitSummary = (exercise: ExerciseDistribution) => {
+    const items = (exercise.circuitExercises ?? []).slice().sort((a, b) => a.order - b.order);
+    const rest = [
+      exercise.circuitRestBetweenExercises ? `${exercise.circuitRestBetweenExercises} s between exercises` : '',
+      exercise.circuitRestBetweenRounds ? `${exercise.circuitRestBetweenRounds} s between rounds` : '',
+    ].filter(Boolean).join(' · ');
+    return (
+      <div className="mt-1 rounded border border-dashed bg-muted/20 px-2 py-1.5 space-y-1">
+        <p className="text-[11px] font-medium flex items-center gap-1">
+          <RefreshCw className="h-3 w-3 text-primary shrink-0" />
+          Circuit · {exercise.circuitRounds ? `${exercise.circuitRounds} rounds` : 'rounds not set'}
+        </p>
+        {rest && <p className="text-[10px] text-muted-foreground">{rest}</p>}
+        {items.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground italic">No exercises in this circuit</p>
+        ) : (
+          <ol className="space-y-0.5">
+            {items.map((ce, i) => {
+              const enabled = ce.enabledParams ?? ['reps'];
+              const dose = [
+                enabled.includes('reps') && ce.reps ? `${ce.reps} reps` : '',
+                enabled.includes('time') && ce.time ? `${ce.time} s` : '',
+                enabled.includes('distance') && ce.distance ? `${ce.distance} m` : '',
+              ].filter(Boolean).join(' · ');
+              return (
+                <li key={ce.id} className="text-[11px] flex items-baseline gap-1.5">
+                  <span className="text-muted-foreground w-3 shrink-0 text-right">{i + 1}.</span>
+                  <span className="flex-1 min-w-0 truncate">{ce.exerciseName}</span>
+                  {dose && <span className="text-muted-foreground shrink-0">{dose}</span>}
+                </li>
+              );
+            })}
+          </ol>
+        )}
+        {exercise.circuitComments && <p className="text-[10px] text-muted-foreground italic">{exercise.circuitComments}</p>}
+      </div>
+    );
+  };
+
   // Render parameter values for an exercise
   const renderExerciseParams = (exercise: ExerciseDistribution) => {
+    if (exercise.isCircuit) return renderCircuitSummary(exercise);
     const { storedParams, methodParams } = getExerciseParams(exercise);
     
     if (methodParams.length === 0 && Object.keys(storedParams).length === 0) {
@@ -1527,7 +1562,7 @@ export function MasterPlannerColumn({
                                           </p>
                                           {renderExerciseParams(exercise)}
                                           {/* Editable Each Side Toggle - below parameter grid */}
-                                          <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
+                                          <div className={cn("flex items-center gap-1.5 mt-1.5", exercise.isCircuit && "hidden")} onClick={(e) => e.stopPropagation()}>
                                             <Checkbox
                                               id={`each-side-section-${exercise.exerciseId}`}
                                               checked={exercise.eachSide || false}
@@ -1735,7 +1770,7 @@ export function MasterPlannerColumn({
                                 </p>
                                 {renderExerciseParams(exercise)}
                                 {/* Editable Each Side Toggle - below parameter grid */}
-                                <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
+                                <div className={cn("flex items-center gap-1.5 mt-1.5", exercise.isCircuit && "hidden")} onClick={(e) => e.stopPropagation()}>
                                   <Checkbox
                                     id={`each-side-unsectioned-${exercise.exerciseId}`}
                                     checked={exercise.eachSide || false}
@@ -1835,7 +1870,7 @@ export function MasterPlannerColumn({
                       </p>
                       {renderExerciseParams(exercise)}
                       {/* Editable Each Side Toggle - below parameter grid */}
-                      <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
+                      <div className={cn("flex items-center gap-1.5 mt-1.5", exercise.isCircuit && "hidden")} onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           id={`each-side-flat-${exercise.exerciseId}`}
                           checked={exercise.eachSide || false}
