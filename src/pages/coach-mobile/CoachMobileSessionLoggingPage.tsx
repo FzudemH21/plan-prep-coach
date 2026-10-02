@@ -897,6 +897,16 @@ export default function CoachMobileSessionLoggingPage() {
     });
   }
 
+  /** The exercise — with a superset, every exercise of it — has all its sets ticked */
+  function isBlockFinished(ex: ExerciseSummary, cs: Record<string, number[]>, section: SectionData): boolean {
+    const members = ex.supersetId ? section.exercises.filter(e => e.supersetId === ex.supersetId) : [ex];
+    return members.every(m => {
+      const count = setCountOverrides[m.id] ?? getSetCount(m);
+      const done = cs[m.id] ?? [];
+      return Array.from({ length: count }, (_, k) => k).every(k => done.includes(k));
+    });
+  }
+
   function isSupersetRoundComplete(exerciseId: string, setIdx: number, newCS: Record<string, number[]>, section: SectionData): boolean {
     const ex = section.exercises.find(e => e.id === exerciseId);
     if (!ex?.supersetId) return true;
@@ -928,10 +938,8 @@ export default function CoachMobileSessionLoggingPage() {
     const newDoneArr = [...doneArr, setIdx];
     const newCS = { ...completedSets, [exerciseId]: newDoneArr };
     setCompletedSets(newCS);
-    // Circuits: rest between rounds only — none after the last round
-    const restSecs = ex.isCircuit && newDoneArr.length >= (setCountOverrides[exerciseId] ?? getSetCount(ex))
-      ? 0
-      : getRestSeconds(ex);
+    // Rest only between sets — none after the last set of an exercise, a superset or a circuit's last round
+    const restSecs = isBlockFinished(ex, newCS, currentSection!) ? 0 : getRestSeconds(ex);
     if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
       continueAfterSection(newCS, restSecs);
     } else {
@@ -972,7 +980,7 @@ export default function CoachMobileSessionLoggingPage() {
     const newCS = { ...completedSets, [exerciseId]: newDoneArr };
     setCompletedSets(newCS);
     if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
-      continueAfterSection(newCS, ex.isCircuit ? 0 : getRestSeconds(ex));
+      continueAfterSection(newCS, 0); // all sets done — no rest after the last one
     }
   }
 
@@ -1002,7 +1010,7 @@ export default function CoachMobileSessionLoggingPage() {
     const ex = currentSection?.exercises.find(e => e.id === exId);
     if (!ex) return;
     if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
-      continueAfterSection(newCS, ex.isCircuit ? 0 : getRestSeconds(ex));
+      continueAfterSection(newCS, 0); // all sets done — no rest after the last one
     }
   }
 

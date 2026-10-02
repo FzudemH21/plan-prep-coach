@@ -5,8 +5,9 @@
  *   between sets / rounds, it drives the timer) is not a log column; the athlete sees its value
  *   in a line above the table. Other parameters named "…rest…" (e.g. rest between reps in
  *   intervals) are ordinary columns — the flag decides, not the name.
- * - setTableLayout: up to 3 parameter columns share the phone's width (as before); with more the
- *   table scrolls sideways with "#" and the tick column pinned, so inputs stay tappable.
+ * - setTableLayout: up to 4 parameter columns share the phone's width (a typical Reps / Tempo / RiR /
+ *   Weight set-up fits a 390 px phone without scrolling — ~60 px per column); with more the table
+ *   scrolls sideways with "#" and the tick column pinned, so inputs stay tappable.
  */
 import { Timer } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -58,15 +59,19 @@ export function RestPrescription({ exercise }: { exercise: ExerciseSummary }) {
 
 /** Width of a parameter column when the table scrolls sideways */
 const WIDE_COL_PX = 88;
+/** Most parameter columns that share the phone's width without sideways scrolling */
+const MAX_FIT_COLUMNS = 4;
 
 /**
- * Class names for the set table — sideways scrolling with pinned columns above 3 parameter columns.
+ * Class names for the set table — sideways scrolling with pinned columns above 4 parameter columns.
  * Scrolling: fixed column widths (inputs would otherwise take their natural ~170 px), and the pinned
  * "#" / tick cells get the same tint as their row (solid background + an inset shadow in the row's
  * colour) — a plain white cell looked like a block lying over the tinted rows.
  */
 export function setTableLayout(columnCount: number) {
-  const wide = columnCount > 3;
+  const wide = columnCount > MAX_FIT_COLUMNS;
+  // 4 columns on a phone: tighter cell padding so each input keeps as much width as possible
+  const tight = !wide && columnCount === MAX_FIT_COLUMNS;
   const headTint = 'shadow-[inset_0_0_0_999px_hsl(var(--muted)/0.3)]';
   const doneTint = 'shadow-[inset_0_0_0_999px_hsl(var(--primary)/0.05)]';
   return {
@@ -74,7 +79,7 @@ export function setTableLayout(columnCount: number) {
     wrapper: cn('rounded-lg border bg-background', wide && 'overflow-x-auto overscroll-x-contain'),
     table: cn('text-sm table-fixed', wide ? 'min-w-full' : 'w-full'),
     tableStyle: wide ? { width: `${28 + columnCount * WIDE_COL_PX + 48}px` } : undefined,
-    paramCell: wide ? 'w-[88px]' : '',
+    paramCell: wide ? 'w-[88px]' : tight ? '!px-0.5' : '',
     /** Header cells */
     pinLeft: wide ? cn('sticky left-0 z-10 bg-background', headTint) : '',
     pinRight: wide ? cn('sticky right-0 z-10 bg-background', headTint) : '',

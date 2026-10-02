@@ -461,7 +461,7 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
     : [];
 
   return (
-    // Up to 3 parameter columns share the phone's width; with more, the table scrolls sideways (SetTableParts)
+    // Up to 4 parameter columns share the phone's width; with more, the table scrolls sideways (SetTableParts)
     <div>
     <RestPrescription exercise={exercise} />
     <IntervalLauncher
@@ -1079,6 +1079,16 @@ export default function AthleteSessionPage() {
   /** Returns true when all superset siblings have also completed setIdx.
    *  Non-superset exercises always return true (no siblings to wait for).
    *  Siblings whose own set count is ≤ setIdx are treated as done for this round. */
+  /** The exercise — with a superset, every exercise of it — has all its sets ticked */
+  function isBlockFinished(ex: ExerciseSummary, cs: Record<string, number[]>, section: SectionData): boolean {
+    const members = ex.supersetId ? section.exercises.filter(e => e.supersetId === ex.supersetId) : [ex];
+    return members.every(m => {
+      const count = setCountOverrides[m.id] ?? getSetCount(m);
+      const done = cs[m.id] ?? [];
+      return Array.from({ length: count }, (_, k) => k).every(k => done.includes(k));
+    });
+  }
+
   function isSupersetRoundComplete(
     exerciseId: string,
     setIdx: number,
@@ -1129,10 +1139,8 @@ export default function AthleteSessionPage() {
     const newCS = { ...completedSets, [exerciseId]: newDoneArr };
     setCompletedSets(newCS);
 
-    // Circuits: rest between rounds only — none after the last round
-    const restSecs = ex.isCircuit && newDoneArr.length >= (setCountOverrides[exerciseId] ?? getSetCount(ex))
-      ? 0
-      : getRestSeconds(ex);
+    // Rest only between sets — none after the last set of an exercise, a superset or a circuit's last round
+    const restSecs = isBlockFinished(ex, newCS, currentSection!) ? 0 : getRestSeconds(ex);
 
     if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
       continueAfterSection(newCS, restSecs);
@@ -1189,7 +1197,7 @@ export default function AthleteSessionPage() {
     setCompletedSets(newCS);
 
     if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
-      continueAfterSection(newCS, ex.isCircuit ? 0 : getRestSeconds(ex));
+      continueAfterSection(newCS, 0); // all sets done — no rest after the last one
     }
     // If section not yet complete, just update completed sets — no rest needed
   }
