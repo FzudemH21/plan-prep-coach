@@ -234,7 +234,8 @@ function CompletionSheet({
                 )}>
                 <span className="w-5 text-center font-bold tabular-nums shrink-0">{v}</span>
                 <span className={cn('text-sm', borgRating === v ? 'text-foreground' : 'text-muted-foreground')}>
-                  {BORG_LABELS[v] ?? <span className="opacity-30">—</span>}
+                  {/* Levels without a description stay empty — a dash looked like a value */}
+                  {BORG_LABELS[v] ?? null}
                 </span>
               </button>
             ))}

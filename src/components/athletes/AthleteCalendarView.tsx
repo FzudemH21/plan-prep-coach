@@ -43,6 +43,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -1249,6 +1250,45 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     void unlinkSessionLogs(clearableDates);
     toast({ title: 'Week cleared' });
   }, [editing.handleClearDays, selectedAssignmentId, toast, getConnectionForAthlete, athlete.id, unlinkSessionLogs]);
+
+  // ── Clear day / week — one confirmation for both, optionally with the tests & events ─────────
+  const [clearRequest, setClearRequest] = useState<{ kind: 'day' | 'week'; start: string; dates: string[] } | null>(null);
+  const [clearEventsToo, setClearEventsToo] = useState(true);
+  const requestClearDay = useCallback((dayDate: string) => {
+    setClearEventsToo(true);
+    setClearRequest({ kind: 'day', start: dayDate, dates: [dayDate] });
+  }, []);
+  const requestClearWeek = useCallback((weekStartDate: string) => {
+    const start = new Date(weekStartDate + 'T12:00:00');
+    const dates = Array.from({ length: 7 }, (_, i) => format(new Date(start.getTime() + i * 86400000), 'yyyy-MM-dd'));
+    setClearEventsToo(true);
+    setClearRequest({ kind: 'week', start: weekStartDate, dates });
+  }, []);
+  const clearRequestEvents = useMemo(
+    () => (clearRequest ? getEventsForAthlete(athlete.id).filter(e => clearRequest.dates.includes(e.date)) : []),
+    [clearRequest, getEventsForAthlete, athlete.id],
+  );
+  const confirmClear = useCallback(async () => {
+    if (!clearRequest) return;
+    const { kind, start, dates } = clearRequest;
+    const removeEvents = clearEventsToo && clearRequestEvents.length > 0;
+    setClearRequest(null);
+    if (kind === 'day') handleClearDay(start); else handleClearWeek(start);
+    if (!removeEvents) return;
+    const dateSet = new Set(dates);
+    await deleteCalendarEventsWhere(athlete.id, e => dateSet.has(e.date));
+    // The athlete app reads tests/events from the schedule rows — empty them on rows that remain
+    const connection = getConnectionForAthlete(athlete.id);
+    if (connection) {
+      await supabase
+        .from('athlete_schedule')
+        .update({ events: [] })
+        .eq('athlete_connection_id', connection.id)
+        .in('date', dates);
+    }
+    toast({ title: `Removed ${clearRequestEvents.length} test${clearRequestEvents.length === 1 ? '' : 's'}/event${clearRequestEvents.length === 1 ? '' : 's'}` });
+  }, [clearRequest, clearEventsToo, clearRequestEvents, handleClearDay, handleClearWeek, deleteCalendarEventsWhere, athlete.id, getConnectionForAthlete, toast]);
+
 
   // Build mesocycle from assignment for MasterPlannerGrid
   // All of the assignment's mesocycles — the Master Planner resolves each day's own mesocycle
@@ -2849,7 +2889,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 onPasteSession={editing.handlePasteSession}
                 copiedSession={editing.copiedSession}
                 onCopyDay={editing.handleCopyDay}
-                onClearDay={handleClearDay}
+                onClearDay={requestClearDay}
                 onPasteDay={editing.handlePasteDay}
                 copiedDay={editing.copiedDay}
                 onAddSession={(dayDate: string) => {
@@ -2897,12 +2937,12 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                       // Week operations
                       copiedWeek={editing.copiedWeek}
                       onCopyWeek={editing.handleCopyWeek}
-                      onClearWeek={handleClearWeek}
+                      onClearWeek={requestClearWeek}
                       onPasteWeek={editing.handlePasteWeek}
                       // Day operations
                       copiedDay={editing.copiedDay}
                       onCopyDay={editing.handleCopyDay}
-                      onClearDay={handleClearDay}
+                      onClearDay={requestClearDay}
                       onPasteDay={editing.handlePasteDay}
                       // Session operations
                       copiedSession={editing.copiedSession}
@@ -2954,6 +2994,45 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       )}
 
       {/* Assign Program Dialog */}
+      <AlertDialog open={clearRequest !== null} onOpenChange={(open) => { if (!open) setClearRequest(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{clearRequest?.kind === 'week' ? 'Clear entire week?' : 'Clear day?'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {clearRequest?.kind === 'week'
+                ? `This deletes all sessions and resets every day of the week of ${clearRequest ? format(new Date(clearRequest.start + 'T12:00:00'), 'MMM d') : ''}.`
+                : `This deletes all sessions of ${clearRequest ? format(new Date(clearRequest.start + 'T12:00:00'), 'EEE, MMM d') : ''}.`}
+              {' '}This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {clearRequestEvents.length > 0 && (
+            <label className="flex items-start gap-2 rounded-md border p-3 text-sm cursor-pointer">
+              <Checkbox
+                checked={clearEventsToo}
+                onCheckedChange={(checked) => setClearEventsToo(checked === true)}
+                className="mt-0.5"
+              />
+              <span>
+                Also remove tests &amp; events ({clearRequestEvents.length})
+                <span className="block text-xs text-muted-foreground">
+                  {[...new Set(clearRequestEvents.map(e => e.title))].slice(0, 4).join(', ')}
+                  {new Set(clearRequestEvents.map(e => e.title)).size > 4 ? ', …' : ''}
+                </span>
+              </span>
+            </label>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { void confirmClear(); }}
+            >
+              {clearRequest?.kind === 'week' ? 'Clear week' : 'Clear day'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AssignProgramDialog
         open={showAssignDialog}
         onOpenChange={setShowAssignDialog}

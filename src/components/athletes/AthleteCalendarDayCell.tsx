@@ -386,7 +386,8 @@ export function AthleteCalendarDayCell({
                 )}
                 
                 {/* Clear Day */}
-                {onClearDay && hasTraining && (
+                {/* Also for days with only tests/events — the confirmation offers removing them */}
+                {onClearDay && (hasTraining || isSpecialDay) && (
                   <DropdownMenuItem
                     onClick={(e) => {
                       e.stopPropagation();
