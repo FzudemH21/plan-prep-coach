@@ -86,7 +86,7 @@ export function ToolboxColumnFilter({
   const filteredSelectedCount = processedValues.filter(v => selectedValues.includes(v)).length;
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
+    <Popover modal open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"

@@ -2479,6 +2479,21 @@ export default function MesocyclePage() {
       targetMesocycles = targetMesocycles.filter(m => selectedMesocycleIds.includes(m.id));
     }
 
+    // Clear: empty the parameter in EVERY session slot of the row (split microcycles and older
+    // per-session entries included) — before, only session 1 was emptied when not split
+    if (value === '') {
+      targetMesocycles.forEach(mesocycle => {
+        for (let i = 0; i < (mesocycle.microcycles?.length || 0); i++) {
+          const slots = parameterValues[mesocycle.id]?.[i]?.[methodName] ?? {};
+          const sessionKeys = Object.keys(slots).filter(k => !isNaN(Number(k))).map(Number);
+          (sessionKeys.length > 0 ? sessionKeys : [0]).forEach(sessionIdx => {
+            updateParameterValue(mesocycle.id, i, methodName, parameterName, '', sessionIdx);
+          });
+        }
+      });
+      return;
+    }
+
     // Fill the selected mesocycles
     targetMesocycles.forEach(mesocycle => {
       for (let i = 0; i < (mesocycle.microcycles?.length || 0); i++) {
@@ -2510,7 +2525,7 @@ export default function MesocyclePage() {
         }
       }
     });
-  }, [mesocycles, getParameterValue, updateParameterValue, isMethodAllocatedToMesocycle, isMicrocycleSplit, getCellFrequency]);
+  }, [mesocycles, parameterValues, getParameterValue, updateParameterValue, isMethodAllocatedToMesocycle, isMicrocycleSplit, getCellFrequency]);
 
   // ── Template loading helpers ──────────────────────────────────────────────
 

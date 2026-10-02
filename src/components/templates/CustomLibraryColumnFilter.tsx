@@ -61,7 +61,7 @@ export function CustomLibraryColumnFilter({
   };
 
   return (
-    <Popover open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) setSearch(''); }}>
+    <Popover modal open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) setSearch(''); }}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"

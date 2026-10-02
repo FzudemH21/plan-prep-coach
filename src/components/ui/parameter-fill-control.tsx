@@ -206,7 +206,7 @@ export function ParameterFillControl({
                     onClick={clearAllMesocycles}
                     className="h-6 px-2 text-xs"
                   >
-                    Clear
+                    None
                   </Button>
                 </div>
               </div>
@@ -238,10 +238,11 @@ export function ParameterFillControl({
               size="sm"
               onClick={handleClear}
               disabled={selectedMesocycleIds.size === 0}
-              className="h-8 text-xs"
+              className="h-8 text-xs text-destructive hover:text-destructive"
+              title="Empty this parameter in every microcycle and session of the selected mesocycles"
             >
               <X className="h-3 w-3 mr-1" />
-              Clear Selected
+              Clear row
             </Button>
             <Button
               variant="default"
