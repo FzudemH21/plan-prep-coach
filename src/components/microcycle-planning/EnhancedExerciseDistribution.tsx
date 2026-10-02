@@ -39,6 +39,7 @@ import { cleanupSupersetsOnExerciseDelete, toggleSuperset } from '@/utils/supers
 import { getBorgBg, getBorgFg, getBorgLabelFull, getBorgStyleLight, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { CircuitBuilderDialog } from '@/components/templates/CircuitBuilderDialog';
 import { notifySessionMetaChanged } from '@/utils/parameterVisibility';
+import { fitExercisesToMesocycleMethods, describeMethodFit } from '@/utils/exerciseMethodRemap';
 
 interface EnhancedExerciseDistributionProps {
   mesocycle: ExtendedMesocycle;
@@ -654,6 +655,7 @@ export function EnhancedExerciseDistribution({
       circuitId: circuit.id,
       circuitLibraryId: libraryId,
       circuitExercises: circuit.exercises,
+      circuitRounds: circuit.rounds,
       circuitRestBetweenRounds: circuit.restBetweenRounds,
       circuitRestBetweenExercises: circuit.restBetweenExercises,
       circuitComments: circuit.comments,
@@ -1821,18 +1823,26 @@ export function EnhancedExerciseDistribution({
       // Copy exercises with updated sectionIds, filtered to target microcycle's selection
       const newExercises: ExerciseDistribution[] = [];
       const oldToNewExerciseIds: Record<string, string> = {};
+      const fitNotes = { remapped: 0, dropped: [] as string[] };
 
       sourceDays.forEach((sourceDay, dayIndex) => {
         if (dayIndex >= minDays) return;
 
         const targetDate = dayMapping[dayIndex];
-        const sourceDateExercises = exerciseDistribution.filter(
-          ex => ex.dayDate === sourceDay.date
+        // Skip exercises not selected for the target microcycle (circuits from the library aren't
+        // tied to a method or Exercise Selection — they're always copied), then switch exercises to
+        // the method the target mesocycle uses for them
+        const fit = fitExercisesToMesocycleMethods(
+          exerciseDistribution.filter(
+            ex => ex.dayDate === sourceDay.date && (!ex.methodId || targetValidExerciseIds.has(ex.exerciseId))
+          ),
+          { cells: exerciseSelectionData, mesocycleId: targetMesocycle!.id, microcycleId: targetMicrocycleId, methodAllocations },
         );
+        fitNotes.remapped += fit.remapped;
+        fitNotes.dropped.push(...fit.dropped);
+        const sourceDateExercises = fit.exercises;
 
         sourceDateExercises.forEach(exercise => {
-          // Skip exercises not selected for the target microcycle
-          if (!targetValidExerciseIds.has(exercise.exerciseId)) return;
 
           const newId = `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
           oldToNewExerciseIds[exercise.id] = newId;
@@ -1935,9 +1945,10 @@ export function EnhancedExerciseDistribution({
       onSectionsChange([...filteredSections, ...newSections]);
       onSupersetsChange(newSupersets);
       
+      const fitText = describeMethodFit({ exercises: [], ...fitNotes });
       toast({
         title: 'Copied successfully',
-        description: `Copied ${newExercises.length} exercises from ${sourceMicrocycle.name} to ${targetMicrocycle.name}`,
+        description: `Copied ${newExercises.length} exercises from ${sourceMicrocycle.name} to ${targetMicrocycle.name}${fitText ? ` · ${fitText}` : ''}`,
       });
     } catch (error) {
       toast({
@@ -2010,6 +2021,7 @@ export function EnhancedExerciseDistribution({
       const newSections: SessionSection[] = [];
       const oldToNewExerciseIds: Record<string, string> = {};
       const oldToNewSectionIds: Record<string, string> = {};
+      const fitNotes = { remapped: 0, dropped: [] as string[] };
       
       // Clear target mesocycle's supersets BEFORE copying
       const currentMesocycleDays = trainingDays.filter(day => {
@@ -2079,13 +2091,20 @@ export function EnhancedExerciseDistribution({
           if (dayIndex >= minDays) return;
 
           const targetDate = dayMapping[sourceDay.date];
-          const sourceDateExercises = exerciseDistribution.filter(
-            ex => ex.dayDate === sourceDay.date
+          // Skip exercises not selected for the target mesocycle/microcycle (circuits from the
+          // library are always copied), then switch exercises to the method this mesocycle uses
+          // for them — the previous mesocycle may have had a different method setup
+          const fit = fitExercisesToMesocycleMethods(
+            exerciseDistribution.filter(
+              ex => ex.dayDate === sourceDay.date && (!ex.methodId || targetMicroValidExerciseIds.has(ex.exerciseId))
+            ),
+            { cells: exerciseSelectionData, mesocycleId: mesocycle.id, microcycleId: targetMicro.id, methodAllocations },
           );
+          fitNotes.remapped += fit.remapped;
+          fitNotes.dropped.push(...fit.dropped);
+          const sourceDateExercises = fit.exercises;
 
           sourceDateExercises.forEach(exercise => {
-            // Skip exercises not selected for the target mesocycle/microcycle
-            if (!targetMicroValidExerciseIds.has(exercise.exerciseId)) return;
 
             const newId = `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
             oldToNewExerciseIds[exercise.id] = newId;
@@ -2147,9 +2166,10 @@ export function EnhancedExerciseDistribution({
       onSectionsChange([...filteredSections, ...newSections]);
       onSupersetsChange(newSupersets);
       
+      const fitText = describeMethodFit({ exercises: [], ...fitNotes });
       toast({
         title: 'Mesocycle copied successfully',
-        description: `Copied ${newExercises.length} exercises from ${sourceMesocycle.name} to ${mesocycle.name}`,
+        description: `Copied ${newExercises.length} exercises from ${sourceMesocycle.name} to ${mesocycle.name}${fitText ? ` · ${fitText}` : ''}`,
       });
     } catch (error) {
       toast({

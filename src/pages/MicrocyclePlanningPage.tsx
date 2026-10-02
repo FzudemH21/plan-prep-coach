@@ -18,6 +18,7 @@ import { getAthleteDisplayName } from '@/types/athlete';
 import { TrainingPlanOverview } from '@/components/shared/TrainingPlanOverview';
 import { ExtendedMesocycle, Microcycle } from '@/features/planner/types';
 import { TrainingDay } from '@/types/daily-intensity';
+import { fitExercisesToMesocycleMethods, describeMethodFit, MethodRemapResult } from '@/utils/exerciseMethodRemap';
 import { CellData, ExerciseSelection, SessionSection, SupersetMapping, ExerciseDistribution } from '@/types/microcycle-planning';
 import { IntensityLevel } from '@/types/training';
 import { migrateLegacyIntensity } from '@/utils/intensityScale';
@@ -1909,6 +1910,22 @@ export default function MicrocyclePlanningPage() {
 
   // Handle delete session
 
+  /** Pasted placements into another mesocycle: switch exercises to the method that mesocycle uses
+   *  for them, leave out those whose method isn't assigned there. Same mesocycle → unchanged. */
+  const fitPastedToTargetDay = (exercises: ExerciseDistribution[], targetDate: string): MethodRemapResult => {
+    const target = trainingDays.find(d => d.date === targetDate);
+    const sourceMesoId = trainingDays.find(d => d.date === exercises[0]?.dayDate)?.mesocycleId;
+    if (!target || exercises.length === 0 || sourceMesoId === target.mesocycleId) {
+      return { exercises, remapped: 0, dropped: [] };
+    }
+    return fitExercisesToMesocycleMethods(exercises, {
+      cells: exerciseSelectionData,
+      mesocycleId: target.mesocycleId,
+      microcycleId: target.microcycleId,
+      methodAllocations: resolvedMethodAllocations,
+    });
+  };
+
   // Handle copy session
   const handleCopySession = (dayDate: string, sessionIndex: number) => {
     const sessionExercises = exerciseDistribution.filter(
@@ -1956,7 +1973,13 @@ export default function MicrocyclePlanningPage() {
       toast({ title: "Cannot paste outside plan date range", variant: "destructive" });
       return;
     }
-    
+
+    const sessionFit = fitPastedToTargetDay(copiedSession.exercises, targetDate);
+    if (sessionFit.exercises.length === 0) {
+      toast({ title: "Nothing to paste", description: describeMethodFit(sessionFit) ?? undefined, variant: "destructive" });
+      return;
+    }
+
     // Determine the next session index for this day
     const targetDayExercises = exerciseDistribution.filter(ex => ex.dayDate === targetDate);
     const maxSessionIndex = targetDayExercises.length > 0
@@ -1991,7 +2014,7 @@ export default function MicrocyclePlanningPage() {
     const oldToNewExerciseId: Record<string, string> = {};
     
     // Create new exercises with updated date, session index, and remapped section IDs
-    const pastedExercises = copiedSession.exercises.map(ex => {
+    const pastedExercises = sessionFit.exercises.map(ex => {
       const newId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       oldToNewExerciseId[ex.id] = newId;
       return {
@@ -2028,7 +2051,7 @@ export default function MicrocyclePlanningPage() {
             .map(id => oldToNewExerciseId[id])
             .filter(Boolean) as string[];
           
-          if (mappedIds.length > 0) {
+          if (mappedIds.length >= 2) {
             newSupersets[targetDate][newSessionIndex][destSectionKey][supersetId] = mappedIds;
           }
         });
@@ -2065,9 +2088,10 @@ export default function MicrocyclePlanningPage() {
       })
     );
     
+    const sessionFitText = describeMethodFit(sessionFit);
     toast({
       title: "Session pasted",
-      description: `${copiedSession.exercises.length} exercise(s) pasted successfully`,
+      description: `${pastedExercises.length} exercise(s) pasted successfully${sessionFitText ? ` · ${sessionFitText}` : ''}`,
     });
     
     // Clear the copied session so paste button disappears
@@ -2281,9 +2305,21 @@ export default function MicrocyclePlanningPage() {
     
     // 3. Create mapping from old exercise IDs to new exercise IDs
     const exerciseIdMapping = new Map<string, string>();
-    
+
+    // Fit each day's exercises to the mesocycle of the day they land on
+    const weekFit: MethodRemapResult = { exercises: [], remapped: 0, dropped: [] };
+    [...new Set(copiedWeek.exercises.map(ex => ex.dayDate))].forEach(sourceDayDate => {
+      const fit = fitPastedToTargetDay(
+        copiedWeek.exercises.filter(ex => ex.dayDate === sourceDayDate),
+        format(addDays(parseISO(sourceDayDate), dayOffset), 'yyyy-MM-dd'),
+      );
+      weekFit.exercises.push(...fit.exercises);
+      weekFit.remapped += fit.remapped;
+      weekFit.dropped.push(...fit.dropped);
+    });
+
     // 4. Create new exercises with new IDs, adjusted dates, remapped section IDs, AND shifted session indices
-    const pastedExercises = copiedWeek.exercises.map(ex => {
+    const pastedExercises = weekFit.exercises.map(ex => {
       const newId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       exerciseIdMapping.set(ex.id, newId);
       const originalDate = parseISO(ex.dayDate);
@@ -2391,9 +2427,10 @@ export default function MicrocyclePlanningPage() {
     // 9. Toast and cleanup
     const pastedSessionCount = new Set(pastedExercises.map(ex => `${ex.dayDate}-${ex.sessionIndex}`)).size;
     
+    const weekFitText = describeMethodFit(weekFit);
     toast({
       title: "Week pasted",
-      description: `${pastedSessionCount} session(s) with ${pastedExercises.length} exercise(s) added as new sessions`,
+      description: `${pastedSessionCount} session(s) with ${pastedExercises.length} exercise(s) added as new sessions${weekFitText ? ` · ${weekFitText}` : ''}`,
     });
     
     setCopiedWeek(null);
@@ -2458,8 +2495,14 @@ export default function MicrocyclePlanningPage() {
       order: newOrder
     };
     
+    const sectionFit = fitPastedToTargetDay(copiedSection.exercises, targetDayDate);
+    if (sectionFit.exercises.length === 0) {
+      toast({ title: "Nothing to paste", description: describeMethodFit(sectionFit) ?? undefined, variant: "destructive" });
+      return;
+    }
+
     // Create new exercises with updated IDs, date, session index, and section ID
-    const pastedExercises = copiedSection.exercises.map(ex => ({
+    const pastedExercises = sectionFit.exercises.map(ex => ({
       ...ex,
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       dayDate: targetDayDate,
@@ -2474,9 +2517,10 @@ export default function MicrocyclePlanningPage() {
     localStorage.setItem('sessionSections', JSON.stringify([...sessionSections, pastedSection]));
     localStorage.setItem('exerciseDistribution', JSON.stringify([...exerciseDistribution, ...pastedExercises]));
     
+    const sectionFitText = describeMethodFit(sectionFit);
     toast({
       title: "Section pasted",
-      description: `Section "${pastedSection.name}" with ${pastedExercises.length} exercise(s) pasted successfully`,
+      description: `Section "${pastedSection.name}" with ${pastedExercises.length} exercise(s) pasted successfully${sectionFitText ? ` · ${sectionFitText}` : ''}`,
     });
     
     setCopiedSection(null);
@@ -2533,6 +2577,7 @@ export default function MicrocyclePlanningPage() {
   // Handle paste day - OVERWRITE behavior (clears target day first)
   const handlePasteDay = (targetDate: string) => {
     if (!copiedDay) return;
+    const dayFit = fitPastedToTargetDay(copiedDay.exercises, targetDate);
     
     // Create ID mappings for sections (old -> new)
     const sectionIdMapping = new Map<string, string>();
@@ -2543,7 +2588,7 @@ export default function MicrocyclePlanningPage() {
     
     // Create ID mappings for exercises (old -> new)
     const exerciseIdMapping = new Map<string, string>();
-    copiedDay.exercises.forEach(ex => {
+    dayFit.exercises.forEach(ex => {
       const newId = `dist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 5)}`;
       exerciseIdMapping.set(ex.id, newId);
     });
@@ -2583,7 +2628,11 @@ export default function MicrocyclePlanningPage() {
             for (const supersetId in sourceSupersets[sessionIndex][sectionId]) {
               const exerciseIds = sourceSupersets[sessionIndex][sectionId][supersetId];
               // Remap exercise IDs
-              const newExerciseIds = exerciseIds.map(exId => exerciseIdMapping.get(exId) || exId);
+              // Remap exercise IDs (exercises left out by the method fit drop out of the superset)
+              const newExerciseIds = exerciseIds
+                .map(exId => exerciseIdMapping.get(exId))
+                .filter((id): id is string => !!id);
+              if (newExerciseIds.length < 2) continue;
               // Generate new superset ID
               const newSupersetId = `superset-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
               targetDaySupersets[sessionIndex][newSectionId][newSupersetId] = newExerciseIds;
@@ -2609,9 +2658,9 @@ export default function MicrocyclePlanningPage() {
       const filteredPrev = prev.filter(ex => ex.dayDate !== targetDate);
       
       // If there are exercises to copy
-      if (copiedDay.exercises.length > 0) {
+      if (dayFit.exercises.length > 0) {
         // Create new exercises with updated IDs, date, and remapped section IDs
-        const pastedExercises = copiedDay.exercises.map(ex => ({
+        const pastedExercises = dayFit.exercises.map(ex => ({
           ...ex,
           id: exerciseIdMapping.get(ex.id) || ex.id,
           dayDate: targetDate,
@@ -2692,7 +2741,9 @@ export default function MicrocyclePlanningPage() {
     
     // Build descriptive toast message
     const parts = [];
-    if (copiedDay.exercises.length > 0) parts.push(`${copiedDay.exercises.length} exercise(s)`);
+    if (dayFit.exercises.length > 0) parts.push(`${dayFit.exercises.length} exercise(s)`);
+    const dayFitText = describeMethodFit(dayFit);
+    if (dayFitText) parts.push(dayFitText);
     if (copiedDay.intensity) parts.push(`intensity`);
     if (copiedDay.testNames?.length) parts.push(`${copiedDay.testNames.length} test(s)`);
     if (copiedDay.eventNames?.length) parts.push(`${copiedDay.eventNames.length} event(s)`);
