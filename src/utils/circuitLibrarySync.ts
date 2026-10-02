@@ -124,6 +124,12 @@ export function syncCircuitPlacements(placements: ExerciseDistribution[], librar
     }
     const found = findLibraryCircuit(libraries, p.circuitId ?? p.exerciseId, p.circuitLibraryId);
     if (!found) return p;
+    // Rounds never stored on the placement (older placements, AI-added circuits) — the athlete app
+    // would fall back to 3; take the library's
+    if (!p.circuitRounds && found.circuit.rounds) {
+      changed = true;
+      p = { ...p, circuitRounds: found.circuit.rounds };
+    }
     const version = libraryCircuitVersion(found.circuit);
     const placementSig = placementSignature(p, found.circuit.rounds);
     if (placementSig === librarySignature(found.circuit)) {

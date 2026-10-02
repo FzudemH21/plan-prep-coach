@@ -92,9 +92,15 @@ export function CircuitBuilderDialog({
     existingCircuit: Circuit;
   } | null>(null);
 
-  // Pre-populate when editing or reset when creating
+  // Pre-populate when editing or reset when creating — once per opening. Callers build the `circuit`
+  // object inline, so it is a new object on every re-render of the page behind the dialog; reacting
+  // to that reset the form mid-edit (e.g. typed rounds jumped back to the stored value or to 3).
+  const populatedForRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) { populatedForRef.current = null; return; }
+    const key = circuit ? `edit:${circuit.id}` : 'new';
+    if (populatedForRef.current === key) return;
+    populatedForRef.current = key;
     if (circuit) {
       setName(circuit.name);
       setRounds(circuit.rounds ?? '3');

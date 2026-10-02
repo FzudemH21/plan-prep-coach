@@ -448,8 +448,13 @@ function CircuitInSessionEditor({
   const [saveLibId, setSaveLibId] = useState<string>('');
   const [saveMode, setSaveMode] = useState<'new' | 'overwrite'>('new');
 
+  // Fill the form once per opening — re-running on every new `circuit` / `libraries` object reset
+  // the form mid-edit (typed rounds jumped back)
+  const populatedForRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!open || !circuit) return;
+    if (!open || !circuit) { populatedForRef.current = null; return; }
+    if (populatedForRef.current === circuit.id) return;
+    populatedForRef.current = circuit.id;
     setName(circuit.name);
     setRounds(circuit.circuitRounds ?? '3');
     setRestBetweenRounds(circuit.circuitRestBetweenRounds ?? '60');

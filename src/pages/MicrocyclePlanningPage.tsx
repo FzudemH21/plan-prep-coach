@@ -4908,6 +4908,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
         isCircuit: true, circuitId, circuitLibraryId: libraryId,
         ...(circuit ? {
           circuitExercises: circuit.exercises,
+          circuitRounds: circuit.rounds,
           circuitRestBetweenRounds: circuit.restBetweenRounds,
           circuitRestBetweenExercises: circuit.restBetweenExercises,
           circuitComments: circuit.comments,
