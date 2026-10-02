@@ -1611,6 +1611,10 @@ export function EnhancedExerciseDistribution({
     onDistributionChange(updated);
   }, [exerciseDistribution, onDistributionChange]);
 
+  const handleExerciseEachSideChange = useCallback((exerciseId: string, eachSide: boolean) => {
+    onDistributionChange(exerciseDistribution.map(ex => ex.id === exerciseId ? { ...ex, eachSide } : ex));
+  }, [exerciseDistribution, onDistributionChange]);
+
   const handleDeleteSection = useCallback((sectionId: string) => {
     // Find section to get dayDate and sessionIndex for superset cleanup
     const section = sessionSections.find(s => s.id === sectionId);
@@ -2627,6 +2631,7 @@ export function EnhancedExerciseDistribution({
                                     onMoveSessionUp={handleMoveSessionUpLocal}
                                     onMoveSessionDown={handleMoveSessionDownLocal}
                                     onExerciseNotesChange={handleExerciseNotesChange}
+                                    onExerciseEachSideChange={handleExerciseEachSideChange}
                                     onReorderSection={handleSectionReorder}
                                     onSaveToLibrary={onSaveToLibrary}
                                     methodOptionsByExercise={methodOptionsByExercise}

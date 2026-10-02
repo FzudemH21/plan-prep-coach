@@ -38,6 +38,9 @@ interface PopupTableColumn {
 
 const LAST_LIBRARY_KEY = 'exerciseLibraryPicker.lastLibraryId';
 const FILTERS_KEY = 'exerciseLibraryPicker.filtersByLibrary';
+const SEARCH_ALL_KEY = 'exerciseLibraryPicker.searchAllLibraries';
+/** Most rows the all-libraries list renders at once */
+const SEARCH_ALL_LIMIT = 200;
 
 type SavedLibraryFilters = Record<string, {
   columnFilters: Record<string, string[]>;
@@ -81,6 +84,14 @@ export function ExerciseLibraryPopup({
     sortDirection: 'asc'
   });
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+  // Search every library at once (flat list: name + library) — remembered per browser
+  const [searchAllLibraries, setSearchAllLibraries] = useState<boolean>(() => {
+    try { return localStorage.getItem(SEARCH_ALL_KEY) === '1'; } catch { return false; }
+  });
+  const toggleSearchAllLibraries = (on: boolean) => {
+    setSearchAllLibraries(on);
+    try { localStorage.setItem(SEARCH_ALL_KEY, on ? '1' : '0'); } catch { /* unavailable */ }
+  };
   const [isNewExerciseDialogOpen, setIsNewExerciseDialogOpen] = useState(false);
   const [newExerciseName, setNewExerciseName] = useState('');
 
@@ -184,6 +195,36 @@ export function ExerciseLibraryPopup({
 
     return filtered;
   }, [libraryData, activeTab, filterState]);
+
+  /** The exercise's name: the library's first column (same rule as when adding it) */
+  const exerciseNameOf = (exercise: Record<string, any>): string => {
+    const library = allLibraries[exercise.library];
+    const firstKey = library?.columns?.[0]?.key;
+    return String((firstKey ? exercise[firstKey] : exercise.name) ?? '');
+  };
+
+  // All-libraries search: matches on the exercise name only (a flat list without columns would
+  // make hits on other fields look random); names that start with the term come first
+  const allLibraryMatches = useMemo(() => {
+    if (!searchAllLibraries) return [];
+    const term = filterState.search.trim().toLowerCase();
+    if (!term) return [];
+    const matches: { exercise: Record<string, any>; name: string; libraryName: string }[] = [];
+    Object.values(libraryData).flat().forEach(exercise => {
+      const name = exerciseNameOf(exercise);
+      if (name.toLowerCase().includes(term)) {
+        matches.push({ exercise, name, libraryName: allLibraries[exercise.library]?.name ?? '' });
+      }
+    });
+    return matches.sort((a, b) => {
+      const aStarts = a.name.toLowerCase().startsWith(term) ? 0 : 1;
+      const bStarts = b.name.toLowerCase().startsWith(term) ? 0 : 1;
+      return aStarts - bStarts
+        || a.name.localeCompare(b.name, 'de', { sensitivity: 'base' })
+        || a.libraryName.localeCompare(b.libraryName);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchAllLibraries, filterState.search, libraryData, allLibraries]);
 
   // Check if search term exists in any library
   const searchExistsInAllLibraries = useMemo(() => {
@@ -455,7 +496,7 @@ export function ExerciseLibraryPopup({
                     <div className="relative px-1">
                       <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
-                        placeholder="Search exercises..."
+                        placeholder={searchAllLibraries ? "Search all libraries..." : "Search exercises..."}
                         value={filterState.search}
                         onChange={(e) => handleSearchChange(e.target.value)}
                         className="pl-8 w-64"
@@ -474,7 +515,14 @@ export function ExerciseLibraryPopup({
                         </div>
                       )}
                     </div>
-                    {hasActiveFilters && (
+                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                      <Checkbox
+                        checked={searchAllLibraries}
+                        onCheckedChange={(checked) => toggleSearchAllLibraries(checked === true)}
+                      />
+                      All libraries
+                    </label>
+                    {hasActiveFilters && !searchAllLibraries && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -487,13 +535,15 @@ export function ExerciseLibraryPopup({
                     )}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {filteredAndSortedExercises.length} exercises
+                    {searchAllLibraries
+                      ? (filterState.search.trim() ? `${allLibraryMatches.length} matches in all libraries` : '')
+                      : `${filteredAndSortedExercises.length} exercises`}
                   </div>
                 </div>
 
                 {libraries.map(lib => {
                   const libCircuits = lib.circuits ?? [];
-                  if (lib.id !== activeTab || libCircuits.length === 0) return null;
+                  if (searchAllLibraries || lib.id !== activeTab || libCircuits.length === 0) return null;
                   return (
                     <div key={`circuits-${lib.id}`} className="mt-3 shrink-0">
                       <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 mb-1.5">
@@ -536,6 +586,62 @@ export function ExerciseLibraryPopup({
                 })}
 
                 <TabsContent value={activeTab} className="mt-4 flex-1 flex flex-col overflow-hidden">
+                  {searchAllLibraries ? (
+                    // Flat list across all libraries: name + the library it belongs to
+                    <div className="flex-1 border rounded-lg overflow-y-auto max-h-[50vh]" style={{ scrollbarWidth: 'thin' }}>
+                      {!filterState.search.trim() ? (
+                        <p className="text-sm text-muted-foreground text-center py-8">
+                          Type an exercise name to search all {Object.keys(allLibraries).length} libraries
+                        </p>
+                      ) : allLibraryMatches.length === 0 ? (
+                        <div className="text-center py-8 space-y-2">
+                          <p className="text-muted-foreground">No exercise named like "{filterState.search}" in any library</p>
+                          {filterState.search.trim().length > 2 && (
+                            <Button variant="outline" size="sm" onClick={handleCreateNewExercise}>
+                              <Plus className="h-3 w-3 mr-1" />
+                              Create "{filterState.search}" as new exercise
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <ul className="divide-y">
+                          {allLibraryMatches.slice(0, SEARCH_ALL_LIMIT).map(({ exercise, name, libraryName }) => {
+                            const isAlreadySelected = selectedExerciseIds.includes(exercise.id);
+                            const isCurrentlySelected = selectedItems.has(exercise.id);
+                            return (
+                              <li key={`${exercise.library}-${exercise.id}`}>
+                                <label
+                                  className={cn(
+                                    "flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-muted/40",
+                                    isAlreadySelected && "opacity-50 cursor-default"
+                                  )}
+                                >
+                                  <Checkbox
+                                    checked={isCurrentlySelected}
+                                    disabled={isAlreadySelected}
+                                    onCheckedChange={(checked) => handleItemSelect(exercise.id, checked as boolean)}
+                                  />
+                                  <span className="flex-1 truncate font-medium" title={name}>{name || '-'}</span>
+                                  {isAlreadySelected && (
+                                    <Badge variant="secondary" className="text-xs">Already selected</Badge>
+                                  )}
+                                  <Badge variant="outline" className="text-xs font-normal text-muted-foreground shrink-0">
+                                    {libraryName}
+                                  </Badge>
+                                </label>
+                              </li>
+                            );
+                          })}
+                          {allLibraryMatches.length > SEARCH_ALL_LIMIT && (
+                            <li className="px-3 py-2 text-xs text-muted-foreground text-center">
+                              Showing the first {SEARCH_ALL_LIMIT} of {allLibraryMatches.length} — type more to narrow it down
+                            </li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  ) : (
+                  <>
                   {/* Table with sticky headers and horizontal scroll */}
                   <div className="flex-1 border rounded-lg overflow-hidden">
                     <div className="overflow-auto max-h-[50vh] relative isolate" style={{scrollbarWidth: 'thin'}}>
@@ -675,6 +781,8 @@ export function ExerciseLibraryPopup({
                       </table>
                     </div>
                   </div>
+                  </>
+                  )}
                 </TabsContent>
               </Tabs>
             </div>

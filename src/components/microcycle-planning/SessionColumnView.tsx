@@ -68,6 +68,8 @@ interface SessionColumnViewProps {
   onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
   onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
+  /** Toggle "each side" (unilateral: the reps count per side) */
+  onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
   onReorderSection?: (sectionId: string, direction: 'up' | 'down') => void;
   /** Visual hint during drag: 'match' = valid drop, 'no-match' = dim, 'neutral' = no drag active */
   methodMatchState?: 'match' | 'no-match' | 'neutral';
@@ -114,6 +116,7 @@ export function SessionColumnView({
   onMoveSessionUp,
   onMoveSessionDown,
   onExerciseNotesChange,
+  onExerciseEachSideChange,
   onReorderSection,
   methodMatchState = 'neutral',
   assignedMethods,
@@ -381,6 +384,22 @@ export function SessionColumnView({
                       </Badge>
                     )}
                   </div>
+
+                  {/* Each side (unilateral) toggle */}
+                  {onExerciseEachSideChange && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={cn(
+                        "h-6 px-1 text-[10px] font-semibold",
+                        exercise.eachSide ? "text-primary bg-primary/10" : "text-muted-foreground"
+                      )}
+                      onClick={() => onExerciseEachSideChange(exercise.id, !exercise.eachSide)}
+                      title={exercise.eachSide ? "Each side — click to turn off" : "Mark as each side (reps per side)"}
+                    >
+                      L/R
+                    </Button>
+                  )}
 
                   {/* Notes button */}
                   <Button
