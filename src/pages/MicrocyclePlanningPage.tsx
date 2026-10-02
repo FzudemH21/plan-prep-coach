@@ -798,15 +798,23 @@ export default function MicrocyclePlanningPage() {
       result[base] = [...new Set([...(result[base] ?? []), ...mesoIds])];
     });
 
-    // 2. Supplement from parameterValues – handles the case where methodAllocations is stale
-    //    or empty but parameterValues already has method keys for specific mesocycles.
+    // 2. Supplement from parameterValues — only for methods without any allocation from Phase 2
+    //    Step 3 (older plans), and only where the periodization table has real values. The table
+    //    keeps (empty) rows for every method in every mesocycle, so counting mere keys made a
+    //    method not allocated to a mesocycle (e.g. "Strength") show up in its method palette.
+    const explicitlyAllocated = new Set(Object.keys(result));
     mesocycles.forEach(meso => {
       const mesoData = parameterValues[meso.id];
       if (!mesoData) return;
       Object.values(mesoData).forEach(microData => {
         if (!microData || typeof microData !== 'object') return;
-        Object.keys(microData).forEach(methodKey => {
+        Object.entries(microData).forEach(([methodKey, sessions]) => {
           const base = methodKey.split('::')[0];
+          if (explicitlyAllocated.has(base)) return;
+          const hasValues = Object.values((sessions ?? {}) as Record<string, Record<string, unknown>>).some(params =>
+            Object.entries(params ?? {}).some(([param, value]) =>
+              !param.endsWith('_unit') && value !== '' && value !== null && value !== undefined));
+          if (!hasValues) return;
           if (!result[base]) result[base] = [];
           if (!result[base].includes(meso.id)) result[base].push(meso.id);
         });

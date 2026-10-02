@@ -322,6 +322,37 @@ export function MethodSessionArchitecture({
     [dayMethodAssignments, onDayMethodAssignmentsChange]
   );
 
+  /** Move an assigned method to another session (drag & drop between sessions). A move doesn't
+   *  change how often the method is placed, so only the "not twice in one session" rule applies. */
+  const moveMethodBetweenSessions = useCallback(
+    (fromDate: string, fromSession: number, toDate: string, toSession: number, methodId: string, toIndex: number) => {
+      const fromKey = `${fromDate}_${fromSession}`;
+      const toKey = `${toDate}_${toSession}`;
+      const from = dayMethodAssignments[fromKey] ?? [];
+      if (!from.includes(methodId)) return;
+      if (fromKey === toKey) {
+        // Reorder within the session
+        const reordered = from.filter(m => m !== methodId);
+        reordered.splice(Math.min(toIndex, reordered.length), 0, methodId);
+        onDayMethodAssignmentsChange({ ...dayMethodAssignments, [fromKey]: reordered });
+        return;
+      }
+      const to = dayMethodAssignments[toKey] ?? [];
+      if (to.includes(methodId)) {
+        toast({ title: 'Already in that session', description: `${displayLabel(methodId)} is already assigned there.` });
+        return;
+      }
+      const nextTo = [...to];
+      nextTo.splice(Math.min(toIndex, nextTo.length), 0, methodId);
+      onDayMethodAssignmentsChange({
+        ...dayMethodAssignments,
+        [fromKey]: from.filter(m => m !== methodId),
+        [toKey]: nextTo,
+      });
+    },
+    [dayMethodAssignments, onDayMethodAssignmentsChange, toast]
+  );
+
   const removeMethodFromSession = useCallback(
     (dayDate: string, sessionIndex: number, methodId: string) => {
       const key = `${dayDate}_${sessionIndex}`;
@@ -560,9 +591,21 @@ export function MethodSessionArchitecture({
         const sessionIndex = parseInt(parts[2], 10);
         const methodId = draggableId.slice('method::'.length);
         addMethodToSession(dayDate, sessionIndex, methodId);
+        return;
+      }
+      // An assigned method dragged to another session (or within its session)
+      if (
+        source.droppableId.startsWith('session-drop::') &&
+        destination.droppableId.startsWith('session-drop::')
+      ) {
+        const [, fromDate, fromSi] = source.droppableId.split('::');
+        const [, toDate, toSi] = destination.droppableId.split('::');
+        // draggableId: assigned::{date}::{session}::{methodId} — the method id may contain "::"
+        const methodId = draggableId.split('::').slice(3).join('::');
+        moveMethodBetweenSessions(fromDate, parseInt(fromSi, 10), toDate, parseInt(toSi, 10), methodId, destination.index);
       }
     },
-    [addMethodToSession]
+    [addMethodToSession, moveMethodBetweenSessions]
   );
 
   // ── render ───────────────────────────────────────────────────────────────────
@@ -1137,10 +1180,23 @@ export function MethodSessionArchitecture({
                                             const sessionMethods = dayMethodAssignments[`${day.date}_${si}`] ?? [];
                                             return (
                                               <div className="space-y-1.5 min-h-[32px]">
-                                                {sessionMethods.map(methodId => (
-                                                  <div
+                                                {sessionMethods.map((methodId, mi) => (
+                                                  // Draggable to another session (or to reorder) — no need to remove and re-add
+                                                  <Draggable
                                                     key={methodId}
-                                                    className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 shadow-sm"
+                                                    draggableId={`assigned::${day.date}::${si}::${methodId}`}
+                                                    index={mi}
+                                                  >
+                                                    {(dragProv, dragSnap) => (
+                                                  <div
+                                                    ref={dragProv.innerRef}
+                                                    {...dragProv.draggableProps}
+                                                    {...dragProv.dragHandleProps}
+                                                    className={cn(
+                                                      'flex items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 shadow-sm cursor-grab active:cursor-grabbing',
+                                                      dragSnap.isDragging && 'ring-2 ring-primary/40 bg-background shadow-md',
+                                                    )}
+                                                    title="Drag to another session"
                                                   >
                                                     <span className="text-xs font-medium leading-snug" title={methodId}>
                                                       {displayLabel(methodId)}
@@ -1153,6 +1209,8 @@ export function MethodSessionArchitecture({
                                                       <X className="h-3 w-3" />
                                                     </button>
                                                   </div>
+                                                    )}
+                                                  </Draggable>
                                                 ))}
                                                 {sessDropSnap.isDraggingOver && sessionMethods.length === 0 && (
                                                   <div className="w-full text-center text-xs text-primary border border-dashed border-primary/50 rounded py-2">
