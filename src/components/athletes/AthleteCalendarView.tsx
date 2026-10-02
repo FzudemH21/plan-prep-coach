@@ -151,6 +151,45 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   }
   const [liveScheduleMap, setLiveScheduleMap] = useState<Map<string, LiveScheduleEntry>>(new Map());
 
+  /** Reload the athlete_schedule rows of a date range into liveScheduleMap; dates in the range
+   *  without a row are dropped (e.g. rows of a deleted program) */
+  const refreshLiveScheduleRange = useCallback(async (connectionId: string, dates: string[]) => {
+    if (dates.length === 0) return;
+    const sorted = [...dates].sort();
+    const from = sorted[0];
+    const to = sorted[sorted.length - 1];
+    const { data } = await supabase
+      .from('athlete_schedule')
+      .select('id, date, sessions, intensity')
+      .eq('athlete_connection_id', connectionId)
+      .gte('date', from)
+      .lte('date', to);
+    if (!data) return;
+    type RawSession = {
+      id: string; name: string; exerciseCount: number; intensity?: string; notes?: string;
+      exercises?: LiveScheduleExercise[];
+    };
+    setLiveScheduleMap(prev => {
+      const next = new Map(prev);
+      for (const date of prev.keys()) if (date >= from && date <= to) next.delete(date);
+      (data as Record<string, unknown>[]).forEach(row => {
+        next.set(row.date as string, {
+          rowId: row.id as string,
+          rowIntensity: row.intensity as string | null,
+          sessions: ((row.sessions as RawSession[]) ?? []).map(s => ({
+            id: s.id,
+            sessionName: s.name,
+            exerciseCount: s.exerciseCount ?? 0,
+            intensity: s.intensity ?? null,
+            notes: s.notes,
+            exercises: (s.exercises ?? []) as LiveScheduleExercise[],
+          })),
+        });
+      });
+      return next;
+    });
+  }, []);
+
   // Completed session logs — keyed by session_id = "${date}-${sessionIndex}"
   const [sessionLogs, setSessionLogs] = useState<Map<string, CoachSessionLog>>(new Map());
   const [sessionLogsLoaded, setSessionLogsLoaded] = useState(false);
@@ -244,7 +283,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   const { data: toolboxData } = useToolboxData();
   const { toast } = useToast();
   const { getConnectionForAthlete, loading: connectionsLoading } = useAthleteConnections();
-  const { addEvent: addCalendarEvent, addEvents: addCalendarEvents, deleteEvent: deleteCalendarEvent, getEventsForAthlete, getEventsForDate } = useCalendarEvents();
+  const { addEvent: addCalendarEvent, addEvents: addCalendarEvents, deleteEvent: deleteCalendarEvent, deleteEventsWhere: deleteCalendarEventsWhere, getEventsForAthlete, getEventsForDate } = useCalendarEvents();
 
   // Shared calendar grid date range — must be declared early so effects below can use it
   const { dateRange: calendarDateRange } = useCalendarGrid(currentDate, viewMode);
@@ -556,8 +595,20 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           table: 'athlete_schedule',
           filter: `athlete_connection_id=eq.${connection.id}`,
         },
-        (payload: { eventType: string; new: Record<string, unknown> }) => {
-          if (payload.eventType === 'DELETE') return; // ignore deletes
+        (payload: { eventType: string; new: Record<string, unknown>; old?: Record<string, unknown> }) => {
+          if (payload.eventType === 'DELETE') {
+            // A deleted row (assignment deleted, day cleared, re-sync) must not keep showing its
+            // sessions — the payload carries only the row id, so match on that
+            const deletedId = payload.old?.id as string | undefined;
+            if (!deletedId) return;
+            setLiveScheduleMap(prev => {
+              let hit = false;
+              const next = new Map(prev);
+              prev.forEach((entry, date) => { if (entry.rowId === deletedId) { next.delete(date); hit = true; } });
+              return hit ? next : prev;
+            });
+            return;
+          }
           const row = payload.new;
           const dateStr = row.date as string;
           // Skip dates the coach explicitly cleared this session — prevents
@@ -2260,6 +2311,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           // Returns the athlete's full event list INCLUDING the ones just added — the sync must
           // get this list: getEventsForAthlete() still returns the pre-assign snapshot here, so
           // syncing with it sent the previous assignment's tests to the app, not the new ones.
+          // The assignment these tests/events belong to (deleting it removes them again)
+          const eventsAssignmentId = newAssignment?.id ?? selectedAssignmentId ?? undefined;
           const transferTestsEvents = async (): Promise<CalendarEvent[]> => {
             const existingEvents = getEventsForAthlete(athlete.id);
             try {
@@ -2282,6 +2335,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                     type: 'test',
                     title: sg.testMethod,
                     date,
+                    assignmentId: eventsAssignmentId,
                     parameterId: sg.parameterLinkedId || undefined,
                     targetValue: sg.goalValue ? String(sg.goalValue) : undefined,
                     notes: sg.comments || undefined,
@@ -2296,6 +2350,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                     type: 'event',
                     title: evt.name,
                     date,
+                    assignmentId: eventsAssignmentId,
                     notes: evt.comments || undefined,
                   });
                 });
@@ -2444,7 +2499,11 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 undefined, // sessionIntensities not available at assign time
                 enrichEvents(athleteEventsForSync),
                 athleteFormulaData,
-              ).catch(e => console.error('[ASSIGN] ✗ athlete schedule sync failed:', e));
+              )
+                // The calendar shows athlete_schedule rows over the plan where they exist — reload
+                // the new plan's dates so rows left by an earlier program can't hide its sessions
+                .then(() => refreshLiveScheduleRange(createConnectionId!, dataToSave.trainingDays.map((td: { date: string }) => td.date)))
+                .catch(e => console.error('[ASSIGN] ✗ athlete schedule sync failed:', e));
             } else {
               console.warn('[ASSIGN] create: no connection found for athlete', athlete.id,
                 '— schedule not synced. Create an invite link for this athlete to enable app sync.');
@@ -2477,7 +2536,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
     setShowAssignDialog(false);
     setSelectedDate(null);
-  }, [athlete.id, athleteData, getProgram, addCalendarEvent, getEventsForAthlete, selectedAssignmentId, editing.mergeSessionData, editing.exerciseDistribution, assignments, unlinkSessionLogs, user]);
+  }, [athlete.id, athleteData, getProgram, addCalendarEvent, getEventsForAthlete, selectedAssignmentId, editing.mergeSessionData, editing.exerciseDistribution, assignments, unlinkSessionLogs, user, refreshLiveScheduleRange]);
 
   const handleDeleteAssignment = async () => {
     if (!deleteAssignment) return;
@@ -2516,6 +2575,29 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
     // Logged sessions stay in the athlete's history but are unlinked from these dates
     void unlinkSessionLogs([...coveredDates]);
+
+    // The calendar must not keep showing the deleted rows' sessions until a reload (they used to
+    // hide the sessions of a program assigned afterwards on the same dates)
+    coveredDates.forEach(date => {
+      clearedDatesRef.current.add(date);
+      setTimeout(() => { clearedDatesRef.current.delete(date); }, 10000);
+    });
+    setLiveScheduleMap(prev => {
+      const next = new Map(prev);
+      coveredDates.forEach(date => next.delete(date));
+      return next;
+    });
+
+    // Tests/events that came with this assignment go with it: tagged ones, and (older data
+    // without the tag) the reviewed tests/events of the assignment on their scheduled dates
+    const assignedKeys = new Set<string>();
+    (assignmentToDelete.reviewedSubGoals ?? []).forEach(sg =>
+      sg.scheduledDates.forEach(d => assignedKeys.add(`test|${sg.testMethod}|${d.substring(0, 10)}`)));
+    (assignmentToDelete.reviewedEvents ?? []).forEach(evt =>
+      evt.scheduledDates.forEach(d => assignedKeys.add(`event|${evt.name}|${d.substring(0, 10)}`)));
+    void deleteCalendarEventsWhere(athlete.id, e =>
+      e.assignmentId === assignmentToDelete.id ||
+      (!e.assignmentId && assignedKeys.has(`${e.type}|${e.title}|${e.date}`)));
 
     // Delete athlete_schedule rows for every date covered by this assignment
     const connection = getConnectionForAthlete(athlete.id);

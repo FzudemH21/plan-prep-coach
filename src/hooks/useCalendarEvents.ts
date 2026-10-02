@@ -10,6 +10,8 @@ export interface CalendarEvent {
   notes?: string;
   parameterId?: string;
   targetValue?: string;
+  /** Set when the test/event came with an assigned program — removed when that assignment is deleted */
+  assignmentId?: string;
 }
 
 type CalendarEventsStore = Record<string, CalendarEvent[]>;
@@ -90,6 +92,21 @@ export function useCalendarEvents() {
     [write],
   );
 
+  /** Remove every event of the athlete matching the predicate (one store write) */
+  const deleteEventsWhere = useCallback(
+    async (athleteId: string, predicate: (e: CalendarEvent) => boolean): Promise<number> => {
+      let removed = 0;
+      await write(cur => {
+        const list = cur[athleteId] || [];
+        const kept = list.filter(e => !predicate(e));
+        removed = list.length - kept.length;
+        return removed > 0 ? { ...cur, [athleteId]: kept } : cur;
+      });
+      return removed;
+    },
+    [write],
+  );
+
   const updateEvent = useCallback(
     async (
       athleteId: string,
@@ -133,7 +150,7 @@ export function useCalendarEvents() {
   }, [write]);
 
   return {
-    getEventsForDate, getEventsForAthlete, addEvent, addEvents, deleteEvent, updateEvent, deleteEventsForAthlete,
+    getEventsForDate, getEventsForAthlete, addEvent, addEvents, deleteEvent, deleteEventsWhere, updateEvent, deleteEventsForAthlete,
     normalizeParameterRefs, isLoaded: !isLoading,
   };
 }
