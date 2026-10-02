@@ -3655,6 +3655,97 @@ export default function MicrocyclePlanningPage() {
   ];
   const microStepLabel = microStepLabels[currentStep - 1] ?? `Step ${currentStep}`;
 
+  /**
+   * One session for the AI, exactly as built: sections in order, exercises in order within them,
+   * supersets spelled out ("Superset A: X + Y"), circuits with rounds and their exercises. Before,
+   * the AI got an unordered flat list without pairings or circuit contents and guessed — e.g. it
+   * "saw" Copenhagen planks paired with hip abduction when they were paired with calf raises.
+   */
+  const describeSessionForAI = (dayDate: string, sessionIdx: number, indent: string): string[] => {
+    const lines: string[] = [];
+    const sections = sessionSections
+      .filter(sec => sec.dayDate === dayDate && sec.sessionIndex === sessionIdx)
+      .sort((a, b) => a.order - b.order);
+    const sessionExercises = exerciseDistribution
+      .filter(e => e.dayDate === dayDate && (e.sessionIndex ?? 0) === sessionIdx)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const sessionSupersets = supersets[dayDate]?.[sessionIdx] ?? {};
+
+    const describeExercise = (e: typeof sessionExercises[number]): string => {
+      const exNote = e.notes ? ` [note: "${e.notes}"]` : '';
+      const ovNote = e.parameterOverrides && Object.keys(e.parameterOverrides).length > 0
+        ? ` [overrides: ${Object.entries(e.parameterOverrides).filter(([k]) => !k.endsWith('_unit')).map(([k, v]) => `${k}=${v}`).join(', ')}]`
+        : '';
+      if (e.isCircuit) {
+        const parts = (e.circuitExercises ?? [])
+          .slice()
+          .sort((a, b) => a.order - b.order)
+          .map(ce => {
+            const enabled = ce.enabledParams ?? ['reps'];
+            const dose = [
+              enabled.includes('reps') && ce.reps ? `${ce.reps} reps` : '',
+              enabled.includes('time') && ce.time ? `${ce.time} s` : '',
+              enabled.includes('distance') && ce.distance ? `${ce.distance} m` : '',
+            ].filter(Boolean).join(', ');
+            return dose ? `${ce.exerciseName} (${dose})` : ce.exerciseName;
+          });
+        const rounds = e.circuitRounds ? `${e.circuitRounds} rounds` : 'rounds not set';
+        const rest = [
+          e.circuitRestBetweenExercises ? `${e.circuitRestBetweenExercises} s between exercises` : '',
+          e.circuitRestBetweenRounds ? `${e.circuitRestBetweenRounds} s between rounds` : '',
+        ].filter(Boolean).join(', ');
+        return `CIRCUIT "${e.exerciseName}" (id: ${e.id}, method: ${e.methodId}; ${rounds}${rest ? `; ${rest}` : ''}) — in this order: ${parts.join(' → ') || '(no exercises)'}${exNote}`;
+      }
+      return `${e.exerciseName} (id: ${e.id}, exerciseId: ${e.exerciseId}, method: ${e.methodId}${e.eachSide ? ', each side' : ''})${exNote}${ovNote}`;
+    };
+
+    // Exercises of one section (or the unsectioned ones) in order, superset members kept together
+    const describeGroup = (exs: typeof sessionExercises, sectionKey: string, pad: string) => {
+      const groups = sessionSupersets[sectionKey] ?? {};
+      const supersetOf = new Map<string, string>();
+      Object.entries(groups).forEach(([sid, ids]) => {
+        if ((ids as string[]).length >= 2) (ids as string[]).forEach(id => supersetOf.set(id, sid));
+      });
+      const letters = new Map<string, string>();
+      const done = new Set<string>();
+      let pos = 0;
+      exs.forEach(e => {
+        if (done.has(e.id)) return;
+        pos += 1;
+        const sid = supersetOf.get(e.id);
+        if (sid) {
+          if (!letters.has(sid)) letters.set(sid, String.fromCharCode(65 + letters.size));
+          const members = exs.filter(x => supersetOf.get(x.id) === sid);
+          members.forEach(m => done.add(m.id));
+          lines.push(`${pad}${pos}. SUPERSET ${letters.get(sid)} (performed together, alternating): ${members.map(describeExercise).join('  +  ')}`);
+        } else {
+          done.add(e.id);
+          lines.push(`${pad}${pos}. ${describeExercise(e)}`);
+        }
+      });
+    };
+
+    if (sections.length > 0) {
+      sections.forEach((sec, i) => {
+        const secNote = sec.comments ? ` [note: "${sec.comments}"]` : '';
+        lines.push(`${indent}Section ${i + 1}: "${sec.name}"${secNote} (sectionId: ${sec.id})`);
+        const secExs = sessionExercises.filter(e => e.sectionId === sec.id);
+        if (secExs.length === 0) lines.push(`${indent}  (empty)`);
+        else describeGroup(secExs, sec.id, `${indent}  `);
+      });
+      const unsectioned = sessionExercises.filter(e => !e.sectionId || !sections.find(sec => sec.id === e.sectionId));
+      if (unsectioned.length > 0) {
+        lines.push(`${indent}Not in a section:`);
+        describeGroup(unsectioned, '__unsectioned__', `${indent}  `);
+      }
+    } else if (sessionExercises.length > 0) {
+      describeGroup(sessionExercises, '__unsectioned__', indent);
+    } else {
+      lines.push(`${indent}(no exercises yet)`);
+    }
+    return lines;
+  };
+
   const microWizardContext = useMemo(() => {
     const athleteStr = athleteName ? `Athlete: ${athleteName}` : "No athlete selected";
     const planStr = macrocycleData?.planName ? `Plan: ${macrocycleData.planName}` : "";
@@ -3799,7 +3890,7 @@ export default function MicrocyclePlanningPage() {
       if (allCircuits.length > 0) {
         const circuitLines = [`Available circuits:`];
         allCircuits.forEach(({ lib, circuit }) => {
-          const exList = circuit.exercises.map((e: { name: string }) => e.name).join(', ');
+          const exList = [...circuit.exercises].sort((a, b) => a.order - b.order).map(e => e.exerciseName).join(' → ');
           circuitLines.push(`  "${circuit.name}" (circuitId: ${circuit.id}, libraryId: ${lib.id}) — exercises: ${exList || '(none)'}`);
         });
         circuitsStr = circuitLines.join('\n');
@@ -3838,34 +3929,22 @@ export default function MicrocyclePlanningPage() {
         scheduleStr = scheduleLines.join('\n');
       }
 
-      // Distributed exercises — what's already on each day/session
-      const microDates2 = new Set(
-        currentMicro
-          ? trainingDays.filter(d => d.microcycleId === currentMicro.id).map(d => d.date)
-          : []
-      );
-      const distributed = exerciseDistribution.filter(e => microDates2.has(e.dayDate));
-      if (distributed.length > 0) {
-        const bySlot: Record<string, Array<{ id: string; name: string; methodId: string; sectionName?: string }>> = {};
-        distributed.forEach(e => {
-          const key = `${e.dayDate}_${e.sessionIndex ?? 0}`;
-          if (!bySlot[key]) bySlot[key] = [];
-          const sectionName = e.sectionId
-            ? sessionSections.find(s => s.id === e.sectionId)?.name
-            : undefined;
-          bySlot[key].push({ id: e.id, name: e.exerciseName, methodId: e.methodId, sectionName });
-        });
-        const distLines = [`Exercises already distributed in current microcycle (use these exact entry ids for move_exercise, create_superset, set_note):`];
-        Object.entries(bySlot).sort().forEach(([key, exs]) => {
-          const [date, si] = key.split('_');
-          const sessionIdx = Number(si);
-          const sectionNames = sessionSections
-            .filter(s => s.dayDate === date && s.sessionIndex === sessionIdx)
-            .sort((a, b) => a.order - b.order)
-            .map(s => s.name);
-          const sectionInfo = sectionNames.length ? ` [sections: ${sectionNames.join(', ')}]` : '';
-          distLines.push(`  ${date} session ${sessionIdx}${sectionInfo}: ${exs.map(e => `${e.name} (id: ${e.id}, method: ${e.methodId}${e.sectionName ? `, section: ${e.sectionName}` : ''})`).join(', ')}`);
-        });
+      // The sessions as built so far in the current microcycle — sections, order, supersets, circuits
+      const builtDays = microDays.filter(d => d.intensity !== '0');
+      const distLines = [`Sessions as currently built in this microcycle — THIS is the coach's session plan. Sections and exercises are listed in the exact order they are performed; SUPERSET lines list exactly which exercises are paired; CIRCUIT lines list their exercises in order. Read pairings and order ONLY from here, never infer them (use the exact entry ids for move_exercise, create_superset, set_note):`];
+      let anyBuilt = false;
+      builtDays.forEach(day => {
+        const sessionCount = day.sessions ?? 1;
+        for (let s = 0; s < sessionCount; s++) {
+          const hasContent = exerciseDistribution.some(e => e.dayDate === day.date && (e.sessionIndex ?? 0) === s);
+          if (!hasContent) continue;
+          anyBuilt = true;
+          const sessionName = day.sessionNames?.[s] ?? `Session ${s + 1}`;
+          distLines.push(`  ${day.date} (${format(new Date(day.date + 'T12:00:00'), 'EEE dd MMM')}) session ${s} "${sessionName}":`);
+          distLines.push(...describeSessionForAI(day.date, s, '    '));
+        }
+      });
+      if (anyBuilt) {
         scheduleStr = scheduleStr ? scheduleStr + '\n\n' + distLines.join('\n') : distLines.join('\n');
       }
     }
@@ -3907,41 +3986,8 @@ export default function MicrocyclePlanningPage() {
                 if (ws.comments) sessionComment = ` [note: "${ws.comments}"]`;
               } catch { /* ignore */ }
               calLines.push(`    Session ${s} "${sessionName}" [methods: ${methods.join(', ') || 'none'}]${intensityNote}${sessionComment}`);
-              // Sections in this session
-              const sections = sessionSections
-                .filter(sec => sec.dayDate === day.date && sec.sessionIndex === s)
-                .sort((a, b) => a.order - b.order);
-              // Exercises in this session grouped by section
-              const sessionExercises = exerciseDistribution.filter(
-                e => e.dayDate === day.date && (e.sessionIndex ?? 0) === s
-              );
-              if (sections.length > 0) {
-                sections.forEach(sec => {
-                  const secNote = sec.comments ? ` [note: "${sec.comments}"]` : '';
-                  calLines.push(`      Section: "${sec.name}"${secNote} (sectionId: ${sec.id})`);
-                  const secExs = sessionExercises.filter(e => e.sectionId === sec.id);
-                  secExs.forEach(e => {
-                    const exNote = e.notes ? ` [note: "${e.notes}"]` : '';
-                    const ovNote = e.parameterOverrides && Object.keys(e.parameterOverrides).length > 0 ? ` [overrides: ${Object.entries(e.parameterOverrides).map(([k, v]) => `${k}=${v}`).join(', ')}]` : '';
-                    calLines.push(`        - ${e.exerciseName} (id: ${e.id}, exerciseId: ${e.exerciseId}, method: ${e.methodId})${exNote}${ovNote}`);
-                  });
-                });
-                // Exercises not in any section
-                const unsectioned = sessionExercises.filter(e => !e.sectionId || !sections.find(sec => sec.id === e.sectionId));
-                unsectioned.forEach(e => {
-                  const exNote = e.notes ? ` [note: "${e.notes}"]` : '';
-                  const ovNote = e.parameterOverrides && Object.keys(e.parameterOverrides).length > 0 ? ` [overrides: ${Object.entries(e.parameterOverrides).map(([k, v]) => `${k}=${v}`).join(', ')}]` : '';
-                  calLines.push(`      - ${e.exerciseName} (id: ${e.id}, exerciseId: ${e.exerciseId}, method: ${e.methodId}) [no section]${exNote}${ovNote}`);
-                });
-              } else if (sessionExercises.length > 0) {
-                sessionExercises.forEach(e => {
-                  const exNote = e.notes ? ` [note: "${e.notes}"]` : '';
-                  const ovNote = e.parameterOverrides && Object.keys(e.parameterOverrides).length > 0 ? ` [overrides: ${Object.entries(e.parameterOverrides).map(([k, v]) => `${k}=${v}`).join(', ')}]` : '';
-                  calLines.push(`      - ${e.exerciseName} (id: ${e.id}, exerciseId: ${e.exerciseId}, method: ${e.methodId})${exNote}${ovNote}`);
-                });
-              } else {
-                calLines.push(`      (no exercises yet)`);
-              }
+              // Sections, exercises in order, supersets and circuits — exactly as built
+              calLines.push(...describeSessionForAI(day.date, s, '      '));
             }
           });
         });
@@ -3984,7 +4030,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, currentMicrocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData, exerciseDistribution, sessionSections, libraries, parameterValues, athleteExerciseHistoryStr, methodCategoriesWithExercises]);
+  }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, currentMicrocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData, exerciseDistribution, sessionSections, supersets, libraries, parameterValues, athleteExerciseHistoryStr, methodCategoriesWithExercises]);
 
   const handleMicroAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
     if (action.type === "set_plan_notes") {
