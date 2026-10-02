@@ -874,13 +874,25 @@ const updateCellData = (
   };
 
   // Check if there are previous columns (show copy button for all columns except first)
+  /** Whether the method is assigned to a mesocycle (Step 3) — no allocations at all = every one */
+  const isAllocated = (methodId: string, mesocycleId: string): boolean =>
+    Object.keys(methodAllocations).length === 0 || (methodAllocations[methodId] ?? []).includes(mesocycleId);
+
+  /** "Copy" only when there is something to copy: an earlier column in which the method is
+   *  assigned and has exercises (before, it showed in every column but the first — also after a
+   *  mesocycle the method isn't assigned to) */
   const hasPreviousExercisesInMethod = (
-    methodId: string, 
-    categoryName: string | undefined, 
+    methodId: string,
+    categoryName: string | undefined,
     currentColumnIndex: number
   ): boolean => {
-    // Show copy button for all columns except the first one
-    return currentColumnIndex > 0;
+    for (let i = currentColumnIndex - 1; i >= 0; i--) {
+      const column = columnStructure[i];
+      if (column.type === 'link-area') continue;
+      if (!isAllocated(methodId, column.mesocycleId)) continue;
+      if ((planningState.cellData[getCellId(methodId, categoryName, column.id)]?.exercises.length ?? 0) > 0) return true;
+    }
+    return false;
   };
 
   // Copy exercises from previous column or open dialog
@@ -892,11 +904,12 @@ const updateCellData = (
     const targetColumnIndex = columnStructure.findIndex(col => col.id === targetColumnId);
     if (targetColumnIndex === -1) return;
 
-    // Find the most recent previous column with exercises
+    // Find the most recent previous column with exercises (where the method is assigned)
     let sourceColumnId: string | null = null;
     for (let i = targetColumnIndex - 1; i >= 0; i--) {
       const column = columnStructure[i];
       if (column.type === 'link-area') continue;
+      if (!isAllocated(methodId, column.mesocycleId)) continue;
       
       const cellId = getCellId(methodId, categoryName, column.id);
       const cell = planningState.cellData[cellId];

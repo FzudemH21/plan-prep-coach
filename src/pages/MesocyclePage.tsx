@@ -1,3 +1,4 @@
+import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { MicrocyclePlanningTable, type MicrocyclePlanningTableHandle } from '@/components/microcycle-planning';
 import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
 import { WIZARD_CHAT_ID } from '@/contexts/AIChatContext';
@@ -2956,9 +2957,12 @@ export default function MesocyclePage() {
     // Helper to check if a parameter is a base parameter (not auto-generated session variant)
     const isBaseParameter = (paramName: string): boolean => {
       // Auto-generated parameters have suffixes like _set1, _set2, _set1_set1, etc.
-      // Base parameters are the original user-defined ones
-      return !/_set\d+(?:_set\d+)?$/.test(paramName);
+      // Base parameters are the original user-defined ones. "{name}_unit" is the unit chosen for a
+      // parameter — shown with its value, not as a parameter of its own
+      return !/_set\d+(?:_set\d+)?$/.test(paramName) && !paramName.endsWith('_unit');
     };
+    // Units chosen in the periodization table ("{name}_unit"), per parameter
+    const chosenUnits: Record<string, string> = {};
     
     // Get full method name with category if applicable
     const fullMethodName = categoryName ? `${methodId}::${categoryName}` : methodId;
@@ -3009,7 +3013,13 @@ export default function MesocyclePage() {
       }
       
       if (!methodParams) return;
-      
+
+      Object.values(methodParams).forEach(params => {
+        Object.entries(params as Record<string, string | number>).forEach(([key, value]) => {
+          if (key.endsWith('_unit') && value) chosenUnits[key.slice(0, -'_unit'.length)] = String(value);
+        });
+      });
+
       const sessionCount = Object.keys(methodParams).length;
       maxSessionCount = Math.max(maxSessionCount, sessionCount);
       
@@ -3097,7 +3107,9 @@ export default function MesocyclePage() {
             }
             methodParamDefs = methodParamDefs || [];
             const paramDef = methodParamDefs.find(p => p.name === paramName);
-            const unit = paramDef?.isQuantitative && paramDef?.options?.[0] ? ` ${paramDef.options[0]}` : '';
+            // The unit chosen in the table, else the toolbox's first unit
+            const unitName = chosenUnits[paramName] ?? (paramDef?.isQuantitative ? paramDef?.options?.[0] : undefined);
+            const unit = unitName ? ` ${unitName}` : '';
             rowParts.push(`${value}${unit}`.padEnd(15));
           } else {
             rowParts.push('-'.padEnd(15)); // Empty cell indicator
@@ -3125,17 +3137,18 @@ export default function MesocyclePage() {
           }
           methodParamDefs = methodParamDefs || [];
           const paramDef = methodParamDefs.find(p => p.name === paramName);
-          const unit = paramDef?.isQuantitative && paramDef?.options?.[0] ? ` ${paramDef.options[0]}` : '';
-          
+          // The unit chosen in the table, else the toolbox's first unit
+          const unitName = chosenUnits[paramName] ?? (paramDef?.isQuantitative ? paramDef?.options?.[0] : undefined);
+          const unit = unitName ? ` ${unitName}` : '';
+
           if (uniqueValues.length === 1) {
             return `${paramName}: ${uniqueValues[0]}${unit}`;
           }
           
           // Try to parse as numbers for range formatting
-          const numericValues = uniqueValues.map(v => {
-            const parsed = parseFloat(v.toString());
-            return isNaN(parsed) ? null : parsed;
-          }).filter(v => v !== null) as number[];
+          // Decimal commas too ("1,5")
+          const numericValues = uniqueValues.map(v => parseMeasuredNumber(v.toString()))
+            .filter((v): v is number => v !== null);
           
           if (numericValues.length === uniqueValues.length && numericValues.length > 1) {
             // All numeric: show range
