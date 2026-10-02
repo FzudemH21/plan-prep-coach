@@ -1,4 +1,4 @@
-import { sendMessage } from '@/utils/anthropicApi';
+import { sendMessage, AI_MODEL } from '@/utils/anthropicApi';
 import type { Message } from '@/utils/anthropicApi';
 
 /** Compress a chat thread when it grows past this many messages. */
@@ -34,7 +34,7 @@ export async function compressConversation(messages: Message[]): Promise<Message
     const summary = await sendMessage(
       [{ role: 'user', content: transcript }],
       SYSTEM_PROMPT,
-      'claude-haiku-4-5-20251001',
+      AI_MODEL,
       512,
     );
     return [

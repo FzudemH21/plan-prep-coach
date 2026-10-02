@@ -31,7 +31,7 @@ import {
   FileText,
   AlertCircle,
 } from "lucide-react";
-import { sendMessage, sendMessageWithFile, type FileAttachment } from "@/utils/anthropicApi";
+import { sendMessage, sendMessageWithFile, AI_MODEL, type FileAttachment } from "@/utils/anthropicApi";
 import { useCoachProfile, type CoachProfile } from "@/hooks/useCoachProfile";
 import type { CoachDocument } from "@/hooks/useCoachDocuments";
 
@@ -107,7 +107,7 @@ async function mergeSummaries(existing: string, incoming: string): Promise<strin
     return await sendMessage(
       [{ role: "user", content: `Existing summary:\n${existing}\n\nNew information:\n${incoming}` }],
       MERGE_SUMMARY_SYSTEM,
-      "claude-haiku-4-5"
+      AI_MODEL
     );
   } catch {
     return `${existing}\n\n${incoming}`;
@@ -156,7 +156,7 @@ Enrich the original profile with the new information. Preserve all original cont
     const raw = await sendMessage(
       [{ role: "user", content: prompt }],
       MERGE_STRUCTURED_SYSTEM,
-      "claude-haiku-4-5"
+      AI_MODEL
     );
     const parsed = JSON.parse(
       raw.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim()
@@ -240,7 +240,7 @@ export function DocumentAnalysisDialog({
         textPrompt,
         attachment,
         EXTRACTION_SYSTEM,
-        "claude-sonnet-4-5"
+        AI_MODEL
       );
 
       let parsed: ExtractedInfo;

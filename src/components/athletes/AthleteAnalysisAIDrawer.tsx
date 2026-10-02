@@ -11,7 +11,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { supabase } from '@/lib/supabase';
-import { sendMessage } from '@/utils/anthropicApi';
+import { sendMessage, AI_MODEL } from '@/utils/anthropicApi';
 import { format, subMonths } from 'date-fns';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import type { AthletePerformanceParameter } from '@/types/athlete';
@@ -387,7 +387,7 @@ export function AthleteAnalysisAIDrawer({
     const history = [...apiMessages.current, newApiMsg];
 
     try {
-      const reply = await sendMessage(history, ANALYSIS_SYSTEM_PROMPT, 'claude-sonnet-4-5', 4096);
+      const reply = await sendMessage(history, ANALYSIS_SYSTEM_PROMPT, AI_MODEL, 4096);
       const replyMsg: ApiMessage = { role: 'assistant', content: reply };
       apiMessages.current = [...history, replyMsg];
       setDisplayMessages((prev) => [...prev, { role: 'assistant', content: reply }]);

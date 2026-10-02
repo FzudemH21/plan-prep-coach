@@ -22,7 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Sparkles, CheckCircle2 } from "lucide-react";
-import { sendMessage } from "@/utils/anthropicApi";
+import { sendMessage, AI_MODEL } from "@/utils/anthropicApi";
 import { saveRationaleNotes } from "@/lib/planMemory";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ async function generateQuestions(planSummary: string): Promise<string[]> {
   const response = await sendMessage(
     [{ role: "user", content: `Plan summary:\n${planSummary}` }],
     QUESTION_SYSTEM,
-    "claude-haiku-4-5",
+    AI_MODEL,
   );
 
   // sendMessage returns a plain string

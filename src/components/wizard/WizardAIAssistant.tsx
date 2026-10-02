@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, X, Send, Mic, MicOff, Loader2, ChevronRight, CheckCircle2, Sparkles, Trash2, ChevronsDown, ChevronsUp } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { sendMessage, type Message, type SystemBlock } from "@/utils/anthropicApi";
+import { sendMessage, AI_MODEL, type Message, type SystemBlock } from "@/utils/anthropicApi";
 import { compressConversation, COMPRESSION_THRESHOLD } from "@/utils/compressConversation";
 import { useCoachProfile } from "@/hooks/useCoachProfile";
 import { useSpeechInput } from "@/hooks/useSpeechInput";
@@ -1084,12 +1084,10 @@ export function WizardAIAssistant({
         !!onApplySuggestion, coachMemoryContext, effectiveRagContext, assistantRole, globalContext, focusedSessionContext, anamnesisContext,
         length,
       ),
-      // Sonnet 5.5 thinks before answering (adaptive thinking); thinking counts toward max_tokens,
-      // so there's room for it plus a long answer. Medium effort: careful reading of the plan
-      // context without the token cost of "high".
-      "claude-sonnet-5-5",
+      // Sonnet 5.5 at high effort (AI_MODEL / AI_EFFORT); thinking counts toward max_tokens,
+      // so there's room for it plus a long answer
+      AI_MODEL,
       16000,
-      { effort: 'medium' },
     );
   };
 

@@ -58,24 +58,41 @@ async function extractText(response: Response): Promise<string> {
 
 export type SystemBlock = { type: "text"; text: string; cache_control?: { type: "ephemeral" } };
 
+/** The model used by every AI feature in the app */
+export const AI_MODEL = "claude-sonnet-5-5";
+/** Default thinking effort (Sonnet 5.5 thinks before answering; thinking is billed as output) */
+export const AI_EFFORT: Effort = "high";
+/** Thinking counts toward max_tokens — a low cap could leave no room for the answer itself */
+const MIN_MAX_TOKENS = 16000;
+
+export type Effort = "low" | "medium" | "high";
+
+/** Request fields shared by every call: the model, room for thinking + answer, the effort */
+function modelFields(model: string, maxTokens: number, effort?: Effort): Record<string, unknown> {
+  const thinks = /^claude-(sonnet|opus)-5/.test(model);
+  return {
+    model,
+    max_tokens: thinks ? Math.max(maxTokens, MIN_MAX_TOKENS) : maxTokens,
+    ...(thinks ? { output_config: { effort: effort ?? AI_EFFORT } } : {}),
+  };
+}
+
 export interface SendOptions {
-  /** How much the model thinks before answering (Sonnet 5.5 and newer; thinking tokens are billed as output) */
-  effort?: 'low' | 'medium' | 'high';
+  /** How much the model thinks before answering — defaults to AI_EFFORT */
+  effort?: Effort;
 }
 
 export async function sendMessage(
   messages: Message[],
   systemPrompt: string | SystemBlock[],
-  model = "claude-haiku-4-5",
+  model: string = AI_MODEL,
   maxTokens = 4096,
   options: SendOptions = {},
 ): Promise<string> {
   const response = await proxyFetch({
-    model,
-    max_tokens: maxTokens,
+    ...modelFields(model, maxTokens, options.effort),
     system: systemPrompt,
     messages,
-    ...(options.effort ? { output_config: { effort: options.effort } } : {}),
   });
   return extractText(response);
 }
@@ -89,7 +106,7 @@ export async function sendMessageWithFile(
   textContent: string,
   attachment: FileAttachment | null,
   systemPrompt: string,
-  model = "claude-sonnet-4-5"
+  model: string = AI_MODEL
 ): Promise<string> {
   type ContentBlock =
     | { type: "text"; text: string }
@@ -112,8 +129,7 @@ export async function sendMessageWithFile(
   content.push({ type: "text", text: textContent });
 
   const response = await proxyFetch({
-    model,
-    max_tokens: 2048,
+    ...modelFields(model, 2048),
     system: systemPrompt,
     messages: [{ role: "user", content }],
   });

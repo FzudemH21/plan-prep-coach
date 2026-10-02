@@ -34,6 +34,7 @@ import {
 } from '@/utils/workoutProgress';
 import { previousValueFor, usePreviousExerciseValues, type PreviousExerciseValues } from '@/hooks/usePreviousExerciseValues';
 import { SectionNavigator, nextUnfinishedSection } from '@/components/workout/SectionNavigator';
+import { getRestSeconds } from '@/utils/workoutRest';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -141,52 +142,6 @@ function getPlannedValue(ex: ExerciseSummary, paramName: string, setIdx: number)
   return '';
 }
 
-function getRestSeconds(ex: ExerciseSummary): number {
-  if (ex.isCircuit) {
-    const secs = Number(ex.circuitRestBetweenRounds ?? 60);
-    return secs > 0 ? secs : 60;
-  }
-  if (!ex.plannedParams) return 90;
-
-  function parseRestValue(key: string): number | null {
-    for (let i = 1; i <= 20; i++) {
-      const sv = ex.plannedParams![`${key}_set${i}`];
-      if (sv === undefined) break;
-      if (sv === '') continue;
-      const n = Number(sv);
-      if (!isNaN(n) && n > 0) {
-        const unitKey = ex.plannedParams![`${key}_unit`];
-        if (/min/i.test(String(unitKey)) || n <= 15) return n * 60;
-        return n;
-      }
-    }
-    const raw = ex.plannedParams![key];
-    if (raw === undefined || raw === '') return null;
-    const n = Number(raw);
-    if (isNaN(n) || n <= 0) return null;
-    const unitKey = ex.plannedParams![`${key}_unit`];
-    if (/min/i.test(String(unitKey)) || n <= 15) return n * 60;
-    return n;
-  }
-
-  if (ex.restParamName) {
-    const secs = parseRestValue(ex.restParamName);
-    if (secs !== null) return secs;
-  }
-
-  // Only for exercises without a flagged rest parameter (older data): a key named like rest
-  if (ex.restParamName) return 90;
-  const REST = /rest|pause|recovery/i;
-  for (const key of Object.keys(ex.plannedParams)) {
-    if (/_set\d+$/.test(key) || key.endsWith('_unit')) continue;
-    if (REST.test(key)) {
-      const secs = parseRestValue(key);
-      if (secs !== null) return secs;
-    }
-  }
-
-  return 90;
-}
 
 function formatTime(s: number): string {
   const m = Math.floor(s / 60);
@@ -973,7 +928,10 @@ export default function CoachMobileSessionLoggingPage() {
     const newDoneArr = [...doneArr, setIdx];
     const newCS = { ...completedSets, [exerciseId]: newDoneArr };
     setCompletedSets(newCS);
-    const restSecs = getRestSeconds(ex);
+    // Circuits: rest between rounds only — none after the last round
+    const restSecs = ex.isCircuit && newDoneArr.length >= (setCountOverrides[exerciseId] ?? getSetCount(ex))
+      ? 0
+      : getRestSeconds(ex);
     if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
       continueAfterSection(newCS, restSecs);
     } else {
@@ -1014,7 +972,7 @@ export default function CoachMobileSessionLoggingPage() {
     const newCS = { ...completedSets, [exerciseId]: newDoneArr };
     setCompletedSets(newCS);
     if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
-      continueAfterSection(newCS, getRestSeconds(ex));
+      continueAfterSection(newCS, ex.isCircuit ? 0 : getRestSeconds(ex));
     }
   }
 
@@ -1044,7 +1002,7 @@ export default function CoachMobileSessionLoggingPage() {
     const ex = currentSection?.exercises.find(e => e.id === exId);
     if (!ex) return;
     if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
-      continueAfterSection(newCS, getRestSeconds(ex));
+      continueAfterSection(newCS, ex.isCircuit ? 0 : getRestSeconds(ex));
     }
   }
 
@@ -1239,7 +1197,11 @@ export default function CoachMobileSessionLoggingPage() {
                                     return (
                                       <div key={cex.id} className="flex items-center gap-2 pl-10 pr-4 py-2 text-xs border-t border-border/20">
                                         <span className="text-muted-foreground w-4 shrink-0 text-right">{ci + 1}.</span>
-                                        <span className="flex-1 min-w-0 truncate text-muted-foreground">{cex.exerciseName}</span>
+                                        <button
+                                          onClick={() => setDetailTarget({ name: cex.exerciseName, videoUrl: cex.exerciseVideoUrl, description: cex.exerciseDescription, exerciseLibraryId: cex.exerciseId })}
+                                          className="flex-1 min-w-0 text-left truncate text-muted-foreground hover:text-foreground hover:underline active:opacity-60 transition-colors">
+                                          {cex.exerciseName}
+                                        </button>
                                         {paramStr && <span className="text-muted-foreground shrink-0">{paramStr}</span>}
                                       </div>
                                     );

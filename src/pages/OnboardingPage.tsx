@@ -25,7 +25,7 @@ import {
   BookOpen,
   ClipboardList,
 } from "lucide-react";
-import { sendMessage, type Message } from "@/utils/anthropicApi";
+import { sendMessage, AI_MODEL, type Message } from "@/utils/anthropicApi";
 import { useCoachProfile, type CoachProfile } from "@/hooks/useCoachProfile";
 import { useCoachDocuments } from "@/hooks/useCoachDocuments";
 import { TrainingPlanEnricher } from "@/components/coach/TrainingPlanEnricher";
@@ -273,7 +273,7 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip, onBack, hideSkipWar
     sendMessage(
       [{ role: "user", content: `Welcome ${coachName}, a coach in the field of ${sports.join(", ")}. Ask one open first question.` }],
       OPENER_SYSTEM,
-      "claude-haiku-4-5"
+      AI_MODEL
     )
       .then((text) => setMessages([{ role: "assistant", content: text }]))
       .catch(() => setMessages([fallback]))
@@ -296,7 +296,7 @@ function Stage2Chat({ coachName, sports, onComplete, onSkip, onBack, hideSkipWar
     setIsLoading(true);
 
     try {
-      const raw = await sendMessage(newMessages, buildConversationSystemPrompt(coachName, sports), "claude-haiku-4-5");
+      const raw = await sendMessage(newMessages, buildConversationSystemPrompt(coachName, sports), AI_MODEL);
       const hasReady = raw.includes(READY_TOKEN);
       const reply = raw.replace(READY_TOKEN, "").trim();
       if (hasReady) setProfileReady(true);
@@ -629,7 +629,7 @@ export default function OnboardingPage() {
       const raw = await sendMessage(
         [{ role: "user", content: `Here is the conversation with the coach:\n\n${transcript}\n\nPlease extract the structured information as JSON.` }],
         EXTRACTION_SYSTEM,
-        "claude-sonnet-4-5"
+        AI_MODEL
       );
 
       let parsed: {

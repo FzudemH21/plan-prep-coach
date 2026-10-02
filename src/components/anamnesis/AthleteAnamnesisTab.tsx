@@ -51,7 +51,7 @@ import { TemplateEditorDialog } from '@/components/anamnesis/AnamnesisTemplateEd
 import { FormLinkBox, PrivacyNoticeDialog, ProfileAnswersBanner, SendFormLinkDialog } from '@/components/anamnesis/AnamnesisFormLink';
 import { useCoachPrivacyNotice, isPrivacyNoticeComplete } from '@/hooks/useCoachPrivacyNotice';
 import { Checkbox } from '@/components/ui/checkbox';
-import { sendMessage } from '@/utils/anthropicApi';
+import { sendMessage, AI_MODEL } from '@/utils/anthropicApi';
 import { uploadAnamnesisFile, deleteFile, getSignedUrl } from '@/lib/storage';
 import { useAuth } from '@/hooks/useAuth';
 import { SEX_LABELS, type Athlete } from '@/types/athlete';
@@ -600,7 +600,7 @@ English: Current status & complaints / Relevant history / Findings from the appo
 German: Aktueller Stand & Beschwerden / Relevante Vorgeschichte / Befunde aus dem Termin / Kontraindikationen & Vorsichtsmaßnahmen (laut Angaben) / Ziele & Trainingsfokus (laut Angaben) / Offene Punkte (laut Notizen)
 Write in the language most of the answers and notes are in (German or English), headings included.
 Where nothing is stated for a heading, write "- Not stated" (German: "- Keine Angaben").`,
-        'claude-sonnet-4-5',
+        AI_MODEL,
         // Room for long notes — at 1,500 tokens the summary was cut off mid-sentence
         4096,
       );

@@ -7,7 +7,7 @@
  * All text is written directly to the athlete in plain, motivating language.
  */
 
-import { sendMessage } from "@/utils/anthropicApi";
+import { sendMessage, AI_MODEL } from "@/utils/anthropicApi";
 import { TrainingProgram } from "@/hooks/useTrainingPrograms";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -192,7 +192,7 @@ export async function generatePlanNarrative(
     const raw = await sendMessage(
       [{ role: "user", content: buildPrompt(program, mesos, opts) }],
       SYSTEM,
-      "claude-haiku-4-5"
+      AI_MODEL
     );
 
     // Strip any accidental markdown fences before parsing

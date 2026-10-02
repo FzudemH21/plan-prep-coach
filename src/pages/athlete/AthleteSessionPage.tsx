@@ -36,6 +36,7 @@ import {
 } from '@/utils/workoutProgress';
 import { previousValueFor, usePreviousExerciseValues, type PreviousExerciseValues } from '@/hooks/usePreviousExerciseValues';
 import { SectionNavigator, nextUnfinishedSection } from '@/components/workout/SectionNavigator';
+import { getRestSeconds } from '@/utils/workoutRest';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -147,59 +148,6 @@ function getPlannedValue(ex: ExerciseSummary, paramName: string, setIdx: number)
   return '';
 }
 
-/** Resolve rest duration in seconds for an exercise.
- *  Circuits use circuitRestBetweenRounds; regular exercises use planned params. */
-function getRestSeconds(ex: ExerciseSummary): number {
-  if (ex.isCircuit) {
-    const secs = Number(ex.circuitRestBetweenRounds ?? 60);
-    return secs > 0 ? secs : 60;
-  }
-  if (!ex.plannedParams) return 90;
-
-  function parseRestValue(key: string): number | null {
-    // Per-set keys take priority over the plain key so that training-calendar overrides
-    // (stored as Rest_set1, Rest_set2, …) win over the periodization-table baseline.
-    // Also handles ad-hoc exercises where the plain key is always ''.
-    for (let i = 1; i <= 20; i++) {
-      const sv = ex.plannedParams![`${key}_set${i}`];
-      if (sv === undefined) break;   // no more set keys — stop scanning
-      if (sv === '') continue;       // empty slot — try next
-      const n = Number(sv);
-      if (!isNaN(n) && n > 0) {
-        const unitKey = ex.plannedParams![`${key}_unit`];
-        if (/min/i.test(String(unitKey)) || n <= 15) return n * 60;
-        return n;
-      }
-    }
-    // Plain key fallback: periodization-table baseline for exercises without per-set overrides.
-    const raw = ex.plannedParams![key];
-    if (raw === undefined || raw === '') return null;
-    const n = Number(raw);
-    if (isNaN(n) || n <= 0) return null;
-    const unitKey = ex.plannedParams![`${key}_unit`];
-    if (/min/i.test(String(unitKey)) || n <= 15) return n * 60;
-    return n;
-  }
-
-  // 1. Use the named rest parameter set by the toolbox
-  if (ex.restParamName) {
-    const secs = parseRestValue(ex.restParamName);
-    if (secs !== null) return secs;
-  }
-
-  // 2. Only for exercises without a flagged rest parameter (older data): a key named like rest
-  if (ex.restParamName) return 90;
-  const REST = /rest|pause|recovery/i;
-  for (const key of Object.keys(ex.plannedParams)) {
-    if (/_set\d+$/.test(key) || key.endsWith('_unit')) continue;
-    if (REST.test(key)) {
-      const secs = parseRestValue(key);
-      if (secs !== null) return secs;
-    }
-  }
-
-  return 90;
-}
 
 
 function formatTime(s: number): string {
@@ -415,14 +363,14 @@ function CircuitCard({ exercise, completedSets, onCompleteRound, onShowDetail }:
             <div className="border-t divide-y divide-border/30 bg-muted/10">
               {circuitExercises.map((cex, i) => {
                 const paramStr = formatCircuitExerciseParams(cex);
-                const hasDetail = !!(cex.exerciseVideoUrl || cex.exerciseDescription);
                 return (
                   <div key={cex.id} className="flex items-center gap-2 px-3 py-2 text-xs">
                     <span className="text-muted-foreground w-4 shrink-0 text-right">{i + 1}.</span>
-                    {hasDetail && onShowDetail ? (
+                    {onShowDetail ? (
+                      // Tappable like every other exercise (the sheet says so when there are no details)
                       <button
                         onClick={() => onShowDetail({ name: cex.exerciseName, videoUrl: cex.exerciseVideoUrl, description: cex.exerciseDescription })}
-                        className="flex-1 min-w-0 text-left hover:underline active:opacity-60 transition-opacity truncate"
+                        className="flex-1 min-w-0 min-h-[32px] text-left text-primary/90 hover:underline active:opacity-60 transition-opacity truncate"
                       >
                         {cex.exerciseName}
                       </button>
@@ -922,6 +870,13 @@ export default function AthleteSessionPage() {
 
   // Overview: which section cards are expanded (by section id); all start expanded
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set<string>());
+  // Circuits in the session overview start collapsed; tap to show their exercises
+  const [expandedCircuits, setExpandedCircuits] = useState<Set<string>>(new Set<string>());
+  const toggleCircuit = (id: string) => setExpandedCircuits(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
   const expandedInitRef = useRef(false);
 
   // ── Derived ────────────────────────────────────────────────────────────────
@@ -1174,7 +1129,10 @@ export default function AthleteSessionPage() {
     const newCS = { ...completedSets, [exerciseId]: newDoneArr };
     setCompletedSets(newCS);
 
-    const restSecs = getRestSeconds(ex);
+    // Circuits: rest between rounds only — none after the last round
+    const restSecs = ex.isCircuit && newDoneArr.length >= (setCountOverrides[exerciseId] ?? getSetCount(ex))
+      ? 0
+      : getRestSeconds(ex);
 
     if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
       continueAfterSection(newCS, restSecs);
@@ -1231,7 +1189,7 @@ export default function AthleteSessionPage() {
     setCompletedSets(newCS);
 
     if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
-      continueAfterSection(newCS, getRestSeconds(ex));
+      continueAfterSection(newCS, ex.isCircuit ? 0 : getRestSeconds(ex));
     }
     // If section not yet complete, just update completed sets — no rest needed
   }
@@ -1556,7 +1514,19 @@ export default function AthleteSessionPage() {
                                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                                   {ex.isCircuit && <RefreshCw className="h-3 w-3 text-muted-foreground shrink-0" />}
                                   {ex.isCircuit ? (
-                                    <span className="min-w-0 text-sm truncate">{ex.name}</span>
+                                    <button
+                                      onClick={() => toggleCircuit(ex.id)}
+                                      className="flex items-center gap-1 min-w-0 min-h-[32px] text-sm text-left active:opacity-60 transition-opacity"
+                                      aria-expanded={expandedCircuits.has(ex.id)}
+                                    >
+                                      <span className="truncate">{ex.name}</span>
+                                      {(ex.circuitExercises ?? []).length > 0 && (
+                                        <ChevronDown className={cn(
+                                          'h-3.5 w-3.5 text-muted-foreground shrink-0 transition-transform duration-200',
+                                          expandedCircuits.has(ex.id) && 'rotate-180'
+                                        )} />
+                                      )}
+                                    </button>
                                   ) : (
                                     <button
                                       onClick={() => setDetailTarget({ name: ex.name, videoUrl: ex.exerciseVideoUrl, description: ex.exerciseDescription })}
@@ -1575,28 +1545,23 @@ export default function AthleteSessionPage() {
                                 ) : null}
                               </div>
 
-                              {/* Circuit sub-exercises — read-only in overview */}
-                              {ex.isCircuit && (ex.circuitExercises ?? []).length > 0 && (
+                              {/* Circuit sub-exercises — collapsed by default; tap one for its details */}
+                              {ex.isCircuit && expandedCircuits.has(ex.id) && (ex.circuitExercises ?? []).length > 0 && (
                                 <div className="bg-muted/20">
                                   {(ex.circuitExercises ?? [])
                                     .slice()
                                     .sort((a, b) => a.order - b.order)
                                     .map((cex, ci) => {
                                       const paramStr = formatCircuitExerciseParams(cex);
-                                      const hasDetail = !!(cex.exerciseVideoUrl || cex.exerciseDescription);
                                       return (
-                                        <div key={cex.id} className="flex items-center gap-2 pl-10 pr-4 py-2 text-xs border-t border-border/20">
+                                        <div key={cex.id} className="flex items-center gap-2 pl-10 pr-4 py-1 text-xs border-t border-border/20">
                                           <span className="text-muted-foreground w-4 shrink-0 text-right">{ci + 1}.</span>
-                                          {hasDetail ? (
-                                            <button
-                                              onClick={() => setDetailTarget({ name: cex.exerciseName, videoUrl: cex.exerciseVideoUrl, description: cex.exerciseDescription })}
-                                              className="flex-1 min-w-0 text-left text-muted-foreground hover:text-foreground hover:underline active:opacity-60 transition-colors truncate"
-                                            >
-                                              {cex.exerciseName}
-                                            </button>
-                                          ) : (
-                                            <span className="flex-1 min-w-0 truncate text-muted-foreground">{cex.exerciseName}</span>
-                                          )}
+                                          <button
+                                            onClick={() => setDetailTarget({ name: cex.exerciseName, videoUrl: cex.exerciseVideoUrl, description: cex.exerciseDescription })}
+                                            className="flex-1 min-w-0 min-h-[32px] text-left hover:text-primary active:opacity-60 transition-colors truncate"
+                                          >
+                                            {cex.exerciseName}
+                                          </button>
                                           {paramStr && (
                                             <span className="text-muted-foreground shrink-0">{paramStr}</span>
                                           )}
