@@ -50,6 +50,7 @@ import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { AccumulatedContextDialog } from '@/components/wizard/AccumulatedContextDialog';
 import { extractPlanSummary } from '@/lib/planMemory';
 import { SaveToLibraryDialog } from '@/components/session-library/SaveToLibraryDialog';
+import { syncCircuitPlacements } from '@/utils/circuitLibrarySync';
 
 // Using ExerciseDistribution, SessionSection, and SupersetMapping from types file
 
@@ -524,6 +525,13 @@ export default function MicrocyclePlanningPage() {
       });
     }
   }, [exerciseSelectionData, mesocycles, toast]);
+
+  // Placed circuits follow the circuit library: unedited ones update automatically, edited ones
+  // keep their changes (Exercise Distribution offers the update). Also restores circuit data on
+  // circuits that were placed as plain exercises. No-op (same array) when nothing changes.
+  useEffect(() => {
+    setExerciseDistribution(prev => syncCircuitPlacements(prev, libraries));
+  }, [libraries, exerciseDistribution]);
 
   // Save exercise distribution to localStorage
   useEffect(() => {

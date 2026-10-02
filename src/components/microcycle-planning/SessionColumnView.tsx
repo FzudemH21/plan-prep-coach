@@ -81,6 +81,9 @@ interface SessionColumnViewProps {
   onAddCircuitInline?: (sectionId?: string) => void;
   /** Called when the user clicks "Edit" on a circuit card — passes the circuit's distribution entry id */
   onEditCircuit?: (exerciseDistributionId: string) => void;
+  /** Placed circuits (edited in the program) whose library circuit has a newer version */
+  circuitUpdateIds?: Set<string>;
+  onUpdateCircuitFromLibrary?: (exerciseDistributionId: string) => void;
   /** Save this session to the Session Library */
   onSaveToLibrary?: (dayDate: string, sessionIndex: number) => void;
   /** exerciseId → methods of this mesocycle that contain it (2+ → the card's method can be switched) */
@@ -123,6 +126,8 @@ export function SessionColumnView({
   onAddExerciseInline,
   onAddCircuitInline,
   onEditCircuit,
+  circuitUpdateIds,
+  onUpdateCircuitFromLibrary,
   onSaveToLibrary,
   methodOptionsByExercise,
   onChangeExerciseMethod,
@@ -268,9 +273,20 @@ export function SessionColumnView({
                         {exercise.exerciseName}
                       </button>
                       <div className="text-muted-foreground text-[10px]">
+                        {exercise.circuitRounds ? `${exercise.circuitRounds} rounds · ` : ''}
                         {exercise.circuitExercises?.length ?? 0} exercises
                         {exercise.circuitRestBetweenRounds ? ` · ${exercise.circuitRestBetweenRounds}s / ${exercise.circuitRestBetweenExercises}s` : ''}
                       </div>
+                      {circuitUpdateIds?.has(exercise.id) && onUpdateCircuitFromLibrary && (
+                        <button
+                          type="button"
+                          onClick={() => onUpdateCircuitFromLibrary(exercise.id)}
+                          className="mt-1 inline-flex items-center rounded border border-amber-400/60 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300"
+                          title="This circuit was edited in the program and the library version has changed since. Click to replace it with the library version (your edits here are discarded)."
+                        >
+                          Library version changed — update?
+                        </button>
+                      )}
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>

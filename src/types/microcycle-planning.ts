@@ -111,6 +111,8 @@ export interface ExerciseDistribution {
   circuitRestBetweenRounds?: string;
   circuitRestBetweenExercises?: string;
   circuitComments?: string;
+  /** Hash of the library circuit version this placement was last taken from (circuit library sync) */
+  circuitLibraryBaseline?: string;
   // Per-exercise parameter overrides set via AI (take precedence over method-level periodization params)
   parameterOverrides?: Record<string, string | number>;
   // For ad-hoc (toolbox-sourced) exercises: store the full planned params and visible param list

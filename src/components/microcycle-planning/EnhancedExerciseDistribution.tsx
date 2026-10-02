@@ -40,6 +40,7 @@ import { getBorgBg, getBorgFg, getBorgLabelFull, getBorgStyleLight, migrateLegac
 import { CircuitBuilderDialog } from '@/components/templates/CircuitBuilderDialog';
 import { notifySessionMetaChanged } from '@/utils/parameterVisibility';
 import { fitExercisesToMesocycleMethods, describeMethodFit } from '@/utils/exerciseMethodRemap';
+import { applyLibraryCircuit, findLibraryCircuit, isCircuitLibraryUpdateAvailable } from '@/utils/circuitLibrarySync';
 
 interface EnhancedExerciseDistributionProps {
   mesocycle: ExtendedMesocycle;
@@ -1613,6 +1614,21 @@ export function EnhancedExerciseDistribution({
     onDistributionChange(updated);
   }, [exerciseDistribution, onDistributionChange]);
 
+  // Circuits edited in the program whose library circuit has changed since — offered as an update
+  const circuitUpdateIds = useMemo(
+    () => new Set(exerciseDistribution.filter(ex => isCircuitLibraryUpdateAvailable(ex, libraries)).map(ex => ex.id)),
+    [exerciseDistribution, libraries]
+  );
+  const handleUpdateCircuitFromLibrary = useCallback((distributionId: string) => {
+    const entry = exerciseDistribution.find(ex => ex.id === distributionId);
+    const found = entry && findLibraryCircuit(libraries, entry.circuitId ?? entry.exerciseId, entry.circuitLibraryId);
+    if (!entry || !found) return;
+    onDistributionChange(exerciseDistribution.map(ex =>
+      ex.id === distributionId ? applyLibraryCircuit(ex, found.circuit, found.libraryId) : ex
+    ));
+    toast({ title: 'Circuit updated', description: `"${found.circuit.name}" now matches the library version` });
+  }, [exerciseDistribution, libraries, onDistributionChange, toast]);
+
   const handleExerciseEachSideChange = useCallback((exerciseId: string, eachSide: boolean) => {
     onDistributionChange(exerciseDistribution.map(ex => ex.id === exerciseId ? { ...ex, eachSide } : ex));
   }, [exerciseDistribution, onDistributionChange]);
@@ -2652,6 +2668,8 @@ export function EnhancedExerciseDistribution({
                                     onMoveSessionDown={handleMoveSessionDownLocal}
                                     onExerciseNotesChange={handleExerciseNotesChange}
                                     onExerciseEachSideChange={handleExerciseEachSideChange}
+                                    circuitUpdateIds={circuitUpdateIds}
+                                    onUpdateCircuitFromLibrary={handleUpdateCircuitFromLibrary}
                                     onReorderSection={handleSectionReorder}
                                     onSaveToLibrary={onSaveToLibrary}
                                     methodOptionsByExercise={methodOptionsByExercise}
@@ -2814,6 +2832,7 @@ export function EnhancedExerciseDistribution({
         id: entry.circuitId ?? entry.exerciseId,
         name: entry.exerciseName,
         exercises: entry.circuitExercises ?? [],
+        rounds: entry.circuitRounds,
         restBetweenRounds: entry.circuitRestBetweenRounds ?? '60',
         restBetweenExercises: entry.circuitRestBetweenExercises ?? '15',
         comments: entry.circuitComments,
@@ -2832,6 +2851,7 @@ export function EnhancedExerciseDistribution({
                 ? {
                     ...ex,
                     exerciseName: updatedCircuit.name,
+                    circuitRounds: updatedCircuit.rounds,
                     circuitRestBetweenRounds: updatedCircuit.restBetweenRounds,
                     circuitRestBetweenExercises: updatedCircuit.restBetweenExercises,
                     circuitComments: updatedCircuit.comments,
