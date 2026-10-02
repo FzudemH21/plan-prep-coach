@@ -763,6 +763,11 @@ export function TrainingCalendarView({
                   onDistributionChange(updated);
                 }
               }}
+              onExerciseOverridesReset={onDistributionChange ? (distributionId) => {
+                onDistributionChange(exerciseDistribution.map(ex =>
+                  (ex.id || ex.exerciseId) === distributionId ? { ...ex, parameterOverrides: undefined } : ex
+                ));
+              } : undefined}
               onExerciseEachSideChange={(exerciseId, eachSide) => {
                 // Sync eachSide toggle to parent's exerciseDistribution
                 if (onDistributionChange) {

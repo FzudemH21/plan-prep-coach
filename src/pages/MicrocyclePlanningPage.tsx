@@ -195,6 +195,10 @@ export default function MicrocyclePlanningPage() {
     exercises: ExerciseDistribution[];
     sourceDate: string;
     sessionIndex: number;
+    /** Session intensity, name and session note — pasted along with the exercises */
+    intensity?: string | null;
+    sessionName?: string;
+    sessionNote?: string;
   } | null>(null);
   const [copiedWeek, setCopiedWeek] = useState<{
     exercises: ExerciseDistribution[];
@@ -212,6 +216,10 @@ export default function MicrocyclePlanningPage() {
     testNames?: string[];
     eventNames?: string[];
     splitState?: number;
+    /** Per session: intensity and session note (session index → value) */
+    sessionIntensities?: Record<number, string>;
+    sessionNotes?: Record<number, string>;
+    sessionNames?: string[];
   } | null>(null);
   const [copiedSection, setCopiedSection] = useState<{
     exercises: ExerciseDistribution[];
@@ -1953,11 +1961,22 @@ export default function MicrocyclePlanningPage() {
       return;
     }
     
+    // Session-level data lives under per-session keys ("{prefix}_{mesocycleId}_{date}_{index}")
+    const sourceMesoId = trainingDays.find(d => d.date === dayDate)?.mesocycleId ?? currentMesocycle?.id;
+    let sessionNote: string | undefined;
+    try {
+      const ws = JSON.parse(localStorage.getItem(`workoutSessions_${sourceMesoId}_${dayDate}_${sessionIndex}`) ?? '{}');
+      if (typeof ws.comments === 'string' && ws.comments) sessionNote = ws.comments;
+    } catch { /* ignore */ }
+
     setCopiedSession({
       exercises: sessionExercises,
       sections: sessionSectionsForSession,
       sourceDate: dayDate,
-      sessionIndex: sessionIndex
+      sessionIndex: sessionIndex,
+      intensity: sourceMesoId ? localStorage.getItem(`sessionIntensity_${sourceMesoId}_${dayDate}_${sessionIndex}`) : null,
+      sessionName: trainingDays.find(d => d.date === dayDate)?.sessionNames?.[sessionIndex],
+      sessionNote,
     } as any);
     
     const sectionCount = sessionSectionsForSession.length;
@@ -2080,7 +2099,23 @@ export default function MicrocyclePlanningPage() {
     localStorage.setItem('exerciseDistribution', JSON.stringify(updatedExerciseDistribution));
     localStorage.setItem('sessionSections', JSON.stringify(updatedSessionSections));
     
-    // Update trainingDays to include the new session count
+    // Session intensity and session note travel with the session
+    const targetMesoId = trainingDays.find(d => d.date === targetDate)?.mesocycleId ?? currentMesocycle?.id;
+    if (targetMesoId) {
+      if (copiedSession.intensity) {
+        localStorage.setItem(`sessionIntensity_${targetMesoId}_${targetDate}_${newSessionIndex}`, copiedSession.intensity);
+      }
+      if (copiedSession.sessionNote) {
+        const wsKey = `workoutSessions_${targetMesoId}_${targetDate}_${newSessionIndex}`;
+        let existing: Record<string, unknown> = {};
+        try { existing = JSON.parse(localStorage.getItem(wsKey) ?? '{}'); } catch { /* ignore */ }
+        localStorage.setItem(wsKey, JSON.stringify({ ...existing, comments: copiedSession.sessionNote }));
+        setSessionCommentsRefreshKey(k => k + 1);
+      }
+      notifySessionMetaChanged();
+    }
+
+    // Update trainingDays to include the new session count (and the copied session's name)
     setTrainingDays(prev =>
       prev.map(day => {
         if (day.date !== targetDate) return day;
@@ -2088,6 +2123,7 @@ export default function MicrocyclePlanningPage() {
         while (sessionNames.length <= newSessionIndex) {
           sessionNames.push(`Session ${sessionNames.length + 1}`);
         }
+        if (copiedSession.sessionName) sessionNames[newSessionIndex] = copiedSession.sessionName;
         return {
           ...day,
           sessions: newSessionIndex + 1,
@@ -2556,8 +2592,25 @@ export default function MicrocyclePlanningPage() {
     // Get split state for this day
     const splitState = daySplitStates[dayDate];
     
+    // Session intensities and session notes (per-session keys)
+    const sourceMesoId = trainingDay?.mesocycleId ?? currentMesocycle?.id;
+    const sessionIntensities: Record<number, string> = {};
+    const sessionNotes: Record<number, string> = {};
+    const sessionCount = Math.max(splitState ?? 0, trainingDay?.sessions ?? 0, ...dayExercises.map(ex => ex.sessionIndex + 1));
+    for (let i = 0; i < sessionCount && sourceMesoId; i++) {
+      const intensity = localStorage.getItem(`sessionIntensity_${sourceMesoId}_${dayDate}_${i}`);
+      if (intensity) sessionIntensities[i] = intensity;
+      try {
+        const ws = JSON.parse(localStorage.getItem(`workoutSessions_${sourceMesoId}_${dayDate}_${i}`) ?? '{}');
+        if (typeof ws.comments === 'string' && ws.comments) sessionNotes[i] = ws.comments;
+      } catch { /* ignore */ }
+    }
+
     // Always allow copying (every day has at least intensity)
     setCopiedDay({
+      sessionIntensities,
+      sessionNotes,
+      sessionNames: trainingDay?.sessionNames ? [...trainingDay.sessionNames] : undefined,
       exercises: dayExercises,
       sections: daySections,
       supersets: daySupersets,
@@ -2730,6 +2783,26 @@ export default function MicrocyclePlanningPage() {
       });
     }
 
+    // Session intensities and notes of the copied day replace the target day's
+    const targetMesoId = trainingDays.find(d => d.date === targetDate)?.mesocycleId ?? currentMesocycle?.id;
+    if (targetMesoId) {
+      const count = Math.max(copiedDay.splitState ?? 0, daySplitStates[targetDate] ?? 0, 8);
+      for (let i = 0; i < count; i++) {
+        const iKey = `sessionIntensity_${targetMesoId}_${targetDate}_${i}`;
+        const intensity = copiedDay.sessionIntensities?.[i];
+        if (intensity) localStorage.setItem(iKey, intensity);
+        else localStorage.removeItem(iKey);
+        const wsKey = `workoutSessions_${targetMesoId}_${targetDate}_${i}`;
+        const note = copiedDay.sessionNotes?.[i];
+        let existing: Record<string, unknown> = {};
+        try { existing = JSON.parse(localStorage.getItem(wsKey) ?? '{}'); } catch { /* ignore */ }
+        if (note) localStorage.setItem(wsKey, JSON.stringify({ ...existing, comments: note }));
+        else if (existing.comments) localStorage.setItem(wsKey, JSON.stringify({ ...existing, comments: '' }));
+      }
+      setSessionCommentsRefreshKey(k => k + 1);
+      notifySessionMetaChanged();
+    }
+
     // 7. Update trainingDays session info
     setTrainingDays(prev =>
       prev.map(day => {
@@ -2737,7 +2810,7 @@ export default function MicrocyclePlanningPage() {
         const sessionCount = copiedDay.splitState ?? 0;
         const sessionNames: string[] = [];
         for (let i = 0; i < sessionCount; i++) {
-          sessionNames.push(`Session ${i + 1}`);
+          sessionNames.push(copiedDay.sessionNames?.[i] ?? `Session ${i + 1}`);
         }
         return {
           ...day,

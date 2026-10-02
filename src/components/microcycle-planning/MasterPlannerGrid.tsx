@@ -73,6 +73,8 @@ interface MasterPlannerGridProps {
   // New props for Phase 2 - editable notes and eachSide
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
   onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
+  /** Drop this placement's own parameter edits (session sheet / Master Planner) → Periodization Table values again */
+  onExerciseOverridesReset?: (exerciseDistributionId: string) => void;
   // New props for Phase 4 - intensity editing
   onDayIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
   onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
@@ -152,6 +154,7 @@ export function MasterPlannerGrid({
   onSectionCommentChange,
   onExerciseNotesChange,
   onExerciseEachSideChange,
+  onExerciseOverridesReset,
   onDayIntensityChange,
   onSessionIntensityChange,
   onSectionReorder,
@@ -300,6 +303,7 @@ export function MasterPlannerGrid({
               totalWeeks={filteredDays.length}
               onExerciseNotesChange={onExerciseNotesChange}
               onExerciseEachSideChange={onExerciseEachSideChange}
+              onExerciseOverridesReset={onExerciseOverridesReset}
               onDayIntensityChange={onDayIntensityChange}
               onSessionIntensityChange={onSessionIntensityChange}
               onSectionReorder={onSectionReorder}

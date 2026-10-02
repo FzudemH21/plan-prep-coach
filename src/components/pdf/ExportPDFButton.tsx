@@ -224,6 +224,10 @@ export function ExportPDFButton({
     }
   };
 
+  /** A new version of the app was deployed while this page was open: the code the export loads on
+   *  demand now has another file name, so the old one can't be fetched. Only a page reload helps. */
+  const isOutdatedAppError = /dynamically imported module|Importing a module script failed|Loading chunk/i.test(errorMsg);
+
   // ── Export handler ──────────────────────────────────────────────────────────
   const handleExport = async () => {
     try {
@@ -447,15 +451,34 @@ export function ExportPDFButton({
           {/* Error */}
           {step === "error" && (
             <div className="py-4">
-              <p className="text-sm text-destructive">{errorMsg}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => setStep("idle")}
-              >
-                Try again
-              </Button>
+              {isOutdatedAppError ? (
+                <>
+                  <p className="text-sm text-destructive">
+                    The app was updated since this page was opened, so the export can't load. Reload the page
+                    (save your program first if you have unsaved changes) and export again.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={() => window.location.reload()}
+                  >
+                    Reload page
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-destructive">{errorMsg}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={() => setStep("idle")}
+                  >
+                    Try again
+                  </Button>
+                </>
+              )}
             </div>
           )}
 

@@ -34,7 +34,7 @@ No prompt without this line. CLAUDE.md and FEATURES.md are the single source of 
 - Client wrapper: `src/lib/anthropic.ts`
 - Key stored in `.env` as `VITE_ANTHROPIC_API_KEY` (never commit)
 - `dangerouslyAllowBrowser: true` is set — acceptable for local coach tool, must be replaced with a backend proxy for SaaS
-- Model in use: `claude-sonnet-4-5` with `max_tokens: 8192`
+- Wizard AI model: `claude-sonnet-5-5` with `max_tokens: 16000` and `output_config.effort: "medium"` (adaptive thinking; `extractText` in `src/utils/anthropicApi.ts` reads the reply by block type). Other features still use `claude-sonnet-4-5` / `claude-haiku-4-5`
 
 ### Supabase
 - SDK installed: `@supabase/supabase-js`
@@ -100,7 +100,7 @@ Applied at: mesocycle level, microcycle level, daily level, and session level. U
 
 ### AI Assistant
 - Available on every page and wizard step (`WizardAIAssistant` component)
-- Powered by `claude-sonnet-4-5`
+- Powered by `claude-sonnet-5-5` (medium effort)
 - Receives full wizard context (current step, athlete, plan state, toolbox, parameter database)
 - Can apply structured actions directly into the wizard via `[[APPLY: {...}]]` blocks
 - Available actions per phase — see Wizard Flow section below

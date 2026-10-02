@@ -42,27 +42,40 @@ async function extractText(response: Response): Promise<string> {
     throw new Error(`AI proxy error ${response.status}: ${error}`);
   }
   const data = await response.json() as {
-    content: Array<{ type: string; text: string }>;
+    content: Array<{ type: string; text?: string }>;
+    stop_reason?: string;
   };
-  const textBlock = data.content.find((b) => b.type === 'text');
-  if (!textBlock) throw new Error('No text in API response');
+  // Newer models (Sonnet 5.5) may start with a thinking block — read the reply by block type
+  const textBlock = data.content.find((b) => b.type === 'text' && b.text);
+  if (!textBlock?.text) {
+    if (data.stop_reason === 'refusal') throw new Error('The AI declined to answer this request.');
+    if (data.stop_reason === 'max_tokens') throw new Error('The AI ran out of room before answering — please try again or ask for a shorter answer.');
+    throw new Error('No text in API response');
+  }
   // The reply refers to "Athlete A" etc. — show the real names in the app
   return restoreNames(textBlock.text);
 }
 
 export type SystemBlock = { type: "text"; text: string; cache_control?: { type: "ephemeral" } };
 
+export interface SendOptions {
+  /** How much the model thinks before answering (Sonnet 5.5 and newer; thinking tokens are billed as output) */
+  effort?: 'low' | 'medium' | 'high';
+}
+
 export async function sendMessage(
   messages: Message[],
   systemPrompt: string | SystemBlock[],
   model = "claude-haiku-4-5",
   maxTokens = 4096,
+  options: SendOptions = {},
 ): Promise<string> {
   const response = await proxyFetch({
     model,
     max_tokens: maxTokens,
     system: systemPrompt,
     messages,
+    ...(options.effort ? { output_config: { effort: options.effort } } : {}),
   });
   return extractText(response);
 }

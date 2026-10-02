@@ -1084,8 +1084,12 @@ export function WizardAIAssistant({
         !!onApplySuggestion, coachMemoryContext, effectiveRagContext, assistantRole, globalContext, focusedSessionContext, anamnesisContext,
         length,
       ),
-      "claude-sonnet-4-5",
-      8192
+      // Sonnet 5.5 thinks before answering (adaptive thinking); thinking counts toward max_tokens,
+      // so there's room for it plus a long answer. Medium effort: careful reading of the plan
+      // context without the token cost of "high".
+      "claude-sonnet-5-5",
+      16000,
+      { effort: 'medium' },
     );
   };
 

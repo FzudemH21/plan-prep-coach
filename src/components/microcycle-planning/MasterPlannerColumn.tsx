@@ -138,6 +138,8 @@ interface MasterPlannerColumnProps {
   // New props for Phase 2 - editable notes and eachSide
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
   onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
+  /** Drop this placement's own parameter edits (session sheet / Master Planner) → Periodization Table values again */
+  onExerciseOverridesReset?: (exerciseDistributionId: string) => void;
   // New props for Phase 4 - intensity editing
   onDayIntensityChange?: (dayDate: string, intensity: IntensityLevel) => void;
   onSessionIntensityChange?: (dayDate: string, sessionIndex: number, intensity: IntensityLevel) => void;
@@ -501,6 +503,7 @@ export function MasterPlannerColumn({
   totalWeeks = 6,
   onExerciseNotesChange,
   onExerciseEachSideChange,
+  onExerciseOverridesReset,
   onDayIntensityChange,
   onSessionIntensityChange,
   onSectionReorder,
@@ -1081,8 +1084,28 @@ export function MasterPlannerColumn({
       return Math.round(result * 2) / 2;
     };
 
+    const editedParamNames = Object.keys(exercise.parameterOverrides ?? {});
+
     return (
       <>
+        {/* Values edited for this exercise on this day win over the Periodization Table — so later
+            changes there don't reach them. Offer the way back. */}
+        {editedParamNames.length > 0 && onExerciseOverridesReset && (
+          <div className="flex items-center gap-1 mt-1 text-[10px] text-amber-700 dark:text-amber-400" onClick={(e) => e.stopPropagation()}>
+            <span title={`Edited here or in the session sheet: ${editedParamNames.map(n => n.replace(/_set(\d+)$/, ' (set $1)')).join(', ')}`}>
+              Edited for this session
+            </span>
+            <button
+              type="button"
+              className="inline-flex items-center gap-0.5 rounded px-1 hover:bg-amber-100 dark:hover:bg-amber-950/40 underline-offset-2 hover:underline"
+              title="Discard this exercise's own edits and use the Periodization Table values again"
+              onClick={() => onExerciseOverridesReset(exercise.id || exercise.exerciseId)}
+            >
+              <RefreshCw className="h-2.5 w-2.5" />
+              Reset to periodization
+            </button>
+          </div>
+        )}
         {/* Parameter visibility — per session, shared with the Workout Session Sheet */}
         {pickerParams.length > 0 && (
           <div className="flex justify-end mt-1" onClick={(e) => e.stopPropagation()}>

@@ -755,7 +755,7 @@ export function SessionColumnView({
                   <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
                     {/* Section Header - muted background */}
                     <div className="bg-muted/20 px-3 py-2 border-b">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-1">
                         {editingSectionId === section.id ? (
                           <div className="flex items-center gap-1 flex-1">
                             <Input
@@ -793,12 +793,12 @@ export function SessionColumnView({
                           </div>
                         ) : (
                           <>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
                               {/* Collapse/Expand Toggle */}
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-5 w-5 p-0"
+                                className="h-5 w-5 p-0 shrink-0"
                                 onClick={() => toggleSectionCollapse(section.id)}
                               >
                                 {collapsedSections[section.id] 
@@ -809,7 +809,7 @@ export function SessionColumnView({
                               
                               {/* Arrow buttons for reordering - only show when multiple sections */}
                               {exercisesBySection.sortedSections.length > 1 && (
-                                <div className="flex items-center gap-0.5">
+                                <div className="flex items-center gap-0.5 shrink-0">
                                   {sectionIndex > 0 && onReorderSection && (
                                     <Button
                                       variant="ghost"
@@ -835,9 +835,11 @@ export function SessionColumnView({
                                 </div>
                               )}
                               
-                              <span className="text-sm font-semibold">{section.name}</span>
+                              {/* Long names wrap instead of pushing the buttons out of the column */}
+                              <span className="text-sm font-semibold min-w-0 break-words leading-tight">{section.name}</span>
                             </div>
-                            <div className="flex items-center gap-1">
+                            {/* Add exercise / circuit stay visible; copy, rename and delete are in the menu */}
+                            <div className="flex items-center gap-0.5 shrink-0">
                               {/* Add exercise to this section */}
                               {onAddExerciseInline && (
                                 <Button
@@ -862,37 +864,37 @@ export function SessionColumnView({
                                   <Recycle className="h-3 w-3" />
                                 </Button>
                               )}
-                              {/* Copy Section Button */}
-                              {onCopySection && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0 hover:bg-accent"
-                                  onClick={() => onCopySection(section.id)}
-                                  title="Copy section"
-                                >
-                                  <Copy className="h-3 w-3" />
-                                </Button>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0 hover:bg-accent"
-                                onClick={() => handleStartRenameSection(section)}
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0 text-destructive hover:bg-accent"
-                                onClick={() => {
-                                  setSectionToDelete(section.id);
-                                  setDeleteSectionDialogOpen(true);
-                                }}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0 hover:bg-accent"
+                                    title="More section actions"
+                                  >
+                                    <MoreVertical className="h-3 w-3" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="text-xs">
+                                  {onCopySection && (
+                                    <DropdownMenuItem onClick={() => onCopySection(section.id)}>
+                                      <Copy className="mr-2 h-3 w-3" />Copy section
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuItem onClick={() => handleStartRenameSection(section)}>
+                                    <Pencil className="mr-2 h-3 w-3" />Rename
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={() => {
+                                      setSectionToDelete(section.id);
+                                      setDeleteSectionDialogOpen(true);
+                                    }}
+                                  >
+                                    <Trash2 className="mr-2 h-3 w-3" />Delete section
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </>
                         )}
