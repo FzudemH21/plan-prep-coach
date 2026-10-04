@@ -431,8 +431,11 @@ export function useAthleteApp() {
     // Day intensities follow the sessions: empty day → rest, otherwise the hardest session's
     const newFromIntensity = dayIntensityFromSessions(
       newFromSessions.map(s => ({ intensity: s.intensity, dayFallback: fromDayIntensity })), fromDayIntensity);
-    const newToIntensity = dayIntensityFromSessions(
-      newToSessions.map(s => ({ intensity: s.intensity, dayFallback: toDayIntensity })), toDayIntensity);
+    // The receiving day never gets easier: its previous day intensity counts too (if it had sessions)
+    const newToIntensity = dayIntensityFromSessions([
+      ...newToSessions.map(s => ({ intensity: s.intensity, dayFallback: toDayIntensity })),
+      ...(existingToSessions.length > 0 && toDayIntensity ? [{ intensity: toDayIntensity }] : []),
+    ], toDayIntensity);
 
     // Update source row (filter by connection + date, not by id which may be undefined)
     await supabase

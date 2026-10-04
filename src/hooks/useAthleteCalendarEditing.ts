@@ -769,6 +769,8 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       ...Array.from({ length: daySplitStates[destDayDate] || 0 }, (_, i) =>
         ({ intensity: sessionIntensities[`${destDayDate}-${i}`] ?? null, dayFallback: dstDayIntensity })),
       { intensity: sessionIntensities[`${sourceDayDate}-${sourceSessionIndex}`] ?? null, dayFallback: srcDayIntensity },
+      // The receiving day never gets easier: its previous day intensity counts too (if it had sessions)
+      ...((daySplitStates[destDayDate] || 0) > 0 && dstDayIntensity ? [{ intensity: dstDayIntensity }] : []),
     ];
     const newSrcDayIntensity = dayIntensityFromSessions(remainingSrc, srcDayIntensity) as IntensityLevel | null;
     const newDstDayIntensity = dayIntensityFromSessions(dstAfter, dstDayIntensity ?? srcDayIntensity) as IntensityLevel | null;

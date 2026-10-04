@@ -952,7 +952,11 @@ export default function CoachMobileAthleteProfilePage() {
     const newDst = dstSessions.map((s, i) => ({ ...s, order: i }));
     // Day intensities follow the sessions: empty day → rest, otherwise the hardest session's
     const newSrcIntensity = dayIntensityFromSessions(newSrc.map(s => ({ intensity: s.intensity, dayFallback: srcDayIntensity })), srcDayIntensity);
-    const newDstIntensity = dayIntensityFromSessions(newDst.map(s => ({ intensity: s.intensity, dayFallback: dstDayIntensity })), dstDayIntensity);
+    // The receiving day never gets easier: its previous day intensity counts too (if it had sessions)
+    const newDstIntensity = dayIntensityFromSessions([
+      ...newDst.map(s => ({ intensity: s.intensity, dayFallback: dstDayIntensity })),
+      ...((dstEntry?.sessions.length ?? 0) > 0 && dstDayIntensity ? [{ intensity: dstDayIntensity }] : []),
+    ], dstDayIntensity);
 
     // Optimistic update — move session in UI immediately, before any Supabase call.
     // This prevents the session from disappearing if one of the two writes partially
