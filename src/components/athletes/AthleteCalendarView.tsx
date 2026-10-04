@@ -68,7 +68,7 @@ import { useAthleteAIContext } from '@/hooks/useAthleteAIContext';
 import { useAnamnesisAIContext } from '@/hooks/useAnamnesisAIContext';
 import { IntensityLevel } from '@/types/training';
 import { cn } from '@/lib/utils';
-import { fetchCoachRemarks, parseExerciseComments, remarksAsText } from '@/utils/sessionComments';
+import { fetchCoachRemarks, parseExerciseComments, remarksAsText, selectWithOptionalColumns } from '@/utils/sessionComments';
 import type { SessionFeedbackEntry } from '@/hooks/useAthleteAIContext';
 
 interface AthleteCalendarViewProps {
@@ -985,8 +985,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       .gte('date', since)
       .order('date', { ascending: false });
     (async () => {
-      let res = await query('id, date, session_name, borg_rating, comment, started_by, exercise_comments');
-      if (res.error) res = await query('id, date, session_name, borg_rating, comment');
+      const res = await selectWithOptionalColumns(query, 'id, date, session_name, borg_rating, comment', ['started_by', 'exercise_comments']);
       const rows = (res.data ?? []) as unknown as Array<Record<string, unknown>>;
       const remarks = await fetchCoachRemarks(rows.map(r => r.id as string));
       if (cancelled) return;
@@ -1502,11 +1501,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       .not('started_at', 'is', null)
       .gte('date', from)
       .lte('date', to);
-    // paused_at (pause / resume), started_by and exercise_comments (session comments) — retried
-    // without them if a migration hasn't been run yet
-    query(`${baseColumns}, paused_at, started_by, exercise_comments`)
-      .then(res => (res.error ? query(`${baseColumns}, paused_at`) : res))
-      .then(res => (res.error ? query(baseColumns) : res))
+    // paused_at (pause / resume), started_by and exercise_comments (session comments) — a column whose
+    // migration hasn't been run is left out on its own (the others still load)
+    selectWithOptionalColumns(query, baseColumns, ['paused_at', 'started_by', 'exercise_comments'])
       .then(res => {
         const data = res.data as unknown as CoachSessionLog[] | null;
         if (cancelled) return;

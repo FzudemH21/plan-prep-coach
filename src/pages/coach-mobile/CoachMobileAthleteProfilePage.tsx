@@ -396,14 +396,19 @@ export default function CoachMobileAthleteProfilePage() {
   // path and state are identical (e.g. notification clicked twice to same tab), so this
   // handles both the first visit and repeated navigations to the same athlete page.
   useEffect(() => {
-    const state = location.state as { tab?: Tab } | null;
+    const state = location.state as { tab?: Tab; weekOf?: string } | null;
     if (state?.tab) {
       setTab(state.tab);
     }
+    // Back from a session: the calendar shows that session's week again (not the current week)
+    if (state?.weekOf) setWeekMonday(getMondayOf(state.weekOf));
   }, [location.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = toLocalDateStr(new Date());
-  const [weekMonday, setWeekMonday] = useState<string>(() => getMondayOf(today));
+  const [weekMonday, setWeekMonday] = useState<string>(() => {
+    const weekOf = (location.state as { weekOf?: string } | null)?.weekOf;
+    return getMondayOf(weekOf ?? today);
+  });
 
   const { athletes, updateAthlete, athletePerformanceParameters, getAthleteBiometrics } = useAthletes();
   const { getEventsForAthlete, addEvent: addCalendarEvent, deleteEvent: deleteCalendarEvent } = useCalendarEvents();
@@ -1634,7 +1639,7 @@ export default function CoachMobileAthleteProfilePage() {
                                               state: {
                                                 entry, sessionIdx: sIdx, connectionId: connection?.id,
                                                 returnPath: `/coach-mobile/athletes/${athleteId}`,
-                                                returnState: { tab },
+                                                returnState: { tab, weekOf: dateStr },
                                               },
                                             })}
                                           >

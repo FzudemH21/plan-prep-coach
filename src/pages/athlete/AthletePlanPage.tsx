@@ -11,6 +11,9 @@ import { supabase } from '@/lib/supabase';
 import { IntensityBadge } from '@/components/athlete-app/IntensityBadge';
 import { cn } from '@/lib/utils';
 
+/** Session date to return to (the plan shows that week again after the session view) */
+const RETURN_WEEK_KEY = 'athletePlan.returnToDate';
+
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
 function addDays(dateStr: string, n: number): string {
@@ -110,7 +113,12 @@ function SessionCard({
 
         <div
           className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer active:opacity-80"
-          onClick={() => !isDragging && navigate('/athlete/session', { state: { entry, sessionIdx: index, log } })}
+          onClick={() => {
+            if (isDragging) return;
+            // Back from the session, the plan shows this session's week again (see selectedWeek)
+            try { sessionStorage.setItem(RETURN_WEEK_KEY, entry.date); } catch { /* unavailable */ }
+            navigate('/athlete/session', { state: { entry, sessionIdx: index, log } });
+          }}
         >
           <div className={cn(
             'w-8 h-8 rounded-md flex items-center justify-center shrink-0',
@@ -422,7 +430,18 @@ export default function AthletePlanPage() {
     return firstEntry < windowStart ? firstEntry : windowStart;
   }, [schedule, currentWeekMonday, today]);
 
-  const [selectedWeek, setSelectedWeek] = useState<string>(currentWeekMonday);
+  // The week of the session just left (set when a session is opened from here), else the current week
+  const [selectedWeek, setSelectedWeek] = useState<string>(() => {
+    try {
+      const returnDate = sessionStorage.getItem(RETURN_WEEK_KEY);
+      if (returnDate) return getMondayOf(returnDate);
+    } catch { /* unavailable */ }
+    return currentWeekMonday;
+  });
+  // Used once — a later visit of the plan starts at the current week again
+  useEffect(() => {
+    try { sessionStorage.removeItem(RETURN_WEEK_KEY); } catch { /* unavailable */ }
+  }, []);
   const canMove = connection?.allowRearrangeWorkouts ?? false;
 
   // Test results (which tests have a result, latest values) and the result / details dialogs

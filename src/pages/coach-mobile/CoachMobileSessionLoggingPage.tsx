@@ -77,7 +77,7 @@ function groupIntoSections(exercises: ExerciseSummary[]): SectionData[] {
     if (!map.has(sid)) {
       map.set(sid, {
         id: sid,
-        name: ex.sectionName ?? (sid === '__none__' ? 'Workout' : 'Section'),
+        name: ex.sectionName ?? (sid === '__none__' ? 'Session' : 'Section'),
         order: ex.sectionOrder ?? 0,
         notes: ex.sectionNotes || undefined,
         exercises: [],
@@ -855,7 +855,7 @@ export default function CoachMobileSessionLoggingPage() {
     setPhase(target);
   }
 
-  // Unfinished workout of this session the coach started (paused, or left mid-workout) → offer Resume
+  // Unfinished session of this session the coach started (paused, or left mid-workout) → offer Resume
   const resumeConnectionId = state?.connectionId;
   const resumeDate = state?.entry?.date;
   const resumeSessionId = state ? state.entry.sessions[state.sessionIdx]?.id : undefined;
@@ -1068,7 +1068,7 @@ export default function CoachMobileSessionLoggingPage() {
   }
 
   /** The current section is done: stay on it — the athlete moves on with "Finish Section" /
-   *  "Finish Workout" (it used to jump to the next unfinished section right after the last set) */
+   *  "Finish Session" (it used to jump to the next unfinished section right after the last set) */
   function continueAfterSection(_cs: Record<string, number[]>, _restSecs: number) {
     setPhase('active');
   }
@@ -1131,7 +1131,7 @@ export default function CoachMobileSessionLoggingPage() {
     };
   });
 
-  // ── Abandon workout ────────────────────────────────────────────────────────
+  // ── Abandon session ────────────────────────────────────────────────────────
 
   async function abandonWorkout(target: 'leave' | 'overview') {
     setAbandonWarning(false);
@@ -1403,7 +1403,7 @@ export default function CoachMobileSessionLoggingPage() {
                 // A resumed workout with progress — confirm (or pause) instead of silently dropping it
                 setAbandonWarning('overview');
               } else if (isFirst) {
-                // No sets done yet — silently undo "Start Workout" to release the lock.
+                // No sets done yet — silently undo "Start Session" to release the lock.
                 // Query by connection/date/session instead of sessionLogId to avoid
                 // a stale-closure race (the state might not be set yet if insert is still in flight).
                 await supabase
@@ -1553,7 +1553,7 @@ export default function CoachMobileSessionLoggingPage() {
     const totalSetsPlanned = sectionExercises.reduce((a, ex) => a + (setCountOverrides[ex.id] ?? getSetCount(ex)), 0);
     const sectionComplete = isSectionComplete(currentSection!, completedSets, setCountOverrides);
     const completeFlags = sectionCompleteFlags(completedSets);
-    // "Finish Section" leads to the next section in order; on the last one it's "Finish Workout"
+    // "Finish Section" leads to the next section in order; on the last one it's "Finish Session"
     // (no jumping back to a skipped earlier section — unfinished work only triggers the warning)
     const nextSectionIdx = sectionIdx < sections.length - 1 ? sectionIdx + 1 : null;
     const workoutComplete = completeFlags.every(Boolean);

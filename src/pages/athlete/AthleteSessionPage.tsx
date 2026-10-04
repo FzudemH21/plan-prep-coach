@@ -36,6 +36,7 @@ import { previousValueFor, usePreviousExerciseValues, type PreviousExerciseValue
 import { SectionNavigator, nextUnfinishedSection } from '@/components/workout/SectionNavigator';
 import { getRestSeconds } from '@/utils/workoutRest';
 import { addExerciseComment, fetchExerciseComments, type ExerciseComment } from '@/utils/sessionComments';
+import { LoggedExerciseResult, type LoggedEntry } from '@/components/workout/LoggedExerciseResult';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@ function groupIntoSections(exercises: ExerciseSummary[]): SectionData[] {
     if (!map.has(sid)) {
       map.set(sid, {
         id: sid,
-        name: ex.sectionName ?? (sid === '__none__' ? 'Workout' : 'Section'),
+        name: ex.sectionName ?? (sid === '__none__' ? 'Session' : 'Section'),
         order: ex.sectionOrder ?? 0,
         // sectionNotes is the same for every exercise in the section — grab once
         notes: ex.sectionNotes || undefined,
@@ -190,7 +191,7 @@ interface CompletionSheetProps {
   durationSeconds: number;
   setsLogged: unknown[];
   onSaved: () => void;
-  /** ID of the in-progress row created when "Start Workout" was tapped.
+  /** ID of the in-progress row created when "Start Session" was tapped.
    *  When present, we UPDATE that row instead of INSERTing a new one. */
   sessionLogId?: string | null;
 }
@@ -216,7 +217,7 @@ function CompletionSheet({
 
     let error;
     if (sessionLogId) {
-      // Update the in-progress row that was created on "Start Workout"
+      // Update the in-progress row that was created on "Start Session"
       ({ error } = await supabase
         .from('athlete_session_logs')
         .update(completionPayload)
@@ -250,7 +251,7 @@ function CompletionSheet({
           <SheetHeader className="mb-5">
             <div className="flex flex-col items-center gap-2 pt-2">
               <CheckCircle2 className="h-10 w-10 text-green-500" />
-              <SheetTitle>Workout Complete!</SheetTitle>
+              <SheetTitle>Session Complete!</SheetTitle>
               <p className="text-sm text-muted-foreground">{sessionName}</p>
             </div>
           </SheetHeader>
@@ -733,7 +734,7 @@ export default function AthleteSessionPage() {
   // completedSets: exerciseId -> number[] of completed set indices
   const [completedSets, setCompletedSets] = useState<Record<string, number[]>>({});
   const [borgSheetOpen, setBorgSheetOpen] = useState(false);
-  // ID of the athlete_session_logs row created when "Start Workout" is tapped
+  // ID of the athlete_session_logs row created when "Start Session" is tapped
   const [sessionLogId, setSessionLogId] = useState<string | null>(null);
   // Per-exercise set count overrides: exId → actual set count (athlete can add/remove sets)
   const [setCountOverrides, setSetCountOverrides] = useState<Record<string, number>>({});
@@ -973,7 +974,7 @@ export default function AthleteSessionPage() {
     // paused_at is cleared by the next autosave (running again)
   }
 
-  // Unfinished workout of this session (paused, or the app was closed mid-workout) → offer Resume
+  // Unfinished session of this session (paused, or the app was closed mid-workout) → offer Resume
   const resumeCheckSession = state?.entry.sessions[state.sessionIdx];
   useEffect(() => {
     if (!connection?.id || !state?.entry.date || !resumeCheckSession?.id || sessionLogId) return;
@@ -1211,7 +1212,7 @@ export default function AthleteSessionPage() {
   }
 
   /** The current section is done: stay on it — the athlete moves on with "Finish Section" /
-   *  "Finish Workout" (it used to jump to the next unfinished section right after the last set) */
+   *  "Finish Session" (it used to jump to the next unfinished section right after the last set) */
   function continueAfterSection(_cs: Record<string, number[]>, _restSecs: number) {
     setPhase('active');
   }
@@ -1248,16 +1249,9 @@ export default function AthleteSessionPage() {
   const currentLog = getSessionLog(entry.date, session.id) ?? state.log ?? null;
 
   // Lookup map for completed-session review (exerciseName → logged data)
-  type LoggedEx = {
-    exerciseName: string;
-    sets?: Array<{ setNumber: number; values: Record<string, string> }>;
-    isCircuit?: boolean;
-    roundsCompleted?: number;
-    totalRounds?: number;
-  };
-  const logMap = new Map<string, LoggedEx>();
+  const logMap = new Map<string, LoggedEntry>();
   if (currentLog) {
-    (currentLog.setsLogged as LoggedEx[]).forEach(e => logMap.set(e.exerciseName, e));
+    ((currentLog.setsLogged ?? []) as LoggedEntry[]).forEach(e => logMap.set(e.exerciseName, e));
   }
 
   // Add / remove a set for a specific exercise
@@ -1342,7 +1336,7 @@ export default function AthleteSessionPage() {
 
   // ── Screen: Overview ───────────────────────────────────────────────────────
 
-  // ── Abandon workout ────────────────────────────────────────────────────────
+  // ── Abandon session ────────────────────────────────────────────────────────
   // Confirmed abandon: the started log row is deleted (so the calendar doesn't show the session as
   // "In progress") and the workout's progress is cleared.
   async function abandonWorkout(target: 'leave' | 'overview') {
@@ -1370,7 +1364,7 @@ export default function AthleteSessionPage() {
     <AlertDialog open={abandonTarget !== null} onOpenChange={o => { if (!o) setAbandonTarget(null); }}>
       <AlertDialogContent className="sm:max-w-[360px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
         <AlertDialogHeader>
-          <AlertDialogTitle>{sessionLogId && phase !== 'paused' ? 'Leave workout?' : 'Abandon workout?'}</AlertDialogTitle>
+          <AlertDialogTitle>{sessionLogId && phase !== 'paused' ? 'Leave session?' : 'Abandon session?'}</AlertDialogTitle>
           <AlertDialogDescription>
             {sessionLogId && phase !== 'paused'
               ? 'Pause it to finish later — your progress is saved. Abandoning deletes the progress and the session won\'t be marked as started.'
@@ -1402,14 +1396,14 @@ export default function AthleteSessionPage() {
       <button
         onClick={() => void pauseWorkout()}
         className="w-11 h-11 rounded-full flex items-center justify-center hover:bg-muted active:bg-muted/80 transition-colors shrink-0"
-        aria-label="Pause workout"
+        aria-label="Pause session"
       >
         <Pause className="h-5 w-5" />
       </button>
       <button
         onClick={() => setAbandonTarget('leave')}
         className="w-11 h-11 -mr-2 rounded-full flex items-center justify-center hover:bg-muted active:bg-muted/80 transition-colors shrink-0"
-        aria-label="Leave workout"
+        aria-label="Leave session"
       >
         <X className="h-5 w-5" />
       </button>
@@ -1582,52 +1576,17 @@ export default function AthleteSessionPage() {
                                 </div>
                               )}
 
-                              {/* Logged results — shown in completed session overview */}
-                              {currentLog && (() => {
-                                const logged = logMap.get(ex.name);
-                                if (!logged) return null;
-                                if (logged.isCircuit) {
-                                  return (
-                                    <p className="px-4 pb-2.5 text-xs font-medium text-green-700">
-                                      {logged.roundsCompleted} / {logged.totalRounds} rounds completed
-                                    </p>
-                                  );
-                                }
-                                const sets = logged.sets ?? [];
-                                if (sets.length === 0) return null;
-                                const paramNames = Array.from(new Set(sets.flatMap(s => Object.keys(s.values))));
-                                if (paramNames.length === 0) return null;
-                                return (
-                                  <div className="px-4 pb-3">
-                                    <table className="text-xs w-full table-fixed">
-                                      <thead>
-                                        <tr className="text-muted-foreground">
-                                          <th className="text-left font-normal pb-1 pr-2 w-6">#</th>
-                                          {paramNames.map(p => {
-                                            const unit = ex.plannedParams?.[`${p}_unit`] as string | undefined;
-                                            return (
-                                              <th key={p} className="text-left font-normal pb-1 pr-2 leading-tight break-words align-bottom">
-                                                {p}
-                                                {unit && <span className="block">({unit})</span>}
-                                              </th>
-                                            );
-                                          })}
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {sets.map(s => (
-                                          <tr key={s.setNumber} className="border-t border-border/20">
-                                            <td className="pr-2 py-1 text-muted-foreground">{s.setNumber}</td>
-                                            {paramNames.map(p => (
-                                              <td key={p} className="pr-2 py-1 font-medium break-words">{s.values[p] ?? '—'}</td>
-                                            ))}
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                );
-                              })()}
+                              {/* Logged session: what was done (coloured status) + the logged sets on tap */}
+                              {currentLog && (
+                                <LoggedExerciseResult
+                                  logged={logMap.get(ex.name)}
+                                  isCircuit={ex.isCircuit}
+                                  plannedCount={getSetCount(ex)}
+                                  units={Object.fromEntries(Object.entries(ex.plannedParams ?? {})
+                                    .filter(([k]) => k.endsWith('_unit'))
+                                    .map(([k, v]) => [k.slice(0, -'_unit'.length), v ? String(v) : undefined]))}
+                                />
+                              )}
 
                               {/* Superset connector — read-only indicator */}
                               {i < sec.exercises.length - 1 && ex.supersetId && ex.supersetId === sec.exercises[i + 1].supersetId && (
@@ -1668,7 +1627,7 @@ export default function AthleteSessionPage() {
                 <Pause className="h-4 w-4 text-amber-600 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-amber-900">
-                    {resumable.pausedAt ? 'Workout paused' : 'Unfinished workout'}
+                    {resumable.pausedAt ? 'Session paused' : 'Unfinished session'}
                   </p>
                   <p className="text-xs text-amber-800">
                     {(() => {
@@ -1694,7 +1653,7 @@ export default function AthleteSessionPage() {
               <div className="space-y-1">
                 <Button className="w-full" size="lg" disabled={!!sessionLock} onClick={() => resumeSavedWorkout(resumable)}>
                   <Play className="h-4 w-4 mr-2" />
-                  Resume Workout
+                  Resume Session
                 </Button>
                 <button
                   onClick={() => setAbandonTarget('overview')}
@@ -1734,7 +1693,7 @@ export default function AthleteSessionPage() {
                   setPhase('sectionIntro');
                 }
               }}>
-                Start Workout
+                Start Session
               </Button>
             )}
           </div>
@@ -1831,7 +1790,7 @@ export default function AthleteSessionPage() {
           <button
             onClick={() => setAbandonTarget('leave')}
             className="absolute top-2 right-2 w-11 h-11 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors"
-            aria-label="Leave workout"
+            aria-label="Leave session"
           >
             <X className="h-5 w-5" />
           </button>
@@ -1876,7 +1835,7 @@ export default function AthleteSessionPage() {
         {sessionLogId && (
           <Button variant="ghost" className="min-h-[44px] text-muted-foreground" onClick={() => void pauseWorkout()}>
             <Pause className="h-4 w-4 mr-2" />
-            Pause workout
+            Pause session
           </Button>
         )}
 
@@ -1896,7 +1855,7 @@ export default function AthleteSessionPage() {
           <button
             onClick={() => navigate(-1)}
             className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors"
-            aria-label="Leave (the workout stays paused)"
+            aria-label="Leave (the session stays paused)"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
@@ -1910,14 +1869,14 @@ export default function AthleteSessionPage() {
           <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mb-2">
             <Pause className="h-8 w-8 text-amber-600" />
           </div>
-          <h2 className="text-2xl font-bold">Workout paused</h2>
+          <h2 className="text-2xl font-bold">Session paused</h2>
           <p className="text-4xl font-bold tabular-nums">{formatTime(workoutElapsed)}</p>
           <p className="text-sm text-muted-foreground">
             {setsDone} of {setsTotal} sets done
             {sections.length > 1 && ` · Section ${sectionIdx + 1} of ${sections.length}`}
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
-            Your progress is saved. You can close the app and resume this workout later.
+            Your progress is saved. You can close the app and resume this session later.
           </p>
         </div>
 
@@ -1933,7 +1892,7 @@ export default function AthleteSessionPage() {
             onClick={() => setAbandonTarget('leave')}
             className="w-full min-h-[44px] text-sm text-destructive hover:underline active:opacity-60"
           >
-            Abandon workout
+            Abandon session
           </button>
         </div>
 
@@ -1952,7 +1911,7 @@ export default function AthleteSessionPage() {
     const totalSetsPlanned = sectionExercises.reduce((a, ex) => a + (setCountOverrides[ex.id] ?? getSetCount(ex)), 0);
     const sectionComplete = isSectionComplete(currentSection!, completedSets, setCountOverrides);
     const completeFlags = sectionCompleteFlags(completedSets);
-    // "Finish Section" leads to the next section in order; on the last one it's "Finish Workout"
+    // "Finish Section" leads to the next section in order; on the last one it's "Finish Session"
     // (no jumping back to a skipped earlier section — unfinished work only triggers the warning)
     const nextSectionIdx = sectionIdx < sections.length - 1 ? sectionIdx + 1 : null;
     const workoutComplete = completeFlags.every(Boolean);
@@ -2221,7 +2180,7 @@ export default function AthleteSessionPage() {
               }}
             >
               <Check className="h-4 w-4 mr-2" />
-              Finish Workout
+              Finish Session
             </Button>
           ) : (
             <>
@@ -2242,7 +2201,7 @@ export default function AthleteSessionPage() {
                 onClick={() => setIncompleteWarning('workout')}
                 className="w-full min-h-[44px] mt-1 -mb-2 text-sm text-muted-foreground hover:text-foreground active:opacity-60 transition-colors"
               >
-                End workout early
+                End session early
               </button>
             </>
           )}
@@ -2284,7 +2243,7 @@ export default function AthleteSessionPage() {
           <AlertDialogContent className="sm:max-w-[360px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
             <AlertDialogHeader>
               <AlertDialogTitle>
-                {incompleteWarning === 'workout' ? 'Finish workout?' : 'Finish section?'}
+                {incompleteWarning === 'workout' ? 'Finish session?' : 'Finish section?'}
               </AlertDialogTitle>
               <AlertDialogDescription>
                 Not all sets are completed yet. Finish anyway?

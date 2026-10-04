@@ -198,3 +198,26 @@ export async function sendCommentReply(
   });
   return error ? error.message : null;
 }
+
+type SelectResult = { data: unknown; error: { message?: string } | null };
+
+/**
+ * select() with optional columns from migrations that may not have been run yet: when the query
+ * fails, only the column named in the error is dropped and the query retried (dropping all optional
+ * columns at once lost e.g. the exercise comments whenever just paused_at was missing).
+ */
+export async function selectWithOptionalColumns(
+  run: (columns: string) => PromiseLike<SelectResult>,
+  baseColumns: string,
+  optionalColumns: string[],
+): Promise<SelectResult> {
+  let optional = [...optionalColumns];
+  for (;;) {
+    const res = await run([baseColumns, ...optional].join(', '));
+    if (!res.error || optional.length === 0) return res;
+    const message = res.error.message ?? '';
+    const missing = optional.find(c => message.includes(c));
+    // Unknown cause: try without any optional column, then give up
+    optional = missing ? optional.filter(c => c !== missing) : [];
+  }
+}

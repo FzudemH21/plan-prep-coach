@@ -25,7 +25,8 @@ import type { CustomLibrary, CustomExercise, Circuit } from '@/contexts/CustomLi
 import type { ToolboxEntry } from '@/types/toolbox';
 import { ExerciseHistorySheet } from '@/components/shared/ExerciseHistorySheet';
 import { SessionCommentsPanel } from '@/components/coach-mobile/SessionCommentsPanel';
-import { parseExerciseComments, type ExerciseComment } from '@/utils/sessionComments';
+import { parseExerciseComments, selectWithOptionalColumns, type ExerciseComment } from '@/utils/sessionComments';
+import { LoggedExerciseResult, type LoggedEntry } from '@/components/workout/LoggedExerciseResult';
 
 // ── Section helpers ───────────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ function groupIntoSections(exercises: ExerciseSummary[]): SectionData[] {
     if (!map.has(sid)) {
       map.set(sid, {
         id: sid,
-        name: ex.sectionName ?? (sid === '__none__' ? 'Workout' : 'Section'),
+        name: ex.sectionName ?? (sid === '__none__' ? 'Session' : 'Section'),
         order: ex.sectionOrder ?? 0,
         notes: ex.sectionNotes || undefined,
         exercises: [],
@@ -1086,9 +1087,8 @@ export default function CoachMobileSessionEditPage() {
       .not('completed_at', 'is', null)
       .maybeSingle();
     const base = 'id, completed_at, borg_rating, duration_seconds, comment, sets_logged';
-    // started_by / exercise_comments need their migrations — retried without them
-    query(`${base}, started_by, exercise_comments`)
-      .then(res => (res.error ? query(base) : res))
+    // started_by / exercise_comments need their migrations — a missing one is left out on its own
+    selectWithOptionalColumns(query, base, ['started_by', 'exercise_comments'])
       .then(({ data: raw }) => {
         const data = raw as unknown as Record<string, unknown> | null;
         if (data) {
@@ -1105,6 +1105,14 @@ export default function CoachMobileSessionEditPage() {
         }
       });
   }, [connectionId, state?.entry?.date, session_ref_id]);
+
+  // Logged entries by exercise name (sets_logged is an array of exercise entries)
+  const loggedByName = useMemo(() => {
+    const map = new Map<string, LoggedEntry>();
+    const raw = sessionLog?.setsLogged as unknown;
+    if (Array.isArray(raw)) (raw as LoggedEntry[]).forEach(e => { if (e?.exerciseName) map.set(e.exerciseName, e); });
+    return map;
+  }, [sessionLog]);
 
   // ── Session lock (athlete in progress → block edit/log) ───────────────────
   const [sessionLock, setSessionLock] = useState<SessionLockInfo | null>(null);
@@ -1767,6 +1775,17 @@ export default function CoachMobileSessionEditPage() {
                                   <p className="text-xs text-muted-foreground mt-1 ml-7 leading-snug">{ex.notes}</p>
                                 )}
                               </div>
+                              {/* Logged session: what was done (coloured status) + the logged sets on tap */}
+                              {sessionLog && (
+                                <LoggedExerciseResult
+                                  logged={loggedByName.get(ex.name)}
+                                  isCircuit={ex.isCircuit}
+                                  plannedCount={ex.isCircuit ? Math.max(1, Number(ex.circuitRounds ?? 3)) : getSetCount(ex)}
+                                  units={Object.fromEntries(Object.entries(ex.plannedParams ?? {})
+                                    .filter(([k]) => k.endsWith('_unit'))
+                                    .map(([k, v]) => [k.slice(0, -'_unit'.length), v ? String(v) : undefined]))}
+                                />
+                              )}
                               {/* Circuit exercise list */}
                               {ex.isCircuit && <CircuitExerciseList ex={ex} onShowDetail={setDetailTarget} />}
                               {/* Superset connector in view mode */}

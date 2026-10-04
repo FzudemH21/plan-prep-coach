@@ -16,7 +16,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { AthleteConnection } from '@/hooks/useAthleteConnections';
-import { parseExerciseComments, shortQuote } from '@/utils/sessionComments';
+import { parseExerciseComments, selectWithOptionalColumns, shortQuote } from '@/utils/sessionComments';
 
 const READ_IDS_KEY = 'ppc-coach-activity-read-ids';
 const FEED_WINDOW_DAYS = 7;
@@ -97,10 +97,7 @@ export function useCoachActivityFeed(connections: AthleteConnection[]) {
       .or(`completed_at.gte.${windowStart},created_at.gte.${windowStart}`)
       .order('completed_at', { ascending: false });
     const sessionBase = 'id, athlete_connection_id, session_id, session_name, date, completed_at, borg_rating, duration_seconds, comment';
-    const loadSessions = async () => {
-      const full = await sessionsQuery(`${sessionBase}, started_by, exercise_comments`);
-      return full.error ? sessionsQuery(sessionBase) : full;
-    };
+    const loadSessions = () => selectWithOptionalColumns(sessionsQuery, sessionBase, ['started_by', 'exercise_comments']);
 
     const [sessionsRes, checkinsRes] = connectedIds.length === 0 ? [{ data: [] }, { data: [] }] : await Promise.all([
       loadSessions(),
