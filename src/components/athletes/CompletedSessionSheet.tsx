@@ -139,15 +139,30 @@ function ExerciseLogCard({ entry }: { entry: SetLogEntry }) {
         {/* Header */}
         <div className="px-3 py-2 bg-muted/30 border-b flex items-center gap-2">
           <Badge variant="outline" className="text-xs shrink-0">Circuit</Badge>
-          <span className="text-sm font-medium">{entry.exerciseName}</span>
+          <span className={`text-sm font-medium flex-1 min-w-0 ${skipped ? 'text-muted-foreground' : ''}`}>{entry.exerciseName}</span>
+          {skipped && (
+            <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+              Not done
+            </span>
+          )}
         </div>
 
-        {/* Rounds completed */}
-        <div className={`px-3 py-2 text-sm border-b ${skipped ? 'text-muted-foreground/50 line-through' : 'text-muted-foreground'}`}>
-          {skipped
-            ? `0 / ${entry.totalRounds} rounds — skipped`
-            : `${entry.roundsCompleted} / ${entry.totalRounds} rounds completed`}
-        </div>
+        {/* Rounds completed — skipped circuits in red, like skipped sets */}
+        {skipped ? (
+          <div className="px-3 py-1.5 text-sm border-b bg-red-50/60 dark:bg-red-950/20 flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-muted-foreground/70">
+              <span className="line-through">0 / {entry.totalRounds} rounds</span>
+              <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-red-100 dark:bg-red-900/50 text-red-500 dark:text-red-400 leading-none">
+                Skipped
+              </span>
+            </span>
+            <span className="text-xs text-red-400 dark:text-red-500">Skipped</span>
+          </div>
+        ) : (
+          <div className="px-3 py-2 text-sm border-b text-muted-foreground">
+            {entry.roundsCompleted} / {entry.totalRounds} rounds completed
+          </div>
+        )}
 
         {/* Circuit config */}
         {(restRounds !== null || restExercises !== null || entry.circuitComments) && (
@@ -583,23 +598,17 @@ export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddT
 
   if (!log) return null;
 
-  const loggedNames = new Set((log.sets_logged ?? []).map(e => e.exerciseName));
   const athleteComments = exerciseComments.filter(c => c.author !== 'coach');
   // The coach's own exercise notes: private ones + older ones saved with the session log
   const allExerciseNotes = [...exerciseComments.filter(c => c.author === 'coach'), ...exerciseNotes];
-  const commentsFor = (name: string) => athleteComments.filter(c => c.exerciseName === name);
-  // Comments whose exercise isn't in the log (e.g. renamed) — shown above the exercises
-  const otherComments = athleteComments.filter(c => !loggedNames.has(c.exerciseName));
+  // All athlete comments on exercises — one list near the top, also for exercises without any logged
+  // set (e.g. "couldn't do it because…"); under the exercises they were easy to miss
+  const otherComments = athleteComments;
   const commentLabel = (c: ExerciseComment) =>
     `${c.author === 'coach' ? 'Noted while logging' : 'Athlete'} · ${format(parseISO(c.createdAt), 'HH:mm')}`;
   const replyFor = (c: ExerciseComment) => (c.author !== 'coach' && connectionId
     ? () => setReplyTarget({ quote: c.text, exerciseName: c.exerciseName, sectionName: c.sectionName })
     : undefined);
-  const renderComments = (entry: SetLogEntry) => {
-    const list = commentsFor(entry.exerciseName);
-    if (list.length === 0) return null;
-    return list.map(c => <CommentBubble key={c.id} label={commentLabel(c)} text={c.text} onReply={replyFor(c)} />);
-  };
 
   const sRPE = computeSRPE(log);
   const completedAt = log.completed_at ? parseISO(log.completed_at) : null;
@@ -669,7 +678,7 @@ export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddT
               </div>
             )}
 
-            {/* Comments on exercises that aren't in the log any more */}
+            {/* Athlete comments on exercises */}
             {otherComments.length > 0 && (
               <div>
                 <p className="text-xs text-muted-foreground font-medium">Exercise comments</p>
@@ -743,7 +752,7 @@ export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddT
             {log.sets_logged && log.sets_logged.length > 0 ? (
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold">Session exercises</h3>
-                <SessionExercises entries={log.sets_logged} renderAfter={renderComments} />
+                <SessionExercises entries={log.sets_logged} />
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
@@ -756,7 +765,8 @@ export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddT
       </SheetContent>
 
       <Dialog open={replyTarget !== null} onOpenChange={o => { if (!o) { setReplyTarget(null); setReplyText(''); } }}>
-        <DialogContent className="sm:max-w-md">
+        {/* Above the sheet (z-300) — at the default z-index it opened behind the sheet's overlay */}
+        <DialogContent className="sm:max-w-md z-[320]" overlayClassName="z-[310]">
           <DialogHeader>
             <DialogTitle>Reply in the chat</DialogTitle>
             <DialogDescription>

@@ -41,7 +41,7 @@ export default function AthleteDatabase() {
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [location.key]);
 
   const athleteData = useAthletes();
   const { deleteEventsForAthlete } = useCalendarEvents();
@@ -107,6 +107,22 @@ export default function AthleteDatabase() {
     }
   }, [athleteData, getConnectionForAthlete, syncProfileToConnection]);
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(navState.openAthleteId ?? null);
+  // A request to open a tab / a session in the calendar - one per navigation (location.key), also
+  // when this page is already shown (e.g. a notification clicked here). Kept until the profile of
+  // that athlete has applied it (the router state itself is cleared right away, see above).
+  const [navRequest, setNavRequest] = useState<{ key: string; athleteId?: string; tab?: string; date?: string; sessionName?: string } | undefined>(undefined);
+  useEffect(() => {
+    if (navState.defaultTab || navState.defaultCalendarDate) {
+      setNavRequest({
+        key: location.key,
+        athleteId: navState.openAthleteId,
+        tab: navState.defaultTab,
+        date: navState.defaultCalendarDate,
+        sessionName: navState.defaultCalendarSessionName,
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
   // Opened again from elsewhere (e.g. a notification) while already on this page
   useEffect(() => {
     if (navState.openAthleteId) setSelectedAthleteId(navState.openAthleteId);
@@ -233,6 +249,8 @@ export default function AthleteDatabase() {
             defaultTab={navState.defaultTab}
             defaultCalendarDate={navState.defaultCalendarDate}
             defaultCalendarSessionName={navState.defaultCalendarSessionName}
+            navRequest={navRequest && (!navRequest.athleteId || navRequest.athleteId === selectedAthlete.id) ? navRequest : undefined}
+            onNavRequestHandled={() => setNavRequest(undefined)}
           />
         ) : (
           <SquadDashboard

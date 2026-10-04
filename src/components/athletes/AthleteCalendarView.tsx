@@ -95,6 +95,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
   // Track which autoOpenSession we've already handled so we don't re-open on re-renders
   const autoOpenHandledRef = useRef<string | null>(null);
+  // Once handled, the parent clears the request — then the same session can be requested again
+  useEffect(() => { if (!autoOpenSession) autoOpenHandledRef.current = null; }, [autoOpenSession]);
 
   const [viewMode, setViewMode] = useState<ViewMode>('4week');
   const [showAssignDialog, setShowAssignDialog] = useState(false);
@@ -1478,11 +1480,31 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         // Also on a failed load — the loading overlay must not wait forever
         if (!data) { setSessionLogsLoaded(true); return; }
         const map = new Map<string, CoachSessionLog>();
+        // Comments written during an earlier, unfinished attempt of the same session (workout
+        // restarted) are shown with the session too
+        const commentsBySession = new Map<string, unknown[]>();
         for (const row of data) {
-          if (row.session_id) {
+          if (!row.session_id) continue;
+          const list = commentsBySession.get(row.session_id) ?? [];
+          if (Array.isArray(row.exercise_comments)) list.push(...row.exercise_comments);
+          commentsBySession.set(row.session_id, list);
+          const existing = map.get(row.session_id);
+          // A completed log wins over an unfinished one
+          if (!existing || (!existing.completed_at && row.completed_at) || (!!existing.completed_at === !!row.completed_at)) {
             map.set(row.session_id as string, row as CoachSessionLog);
           }
         }
+        map.forEach((log, sessionId) => {
+          const all = commentsBySession.get(sessionId) ?? [];
+          const seen = new Set<string>();
+          const unique = all.filter(c => {
+            const id = (c as { id?: string })?.id;
+            if (!id || seen.has(id)) return !id;
+            seen.add(id);
+            return true;
+          });
+          if (unique.length > 0) map.set(sessionId, { ...log, exercise_comments: unique });
+        });
         setSessionLogs(map);
         setSessionLogsLoaded(true);
       });

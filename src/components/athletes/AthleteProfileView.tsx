@@ -82,6 +82,9 @@ interface AthleteProfileViewProps {
   onNewAnamnesisOpened?: () => void;
   /** Open the profile on a specific tab immediately (e.g. 'calendar'). */
   defaultTab?: string;
+  /** A request to open a tab / a session in the calendar (one per navigation) */
+  navRequest?: { key: string; tab?: string; date?: string; sessionName?: string };
+  onNavRequestHandled?: () => void;
   /** Jump the calendar to this date's week immediately (yyyy-MM-dd). */
   defaultCalendarDate?: string;
   /** Auto-open a specific session by name when navigating to the calendar tab. */
@@ -97,6 +100,8 @@ export function AthleteProfileView({
   openNewAnamnesis = false,
   onNewAnamnesisOpened,
   defaultTab,
+  navRequest,
+  onNavRequestHandled,
   defaultCalendarDate,
   defaultCalendarSessionName,
 }: AthleteProfileViewProps) {
@@ -122,6 +127,18 @@ export function AthleteProfileView({
   const [calendarAutoOpenSession, setCalendarAutoOpenSession] = useState<{ date: string; sessionName?: string } | undefined>(
     defaultCalendarDate ? { date: defaultCalendarDate, sessionName: defaultCalendarSessionName } : undefined
   );
+
+  // Requested while this profile is shown (e.g. a notification): tab, calendar date, session
+  useEffect(() => {
+    if (!navRequest) return;
+    if (navRequest.tab) setActiveTab(navRequest.tab);
+    if (navRequest.date) {
+      setCalendarJumpDate(navRequest.date);
+      setCalendarAutoOpenSession({ date: navRequest.date, sessionName: navRequest.sessionName });
+    }
+    onNavRequestHandled?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navRequest?.key]);
 
   // Chat
   const { connections, loading: connectionsLoading } = useAthleteConnections();
