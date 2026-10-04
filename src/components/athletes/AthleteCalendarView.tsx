@@ -68,7 +68,7 @@ import { useAthleteAIContext } from '@/hooks/useAthleteAIContext';
 import { useAnamnesisAIContext } from '@/hooks/useAnamnesisAIContext';
 import { IntensityLevel } from '@/types/training';
 import { cn } from '@/lib/utils';
-import { fetchCoachRemarks, parseExerciseComments } from '@/utils/sessionComments';
+import { fetchCoachRemarks, parseExerciseComments, remarksAsText } from '@/utils/sessionComments';
 import type { SessionFeedbackEntry } from '@/hooks/useAthleteAIContext';
 
 interface AthleteCalendarViewProps {
@@ -953,7 +953,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         borg: (r.borg_rating as number | null) ?? null,
         feedback: typeof r.comment === 'string' && r.comment.trim() ? r.comment.trim() : undefined,
         exerciseComments: parseExerciseComments(r.exercise_comments).map(c => ({ exerciseName: c.exerciseName, text: c.text, byCoach: c.author === 'coach' })),
-        coachRemark: remarks.get(r.id as string),
+        coachRemark: (() => { const rm = remarks.get(r.id as string); return rm ? remarksAsText(rm) : undefined; })(),
       })).filter(f => f.feedback || f.exerciseComments.length > 0 || f.coachRemark));
     })();
     return () => { cancelled = true; };

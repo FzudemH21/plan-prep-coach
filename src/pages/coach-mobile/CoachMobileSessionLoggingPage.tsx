@@ -38,7 +38,7 @@ import {
 import { previousValueFor, usePreviousExerciseValues, type PreviousExerciseValues } from '@/hooks/usePreviousExerciseValues';
 import { SectionNavigator, nextUnfinishedSection } from '@/components/workout/SectionNavigator';
 import { getRestSeconds } from '@/utils/workoutRest';
-import { addExerciseComment, saveCoachRemark } from '@/utils/sessionComments';
+import { addCoachExerciseRemark, fetchCoachRemark, remarksAsText, removeCoachExerciseRemark, saveCoachRemark, type ExerciseComment } from '@/utils/sessionComments';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -171,11 +171,14 @@ interface CompletionSheetProps {
   setsLogged: unknown[];
   onSaved: () => void;
   sessionLogId?: string | null;
+  /** The coach's private notes on exercises, written during the workout */
+  exerciseNotes: ExerciseComment[];
+  onRemoveExerciseNote: (noteId: string) => void;
 }
 
 function CompletionSheet({
   open, onClose, connectionId, date, sessionId, sessionName,
-  durationSeconds, setsLogged, onSaved, sessionLogId,
+  durationSeconds, setsLogged, onSaved, sessionLogId, exerciseNotes, onRemoveExerciseNote,
 }: CompletionSheetProps) {
   const { t } = useTranslation();
   const [borgRating, setBorgRating] = useState<number | null>(null);
@@ -227,12 +230,13 @@ function CompletionSheet({
         toast({ title: t('coachMobile.sessionLogging.completionSheet.remarkError'), description: remarkError, variant: 'destructive' });
       }
     }
-    if (remarkText && remarkToNotes) {
+    const notesText = remarksAsText({ remark: remarkText, exerciseRemarks: exerciseNotes });
+    if (notesText && remarkToNotes) {
       const athleteLocalId = connections.find(c => c.id === connectionId)?.athleteLocalId;
       const athlete = athletes.find(a => a.id === athleteLocalId);
       if (athlete) {
         const when = new Date(date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-        const note: AthleteNote = { id: `note-${Date.now()}`, text: `${sessionName} (${when}): ${remarkText}`, timestamp: new Date().toISOString() };
+        const note: AthleteNote = { id: `note-${Date.now()}`, text: `${sessionName} (${when}):\n${notesText}`, timestamp: new Date().toISOString() };
         await updateAthlete(athlete.id, { notesHistory: [note, ...(athlete.notesHistory ?? [])] });
       }
     }
@@ -279,10 +283,27 @@ function CompletionSheet({
           {/* The coach's own observations — private */}
           <p className="text-sm font-semibold mb-1">{t('coachMobile.sessionLogging.completionSheet.remarksLabel')}</p>
           <p className="text-xs text-muted-foreground mb-2">{t('coachMobile.sessionLogging.completionSheet.remarksHint')}</p>
+          {/* Notes on single exercises from the workout, then the general remark */}
+          {exerciseNotes.length > 0 && (
+            <ul className="space-y-1 mb-2">
+              {exerciseNotes.map(n => (
+                <li key={n.id} className="flex items-start gap-2 rounded-lg bg-muted/40 px-2 py-1.5 text-sm">
+                  <span className="flex-1 min-w-0 whitespace-pre-wrap break-words">
+                    <span className="font-medium">{n.exerciseName}:</span> {n.text}
+                  </span>
+                  <button type="button" onClick={() => onRemoveExerciseNote(n.id)}
+                    className="shrink-0 w-8 h-8 -m-1 flex items-center justify-center text-muted-foreground active:text-destructive"
+                    aria-label={t('coachMobile.sessionComments.removeNote')}>
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           <Textarea value={remark} onChange={e => setRemark(e.target.value)}
             placeholder={t('coachMobile.sessionLogging.completionSheet.remarksPlaceholder')} className="resize-none h-20 mb-2" />
           <label className="flex items-center gap-2 text-sm mb-5 min-h-[44px] cursor-pointer">
-            <Checkbox checked={remarkToNotes} onCheckedChange={(v) => setRemarkToNotes(v === true)} disabled={!remark.trim()} />
+            <Checkbox checked={remarkToNotes} onCheckedChange={(v) => setRemarkToNotes(v === true)} disabled={!remark.trim() && exerciseNotes.length === 0} />
             {t('coachMobile.sessionLogging.completionSheet.addToNotes')}
           </label>
 
@@ -657,6 +678,15 @@ export default function CoachMobileSessionLoggingPage() {
   const [historyTarget, setHistoryTarget] = useState<string | null>(null);
   const [commentTarget, setCommentTarget] = useState<{ exerciseName?: string; sectionName?: string } | null>(null);
   const [commentText, setCommentText] = useState('');
+  // The coach's private notes on exercises in this workout (coach_session_remarks.exercise_remarks)
+  const [coachExerciseNotes, setCoachExerciseNotes] = useState<ExerciseComment[]>([]);
+  // Notes written before a pause — shown again after resuming the workout
+  useEffect(() => {
+    if (!sessionLogId) { setCoachExerciseNotes([]); return; }
+    let cancelled = false;
+    void fetchCoachRemark(sessionLogId).then(r => { if (!cancelled) setCoachExerciseNotes(r.exerciseRemarks); });
+    return () => { cancelled = true; };
+  }, [sessionLogId]);
   const [commentSending, setCommentSending] = useState(false);
   const [sessionLock, setSessionLock] = useState<SessionLockInfo | null>(null);
   // Finishing with sets missing: the current 'section' (→ next unfinished one) or the whole 'workout'
@@ -1808,17 +1838,17 @@ export default function CoachMobileSessionLoggingPage() {
                   if (!commentText.trim() || commentSending || !commentTarget || !sessionLogId) return;
                   setCommentSending(true);
                   try {
-                    // Stays with the session (no chat message) — e.g. what the athlete said about it
-                    const updated = await addExerciseComment(sessionLogId, {
+                    // A private note of the coach — with the coach remarks of this session, never a chat message
+                    const updated = await addCoachExerciseRemark(sessionLogId, state.connectionId, {
                       exerciseName: commentTarget.exerciseName ?? 'Exercise',
                       sectionName: commentTarget.sectionName,
                       text: commentText.trim(),
-                      author: 'coach',
                     });
                     if (!updated) {
                       toast({ title: t('coachMobile.sessionLogging.commentNotSaved'), variant: 'destructive' });
                       return;
                     }
+                    setCoachExerciseNotes(updated);
                     setCommentTarget(null);
                     setCommentText('');
                   } finally {
@@ -1929,6 +1959,12 @@ export default function CoachMobileSessionLoggingPage() {
           sessionId={session.id} sessionName={session.name}
           durationSeconds={workoutElapsed} setsLogged={setsLoggedPayload}
           sessionLogId={sessionLogId}
+          exerciseNotes={coachExerciseNotes}
+          onRemoveExerciseNote={async (noteId) => {
+            if (!sessionLogId) return;
+            const next = await removeCoachExerciseRemark(sessionLogId, connectionId, noteId);
+            if (next) setCoachExerciseNotes(next);
+          }}
           onSaved={() => {
             setBorgSheetOpen(false);
             if (sessionLogId) void clearWorkoutProgress(sessionLogId, true);

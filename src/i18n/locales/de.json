@@ -768,7 +768,7 @@
       "incompleteWarningDesc": "Nicht alle Sätze sind abgeschlossen. Trotzdem beenden?",
       "goBack": "Zurück",
       "finishAnyway": "Trotzdem beenden",
-      "addComment": "Kommentar hinzufügen",
+      "addComment": "Private Notiz zur Übung",
       "commentPlaceholder": "Kommentar schreiben…",
       "adjustExerciseDesc": "{{name}} nur für diese Einheit ersetzen.",
       "loading": "Lädt…",
@@ -835,7 +835,8 @@
       "saving": "Speichert…",
       "send": "Senden",
       "sending": "Sendet…",
-      "cancel": "Abbrechen"
+      "cancel": "Abbrechen",
+      "removeNote": "Notiz entfernen"
     }
   }
 }

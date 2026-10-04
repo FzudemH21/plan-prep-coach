@@ -9,13 +9,13 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { CheckCircle2, Clock, Activity, Flame, RefreshCw, Reply, Lock } from 'lucide-react';
+import { CheckCircle2, Clock, Activity, Flame, RefreshCw, Reply, Lock, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { getBorgLabel, isBorgLevel } from '@/utils/intensityScale';
-import { fetchCoachRemark, parseExerciseComments, saveCoachRemark, sendCommentReply, type ExerciseComment } from '@/utils/sessionComments';
+import { fetchCoachRemark, parseExerciseComments, remarksAsText, removeCoachExerciseRemark, saveCoachRemark, sendCommentReply, type ExerciseComment } from '@/utils/sessionComments';
 
 // ── Exported types ─────────────────────────────────────────────────────────────
 
@@ -524,14 +524,25 @@ export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddT
   // Coach remarks — private (coach_session_remarks)
   const [remark, setRemark] = useState('');
   const [savedRemark, setSavedRemark] = useState('');
+  const [exerciseNotes, setExerciseNotes] = useState<ExerciseComment[]>([]);
   const [remarkSaving, setRemarkSaving] = useState(false);
   useEffect(() => {
-    setRemark(''); setSavedRemark('');
+    setRemark(''); setSavedRemark(''); setExerciseNotes([]);
     if (!log?.id || !open) return;
     let cancelled = false;
-    void fetchCoachRemark(log.id).then(r => { if (!cancelled) { setRemark(r); setSavedRemark(r); } });
+    void fetchCoachRemark(log.id).then(r => {
+      if (cancelled) return;
+      setRemark(r.remark); setSavedRemark(r.remark); setExerciseNotes(r.exerciseRemarks);
+    });
     return () => { cancelled = true; };
   }, [log?.id, open]);
+
+  const removeExerciseNote = async (noteId: string) => {
+    if (!log || !connectionId) return;
+    const next = await removeCoachExerciseRemark(log.id, connectionId, noteId);
+    if (next) setExerciseNotes(next);
+    else toast({ title: 'Note not removed', variant: 'destructive' });
+  };
 
   const saveRemark = async () => {
     if (!log || !connectionId) return;
@@ -573,9 +584,12 @@ export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddT
   if (!log) return null;
 
   const loggedNames = new Set((log.sets_logged ?? []).map(e => e.exerciseName));
-  const commentsFor = (name: string) => exerciseComments.filter(c => c.exerciseName === name);
+  const athleteComments = exerciseComments.filter(c => c.author !== 'coach');
+  // The coach's own exercise notes: private ones + older ones saved with the session log
+  const allExerciseNotes = [...exerciseComments.filter(c => c.author === 'coach'), ...exerciseNotes];
+  const commentsFor = (name: string) => athleteComments.filter(c => c.exerciseName === name);
   // Comments whose exercise isn't in the log (e.g. renamed) — shown above the exercises
-  const otherComments = exerciseComments.filter(c => !loggedNames.has(c.exerciseName));
+  const otherComments = athleteComments.filter(c => !loggedNames.has(c.exerciseName));
   const commentLabel = (c: ExerciseComment) =>
     `${c.author === 'coach' ? 'Noted while logging' : 'Athlete'} · ${format(parseISO(c.createdAt), 'HH:mm')}`;
   const replyFor = (c: ExerciseComment) => (c.author !== 'coach' && connectionId
@@ -673,6 +687,28 @@ export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddT
                   Coach remarks
                   <span className="text-muted-foreground font-normal">· private, only you see these</span>
                 </p>
+                {/* Your notes on single exercises (written while logging), then the general remark */}
+                {allExerciseNotes.length > 0 && (
+                  <ul className="space-y-1">
+                    {allExerciseNotes.map(n => (
+                      <li key={n.id} className="group flex items-start gap-2 rounded bg-muted/40 px-2 py-1.5 text-sm">
+                        <span className="flex-1 min-w-0 whitespace-pre-wrap break-words">
+                          <span className="font-medium">{n.exerciseName}:</span> {n.text}
+                        </span>
+                        {exerciseNotes.some(e => e.id === n.id) && (
+                          <button
+                            type="button"
+                            onClick={() => void removeExerciseNote(n.id)}
+                            className="shrink-0 text-muted-foreground hover:text-destructive opacity-60 group-hover:opacity-100"
+                            title="Remove note"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <Textarea
                   value={remark}
                   onChange={e => setRemark(e.target.value)}
@@ -685,10 +721,11 @@ export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddT
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={!remark.trim()}
+                      disabled={!remark.trim() && allExerciseNotes.length === 0}
                       onClick={async () => {
                         const when = format(parseISO(log.date + 'T12:00:00'), 'd MMM yyyy');
-                        await onAddToAthleteNotes(`${log.session_name ?? 'Session'} (${when}): ${remark.trim()}`);
+                        const text = remarksAsText({ remark, exerciseRemarks: allExerciseNotes });
+                        await onAddToAthleteNotes(`${log.session_name ?? 'Session'} (${when}):\n${text}`);
                         toast({ title: 'Added to athlete notes' });
                       }}
                     >

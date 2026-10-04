@@ -768,7 +768,7 @@
       "incompleteWarningDesc": "Not all sets are completed yet. Finish anyway?",
       "goBack": "Go back",
       "finishAnyway": "Finish anyway",
-      "addComment": "Add Comment",
+      "addComment": "Private note on exercise",
       "commentPlaceholder": "Write your comment…",
       "adjustExerciseDesc": "Replace {{name}} for this session only.",
       "loading": "Loading…",
@@ -835,7 +835,8 @@
       "saving": "Saving…",
       "send": "Send",
       "sending": "Sending…",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "removeNote": "Remove note"
     }
   }
 }

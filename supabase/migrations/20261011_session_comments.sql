@@ -25,8 +25,14 @@ CREATE INDEX IF NOT EXISTS coach_session_remarks_connection_idx
 ALTER TABLE public.coach_session_remarks ENABLE ROW LEVEL SECURITY;
 
 -- Only the coach who wrote them — athletes have no access at all
+-- (dropped first so the whole file can be run again safely)
+DROP POLICY IF EXISTS "coach_manage_session_remarks" ON public.coach_session_remarks;
 CREATE POLICY "coach_manage_session_remarks"
   ON public.coach_session_remarks
   FOR ALL
   USING  (coach_user_id = auth.uid())
   WITH CHECK (coach_user_id = auth.uid());
+
+-- The coach's private notes on single exercises (written while logging with the coach app) —
+-- [{ id, exerciseName, sectionName?, text, createdAt }]. Shown together with the general remark.
+ALTER TABLE public.coach_session_remarks ADD COLUMN IF NOT EXISTS exercise_remarks jsonb NOT NULL DEFAULT '[]';
