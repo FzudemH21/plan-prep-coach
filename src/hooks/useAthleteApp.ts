@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import type { AthleteProfileData } from '@/hooks/useAthleteConnections';
+import { dayIntensityFromSessions } from '@/utils/dayIntensity';
 
 export type { AthleteProfileData };
 
@@ -399,26 +400,44 @@ export function useAthleteApp() {
     // Fetch current DB rows for both dates
     const { data: rows } = await supabase
       .from('athlete_schedule')
-      .select('id, date, sessions')
+      .select('id, date, sessions, intensity')
       .eq('athlete_connection_id', connection.id)
       .in('date', [fromDate, toDate]);
 
     const fromRow = (rows ?? []).find((r: Record<string, unknown>) => r.date === fromDate);
     const toRow   = (rows ?? []).find((r: Record<string, unknown>) => r.date === toDate);
 
+    const fromDayIntensity = (fromRow?.intensity as string | null | undefined) ?? fromEntry?.intensity ?? null;
+    const toDayIntensity = (toRow?.intensity as string | null | undefined) ?? null;
+
     // Remove session from source
     const newFromSessions = ((fromRow?.sessions as SessionSummary[]) ?? [])
       .filter((s: SessionSummary) => s.id !== sessionId)
       .map((s: SessionSummary, i: number) => ({ ...s, order: i }));
 
-    // Add session to target (re-order)
+    // Add session to target (re-order). It keeps its intensity (the day's, if it had none of its
+    // own) and is marked as moved — so a plan re-sync from the coach's desktop keeps it on the new
+    // day instead of putting it back on its planned date (same as moves in the coach mobile app)
     const existingToSessions = (toRow?.sessions as SessionSummary[]) ?? [];
-    const newToSessions = [...existingToSessions, { ...session, order: existingToSessions.length }];
+    const movedSession: SessionSummary = {
+      ...session,
+      order: existingToSessions.length,
+      intensity: session.intensity ?? fromDayIntensity ?? undefined,
+      mobileRearranged: true,
+      originalDate: session.originalDate ?? fromDate,
+    };
+    const newToSessions = [...existingToSessions, movedSession];
+
+    // Day intensities follow the sessions: empty day → rest, otherwise the hardest session's
+    const newFromIntensity = dayIntensityFromSessions(
+      newFromSessions.map(s => ({ intensity: s.intensity, dayFallback: fromDayIntensity })), fromDayIntensity);
+    const newToIntensity = dayIntensityFromSessions(
+      newToSessions.map(s => ({ intensity: s.intensity, dayFallback: toDayIntensity })), toDayIntensity);
 
     // Update source row (filter by connection + date, not by id which may be undefined)
     await supabase
       .from('athlete_schedule')
-      .update({ sessions: newFromSessions })
+      .update({ sessions: newFromSessions, intensity: newFromIntensity })
       .eq('athlete_connection_id', connection.id)
       .eq('date', fromDate);
 
@@ -426,25 +445,25 @@ export function useAthleteApp() {
     if (toRow) {
       await supabase
         .from('athlete_schedule')
-        .update({ sessions: newToSessions })
+        .update({ sessions: newToSessions, intensity: newToIntensity })
         .eq('athlete_connection_id', connection.id)
         .eq('date', toDate);
     } else {
       await supabase
         .from('athlete_schedule')
-        .insert({ athlete_connection_id: connection.id, date: toDate, sessions: newToSessions });
+        .insert({ athlete_connection_id: connection.id, date: toDate, sessions: newToSessions, intensity: newToIntensity });
     }
 
     // Update local state optimistically
     setSchedule(prev => {
       const next = prev.map(e => {
-        if (e.date === fromDate) return { ...e, sessions: newFromSessions };
-        if (e.date === toDate)   return { ...e, sessions: newToSessions };
+        if (e.date === fromDate) return { ...e, sessions: newFromSessions, intensity: newFromIntensity };
+        if (e.date === toDate)   return { ...e, sessions: newToSessions, intensity: newToIntensity };
         return e;
       });
       // If toDate had no row yet, add it
       if (!prev.find(e => e.date === toDate)) {
-        next.push({ id: toDate, date: toDate, intensity: null, sessions: newToSessions, events: [], programName: null, mesocycleName: null, microcycleName: null });
+        next.push({ id: toDate, date: toDate, intensity: newToIntensity, sessions: newToSessions, events: [], programName: null, mesocycleName: null, microcycleName: null });
       }
       return next.sort((a, b) => a.date.localeCompare(b.date));
     });

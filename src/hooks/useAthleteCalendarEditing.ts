@@ -7,6 +7,7 @@ import { TrainingDay } from '@/types/daily-intensity';
 import { toggleSuperset, cleanupSupersetsOnExerciseDelete } from '@/utils/supersetUtils';
 import { useToast } from '@/hooks/use-toast';
 import type { SessionLibraryEntry } from '@/types/sessionLibrary';
+import { dayIntensityFromSessions } from '@/utils/dayIntensity';
 
 interface CopiedSession {
   exercises: ExerciseDistribution[];
@@ -753,6 +754,37 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     }
     setSupersets(newSupersets);
     
+    // Day intensities follow the sessions (same rule as the phone apps): a day without sessions is
+    // rest ("0"), otherwise it takes its hardest session's intensity. Sessions without an own
+    // intensity count with their day's.
+    const dayIntensityOf = (date: string): string | null =>
+      dailyIntensityData.find(d => d.date === date)?.intensity ?? trainingDays.find(d => d.date === date)?.intensity ?? null;
+    const srcDayIntensity = dayIntensityOf(sourceDayDate);
+    const dstDayIntensity = dayIntensityOf(destDayDate);
+    const srcCountBefore = daySplitStates[sourceDayDate] || 0;
+    const remainingSrc = Array.from({ length: srcCountBefore }, (_, i) => i)
+      .filter(i => i !== sourceSessionIndex)
+      .map(i => ({ intensity: sessionIntensities[`${sourceDayDate}-${i}`] ?? null, dayFallback: srcDayIntensity }));
+    const dstAfter = [
+      ...Array.from({ length: daySplitStates[destDayDate] || 0 }, (_, i) =>
+        ({ intensity: sessionIntensities[`${destDayDate}-${i}`] ?? null, dayFallback: dstDayIntensity })),
+      { intensity: sessionIntensities[`${sourceDayDate}-${sourceSessionIndex}`] ?? null, dayFallback: srcDayIntensity },
+    ];
+    const newSrcDayIntensity = dayIntensityFromSessions(remainingSrc, srcDayIntensity) as IntensityLevel | null;
+    const newDstDayIntensity = dayIntensityFromSessions(dstAfter, dstDayIntensity ?? srcDayIntensity) as IntensityLevel | null;
+    setDailyIntensityData(prev => {
+      let next = prev.map(di => {
+        if (di.date === sourceDayDate && newSrcDayIntensity) return { ...di, intensity: newSrcDayIntensity };
+        if (di.date === destDayDate && newDstDayIntensity) return { ...di, intensity: newDstDayIntensity };
+        return di;
+      });
+      if (newDstDayIntensity && !next.some(di => di.date === destDayDate)) {
+        const srcEntry = prev.find(di => di.date === sourceDayDate);
+        next = [...next, { ...(srcEntry ?? {}), date: destDayDate, intensity: newDstDayIntensity }];
+      }
+      return next;
+    });
+
     // CRITICAL FIX: Move session intensity with the session
     // This preserves the original session's intensity instead of inheriting destination day intensity
     setSessionIntensities(prev => {
@@ -819,10 +851,11 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       if (sourceIdx >= 0) {
         const newNames = [...(updated[sourceIdx].sessionNames || [])];
         newNames.splice(sourceSessionIndex, 1);
-        updated[sourceIdx] = { 
-          ...updated[sourceIdx], 
-          sessionNames: newNames, 
-          sessions: Math.max(0, (updated[sourceIdx].sessions || 1) - 1) 
+        updated[sourceIdx] = {
+          ...updated[sourceIdx],
+          sessionNames: newNames,
+          sessions: Math.max(0, (updated[sourceIdx].sessions || 1) - 1),
+          ...(newSrcDayIntensity ? { intensity: newSrcDayIntensity } : {}),
         };
       }
       
@@ -835,7 +868,8 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
           ...updated[destIdx], 
           sessionNames: newNames, 
           sessions: (updated[destIdx].sessions || 0) + 1,
-          isTrainingDay: true
+          isTrainingDay: true,
+          ...(newDstDayIntensity ? { intensity: newDstDayIntensity } : {}),
         };
       } else {
         // Create new day entry if it doesn't exist
@@ -850,7 +884,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
           isTestDay: false,
           isEventDay: false,
           isTrainingDay: true,
-          intensity: sourceDay?.intensity || 'moderate',
+          intensity: newDstDayIntensity ?? sourceDay?.intensity ?? '5',
           sessions: 1,
           sessionNames: [movedSessionName],
         });

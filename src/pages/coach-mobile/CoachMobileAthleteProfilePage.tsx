@@ -31,6 +31,7 @@ import { useSessionLibrary } from '@/hooks/useSessionLibrary';
 import type { SessionLibraryEntry } from '@/types/sessionLibrary';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
+import { dayIntensityFromSessions } from '@/utils/dayIntensity';
 
 // ── Monitoring helpers ─────────────────────────────────────────────────────────
 
@@ -938,13 +939,20 @@ export default function CoachMobileAthleteProfilePage() {
     // plan's session placement and honour this mobile rearrangement.
     const originalDate = movedSession.originalDate ?? sourceDate;
     const isBackToOriginal = destDate === originalDate;
+    const srcDayIntensity = srcEntry.intensity ?? null;
+    const dstDayIntensity = dstEntry?.intensity ?? null;
     const taggedSession: typeof movedSession = {
       ...movedSession,
+      // Keeps its intensity — the day's, if it had none of its own
+      intensity: movedSession.intensity ?? srcDayIntensity ?? undefined,
       mobileRearranged: isBackToOriginal ? undefined : true,
       originalDate: isBackToOriginal ? undefined : originalDate,
     };
     dstSessions.splice(destination.index, 0, taggedSession);
     const newDst = dstSessions.map((s, i) => ({ ...s, order: i }));
+    // Day intensities follow the sessions: empty day → rest, otherwise the hardest session's
+    const newSrcIntensity = dayIntensityFromSessions(newSrc.map(s => ({ intensity: s.intensity, dayFallback: srcDayIntensity })), srcDayIntensity);
+    const newDstIntensity = dayIntensityFromSessions(newDst.map(s => ({ intensity: s.intensity, dayFallback: dstDayIntensity })), dstDayIntensity);
 
     // Optimistic update — move session in UI immediately, before any Supabase call.
     // This prevents the session from disappearing if one of the two writes partially
@@ -952,8 +960,8 @@ export default function CoachMobileAthleteProfilePage() {
     setSchedule(prev => {
       const dstInPrev = prev.some(e => e.date === destDate);
       const next = prev.map(e => {
-        if (e.date === sourceDate) return { ...e, sessions: newSrc };
-        if (e.date === destDate)   return { ...e, sessions: newDst };
+        if (e.date === sourceDate) return { ...e, sessions: newSrc, intensity: newSrcIntensity };
+        if (e.date === destDate)   return { ...e, sessions: newDst, intensity: newDstIntensity };
         return e;
       });
       // If destDate had no local entry yet, add one
@@ -961,7 +969,7 @@ export default function CoachMobileAthleteProfilePage() {
         next.push({
           id: destDate,
           date: destDate,
-          intensity: null,
+          intensity: newDstIntensity,
           sessions: newDst,
           events: [],
           programName: null,
@@ -976,15 +984,15 @@ export default function CoachMobileAthleteProfilePage() {
     setMutating(true);
     try {
       await Promise.all([
-        upsertDayRow(sourceDate, { sessions: newSrc }),
-        upsertDayRow(destDate,   { sessions: newDst }),
+        upsertDayRow(sourceDate, { sessions: newSrc, intensity: newSrcIntensity }),
+        upsertDayRow(destDate,   { sessions: newDst, intensity: newDstIntensity }),
       ]);
     } catch (err) {
       console.error('[drag] upsert failed → rolling back:', err);
       // Rollback to original state
       setSchedule(prev => prev.map(e => {
-        if (e.date === sourceDate) return { ...e, sessions: srcEntry.sessions };
-        if (e.date === destDate)   return { ...e, sessions: dstEntry?.sessions ?? [] };
+        if (e.date === sourceDate) return { ...e, sessions: srcEntry.sessions, intensity: srcEntry.intensity };
+        if (e.date === destDate)   return { ...e, sessions: dstEntry?.sessions ?? [], intensity: dstEntry?.intensity ?? null };
         return e;
       }));
       toast({ title: 'Error', description: 'Could not move session.', variant: 'destructive' });
