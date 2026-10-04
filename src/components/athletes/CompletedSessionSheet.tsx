@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import {
   Sheet,
@@ -9,8 +9,13 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { CheckCircle2, Clock, Activity, Flame, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Clock, Activity, Flame, RefreshCw, Reply, Lock } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
 import { getBorgLabel, isBorgLevel } from '@/utils/intensityScale';
+import { fetchCoachRemark, parseExerciseComments, saveCoachRemark, sendCommentReply, type ExerciseComment } from '@/utils/sessionComments';
 
 // ── Exported types ─────────────────────────────────────────────────────────────
 
@@ -80,6 +85,10 @@ export interface CoachSessionLog {
   paused_at?: string | null;
   comment: string | null;
   sets_logged: SetLogEntry[] | null;
+  /** Athlete comments on single exercises (needs the session-comments migration) */
+  exercise_comments?: unknown;
+  /** 'coach' when the session was logged with the coach app */
+  started_by?: string | null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -414,7 +423,7 @@ function groupBySupersetWithinSection(entries: SetLogEntry[]): ExerciseGroup[] {
   return groups;
 }
 
-function SessionExercises({ entries }: { entries: SetLogEntry[] }) {
+function SessionExercises({ entries, renderAfter }: { entries: SetLogEntry[]; renderAfter?: (entry: SetLogEntry) => React.ReactNode }) {
   const hasStructure = entries.some(e => e.sectionId);
   const sections = groupBySection(entries);
   const showSectionHeaders = hasStructure && (sections.length > 1 || (sections[0]?.sectionName && sections[0].sectionName !== 'Workout'));
@@ -436,7 +445,12 @@ function SessionExercises({ entries }: { entries: SetLogEntry[] }) {
             <div className="space-y-2">
               {groups.map((group, gi) => {
                 if (group.kind === 'single') {
-                  return <ExerciseLogCard key={gi} entry={group.entry} />;
+                  return (
+                    <div key={gi}>
+                      <ExerciseLogCard entry={group.entry} />
+                      {renderAfter?.(group.entry)}
+                    </div>
+                  );
                 }
                 // Superset group
                 return (
@@ -449,6 +463,7 @@ function SessionExercises({ entries }: { entries: SetLogEntry[] }) {
                     {group.members.map((member, mi) => (
                       <div key={mi}>
                         <ExerciseLogCard entry={member} />
+                        {renderAfter && <div className="px-3 pb-2">{renderAfter(member)}</div>}
                         {mi < group.members.length - 1 && (
                           <div className="mx-3 border-t border-dashed border-primary/20" />
                         )}
@@ -471,10 +486,106 @@ interface CompletedSessionSheetProps {
   log: CoachSessionLog | null;
   open: boolean;
   onClose: () => void;
+  /** The athlete's app connection — needed for coach remarks and replies */
+  connectionId?: string;
+  /** Adds a text to the athlete's profile notes */
+  onAddToAthleteNotes?: (text: string) => Promise<void> | void;
 }
 
-export function CompletedSessionSheet({ log, open, onClose }: CompletedSessionSheetProps) {
+interface ReplyTarget {
+  quote: string;
+  exerciseName?: string;
+  sectionName?: string;
+}
+
+/** An athlete comment (or one the coach typed in while logging) with a Reply button */
+function CommentBubble({ label, text, onReply }: { label: string; text: string; onReply?: () => void }) {
+  return (
+    <div className="mt-1.5 rounded-md border-l-2 border-violet-400 bg-violet-50/60 dark:bg-violet-950/20 px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        {onReply && (
+          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={onReply}>
+            <Reply className="h-3 w-3" />
+            Reply
+          </Button>
+        )}
+      </div>
+      <p className="text-sm whitespace-pre-wrap break-words leading-snug">{text}</p>
+    </div>
+  );
+}
+
+export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddToAthleteNotes }: CompletedSessionSheetProps) {
+  const { toast } = useToast();
+  const exerciseComments = useMemo(() => parseExerciseComments(log?.exercise_comments), [log]);
+  const loggedByCoach = log?.started_by === 'coach';
+
+  // Coach remarks — private (coach_session_remarks)
+  const [remark, setRemark] = useState('');
+  const [savedRemark, setSavedRemark] = useState('');
+  const [remarkSaving, setRemarkSaving] = useState(false);
+  useEffect(() => {
+    setRemark(''); setSavedRemark('');
+    if (!log?.id || !open) return;
+    let cancelled = false;
+    void fetchCoachRemark(log.id).then(r => { if (!cancelled) { setRemark(r); setSavedRemark(r); } });
+    return () => { cancelled = true; };
+  }, [log?.id, open]);
+
+  const saveRemark = async () => {
+    if (!log || !connectionId) return;
+    setRemarkSaving(true);
+    const error = await saveCoachRemark(log.id, connectionId, remark);
+    setRemarkSaving(false);
+    if (error) {
+      toast({ title: 'Remarks not saved', description: error, variant: 'destructive' });
+      return;
+    }
+    setSavedRemark(remark.trim());
+    toast({ title: 'Remarks saved' });
+  };
+
+  // Reply — goes into the one athlete chat, with the comment quoted
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [replySending, setReplySending] = useState(false);
+  const sendReply = async () => {
+    if (!log || !connectionId || !replyTarget || !replyText.trim()) return;
+    setReplySending(true);
+    const error = await sendCommentReply(connectionId, replyText, {
+      exerciseName: replyTarget.exerciseName,
+      sectionName: replyTarget.sectionName,
+      sessionName: log.session_name ?? undefined,
+      date: log.date,
+      quote: replyTarget.quote,
+    });
+    setReplySending(false);
+    if (error) {
+      toast({ title: 'Reply not sent', description: error, variant: 'destructive' });
+      return;
+    }
+    setReplyTarget(null);
+    setReplyText('');
+    toast({ title: 'Reply sent', description: 'It is in the athlete chat, with the comment quoted.' });
+  };
+
   if (!log) return null;
+
+  const loggedNames = new Set((log.sets_logged ?? []).map(e => e.exerciseName));
+  const commentsFor = (name: string) => exerciseComments.filter(c => c.exerciseName === name);
+  // Comments whose exercise isn't in the log (e.g. renamed) — shown above the exercises
+  const otherComments = exerciseComments.filter(c => !loggedNames.has(c.exerciseName));
+  const commentLabel = (c: ExerciseComment) =>
+    `${c.author === 'coach' ? 'Noted while logging' : 'Athlete'} · ${format(parseISO(c.createdAt), 'HH:mm')}`;
+  const replyFor = (c: ExerciseComment) => (c.author !== 'coach' && connectionId
+    ? () => setReplyTarget({ quote: c.text, exerciseName: c.exerciseName, sectionName: c.sectionName })
+    : undefined);
+  const renderComments = (entry: SetLogEntry) => {
+    const list = commentsFor(entry.exerciseName);
+    if (list.length === 0) return null;
+    return list.map(c => <CommentBubble key={c.id} label={commentLabel(c)} text={c.text} onReply={replyFor(c)} />);
+  };
 
   const sRPE = computeSRPE(log);
   const completedAt = log.completed_at ? parseISO(log.completed_at) : null;
@@ -526,11 +637,68 @@ export function CompletedSessionSheet({ log, open, onClose }: CompletedSessionSh
               />
             </div>
 
-            {/* Athlete comment */}
+            {/* Athlete feedback on the session — stays with the session; a reply goes to the chat */}
             {log.comment && (
               <div className="rounded-md border bg-muted/30 px-4 py-3">
-                <p className="text-xs text-muted-foreground font-medium mb-1">Athlete note</p>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Athlete feedback{loggedByCoach ? ' (entered by you while logging)' : ''}
+                  </p>
+                  {connectionId && !loggedByCoach && (
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => setReplyTarget({ quote: log.comment! })}>
+                      <Reply className="h-3 w-3" />
+                      Reply
+                    </Button>
+                  )}
+                </div>
                 <p className="text-sm whitespace-pre-wrap leading-snug">{log.comment}</p>
+              </div>
+            )}
+
+            {/* Comments on exercises that aren't in the log any more */}
+            {otherComments.length > 0 && (
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Exercise comments</p>
+                {otherComments.map(c => (
+                  <CommentBubble key={c.id} label={`${c.exerciseName} · ${commentLabel(c)}`} text={c.text} onReply={replyFor(c)} />
+                ))}
+              </div>
+            )}
+
+            {/* Coach remarks — private */}
+            {connectionId && (
+              <div className="rounded-md border px-4 py-3 space-y-2">
+                <p className="text-xs font-medium flex items-center gap-1.5">
+                  <Lock className="h-3 w-3 text-muted-foreground" />
+                  Coach remarks
+                  <span className="text-muted-foreground font-normal">· private, only you see these</span>
+                </p>
+                <Textarea
+                  value={remark}
+                  onChange={e => setRemark(e.target.value)}
+                  rows={3}
+                  placeholder="Your observations, cues, what to change next time…"
+                  className="text-sm resize-none"
+                />
+                <div className="flex justify-end gap-2">
+                  {onAddToAthleteNotes && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!remark.trim()}
+                      onClick={async () => {
+                        const when = format(parseISO(log.date + 'T12:00:00'), 'd MMM yyyy');
+                        await onAddToAthleteNotes(`${log.session_name ?? 'Session'} (${when}): ${remark.trim()}`);
+                        toast({ title: 'Added to athlete notes' });
+                      }}
+                    >
+                      Add to athlete notes
+                    </Button>
+                  )}
+                  <Button size="sm" disabled={remarkSaving || remark.trim() === savedRemark} onClick={saveRemark}>
+                    {remarkSaving ? 'Saving…' : 'Save remarks'}
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -538,7 +706,7 @@ export function CompletedSessionSheet({ log, open, onClose }: CompletedSessionSh
             {log.sets_logged && log.sets_logged.length > 0 ? (
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold">Session exercises</h3>
-                <SessionExercises entries={log.sets_logged} />
+                <SessionExercises entries={log.sets_logged} renderAfter={renderComments} />
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
@@ -549,6 +717,36 @@ export function CompletedSessionSheet({ log, open, onClose }: CompletedSessionSh
           </div>
         </ScrollArea>
       </SheetContent>
+
+      <Dialog open={replyTarget !== null} onOpenChange={o => { if (!o) { setReplyTarget(null); setReplyText(''); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reply in the chat</DialogTitle>
+            <DialogDescription>
+              {[replyTarget?.exerciseName, log.session_name, format(parseISO(log.date + 'T12:00:00'), 'd MMM yyyy')].filter(Boolean).join(' · ')}
+            </DialogDescription>
+          </DialogHeader>
+          {replyTarget && (
+            <p className="border-l-2 border-muted-foreground/40 pl-2 text-sm italic text-muted-foreground whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
+              “{replyTarget.quote}”
+            </p>
+          )}
+          <Textarea
+            autoFocus
+            value={replyText}
+            onChange={e => setReplyText(e.target.value)}
+            rows={4}
+            placeholder="Your reply…"
+            className="resize-none"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setReplyTarget(null); setReplyText(''); }}>Cancel</Button>
+            <Button disabled={!replyText.trim() || replySending} onClick={sendReply}>
+              {replySending ? 'Sending…' : 'Send reply'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }

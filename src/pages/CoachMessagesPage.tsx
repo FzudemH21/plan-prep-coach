@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { uploadChatFile } from '@/lib/storage';
 import { ChatAttachmentDisplay } from '@/components/chat/ChatAttachmentDisplay';
+import { ChatQuote } from '@/components/chat/ChatQuote';
 
 function formatMessageDate(iso: string): string {
   const d = parseISO(iso);
@@ -179,6 +180,7 @@ function ThreadView({
                         ].filter(Boolean).join(' · ')}
                       </button>
                     )}
+                    {msg.reference?.quote && <ChatQuote quote={msg.reference.quote} isOwn={isOwn} />}
                     {/* Text bubble */}
                     {msg.content && (
                       <div className={cn(

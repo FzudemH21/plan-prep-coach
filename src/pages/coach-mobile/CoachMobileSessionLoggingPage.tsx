@@ -25,7 +25,10 @@ import type { AthleteScheduleEntry, ExerciseSummary } from '@/hooks/useAthleteAp
 import { useToast } from '@/hooks/use-toast';
 import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { useAuth } from '@/hooks/useAuth';
-import { useChat } from '@/hooks/useChat';
+import { useAthleteConnections } from '@/hooks/useAthleteConnections';
+import { useAthletes } from '@/hooks/useAthletes';
+import { Checkbox } from '@/components/ui/checkbox';
+import type { AthleteNote } from '@/types/athlete';
 import { ExerciseHistorySheet } from '@/components/shared/ExerciseHistorySheet';
 import { checkSessionLock, type SessionLockInfo } from '@/utils/sessionLock';
 import {
@@ -35,6 +38,7 @@ import {
 import { previousValueFor, usePreviousExerciseValues, type PreviousExerciseValues } from '@/hooks/usePreviousExerciseValues';
 import { SectionNavigator, nextUnfinishedSection } from '@/components/workout/SectionNavigator';
 import { getRestSeconds } from '@/utils/workoutRest';
+import { addExerciseComment, saveCoachRemark } from '@/utils/sessionComments';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -176,8 +180,13 @@ function CompletionSheet({
   const { t } = useTranslation();
   const [borgRating, setBorgRating] = useState<number | null>(null);
   const [comment, setComment] = useState('');
+  // Private coach remarks — stay with the session (coach_session_remarks), optionally also in the athlete notes
+  const [remark, setRemark] = useState('');
+  const [remarkToNotes, setRemarkToNotes] = useState(false);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
+  const { connections } = useAthleteConnections();
+  const { athletes, updateAthlete } = useAthletes();
 
   async function handleSave() {
     setSaving(true);
@@ -190,23 +199,44 @@ function CompletionSheet({
     };
 
     let error;
+    let logId: string | null = sessionLogId ?? null;
     if (sessionLogId) {
       ({ error } = await supabase.from('athlete_session_logs').update(payload).eq('id', sessionLogId));
     } else {
-      ({ error } = await supabase.from('athlete_session_logs').insert({
+      const res = await supabase.from('athlete_session_logs').insert({
         athlete_connection_id: connectionId,
         date,
         session_id: sessionId,
         session_name: sessionName,
         ...payload,
-      }));
+      }).select('id').single();
+      error = res.error;
+      logId = (res.data as { id: string } | null)?.id ?? null;
     }
 
-    setSaving(false);
     if (error) {
+      setSaving(false);
       toast({ title: t('coachMobile.sessionLogging.completionSheet.toastError'), description: error.message, variant: 'destructive' });
       return;
     }
+
+    const remarkText = remark.trim();
+    if (remarkText && logId) {
+      const remarkError = await saveCoachRemark(logId, connectionId, remarkText);
+      if (remarkError) {
+        toast({ title: t('coachMobile.sessionLogging.completionSheet.remarkError'), description: remarkError, variant: 'destructive' });
+      }
+    }
+    if (remarkText && remarkToNotes) {
+      const athleteLocalId = connections.find(c => c.id === connectionId)?.athleteLocalId;
+      const athlete = athletes.find(a => a.id === athleteLocalId);
+      if (athlete) {
+        const when = new Date(date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        const note: AthleteNote = { id: `note-${Date.now()}`, text: `${sessionName} (${when}): ${remarkText}`, timestamp: new Date().toISOString() };
+        await updateAthlete(athlete.id, { notesHistory: [note, ...(athlete.notesHistory ?? [])] });
+      }
+    }
+    setSaving(false);
     toast({ title: t('coachMobile.sessionLogging.completionSheet.toastLogged') });
     onSaved();
   }
@@ -241,9 +271,20 @@ function CompletionSheet({
             ))}
           </div>
 
-          <p className="text-sm font-semibold mb-2">{t('coachMobile.sessionLogging.completionSheet.notesLabel')}</p>
+          {/* What the athlete said — the same field the athlete fills in their app */}
+          <p className="text-sm font-semibold mb-2">{t('coachMobile.sessionLogging.completionSheet.feedbackLabel')}</p>
           <Textarea value={comment} onChange={e => setComment(e.target.value)}
-            placeholder={t('coachMobile.sessionLogging.completionSheet.notesPlaceholder')} className="resize-none h-20 mb-5" />
+            placeholder={t('coachMobile.sessionLogging.completionSheet.feedbackPlaceholder')} className="resize-none h-20 mb-4" />
+
+          {/* The coach's own observations — private */}
+          <p className="text-sm font-semibold mb-1">{t('coachMobile.sessionLogging.completionSheet.remarksLabel')}</p>
+          <p className="text-xs text-muted-foreground mb-2">{t('coachMobile.sessionLogging.completionSheet.remarksHint')}</p>
+          <Textarea value={remark} onChange={e => setRemark(e.target.value)}
+            placeholder={t('coachMobile.sessionLogging.completionSheet.remarksPlaceholder')} className="resize-none h-20 mb-2" />
+          <label className="flex items-center gap-2 text-sm mb-5 min-h-[44px] cursor-pointer">
+            <Checkbox checked={remarkToNotes} onCheckedChange={(v) => setRemarkToNotes(v === true)} disabled={!remark.trim()} />
+            {t('coachMobile.sessionLogging.completionSheet.addToNotes')}
+          </label>
 
           <Button className="w-full" disabled={saving} onClick={handleSave}>
             {saving ? t('coachMobile.sessionLogging.completionSheet.saving') : t('coachMobile.sessionLogging.completionSheet.save')}
@@ -594,7 +635,6 @@ export default function CoachMobileSessionLoggingPage() {
   const { libraries } = useCustomLibraries();
 
   const state = location.state as LocationState | null;
-  const { sendMessage: chatSend } = useChat({ connectionId: state?.connectionId ?? null, callerRole: 'coach' });
 
   // ── State ──────────────────────────────────────────────────────────────────
 
@@ -1765,22 +1805,22 @@ export default function CoachMobileSessionLoggingPage() {
                 className="h-10 w-10 shrink-0"
                 disabled={!commentText.trim() || commentSending}
                 onClick={async () => {
-                  if (!commentText.trim() || commentSending || !commentTarget) return;
+                  if (!commentText.trim() || commentSending || !commentTarget || !sessionLogId) return;
                   setCommentSending(true);
                   try {
-                    await chatSend(commentText, {
-                      messageType: 'exercise_comment',
-                      reference: {
-                        exerciseName: commentTarget.exerciseName,
-                        sectionName: commentTarget.sectionName,
-                        sessionName: session.name,
-                        date: entry.date,
-                      },
+                    // Stays with the session (no chat message) — e.g. what the athlete said about it
+                    const updated = await addExerciseComment(sessionLogId, {
+                      exerciseName: commentTarget.exerciseName ?? 'Exercise',
+                      sectionName: commentTarget.sectionName,
+                      text: commentText.trim(),
+                      author: 'coach',
                     });
+                    if (!updated) {
+                      toast({ title: t('coachMobile.sessionLogging.commentNotSaved'), variant: 'destructive' });
+                      return;
+                    }
                     setCommentTarget(null);
                     setCommentText('');
-                  } catch {
-                    // silent
                   } finally {
                     setCommentSending(false);
                   }

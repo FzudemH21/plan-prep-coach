@@ -12,7 +12,6 @@ import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { useAthleteSettings } from '@/hooks/useAthleteSettings';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,7 +25,6 @@ import {
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { useAthleteApp, AthleteScheduleEntry, ExerciseSummary, SessionLog } from '@/hooks/useAthleteApp';
-import { useChat } from '@/hooks/useChat';
 import { ExerciseHistorySheet } from '@/components/shared/ExerciseHistorySheet';
 import { useToast } from '@/hooks/use-toast';
 import { checkSessionLock, type SessionLockInfo } from '@/utils/sessionLock';
@@ -37,6 +35,7 @@ import {
 import { previousValueFor, usePreviousExerciseValues, type PreviousExerciseValues } from '@/hooks/usePreviousExerciseValues';
 import { SectionNavigator, nextUnfinishedSection } from '@/components/workout/SectionNavigator';
 import { getRestSeconds } from '@/utils/workoutRest';
+import { addExerciseComment, fetchExerciseComments, type ExerciseComment } from '@/utils/sessionComments';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -187,13 +186,10 @@ interface CompletionSheetProps {
   /** ID of the in-progress row created when "Start Workout" was tapped.
    *  When present, we UPDATE that row instead of INSERTing a new one. */
   sessionLogId?: string | null;
-  /** When provided, a non-empty session note is forwarded to the athlete-coach chat. */
-  onSendToChat?: (text: string, sessionName: string, date: string) => Promise<void>;
 }
 
 function CompletionSheet({
   open, onClose, connectionId, date, sessionId, sessionName, durationSeconds, setsLogged, onSaved, sessionLogId,
-  onSendToChat,
 }: CompletionSheetProps) {
   const [borgRating, setBorgRating] = useState<number | null>(null);
   const [comment, setComment] = useState('');
@@ -235,11 +231,7 @@ function CompletionSheet({
       return;
     }
 
-    // Forward the note to the athlete-coach chat (fire-and-forget, non-blocking)
-    if (trimmedComment && onSendToChat) {
-      onSendToChat(trimmedComment, sessionName, date).catch(() => {/* silent */});
-    }
-
+    // The feedback stays with the session — the coach is notified (bell), not messaged
     toast({ title: 'Session logged!' });
     onSaved();
   }
@@ -277,11 +269,11 @@ function CompletionSheet({
             ))}
           </div>
 
-          <p className="text-sm font-semibold mb-2">Notes (optional)</p>
+          <p className="text-sm font-semibold mb-2">Feedback for your coach (optional)</p>
           <Textarea
             value={comment}
             onChange={e => setComment(e.target.value)}
-            placeholder="Any notes about this session…"
+            placeholder="How did it go? Anything your coach should know…"
             className="resize-none h-20 mb-5"
           />
 
@@ -765,15 +757,18 @@ export default function AthleteSessionPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connection?.id, state?.entry.date, lockCheckSession?.id, phase]);
 
-  // Settings
-  const { chatEnabled } = useAthleteSettings();
+  const { toast } = useToast();
 
-  // Chat — exercise/section comment sheet
-  const { sendMessage: chatSend } = useChat({
-    connectionId: connection?.id ?? null,
-    callerRole: 'athlete',
-  });
+  // Exercise comments — saved with this session (the coach gets a notification), not as chat messages
   const [historyTarget, setHistoryTarget] = useState<string | null>(null);
+  const [exerciseComments, setExerciseComments] = useState<ExerciseComment[]>([]);
+  // Comments already written in this workout (e.g. after resuming it)
+  useEffect(() => {
+    if (!sessionLogId) { setExerciseComments([]); return; }
+    let cancelled = false;
+    void fetchExerciseComments(sessionLogId).then(list => { if (!cancelled) setExerciseComments(list); });
+    return () => { cancelled = true; };
+  }, [sessionLogId]);
   const [commentTarget, setCommentTarget] = useState<{
     exerciseName?: string;
     sectionName?: string;
@@ -2070,7 +2065,7 @@ export default function AthleteSessionPage() {
                               <History className="h-4 w-4" />
                             </button>
                           )}
-                          {chatEnabled && (
+                          {sessionLogId && (
                             <button
                               onClick={() => setCommentTarget({ exerciseName: swappedExercises[ex.id]?.replacementName ?? ex.name, sectionName: currentSection?.name })}
                               className="shrink-0 text-muted-foreground hover:text-foreground active:opacity-60 transition-colors ml-0.5"
@@ -2262,12 +2257,6 @@ export default function AthleteSessionPage() {
             setsLogged={setsLoggedPayload}
             onSaved={handleSaved}
             sessionLogId={sessionLogId}
-            onSendToChat={async (text, sName, d) => {
-              await chatSend(text, {
-                messageType: 'session_note',
-                reference: { sessionName: sName, date: d },
-              });
-            }}
           />
         )}
 
@@ -2318,13 +2307,21 @@ export default function AthleteSessionPage() {
         <Dialog open={!!commentTarget} onOpenChange={(o) => { if (!o) { setCommentTarget(null); setCommentText(''); } }}>
           <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl">
             <DialogHeader>
-              <DialogTitle className="text-base">Add Comment</DialogTitle>
+              <DialogTitle className="text-base">Comment for your coach</DialogTitle>
               {commentTarget && (
                 <DialogDescription className="text-xs">
                   📎 {[commentTarget.exerciseName, commentTarget.sectionName, session.name, entry.date ? new Date(entry.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : undefined].filter(Boolean).join(' · ')}
                 </DialogDescription>
               )}
             </DialogHeader>
+            {/* Earlier comments on this exercise in this session */}
+            {commentTarget && exerciseComments.some(c => c.exerciseName === commentTarget.exerciseName) && (
+              <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                {exerciseComments.filter(c => c.exerciseName === commentTarget.exerciseName).map(c => (
+                  <p key={c.id} className="rounded-lg bg-muted/60 px-3 py-2 text-sm whitespace-pre-wrap break-words">{c.text}</p>
+                ))}
+              </div>
+            )}
             <div className="flex items-end gap-2 mt-1">
               <Textarea
                 autoFocus
@@ -2339,22 +2336,22 @@ export default function AthleteSessionPage() {
                 className="h-10 w-10 shrink-0"
                 disabled={!commentText.trim() || commentSending}
                 onClick={async () => {
-                  if (!commentText.trim() || commentSending || !commentTarget) return;
+                  if (!commentText.trim() || commentSending || !commentTarget || !sessionLogId) return;
                   setCommentSending(true);
                   try {
-                    await chatSend(commentText, {
-                      messageType: 'exercise_comment',
-                      reference: {
-                        exerciseName: commentTarget.exerciseName,
-                        sectionName: commentTarget.sectionName,
-                        sessionName: session.name,
-                        date: entry.date,
-                      },
+                    const updated = await addExerciseComment(sessionLogId, {
+                      exerciseName: commentTarget.exerciseName ?? 'Exercise',
+                      sectionName: commentTarget.sectionName,
+                      text: commentText.trim(),
                     });
+                    if (!updated) {
+                      toast({ title: 'Comment not saved', description: 'Please try again.', variant: 'destructive' });
+                      return;
+                    }
+                    setExerciseComments(updated);
                     setCommentTarget(null);
                     setCommentText('');
-                  } catch {
-                    // silent
+                    toast({ title: 'Comment saved', description: 'Your coach will see it with this session.' });
                   } finally {
                     setCommentSending(false);
                   }

@@ -6,6 +6,8 @@
  *   - Daily check-in submissions (athlete_daily_checkins.created_at)
  *   - Anamnesis forms filled in through a form link (athlete_anamneses.form_submitted_at) —
  *     also for athletes without the app
+ *   - Athlete comments, which stay with the session (no chat message): session feedback
+ *     (athlete_session_logs.comment) and exercise comments (athlete_session_logs.exercise_comments)
  *
  * "Unread" state is tracked per-item via a localStorage set of read IDs.
  * Items are unread by default; clicking one or pressing "Mark all as read"
@@ -14,11 +16,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { AthleteConnection } from '@/hooks/useAthleteConnections';
+import { parseExerciseComments, shortQuote } from '@/utils/sessionComments';
 
 const READ_IDS_KEY = 'ppc-coach-activity-read-ids';
 const FEED_WINDOW_DAYS = 7;
 
-export type FeedItemType = 'session_complete' | 'checkin' | 'anamnesis_submitted';
+export type FeedItemType = 'session_complete' | 'checkin' | 'anamnesis_submitted' | 'session_feedback' | 'exercise_comment';
 export type FeedFlag = 'illness' | 'low_wellness' | 'pain';
 
 export interface FeedItem {
@@ -33,8 +36,10 @@ export interface FeedItem {
   flag?: FeedFlag;
   /** yyyy-MM-dd — only set for session_complete items, used for direct navigation */
   date?: string;
-  /** session_id from athlete_session_logs — only set for session_complete items */
+  /** session_id from athlete_session_logs — set for session items (complete, feedback, comments) */
   sessionId?: string;
+  /** Session name — opens the session in the calendar */
+  sessionName?: string;
 }
 
 function loadReadIds(): Set<string> {
@@ -82,16 +87,23 @@ export function useCoachActivityFeed(connections: AthleteConnection[]) {
       .gte('form_submitted_at', windowStart)
       .order('form_submitted_at', { ascending: false });
 
+    // Sessions completed in the window, and sessions started in it (exercise comments are written
+    // during the workout). exercise_comments / started_by need their migrations — without them the
+    // query is retried without those columns.
+    const sessionsQuery = (columns: string) => supabase
+      .from('athlete_session_logs')
+      .select(columns)
+      .in('athlete_connection_id', connectedIds)
+      .or(`completed_at.gte.${windowStart},created_at.gte.${windowStart}`)
+      .order('completed_at', { ascending: false });
+    const sessionBase = 'id, athlete_connection_id, session_id, session_name, date, completed_at, borg_rating, duration_seconds, comment';
+    const loadSessions = async () => {
+      const full = await sessionsQuery(`${sessionBase}, started_by, exercise_comments`);
+      return full.error ? sessionsQuery(sessionBase) : full;
+    };
+
     const [sessionsRes, checkinsRes] = connectedIds.length === 0 ? [{ data: [] }, { data: [] }] : await Promise.all([
-      supabase
-        .from('athlete_session_logs')
-        .select(
-          'id, athlete_connection_id, session_id, session_name, date, completed_at, borg_rating, duration_seconds'
-        )
-        .in('athlete_connection_id', connectedIds)
-        .not('completed_at', 'is', null)
-        .gte('completed_at', windowStart)
-        .order('completed_at', { ascending: false }),
+      loadSessions(),
 
       supabase
         .from('athlete_daily_checkins')
@@ -105,9 +117,44 @@ export function useCoachActivityFeed(connections: AthleteConnection[]) {
 
     const feed: FeedItem[] = [];
 
-    for (const row of sessionsRes.data ?? []) {
+    for (const row of (sessionsRes.data ?? []) as unknown as Array<Record<string, unknown>>) {
       const conn = connMap.get(row.athlete_connection_id as string);
       if (!conn) continue;
+
+      // Exercise comments the athlete wrote (not those the coach typed in while logging)
+      for (const c of parseExerciseComments(row.exercise_comments)) {
+        if (c.author === 'coach' || c.createdAt < windowStart) continue;
+        feed.push({
+          id: `exc-${c.id}`,
+          type: 'exercise_comment',
+          connectionId: conn.id,
+          athleteName: conn.athleteName,
+          athleteLocalId: conn.athleteLocalId,
+          timestamp: c.createdAt,
+          description: `Commented on ${c.exerciseName}: “${shortQuote(c.text)}”`,
+          date: row.date as string,
+          sessionId: row.session_id as string,
+          sessionName: row.session_name as string,
+        });
+      }
+
+      if (!row.completed_at || (row.completed_at as string) < windowStart) continue;
+
+      // Session feedback — when the athlete logged it themselves (the coach typed it in otherwise)
+      if (typeof row.comment === 'string' && row.comment.trim() && row.started_by !== 'coach') {
+        feed.push({
+          id: `fb-${row.id as string}`,
+          type: 'session_feedback',
+          connectionId: conn.id,
+          athleteName: conn.athleteName,
+          athleteLocalId: conn.athleteLocalId,
+          timestamp: row.completed_at as string,
+          description: `Left feedback on "${row.session_name as string}": “${shortQuote(row.comment)}”`,
+          date: row.date as string,
+          sessionId: row.session_id as string,
+          sessionName: row.session_name as string,
+        });
+      }
 
       const rpe = row.borg_rating != null ? ` · RPE ${row.borg_rating}` : '';
       const dur =
@@ -125,6 +172,7 @@ export function useCoachActivityFeed(connections: AthleteConnection[]) {
         description: `Completed "${row.session_name as string}"${dur}${rpe}`,
         date: row.date as string,
         sessionId: row.session_id as string,
+        sessionName: row.session_name as string,
       });
     }
 

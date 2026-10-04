@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import type { MessageReference } from '@/hooks/useChat';
 import { uploadChatFile } from '@/lib/storage';
 import { ChatAttachmentDisplay } from '@/components/chat/ChatAttachmentDisplay';
+import { ChatQuote } from '@/components/chat/ChatQuote';
 
 function formatMessageDate(iso: string): string {
   const d = parseISO(iso);
@@ -191,6 +192,7 @@ export default function AthleteMessagesPage() {
                         {[msg.reference.exerciseName, msg.reference.sectionName, msg.reference.sessionName, msg.reference.date ? format(parseISO(msg.reference.date + 'T12:00:00'), 'd MMM yyyy') : undefined].filter(Boolean).join(' · ')}
                       </button>
                     )}
+                    {msg.reference?.quote && <ChatQuote quote={msg.reference.quote} isOwn={isOwn} />}
                     {/* Text bubble */}
                     {msg.content && (
                       <div

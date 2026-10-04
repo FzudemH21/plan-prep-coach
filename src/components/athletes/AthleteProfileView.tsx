@@ -66,6 +66,7 @@ import { ChatAttachmentDisplay } from '@/components/chat/ChatAttachmentDisplay';
 import { parseISO, isToday, isYesterday } from 'date-fns';
 import { useRef, useLayoutEffect } from 'react';
 import { SportTagInput } from './SportTagInput';
+import { ChatQuote } from '@/components/chat/ChatQuote';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -847,6 +848,7 @@ export function AthleteProfileView({
                             {[msg.reference.exerciseName, msg.reference.sectionName, msg.reference.sessionName, msg.reference.date ? format(parseISO(msg.reference.date + 'T12:00:00'), 'd MMM yyyy') : undefined].filter(Boolean).join(' · ')}
                           </button>
                         )}
+                        {msg.reference?.quote && <ChatQuote quote={msg.reference.quote} isOwn={isOwn} />}
                         {msg.content && (
                           <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm break-words ${isOwn ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-muted text-foreground rounded-bl-sm'}`}>
                             {msg.content}

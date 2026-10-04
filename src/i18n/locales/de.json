@@ -788,7 +788,14 @@
         "notesLabel": "Notizen (optional)",
         "notesPlaceholder": "Notizen zu dieser Einheit…",
         "save": "Speichern & Beenden",
-        "saving": "Speichert…"
+        "saving": "Speichert…",
+        "feedbackLabel": "Feedback des Athleten (optional)",
+        "feedbackPlaceholder": "Was hat der Athlet zur Einheit gesagt?",
+        "remarksLabel": "Coach-Notizen (privat)",
+        "remarksHint": "Nur für dich sichtbar – sie bleiben bei der Einheit.",
+        "remarksPlaceholder": "Deine Beobachtungen, Cues, was du nächstes Mal änderst…",
+        "addToNotes": "Auch zu den Athleten-Notizen hinzufügen",
+        "remarkError": "Coach-Notizen nicht gespeichert"
       },
       "circuitCard": {
         "restBetweenRounds": "{{seconds}}s Pause zwischen Runden",
@@ -807,7 +814,28 @@
         "noDetails": "Keine Details für diese Übung verfügbar.",
         "watchVideo": "Video ansehen",
         "description": "Beschreibung"
-      }
+      },
+      "commentNotSaved": "Kommentar nicht gespeichert"
+    },
+    "sessionComments": {
+      "feedback": "Feedback des Athleten",
+      "feedbackByCoach": "Feedback des Athleten (von dir eingetragen)",
+      "athlete": "Athlet",
+      "notedWhileLogging": "Beim Loggen notiert",
+      "reply": "Antworten",
+      "replyTitle": "Im Chat antworten",
+      "replyPlaceholder": "Deine Antwort…",
+      "replySent": "Antwort im Chat gesendet",
+      "replyError": "Antwort nicht gesendet",
+      "remarks": "Coach-Notizen (privat)",
+      "remarksPlaceholder": "Deine Beobachtungen, Cues, was du nächstes Mal änderst…",
+      "remarkSaved": "Notizen gespeichert",
+      "remarkError": "Notizen nicht gespeichert",
+      "save": "Speichern",
+      "saving": "Speichert…",
+      "send": "Senden",
+      "sending": "Sendet…",
+      "cancel": "Abbrechen"
     }
   }
 }

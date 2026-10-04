@@ -8,6 +8,7 @@
  *   - Upcoming and past tests & events
  *   - Parameter database summary
  *   - Program library overview
+ *   - Recent session feedback: athlete feedback, exercise comments, the coach's private remarks
  */
 
 import { useMemo } from 'react';
@@ -26,6 +27,19 @@ interface UseAthleteAIContextOptions {
   programs: TrainingProgram[];
   parametersData: ParametersDatabaseV2 | null;
   exerciseDistribution?: ExerciseDistribution[];
+  /** Logged sessions with feedback / comments / coach remarks (most recent first) */
+  sessionFeedback?: SessionFeedbackEntry[];
+}
+
+export interface SessionFeedbackEntry {
+  date: string;
+  sessionName: string;
+  borg: number | null;
+  /** Athlete feedback on the session (typed by the coach when logged with the coach app) */
+  feedback?: string;
+  exerciseComments: Array<{ exerciseName: string; text: string; byCoach: boolean }>;
+  /** The coach's private remarks */
+  coachRemark?: string;
 }
 
 export function useAthleteAIContext({
@@ -36,6 +50,7 @@ export function useAthleteAIContext({
   programs,
   parametersData,
   exerciseDistribution,
+  sessionFeedback,
 }: UseAthleteAIContextOptions): string {
   return useMemo(() => {
     const today = format(new Date(), 'yyyy-MM-dd');
@@ -180,8 +195,20 @@ export function useAthleteAIContext({
       sections.push(`## Exercise Distribution (${exerciseDistribution.length} exercises)\n${exLines.join('\n')}`);
     }
 
+    // ── Recent session feedback ─────────────────────────────────────────────
+    if (sessionFeedback && sessionFeedback.length > 0) {
+      const lines = sessionFeedback.slice(0, 30).map(f => {
+        const parts = [`- ${f.date} "${f.sessionName}"${f.borg !== null ? ` (session RPE ${f.borg})` : ''}`];
+        if (f.feedback) parts.push(`  Athlete feedback: ${f.feedback}`);
+        f.exerciseComments.forEach(c => parts.push(`  ${c.byCoach ? 'Coach note' : 'Athlete comment'} on ${c.exerciseName}: ${c.text}`));
+        if (f.coachRemark) parts.push(`  Coach's private remark: ${f.coachRemark}`);
+        return parts.join('\n');
+      });
+      sections.push(`## Recent Session Feedback (last 8 weeks)\nHow the athlete experienced recent sessions — take it into account (e.g. pain, technique, fatigue).\n${lines.join('\n')}`);
+    }
+
     sections.push(`## Today\n${today}`);
 
     return sections.join('\n\n');
-  }, [athlete, performanceParameters, assignments, calendarEvents, programs, parametersData, exerciseDistribution]);
+  }, [athlete, performanceParameters, assignments, calendarEvents, programs, parametersData, exerciseDistribution, sessionFeedback]);
 }

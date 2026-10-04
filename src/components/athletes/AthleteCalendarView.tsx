@@ -68,6 +68,8 @@ import { useAthleteAIContext } from '@/hooks/useAthleteAIContext';
 import { useAnamnesisAIContext } from '@/hooks/useAnamnesisAIContext';
 import { IntensityLevel } from '@/types/training';
 import { cn } from '@/lib/utils';
+import { fetchCoachRemarks, parseExerciseComments } from '@/utils/sessionComments';
+import type { SessionFeedbackEntry } from '@/hooks/useAthleteAIContext';
 
 interface AthleteCalendarViewProps {
   athlete: Athlete;
@@ -925,8 +927,41 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   // Athlete-specific AI context
   // Anamnesis (answers, notes, AI summary) — the calendar assistant takes health status into account too
   const anamnesisAIContext = useAnamnesisAIContext(athlete.id);
+  // Recent session feedback for the AI: athlete feedback, exercise comments, coach remarks (8 weeks)
+  const [sessionFeedback, setSessionFeedback] = useState<SessionFeedbackEntry[]>([]);
+  useEffect(() => {
+    const connection = getConnectionForAthlete(athlete.id);
+    if (!connection) { setSessionFeedback([]); return; }
+    let cancelled = false;
+    const since = format(new Date(Date.now() - 56 * 86400000), 'yyyy-MM-dd');
+    const query = (columns: string) => supabase
+      .from('athlete_session_logs')
+      .select(columns)
+      .eq('athlete_connection_id', connection.id)
+      .not('completed_at', 'is', null)
+      .gte('date', since)
+      .order('date', { ascending: false });
+    (async () => {
+      let res = await query('id, date, session_name, borg_rating, comment, started_by, exercise_comments');
+      if (res.error) res = await query('id, date, session_name, borg_rating, comment');
+      const rows = (res.data ?? []) as unknown as Array<Record<string, unknown>>;
+      const remarks = await fetchCoachRemarks(rows.map(r => r.id as string));
+      if (cancelled) return;
+      setSessionFeedback(rows.map(r => ({
+        date: r.date as string,
+        sessionName: (r.session_name as string) ?? 'Session',
+        borg: (r.borg_rating as number | null) ?? null,
+        feedback: typeof r.comment === 'string' && r.comment.trim() ? r.comment.trim() : undefined,
+        exerciseComments: parseExerciseComments(r.exercise_comments).map(c => ({ exerciseName: c.exerciseName, text: c.text, byCoach: c.author === 'coach' })),
+        coachRemark: remarks.get(r.id as string),
+      })).filter(f => f.feedback || f.exerciseComments.length > 0 || f.coachRemark));
+    })();
+    return () => { cancelled = true; };
+  }, [athlete.id, getConnectionForAthlete, completedSheetOpen]);
+
   const athleteAIContext = useAthleteAIContext({
     athlete,
+    sessionFeedback,
     performanceParameters: athleteData.athletePerformanceParameters.filter(p => p.athleteId === athlete.id),
     assignments,
     calendarEvents: getEventsForAthlete(athlete.id),
@@ -1424,8 +1459,10 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       .not('started_at', 'is', null)
       .gte('date', from)
       .lte('date', to);
-    // paused_at (pause / resume) — without it if the migration hasn't been run yet
-    query(`${baseColumns}, paused_at`)
+    // paused_at (pause / resume), started_by and exercise_comments (session comments) — retried
+    // without them if a migration hasn't been run yet
+    query(`${baseColumns}, paused_at, started_by, exercise_comments`)
+      .then(res => (res.error ? query(`${baseColumns}, paused_at`) : res))
       .then(res => (res.error ? query(baseColumns) : res))
       .then(res => {
         const data = res.data as unknown as CoachSessionLog[] | null;
@@ -2978,6 +3015,12 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         log={selectedCompletedLog}
         open={completedSheetOpen}
         onClose={() => { setCompletedSheetOpen(false); setSelectedCompletedLog(null); }}
+        connectionId={getConnectionForAthlete(athlete.id)?.id}
+        onAddToAthleteNotes={async (text) => {
+          const current = athleteData.athletes.find(a => a.id === athlete.id) ?? athlete;
+          const note = { id: `note-${Date.now()}`, text, timestamp: new Date().toISOString() };
+          await athleteData.updateAthlete(athlete.id, { notesHistory: [note, ...(current.notesHistory ?? [])] });
+        }}
       />
 
       {/* Plan Review Dialog */}

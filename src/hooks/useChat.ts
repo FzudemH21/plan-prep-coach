@@ -16,6 +16,8 @@ export interface MessageReference {
   sectionName?: string;
   sessionName?: string;
   date?: string; // yyyy-MM-dd
+  /** The athlete's comment a coach reply answers — shown quoted above the reply */
+  quote?: string;
 }
 
 export interface ChatAttachment {

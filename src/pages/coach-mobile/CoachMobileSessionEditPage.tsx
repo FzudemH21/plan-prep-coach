@@ -24,6 +24,8 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import type { CustomLibrary, CustomExercise, Circuit } from '@/contexts/CustomLibrariesContext';
 import type { ToolboxEntry } from '@/types/toolbox';
 import { ExerciseHistorySheet } from '@/components/shared/ExerciseHistorySheet';
+import { SessionCommentsPanel } from '@/components/coach-mobile/SessionCommentsPanel';
+import { parseExerciseComments, type ExerciseComment } from '@/utils/sessionComments';
 
 // ── Section helpers ───────────────────────────────────────────────────────────
 
@@ -1056,6 +1058,9 @@ export default function CoachMobileSessionEditPage() {
 
   // ── Session log (to show "completed" banner + actual logged values) ─────────
   const [sessionLog, setSessionLog] = useState<{
+    id: string;
+    startedBy: string | null;
+    exerciseComments: ExerciseComment[];
     completedAt: string | null;
     borgRating: number | null;
     durationSeconds: number | null;
@@ -1065,17 +1070,25 @@ export default function CoachMobileSessionEditPage() {
   const session_ref_id = state?.entry?.sessions[state?.sessionIdx ?? 0]?.id ?? null;
   useEffect(() => {
     if (!connectionId || !state?.entry?.date || !session_ref_id) return;
-    supabase
+    const query = (columns: string) => supabase
       .from('athlete_session_logs')
-      .select('completed_at, borg_rating, duration_seconds, comment, sets_logged')
+      .select(columns)
       .eq('athlete_connection_id', connectionId)
       .eq('date', state.entry.date)
       .eq('session_id', session_ref_id)
       .not('completed_at', 'is', null)
-      .maybeSingle()
-      .then(({ data }) => {
+      .maybeSingle();
+    const base = 'id, completed_at, borg_rating, duration_seconds, comment, sets_logged';
+    // started_by / exercise_comments need their migrations — retried without them
+    query(`${base}, started_by, exercise_comments`)
+      .then(res => (res.error ? query(base) : res))
+      .then(({ data: raw }) => {
+        const data = raw as unknown as Record<string, unknown> | null;
         if (data) {
           setSessionLog({
+            id: data.id as string,
+            startedBy: (data.started_by as string | null) ?? null,
+            exerciseComments: parseExerciseComments(data.exercise_comments),
             completedAt: data.completed_at as string | null,
             borgRating: data.borg_rating as number | null,
             durationSeconds: data.duration_seconds as number | null,
@@ -1674,11 +1687,20 @@ export default function CoachMobileSessionEditPage() {
                         {sessionLog.borgRating !== null ? ` · RPE ${sessionLog.borgRating}` : ''}
                         {sessionLog.borgRating !== null && ` · sRPE: ${Math.round((sessionLog.borgRating) * (sessionLog.durationSeconds ? sessionLog.durationSeconds / 60 : 0))} AU`}
                       </p>
-                      {sessionLog.comment && (
-                        <p className="text-xs text-muted-foreground mt-1 italic">"{sessionLog.comment}"</p>
-                      )}
                     </div>
                   </div>
+                )}
+                {/* Feedback, exercise comments (with Reply) and the coach's private remarks */}
+                {sessionLog && connectionId && (
+                  <SessionCommentsPanel
+                    connectionId={connectionId}
+                    logId={sessionLog.id}
+                    date={entry.date}
+                    sessionName={session.name}
+                    feedback={sessionLog.comment}
+                    startedBy={sessionLog.startedBy}
+                    exerciseComments={sessionLog.exerciseComments}
+                  />
                 )}
 
                 {session.notes && <p className="text-sm text-muted-foreground leading-relaxed pb-1">{session.notes}</p>}

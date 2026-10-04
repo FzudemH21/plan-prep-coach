@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow, parseISO } from 'date-fns';
-import { AlertTriangle, Bell, CheckCircle2, ClipboardList, HeartPulse } from 'lucide-react';
+import { AlertTriangle, Bell, CheckCircle2, ClipboardList, HeartPulse, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,9 @@ import type { AthleteConnection } from '@/hooks/useAthleteConnections';
 function ItemIcon({ item }: { item: FeedItem }) {
   if (item.type === 'anamnesis_submitted') {
     return <span className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0"><ClipboardList className="h-4 w-4 text-blue-600" /></span>;
+  }
+  if (item.type === 'session_feedback' || item.type === 'exercise_comment') {
+    return <span className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center shrink-0"><MessageSquare className="h-4 w-4 text-violet-600" /></span>;
   }
   if (item.flag) {
     return <span className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0"><AlertTriangle className="h-4 w-4 text-amber-600" /></span>;
@@ -30,6 +33,8 @@ function ItemIcon({ item }: { item: FeedItem }) {
 const TAB_FOR: Record<FeedItem['type'], string> = {
   anamnesis_submitted: 'anamnesis',
   session_complete: 'calendar',
+  session_feedback: 'calendar',
+  exercise_comment: 'calendar',
   checkin: 'monitoring',
 };
 
@@ -41,7 +46,14 @@ export function CoachActivityBell({ connections }: { connections: AthleteConnect
   const openItem = (item: FeedItem) => {
     markItemRead(item.id);
     setOpen(false);
-    navigate('/athletes', { state: { openAthleteId: item.athleteLocalId, defaultTab: TAB_FOR[item.type] } });
+    navigate('/athletes', {
+      state: {
+        openAthleteId: item.athleteLocalId,
+        defaultTab: TAB_FOR[item.type],
+        // Session items open that session in the calendar (with its comments)
+        ...(item.date ? { defaultCalendarDate: item.date, defaultCalendarSessionName: item.sessionName } : {}),
+      },
+    });
   };
 
   return (

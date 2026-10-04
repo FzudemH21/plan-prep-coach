@@ -788,7 +788,14 @@
         "notesLabel": "Notes (optional)",
         "notesPlaceholder": "Any notes about this session…",
         "save": "Save & Finish",
-        "saving": "Saving…"
+        "saving": "Saving…",
+        "feedbackLabel": "Athlete feedback (optional)",
+        "feedbackPlaceholder": "What did the athlete say about the session?",
+        "remarksLabel": "Coach remarks (private)",
+        "remarksHint": "Only you see these — they stay with the session.",
+        "remarksPlaceholder": "Your observations, cues, what to change next time…",
+        "addToNotes": "Also add to athlete notes",
+        "remarkError": "Coach remarks not saved"
       },
       "circuitCard": {
         "restBetweenRounds": "{{seconds}}s rest between rounds",
@@ -807,7 +814,28 @@
         "noDetails": "No details available for this exercise.",
         "watchVideo": "Watch video",
         "description": "Description"
-      }
+      },
+      "commentNotSaved": "Comment not saved"
+    },
+    "sessionComments": {
+      "feedback": "Athlete feedback",
+      "feedbackByCoach": "Athlete feedback (entered by you)",
+      "athlete": "Athlete",
+      "notedWhileLogging": "Noted while logging",
+      "reply": "Reply",
+      "replyTitle": "Reply in the chat",
+      "replyPlaceholder": "Your reply…",
+      "replySent": "Reply sent to the chat",
+      "replyError": "Reply not sent",
+      "remarks": "Coach remarks (private)",
+      "remarksPlaceholder": "Your observations, cues, what to change next time…",
+      "remarkSaved": "Remarks saved",
+      "remarkError": "Remarks not saved",
+      "save": "Save",
+      "saving": "Saving…",
+      "send": "Send",
+      "sending": "Sending…",
+      "cancel": "Cancel"
     }
   }
 }

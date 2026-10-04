@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow, parseISO } from 'date-fns';
-import { CheckCircle2, Activity, AlertTriangle, Bell, Loader2, X } from 'lucide-react';
+import { CheckCircle2, Activity, AlertTriangle, Bell, Loader2, MessageSquare, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
@@ -20,6 +20,13 @@ function FeedIcon({ item }: { item: FeedItem }) {
     return (
       <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
         <AlertTriangle className="h-4 w-4 text-amber-600" />
+      </div>
+    );
+  }
+  if (item.type === 'session_feedback' || item.type === 'exercise_comment') {
+    return (
+      <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
+        <MessageSquare className="h-4 w-4 text-violet-600" />
       </div>
     );
   }
@@ -55,7 +62,8 @@ export function CoachNotificationSheet({ open, onClose, onMarkAllRead, onMarkIte
     onMarkItemRead(item.id);
     onClose();
 
-    if (item.type === 'session_complete' && item.date && item.sessionId) {
+    const isSessionItem = item.type === 'session_complete' || item.type === 'session_feedback' || item.type === 'exercise_comment';
+    if (isSessionItem && item.date && item.sessionId) {
       const { data } = await supabase
         .from('athlete_schedule')
         .select('*')
