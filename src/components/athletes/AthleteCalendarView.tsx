@@ -153,6 +153,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     sessions: LiveScheduleSession[];
   }
   const [liveScheduleMap, setLiveScheduleMap] = useState<Map<string, LiveScheduleEntry>>(new Map());
+  // First load of athlete_schedule done — the loading overlay waits for it
+  const [liveScheduleLoaded, setLiveScheduleLoaded] = useState(false);
 
   /** Reload the athlete_schedule rows of a date range into liveScheduleMap; dates in the range
    *  without a row are dropped (e.g. rows of a deleted program) */
@@ -474,7 +476,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       .gte('date', from)
       .lte('date', to)
       .then(({ data }) => {
-        if (!data) return;
+        if (!data) { setLiveScheduleLoaded(true); return; }
         // Cast broadly — we capture all fields that mobile coach can edit.
         type RawSession = {
           id: string; name: string; exerciseCount: number; intensity?: string; notes?: string;
@@ -504,6 +506,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           });
           return next;
         });
+        setLiveScheduleLoaded(true);
       });
   }, [athlete.id, connectionsLoading, getConnectionForAthlete, calendarDateRange]);
 
@@ -651,10 +654,15 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   // Show a loading overlay while athlete data or plan data is still being fetched.
   // Also covers the brief window between athlete switch (selectedAssignmentId reset to null)
   // and the initialization effect picking the first assignment.
+  // With an app connection it also waits for the athlete's schedule and session logs, so sessions
+  // show as logged / in progress as soon as the overlay is gone (before, they switched a few seconds later)
+  const hasAppConnection = !!getConnectionForAthlete(athlete.id);
   const isCalendarLoading =
     athleteData.isLoading ||
     editing.isInitializing ||
-    (assignments.length > 0 && selectedAssignmentId === null);
+    (assignments.length > 0 && selectedAssignmentId === null) ||
+    connectionsLoading ||
+    (hasAppConnection && (!sessionLogsLoaded || !liveScheduleLoaded));
 
   // Auto-sync to athlete_schedule whenever the editing hook persists a change to localStorage.
   // This ensures manually-added sessions and exercises appear in the athlete app without
@@ -1466,7 +1474,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       .then(res => (res.error ? query(baseColumns) : res))
       .then(res => {
         const data = res.data as unknown as CoachSessionLog[] | null;
-        if (cancelled || !data) return;
+        if (cancelled) return;
+        // Also on a failed load — the loading overlay must not wait forever
+        if (!data) { setSessionLogsLoaded(true); return; }
         const map = new Map<string, CoachSessionLog>();
         for (const row of data) {
           if (row.session_id) {

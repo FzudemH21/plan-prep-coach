@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { DisplayModeProvider } from "@/contexts/DisplayModeContext";
 import { CustomLibrariesProvider } from "@/contexts/CustomLibrariesContext";
@@ -49,7 +49,7 @@ import AthleteProfilePage from "./pages/athlete/AthleteProfilePage";
 import AthleteSessionPage from "./pages/athlete/AthleteSessionPage";
 import { hasCoachProfile } from "./hooks/useCoachProfile";
 import { useAuth } from "./hooks/useAuth";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LanguagePickerModal } from "./components/LanguagePickerModal";
 import { isFirstOpen } from "./i18n";
 
@@ -93,9 +93,24 @@ function AppWithLanguagePicker() {
   return <AppRoutes />;
 }
 
+/**
+ * Marks the body while a phone app (athlete app incl. the full-screen session, coach mobile) is
+ * shown — index.css then gives text fields 16px on iOS so Safari doesn't zoom in on focus. On the
+ * body because sheets and dialogs render outside the page layouts.
+ */
+function PhoneAppBodyClass() {
+  const { pathname } = useLocation();
+  const isPhoneApp = /^\/(athlete|coach-mobile)(\/|$)/.test(pathname);
+  useEffect(() => {
+    document.body.classList.toggle('phone-app', isPhoneApp);
+  }, [isPhoneApp]);
+  return null;
+}
+
 function AppRoutes() {
   return (
     <BrowserRouter>
+      <PhoneAppBodyClass />
       {/* Public + standalone routes live outside AppLayout and AuthGuard */}
       <Routes>
         <Route path="/login" element={<LoginPage />} />

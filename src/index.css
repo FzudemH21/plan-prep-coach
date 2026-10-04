@@ -245,3 +245,13 @@ input[type="number"]::-webkit-outer-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/* iPhone / iPad Safari zooms into a text field whose font is smaller than 16px when it gets the
+   focus (the page then stays zoomed). In the athlete app and coach mobile (body.phone-app, set by PhoneAppBodyClass in App.tsx for /athlete and /coach-mobile routes) text fields use 16px on iOS — -webkit-touch-callout is only supported there. */
+@supports (-webkit-touch-callout: none) {
+  body.phone-app input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  body.phone-app textarea,
+  body.phone-app select {
+    font-size: 16px !important;
+  }
+}
