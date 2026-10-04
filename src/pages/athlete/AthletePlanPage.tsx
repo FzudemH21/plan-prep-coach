@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Dumbbell, ChevronRight, ChevronLeft, ChevronDown, Activity, CalendarDays, CheckCircle2, GripVertical, ClipboardCheck, BedDouble, Check, Info, Pencil, Pause } from 'lucide-react';
 import { TestDetailsDialog } from '@/components/athlete-app/TestDetailsDialog';
 import { TestResultDialog, type TestResultTarget } from '@/components/athlete-app/TestResultDialog';
@@ -431,7 +431,19 @@ export default function AthletePlanPage() {
   }, [schedule, currentWeekMonday, today]);
 
   // The week of the session just left (set when a session is opened from here), else the current week
+  // A day tapped on the Today page ("Next 7 days"): show its week, scroll to it, highlight it
+  const location = useLocation();
+  const focusDate = (location.state as { focusDate?: string } | null)?.focusDate;
+  const [pendingFocus, setPendingFocus] = useState<string | null>(focusDate ?? null);
+  useEffect(() => {
+    if (!focusDate) return;
+    setSelectedWeek(getMondayOf(focusDate));
+    setPendingFocus(focusDate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
+
   const [selectedWeek, setSelectedWeek] = useState<string>(() => {
+    if (focusDate) return getMondayOf(focusDate);
     try {
       const returnDate = sessionStorage.getItem(RETURN_WEEK_KEY);
       if (returnDate) return getMondayOf(returnDate);
@@ -443,6 +455,17 @@ export default function AthletePlanPage() {
     try { sessionStorage.removeItem(RETURN_WEEK_KEY); } catch { /* unavailable */ }
   }, []);
   const canMove = connection?.allowRearrangeWorkouts ?? false;
+
+  useEffect(() => {
+    if (!pendingFocus) return;
+    const el = document.querySelector<HTMLElement>(`[data-plan-date="${pendingFocus}"]`);
+    if (!el) return; // not rendered yet (schedule loading / week switching) — runs again
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.classList.add('bg-primary/5', 'ring-1', 'ring-primary/30');
+    const timer = window.setTimeout(() => el.classList.remove('bg-primary/5', 'ring-1', 'ring-primary/30'), 1600);
+    setPendingFocus(null);
+    return () => window.clearTimeout(timer);
+  });
 
   // Test results (which tests have a result, latest values) and the result / details dialogs
   const { resultFor, lastValueLabelFor, markSaved } = useAthleteTestResults(connection);
@@ -533,7 +556,7 @@ export default function AthletePlanPage() {
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-4">
           <div className="py-3 pb-4">
             {weekDays.map((dateStr, i) => (
-              <div key={dateStr}>
+              <div key={dateStr} data-plan-date={dateStr} className="rounded-lg transition-colors scroll-mt-2">
                 {i > 0 && <div className="my-3 border-t border-border" />}
                 <DaySection
                   dateStr={dateStr}

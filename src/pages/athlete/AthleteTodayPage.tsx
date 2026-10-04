@@ -373,108 +373,10 @@ function NextSessionSection({
   );
 }
 
-/** Upcoming days with sessions, tests or events; sessions open directly, tests show their details */
-function ComingUp({
-  days,
-  getSessionLog,
-  onShowTestDetails,
-}: {
-  days: AthleteScheduleEntry[];
-  getSessionLog: (date: string, sessionId: string) => SessionLog | null;
-  onShowTestDetails: (ev: AthleteCalendarEvent) => void;
-}) {
-  const navigate = useNavigate();
-  // Days whose tests are unfolded (folded behind one "N scheduled tests" button by default)
-  const [openTestDays, setOpenTestDays] = useState<Set<string>>(new Set());
-  if (days.length === 0) return null;
-  return (
-    <div className="space-y-2">
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Coming Up</p>
-      <div className="rounded-xl border divide-y">
-        {days.map(e => {
-          const { day, num } = formatShortDate(e.date);
-          const tests = e.events.filter(ev => ev.type === 'test');
-          const events = e.events.filter(ev => ev.type !== 'test');
-          return (
-            <div key={e.date} className="flex gap-3 p-3">
-              <div className="w-10 shrink-0 flex flex-col items-center pt-0.5">
-                <span className="text-xs text-muted-foreground">{day}</span>
-                <span className="text-sm font-semibold">{num}</span>
-                {e.sessions.length > 0 && (
-                  <span className={cn('w-2 h-2 rounded-full mt-1', getDotColor(e.intensity ?? null))} />
-                )}
-              </div>
-              <div className="flex-1 min-w-0 space-y-1.5">
-                {e.sessions.map((session, index) => {
-                  const log = getSessionLog(e.date, session.id);
-                  return (
-                    <button
-                      key={session.id}
-                      onClick={() => navigate('/athlete/session', { state: { entry: e, sessionIdx: index, log } })}
-                      className={cn(
-                        'w-full min-h-[44px] flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors active:scale-[0.99]',
-                        log ? 'border-green-200 bg-green-50/60' : 'hover:bg-muted/60 active:bg-muted',
-                      )}
-                    >
-                      {log
-                        ? <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
-                        : <Dumbbell className="h-4 w-4 text-primary shrink-0" />}
-                      <span className="flex-1 min-w-0">
-                        <span className="block text-sm font-medium truncate">{session.name}</span>
-                        <span className="block text-xs text-muted-foreground">
-                          {session.exerciseCount} exercise{session.exerciseCount !== 1 ? 's' : ''}
-                        </span>
-                      </span>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                    </button>
-                  );
-                })}
-                {tests.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setOpenTestDays(prev => {
-                      const next = new Set(prev);
-                      if (next.has(e.date)) next.delete(e.date); else next.add(e.date);
-                      return next;
-                    })}
-                    aria-expanded={openTestDays.has(e.date)}
-                    className="w-full min-h-[44px] flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-left active:bg-amber-100"
-                  >
-                    <Activity className="h-4 w-4 text-amber-600 shrink-0" />
-                    <span className="flex-1 min-w-0 text-sm font-medium text-amber-900">
-                      {tests.length === 1 ? '1 scheduled test' : `${tests.length} scheduled tests`}
-                    </span>
-                    <ChevronDown className={cn('h-4 w-4 text-amber-700 shrink-0 transition-transform', openTestDays.has(e.date) && 'rotate-180')} />
-                  </button>
-                )}
-                {openTestDays.has(e.date) && tests.map(ev => (
-                  <button
-                    key={ev.id}
-                    onClick={() => onShowTestDetails(ev)}
-                    className="w-full min-h-[44px] flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2 text-left active:bg-amber-100"
-                  >
-                    <Activity className="h-4 w-4 text-amber-600 shrink-0" />
-                    <span className="flex-1 min-w-0 text-sm font-medium text-amber-900 truncate">Test: {ev.title}</span>
-                    <Info className="h-4 w-4 text-amber-700 shrink-0" />
-                  </button>
-                ))}
-                {events.map(ev => (
-                  <div key={ev.id} className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50/60 px-3 py-2 min-h-[44px]">
-                    <CalendarDays className="h-4 w-4 text-blue-600 shrink-0" />
-                    <span className="flex-1 min-w-0 text-sm font-medium text-blue-900 truncate">{ev.title}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/** The next 7 days at a glance — training days as intensity-coloured dots */
+/** The next 7 days at a glance — training days as intensity-coloured dots. Tapping a day opens
+ *  it in the Plan tab (every day: rest days and days with only a test / event can be looked at too) */
 function UpcomingStrip({ schedule, today }: { schedule: AthleteScheduleEntry[]; today: string }) {
+  const navigate = useNavigate();
   const scheduleMap = new Map(schedule.map(e => [e.date, e]));
   const upcomingDates = Array.from({ length: COMING_UP_DAYS }, (_, i) => addDays(today, i + 1));
 
@@ -488,14 +390,20 @@ function UpcomingStrip({ schedule, today }: { schedule: AthleteScheduleEntry[]; 
           const hasTraining = (e?.sessions.length ?? 0) > 0;
           const hasTest = (e?.events ?? []).some(ev => ev.type === 'test');
           return (
-            <div key={dateStr} className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+            <button
+              key={dateStr}
+              type="button"
+              onClick={() => navigate('/athlete/plan', { state: { focusDate: dateStr } })}
+              className="flex flex-col items-center gap-1.5 flex-1 min-w-0 min-h-[44px] py-1 rounded-lg hover:bg-muted/60 active:bg-muted transition-colors"
+              aria-label={`Open ${day} ${num} in the plan`}
+            >
               <span className="text-xs text-muted-foreground">{day}</span>
               <span className="text-sm font-medium">{num}</span>
               <div className="flex items-center gap-0.5 h-2">
                 <div className={cn('w-2 h-2 rounded-full', hasTraining ? getDotColor(e?.intensity ?? null) : 'bg-slate-200')} />
                 {hasTest && <div className="w-2 h-2 rounded-full bg-amber-500" title="Test" />}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -540,13 +448,6 @@ export default function AthleteTodayPage() {
     ? schedule.find(e => e.date > today && e.sessions.length > 0) ?? null
     : null;
 
-  // "Coming up": the next days with sessions, tests or events (the Next-session day isn't repeated)
-  const comingUpEnd = addDays(today, COMING_UP_DAYS);
-  const comingUp = schedule.filter(e =>
-    e.date > today && e.date <= comingUpEnd &&
-    e.date !== nextTrainingDay?.date &&
-    (e.sessions.length > 0 || e.events.length > 0)
-  );
 
   return (
     <>
@@ -600,8 +501,6 @@ export default function AthleteTodayPage() {
         {nextTrainingDay && (
           <NextSessionSection entry={nextTrainingDay} getSessionLog={getSessionLog} />
         )}
-
-        <ComingUp days={comingUp} getSessionLog={getSessionLog} onShowTestDetails={setDetailsEvent} />
 
         <UpcomingStrip schedule={schedule} today={today} />
       </div>
