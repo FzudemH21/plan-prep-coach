@@ -79,11 +79,14 @@ interface AthleteCalendarViewProps {
   autoOpenSession?: { date: string; sessionName?: string };
   /** Called once after autoOpenSession has been consumed, so the parent can clear it. */
   onAutoOpenHandled?: () => void;
+  /** False while the calendar tab is hidden (it stays mounted) — becoming visible reloads the
+   *  athlete's schedule and session logs, with the loading overlay */
+  isActive?: boolean;
 }
 
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onAutoOpenHandled }: AthleteCalendarViewProps) {
+export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onAutoOpenHandled, isActive = true }: AthleteCalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(() =>
     initialDate ? new Date(initialDate + 'T12:00:00') : new Date()
   );
@@ -157,6 +160,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   const [liveScheduleMap, setLiveScheduleMap] = useState<Map<string, LiveScheduleEntry>>(new Map());
   // First load of athlete_schedule done — the loading overlay waits for it
   const [liveScheduleLoaded, setLiveScheduleLoaded] = useState(false);
+  // Bumped to reload athlete_schedule (calendar tab shown again)
+  const [liveScheduleVersion, setLiveScheduleVersion] = useState(0);
 
   /** Reload the athlete_schedule rows of a date range into liveScheduleMap; dates in the range
    *  without a row are dropped (e.g. rows of a deleted program) */
@@ -510,7 +515,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         });
         setLiveScheduleLoaded(true);
       });
-  }, [athlete.id, connectionsLoading, getConnectionForAthlete, calendarDateRange]);
+  }, [athlete.id, connectionsLoading, getConnectionForAthlete, calendarDateRange, liveScheduleVersion]);
 
   // Editing hook — must be declared before any useEffect that references editing in
   // its dependency array, AND before useAthleteAIContext which references editing.exerciseDistribution.
@@ -665,6 +670,34 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     (assignments.length > 0 && selectedAssignmentId === null) ||
     connectionsLoading ||
     (hasAppConnection && (!sessionLogsLoaded || !liveScheduleLoaded));
+
+  // The calendar tab shown again (it stays mounted while hidden): reload schedule + session logs so
+  // it never shows an outdated state — the overlay is up until both are back
+  const wasActiveRef = useRef(isActive);
+  useEffect(() => {
+    const becameActive = isActive && !wasActiveRef.current;
+    wasActiveRef.current = isActive;
+    if (!becameActive || !getConnectionForAthlete(athlete.id)) return;
+    setSessionLogsLoaded(false);
+    setLiveScheduleLoaded(false);
+    setSessionLogsVersion(v => v + 1);
+    setLiveScheduleVersion(v => v + 1);
+  }, [isActive, athlete.id, getConnectionForAthlete]);
+
+  // Session logs written while the calendar is open (athlete finishes / comments) — reload them
+  useEffect(() => {
+    const connection = getConnectionForAthlete(athlete.id);
+    if (!connection) return;
+    const channel = supabase
+      .channel(`session_logs_live_${connection.id}`)
+      .on(
+        'postgres_changes' as any,
+        { event: '*', schema: 'public', table: 'athlete_session_logs', filter: `athlete_connection_id=eq.${connection.id}` },
+        () => setSessionLogsVersion(v => v + 1),
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [athlete.id, getConnectionForAthlete]);
 
   // Auto-sync to athlete_schedule whenever the editing hook persists a change to localStorage.
   // This ensures manually-added sessions and exercises appear in the athlete app without

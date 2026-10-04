@@ -794,6 +794,7 @@ export function AthleteProfileView({
             initialDate={calendarJumpDate}
             autoOpenSession={calendarAutoOpenSession}
             onAutoOpenHandled={() => setCalendarAutoOpenSession(undefined)}
+            isActive={activeTab === 'calendar'}
           />
         </TabsContent>
 

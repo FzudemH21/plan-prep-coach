@@ -90,6 +90,13 @@ function groupIntoSections(exercises: ExerciseSummary[]): SectionData[] {
     .map(s => ({ ...s, exercises: [...s.exercises].sort((a, b) => a.order - b.order) }));
 }
 
+/** The session's date for headers, e.g. "Mon 6 Oct" */
+function sessionDateLabel(date?: string): string {
+  if (!date) return '';
+  const d = new Date(date.slice(0, 10) + 'T12:00:00');
+  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
 function getSetCount(ex: ExerciseSummary): number {
   if (ex.isCircuit) return Math.max(1, Number(ex.circuitRounds ?? 3));
   return ex.plannedSets && ex.plannedSets > 0 ? ex.plannedSets : 3;
@@ -483,7 +490,7 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
                 className={cn(
                   'w-8 h-8 rounded-full flex items-center justify-center mx-auto transition-all text-xs font-bold active:scale-95',
                   allDone
-                    ? 'bg-primary/20 text-primary hover:bg-red-50 hover:text-red-400'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'border-2 border-dashed border-border hover:border-primary hover:bg-primary/10 text-muted-foreground',
                 )}>✓✓</button>
             </th>
@@ -1060,13 +1067,10 @@ export default function CoachMobileSessionLoggingPage() {
     return sections.map(s => isSectionComplete(s, cs, setCountOverrides));
   }
 
-  /** The current section is done: rest, then the next unfinished section (sections may have been
-   *  skipped via the section navigation) — or finish when every section is done */
-  function continueAfterSection(cs: Record<string, number[]>, restSecs: number) {
-    const next = nextUnfinishedSection(sectionCompleteFlags(cs), sectionIdx);
-    // After the last set of the workout there is nothing to rest for — straight to the finish
-    if (next === null) { setPhase('done'); setBorgSheetOpen(true); }
-    else startRest(restSecs, () => { setSectionIdx(next); setPhase('sectionIntro'); });
+  /** The current section is done: stay on it — the athlete moves on with "Finish Section" /
+   *  "Finish Workout" (it used to jump to the next unfinished section right after the last set) */
+  function continueAfterSection(_cs: Record<string, number[]>, _restSecs: number) {
+    setPhase('active');
   }
 
   function handleCompleteCircuitRound(exId: string, roundIdx: number) {
@@ -1205,7 +1209,10 @@ export default function CoachMobileSessionLoggingPage() {
             className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors">
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <h1 className="flex-1 text-center font-semibold text-base truncate pr-8">{session.name}</h1>
+          <div className="flex-1 min-w-0 text-center pr-8">
+            <h1 className="font-semibold text-base truncate">{session.name}</h1>
+            <p className="text-xs text-muted-foreground">{sessionDateLabel(entry.date)}</p>
+          </div>
         </div>
 
         {sections.length === 0 ? (
@@ -1418,7 +1425,10 @@ export default function CoachMobileSessionLoggingPage() {
             className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors">
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <h1 className={cn('flex-1 text-center font-semibold text-base truncate', !pauseButton && 'pr-8')}>{session.name}</h1>
+          <div className={cn('flex-1 min-w-0 text-center', !pauseButton && 'pr-8')}>
+            <h1 className="font-semibold text-base truncate">{session.name}</h1>
+            <p className="text-xs text-muted-foreground">{sessionDateLabel(entry.date)}</p>
+          </div>
           {pauseButton}
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-6 gap-4">
@@ -1497,7 +1507,10 @@ export default function CoachMobileSessionLoggingPage() {
             aria-label={t('coachMobile.sessionLogging.finishLater')}>
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <h1 className="flex-1 text-center font-semibold text-base truncate pr-8">{session.name}</h1>
+          <div className="flex-1 min-w-0 text-center pr-8">
+            <h1 className="font-semibold text-base truncate">{session.name}</h1>
+            <p className="text-xs text-muted-foreground">{sessionDateLabel(entry.date)}</p>
+          </div>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-6 gap-3 text-center">
           <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mb-2">
@@ -1540,8 +1553,9 @@ export default function CoachMobileSessionLoggingPage() {
     const totalSetsPlanned = sectionExercises.reduce((a, ex) => a + (setCountOverrides[ex.id] ?? getSetCount(ex)), 0);
     const sectionComplete = isSectionComplete(currentSection!, completedSets, setCountOverrides);
     const completeFlags = sectionCompleteFlags(completedSets);
-    // Where "Finish Section" leads: the next section not done yet; none left → "Finish Workout"
-    const nextSectionIdx = nextUnfinishedSection(completeFlags, sectionIdx);
+    // "Finish Section" leads to the next section in order; on the last one it's "Finish Workout"
+    // (no jumping back to a skipped earlier section — unfinished work only triggers the warning)
+    const nextSectionIdx = sectionIdx < sections.length - 1 ? sectionIdx + 1 : null;
     const workoutComplete = completeFlags.every(Boolean);
 
     // Build superset groups
@@ -1678,7 +1692,7 @@ export default function CoachMobileSessionLoggingPage() {
             <ChevronLeft className="h-5 w-5" />
           </button>
           <div className="flex-1 min-w-0 text-center">
-            <p className="text-xs text-muted-foreground truncate">{session.name}</p>
+            <p className="text-xs text-muted-foreground truncate">{session.name} · {sessionDateLabel(entry.date)}</p>
             <p className="text-sm font-semibold truncate">{currentSection?.name}</p>
           </div>
           <div className="flex items-center gap-1 text-xs text-muted-foreground tabular-nums shrink-0 w-10 justify-end">
@@ -1796,7 +1810,7 @@ export default function CoachMobileSessionLoggingPage() {
               <AlertDialogAction onClick={() => {
                 const warn = incompleteWarning;
                 setIncompleteWarning(null);
-                const next = nextUnfinishedSection(sectionCompleteFlags(completedSets), sectionIdx);
+                const next = sectionIdx < sections.length - 1 ? sectionIdx + 1 : null;
                 if (warn === 'workout' || next === null) { setPhase('done'); setBorgSheetOpen(true); }
                 else { setSectionIdx(next); setPhase('sectionIntro'); }
               }}>{t('coachMobile.sessionLogging.finishAnyway')}</AlertDialogAction>

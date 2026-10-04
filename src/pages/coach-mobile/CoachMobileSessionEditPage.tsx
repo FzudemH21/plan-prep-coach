@@ -58,6 +58,13 @@ function groupIntoSections(exercises: ExerciseSummary[]): SectionData[] {
     .map(s => ({ ...s, exercises: [...s.exercises].sort((a, b) => a.order - b.order) }));
 }
 
+/** The session's date for headers, e.g. "Mon 6 Oct" */
+function sessionDateLabel(date?: string): string {
+  if (!date) return '';
+  const d = new Date(date.slice(0, 10) + 'T12:00:00');
+  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
 function getSetCount(ex: ExerciseSummary): number {
   if (ex.isCircuit) return Math.max(1, Number(ex.circuitRounds ?? 3));
   if (ex.plannedParams) {
@@ -1646,7 +1653,10 @@ export default function CoachMobileSessionEditPage() {
             className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors shrink-0">
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <h1 className="flex-1 text-center font-semibold text-base truncate">{session?.name || t('coachMobile.sessionEdit.sessionLabel')}</h1>
+          <div className="flex-1 min-w-0 text-center">
+            <h1 className="font-semibold text-base truncate">{session?.name || t('coachMobile.sessionEdit.sessionLabel')}</h1>
+            {entry?.date && <p className="text-xs text-muted-foreground">{sessionDateLabel(entry.date)}</p>}
+          </div>
           <button onClick={() => setMode('edit')}
             className="text-sm font-medium text-primary hover:opacity-80 active:opacity-60 transition-opacity w-8 text-right shrink-0">
             {t('coachMobile.sessionEdit.edit')}

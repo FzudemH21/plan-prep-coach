@@ -461,7 +461,7 @@ function SessionExercises({ entries, renderAfter }: { entries: SetLogEntry[]; re
               {groups.map((group, gi) => {
                 if (group.kind === 'single') {
                   return (
-                    <div key={gi}>
+                    <div key={gi} data-exlog={group.entry.exerciseName} className="rounded-md transition-shadow">
                       <ExerciseLogCard entry={group.entry} />
                       {renderAfter?.(group.entry)}
                     </div>
@@ -476,7 +476,7 @@ function SessionExercises({ entries, renderAfter }: { entries: SetLogEntry[]; re
                       </span>
                     </div>
                     {group.members.map((member, mi) => (
-                      <div key={mi}>
+                      <div key={mi} data-exlog={member.exerciseName} className="transition-shadow">
                         <ExerciseLogCard entry={member} />
                         {renderAfter && <div className="px-3 pb-2">{renderAfter(member)}</div>}
                         {mi < group.members.length - 1 && (
@@ -514,11 +514,24 @@ interface ReplyTarget {
 }
 
 /** An athlete comment (or one the coach typed in while logging) with a Reply button */
-function CommentBubble({ label, text, onReply }: { label: string; text: string; onReply?: () => void }) {
+function CommentBubble({ label, text, onReply, exerciseName, onJump }: {
+  label: string; text: string; onReply?: () => void;
+  /** Shown as a link that scrolls to the exercise in the session */
+  exerciseName?: string; onJump?: () => void;
+}) {
   return (
     <div className="mt-1.5 rounded-md border-l-2 border-violet-400 bg-violet-50/60 dark:bg-violet-950/20 px-3 py-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground min-w-0">
+          {exerciseName && (onJump ? (
+            <button type="button" onClick={onJump} className="font-medium text-foreground hover:underline underline-offset-2" title="Show this exercise in the session">
+              {exerciseName}
+            </button>
+          ) : (
+            <span className="font-medium text-foreground">{exerciseName}</span>
+          ))}
+          {exerciseName ? ' · ' : ''}{label}
+        </p>
         {onReply && (
           <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={onReply}>
             <Reply className="h-3 w-3" />
@@ -601,6 +614,15 @@ export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddT
   const athleteComments = exerciseComments.filter(c => c.author !== 'coach');
   // The coach's own exercise notes: private ones + older ones saved with the session log
   const allExerciseNotes = [...exerciseComments.filter(c => c.author === 'coach'), ...exerciseNotes];
+  const loggedNames = new Set((log.sets_logged ?? []).map(e => e.exerciseName));
+  /** Scroll the session to an exercise and highlight it briefly */
+  const jumpToExercise = (name: string) => {
+    const el = Array.from(document.querySelectorAll<HTMLElement>('[data-exlog]')).find(e => e.dataset.exlog === name);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('ring-2', 'ring-violet-400');
+    window.setTimeout(() => el.classList.remove('ring-2', 'ring-violet-400'), 1600);
+  };
   // All athlete comments on exercises — one list near the top, also for exercises without any logged
   // set (e.g. "couldn't do it because…"); under the exercises they were easy to miss
   const otherComments = athleteComments;
@@ -683,7 +705,14 @@ export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddT
               <div>
                 <p className="text-xs text-muted-foreground font-medium">Exercise comments</p>
                 {otherComments.map(c => (
-                  <CommentBubble key={c.id} label={`${c.exerciseName} · ${commentLabel(c)}`} text={c.text} onReply={replyFor(c)} />
+                  <CommentBubble
+                    key={c.id}
+                    exerciseName={c.exerciseName}
+                    onJump={loggedNames.has(c.exerciseName) ? () => jumpToExercise(c.exerciseName) : undefined}
+                    label={commentLabel(c)}
+                    text={c.text}
+                    onReply={replyFor(c)}
+                  />
                 ))}
               </div>
             )}
