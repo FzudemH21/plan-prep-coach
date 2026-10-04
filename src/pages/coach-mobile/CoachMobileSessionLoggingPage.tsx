@@ -505,11 +505,13 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
                 {columns.map(col => {
                   const planned = getPlannedValue(exercise, col, setIdx);
                   const logged = loggedValues[exercise.id]?.[setIdx]?.[col];
-                  const displayValue = (logged !== undefined && logged !== '') ? logged : planned;
+                  // The planned value is only a hint (placeholder): typing replaces it instead of appending to
+                  // it ("8" + typed "9" became "89"). Ticking the set without typing fills it in (autoFillPlanned).
+                  const displayValue = logged ?? '';
                   return (
                     <td key={col} className={cn('py-1.5 px-1', layout.paramCell)}>
                       <input type="text" inputMode="decimal" value={displayValue}
-                        placeholder={previousValueFor(previous, col, setIdx) || '—'}
+                        placeholder={planned || previousValueFor(previous, col, setIdx) || '—'}
                         onChange={e => onLogValue(exercise.id, setIdx, col, e.target.value)}
                         disabled={isDone}
                         className={cn(
@@ -517,7 +519,8 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
                           'focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary',
                           'disabled:opacity-50 disabled:cursor-not-allowed',
                           isDone && 'line-through text-muted-foreground',
-                          !logged && planned && !isDone && 'text-muted-foreground italic',
+                          // Planned values read as targets (grey italic), last time's values as fainter hints
+                          planned ? 'placeholder:text-muted-foreground placeholder:italic' : '',
                         )} />
                     </td>
                   );

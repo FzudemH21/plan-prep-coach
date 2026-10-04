@@ -523,14 +523,16 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
                   const logged = loggedValues[exercise.id]?.[setIdx]?.[col];
                   // Show logged value if the athlete typed one, otherwise fall back to the
                   // planned value so the athlete can see targets without re-typing them.
-                  const displayValue = (logged !== undefined && logged !== '') ? logged : planned;
+                  // The planned value is only a hint (placeholder): typing replaces it instead of appending to
+                  // it ("8" + typed "9" became "89"). Ticking the set without typing fills it in (autoFillPlanned).
+                  const displayValue = logged ?? '';
                   return (
                     <td key={col} className={cn('py-1.5 px-1', layout.paramCell)}>
                       <input
                         type="text"
                         inputMode="decimal"
                         value={displayValue}
-                        placeholder={previousValueFor(previous, col, setIdx) || '—'}
+                        placeholder={planned || previousValueFor(previous, col, setIdx) || '—'}
                         onChange={e => onLogValue(exercise.id, setIdx, col, e.target.value)}
                         disabled={isDone}
                         className={cn(
@@ -539,7 +541,8 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
                           'disabled:opacity-50 disabled:cursor-not-allowed',
                           isDone && 'line-through text-muted-foreground',
                           // Distinguish pre-filled planned values (not yet confirmed by athlete)
-                          !logged && planned && !isDone && 'text-muted-foreground italic',
+                          // Planned values read as targets (grey italic), last time's values as fainter hints
+                          planned ? 'placeholder:text-muted-foreground placeholder:italic' : '',
                         )}
                       />
                     </td>
