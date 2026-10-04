@@ -1212,7 +1212,7 @@ export default function AthleteSessionPage() {
   }
 
   /** The current section is done: stay on it — the athlete moves on with "Finish Section" /
-   *  "Finish Session" (it used to jump to the next unfinished section right after the last set) */
+   *  "Complete Session" (it used to jump to the next unfinished section right after the last set) */
   function continueAfterSection(_cs: Record<string, number[]>, _restSecs: number) {
     setPhase('active');
   }
@@ -1911,7 +1911,7 @@ export default function AthleteSessionPage() {
     const totalSetsPlanned = sectionExercises.reduce((a, ex) => a + (setCountOverrides[ex.id] ?? getSetCount(ex)), 0);
     const sectionComplete = isSectionComplete(currentSection!, completedSets, setCountOverrides);
     const completeFlags = sectionCompleteFlags(completedSets);
-    // "Finish Section" leads to the next section in order; on the last one it's "Finish Session"
+    // "Finish Section" leads to the next section in order; on the last one it's "Complete Session"
     // (no jumping back to a skipped earlier section — unfinished work only triggers the warning)
     const nextSectionIdx = sectionIdx < sections.length - 1 ? sectionIdx + 1 : null;
     const workoutComplete = completeFlags.every(Boolean);
@@ -2180,7 +2180,7 @@ export default function AthleteSessionPage() {
               }}
             >
               <Check className="h-4 w-4 mr-2" />
-              Finish Session
+              Complete Session
             </Button>
           ) : (
             <>
@@ -2243,7 +2243,7 @@ export default function AthleteSessionPage() {
           <AlertDialogContent className="sm:max-w-[360px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
             <AlertDialogHeader>
               <AlertDialogTitle>
-                {incompleteWarning === 'workout' ? 'Finish session?' : 'Finish section?'}
+                {incompleteWarning === 'workout' ? 'Complete session?' : 'Finish section?'}
               </AlertDialogTitle>
               <AlertDialogDescription>
                 Not all sets are completed yet. Finish anyway?

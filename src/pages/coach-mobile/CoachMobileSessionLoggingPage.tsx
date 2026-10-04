@@ -1068,7 +1068,7 @@ export default function CoachMobileSessionLoggingPage() {
   }
 
   /** The current section is done: stay on it — the athlete moves on with "Finish Section" /
-   *  "Finish Session" (it used to jump to the next unfinished section right after the last set) */
+   *  "Complete Session" (it used to jump to the next unfinished section right after the last set) */
   function continueAfterSection(_cs: Record<string, number[]>, _restSecs: number) {
     setPhase('active');
   }
@@ -1553,7 +1553,7 @@ export default function CoachMobileSessionLoggingPage() {
     const totalSetsPlanned = sectionExercises.reduce((a, ex) => a + (setCountOverrides[ex.id] ?? getSetCount(ex)), 0);
     const sectionComplete = isSectionComplete(currentSection!, completedSets, setCountOverrides);
     const completeFlags = sectionCompleteFlags(completedSets);
-    // "Finish Section" leads to the next section in order; on the last one it's "Finish Session"
+    // "Finish Section" leads to the next section in order; on the last one it's "Complete Session"
     // (no jumping back to a skipped earlier section — unfinished work only triggers the warning)
     const nextSectionIdx = sectionIdx < sections.length - 1 ? sectionIdx + 1 : null;
     const workoutComplete = completeFlags.every(Boolean);
