@@ -242,3 +242,57 @@ export function cleanupSupersetsOnExerciseDelete(
   
   return newSupersets;
 }
+
+/** Superset letter for the n-th superset of a session (0 → A, 1 → B …) */
+export function supersetLetter(n: number): string {
+  return String.fromCharCode(65 + (n % 26));
+}
+
+/**
+ * Superset labels for one session — the same rule in every view (wizard session sheet, Master
+ * Planner, exercise distribution, athlete app, coach mobile, logged sessions, print, AI): walking
+ * through the session in display order (sections top to bottom, exercises in their order), the
+ * first superset reached is A, the next B …; its exercises are numbered in their order (A1, A2).
+ * Before, some views sorted by internal superset id or restarted at A in every section.
+ * @param orderedExercises the session's exercises in display order; `ids` = every id the exercise
+ *        may be stored under in the superset groups (distribution id, exercise id …)
+ * @param sessionSupersets the session's superset groups (section key → superset id → member ids)
+ * @returns exercise key → label (e.g. "B2")
+ */
+export function sessionSupersetLabels(
+  orderedExercises: Array<{ key: string; ids: string[] }>,
+  sessionSupersets: Record<string, Record<string, string[]>> | undefined,
+): Map<string, string> {
+  const groups = Object.values(sessionSupersets ?? {})
+    .flatMap(section => Object.values(section ?? {}))
+    .filter(members => Array.isArray(members) && members.length >= 2);
+  const letterOfGroup = new Map<number, string>();
+  const countInGroup = new Map<number, number>();
+  const labels = new Map<string, string>();
+  orderedExercises.forEach(ex => {
+    const gi = groups.findIndex(members => ex.ids.some(id => members.includes(id)));
+    if (gi < 0) return;
+    if (!letterOfGroup.has(gi)) letterOfGroup.set(gi, supersetLetter(letterOfGroup.size));
+    const n = (countInGroup.get(gi) ?? 0) + 1;
+    countInGroup.set(gi, n);
+    labels.set(ex.key, `${letterOfGroup.get(gi)}${n}`);
+  });
+  return labels;
+}
+
+/**
+ * Superset letters for sections whose exercises carry a supersetId (athlete app / coach mobile
+ * workout): same rule — sections in order, exercises in order, first superset reached is A.
+ * @returns `${sectionId}::${supersetId}` → letter
+ */
+export function supersetLettersForSections(
+  sections: Array<{ id: string; exercises: Array<{ supersetId?: string | null }> }>,
+): Map<string, string> {
+  const letters = new Map<string, string>();
+  sections.forEach(section => section.exercises.forEach(ex => {
+    if (!ex.supersetId) return;
+    const key = `${section.id}::${ex.supersetId}`;
+    if (!letters.has(key)) letters.set(key, supersetLetter(letters.size));
+  }));
+  return letters;
+}

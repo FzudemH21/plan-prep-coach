@@ -37,6 +37,7 @@ import { SectionNavigator, nextUnfinishedSection } from '@/components/workout/Se
 import { getRestSeconds } from '@/utils/workoutRest';
 import { addExerciseComment, fetchExerciseComments, type ExerciseComment } from '@/utils/sessionComments';
 import { LoggedExerciseResult, type LoggedEntry } from '@/components/workout/LoggedExerciseResult';
+import { supersetLettersForSections } from '@/utils/supersetUtils';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1969,12 +1970,12 @@ export default function AthleteSessionPage() {
               </div>
             ) : (() => {
               // ── Build superset groups ───────────────────────────────────────
-              const LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+              // Letters run through the whole session (same rule in every view, supersetUtils)
+              const sessionLetters = supersetLettersForSections(sections);
               const supersetLabel = new Map<string, string>();
-              let labelCount = 0;
               for (const ex of sectionExercises) {
                 if (ex.supersetId && !supersetLabel.has(ex.supersetId)) {
-                  supersetLabel.set(ex.supersetId, LABELS[labelCount++ % 26]);
+                  supersetLabel.set(ex.supersetId, sessionLetters.get(`${currentSection!.id}::${ex.supersetId}`) ?? 'A');
                 }
               }
 

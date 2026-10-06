@@ -15,7 +15,7 @@ import { IntensityLevel } from '@/types/training';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { ToolboxDatabase } from '@/types/toolbox';
 import { ExerciseDistribution, SessionSection, SupersetMapping } from '@/types/microcycle-planning';
-import { getSupersetLabelFromMapping } from '@/utils/supersetUtils';
+import { sessionSupersetLabels } from '@/utils/supersetUtils';
 import { getMethodSessionIndex, getModuloSessionIndex } from '@/utils/sessionIndexUtils';
 import { BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
@@ -804,18 +804,29 @@ export function MasterPlannerColumn({
     return { storedParams, methodParams, chronologicalSessionIndex };
   }, [currentMesocycle, parameterValues, trainingDays, day.dateString, toolboxData, weekNumber, getMicrocycleDates, allExerciseDistribution]);
 
-  // Get superset label for an exercise (A1, A2, B1, B2, etc.)
-  const getSupersetLabel = useCallback((exercise: ExerciseDistribution): string | null => {
-    // Use distribution id (used by Step 1) with fallback to exerciseId
-    const lookupId = exercise.id || exercise.exerciseId;
-    return getSupersetLabelFromMapping(
-      supersets,
-      day.dateString,
-      exercise.sessionIndex,
-      lookupId,
-      exercise.sectionId
-    );
-  }, [supersets, day.dateString]);
+  // Superset labels (A1, A2, B1 …) per session: letters in session order — sections top to bottom,
+  // exercises in their order — the same rule in every view (sessionSupersetLabels)
+  const supersetLabelsBySession = useMemo(() => {
+    const result = new Map<number, Map<string, string>>();
+    const byOrder = (a: ExerciseDistribution, b: ExerciseDistribution) => (a.order ?? 0) - (b.order ?? 0);
+    day.sessions.forEach(session => {
+      const sections = getSectionsForSession(session.sessionIndex);
+      const sectionIds = new Set(sections.map(s => s.id));
+      const ordered = [
+        ...sections.flatMap(sec => session.exercises.filter(ex => ex.sectionId === sec.id).sort(byOrder)),
+        ...session.exercises.filter(ex => !ex.sectionId || !sectionIds.has(ex.sectionId)).sort(byOrder),
+      ];
+      result.set(session.sessionIndex, sessionSupersetLabels(
+        ordered.map(ex => ({ key: ex.id || ex.exerciseId, ids: [ex.id, ex.exerciseId].filter((v): v is string => !!v) })),
+        supersets?.[day.dateString]?.[session.sessionIndex],
+      ));
+    });
+    return result;
+  }, [day.sessions, day.dateString, getSectionsForSession, supersets]);
+
+  const getSupersetLabel = useCallback((exercise: ExerciseDistribution): string | null =>
+    supersetLabelsBySession.get(exercise.sessionIndex)?.get(exercise.id || exercise.exerciseId) ?? null,
+  [supersetLabelsBySession]);
 
   /** A circuit has no parameter grid of its own: rounds, rest and its exercises in order */
   const renderCircuitSummary = (exercise: ExerciseDistribution) => {

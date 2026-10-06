@@ -35,7 +35,7 @@ import { getParametersForMethod } from '@/data/methodParameters';
 import { ExerciseDistribution, ExerciseSelection } from '@/types/microcycle-planning';
 import { ToolboxDatabase } from '@/types/toolbox';
 import { cn } from '@/lib/utils';
-import { toggleSuperset, getSupersetLabelFromMapping, cleanupSupersetsOnExerciseDelete } from '@/utils/supersetUtils';
+import { toggleSuperset, sessionSupersetLabels, cleanupSupersetsOnExerciseDelete } from '@/utils/supersetUtils';
 import { getMethodSessionIndex, getModuloSessionIndex } from '@/utils/sessionIndexUtils';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
@@ -1659,30 +1659,17 @@ export function WorkoutSessionSheet({
     return undefined;
   };
 
-  const getSupersetLabel = (internalId: string): string | undefined => {
-    // Primary lookup by internal id
-    let label = getSupersetLabelFromMapping(
-      supersetsProp || supersets,
-      dayDate,
-      sessionIndex,
-      internalId
-    );
-    // Fallback: try plain exerciseId for cross-context compatibility.
-    // Handles the case where supersets were stored with exerciseId (no distribution id)
-    // but the internal workout exercise id has a composite format.
-    if (!label) {
-      const plainId = resolvePlainExerciseId(internalId);
-      if (plainId) {
-        label = getSupersetLabelFromMapping(
-          supersetsProp || supersets,
-          dayDate,
-          sessionIndex,
-          plainId
-        );
-      }
-    }
-    return label ?? undefined;
-  };
+  // Superset labels in session order (sections top to bottom, exercises in their order) — the
+  // same rule in every view (sessionSupersetLabels). An exercise may be stored in the groups under
+  // its internal id or its plain exercise id.
+  const supersetLabelMap = sessionSupersetLabels(
+    workoutSections.flatMap(section => section.exercises.map(ex => {
+      const plainId = resolvePlainExerciseId(ex.id);
+      return { key: ex.id, ids: plainId ? [ex.id, plainId] : [ex.id] };
+    })),
+    (supersetsProp || supersets)?.[dayDate]?.[sessionIndex],
+  );
+  const getSupersetLabel = (internalId: string): string | undefined => supersetLabelMap.get(internalId);
 
   const getSupersetPartners = (internalId: string): string[] => {
     // Use supersetsProp (from Step 1) as primary source, fallback to local state

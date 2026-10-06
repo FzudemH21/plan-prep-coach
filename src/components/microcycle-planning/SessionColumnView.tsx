@@ -33,6 +33,7 @@ import { parseDateStr } from '@/utils/dateUtils';
 import { cn } from '@/lib/utils';
 import { ExerciseDistribution, SessionSection } from '@/types/microcycle-planning';
 import { displayMethodLabel, methodColorClasses } from './methodLabelUtils';
+import { sessionSupersetLabels } from '@/utils/supersetUtils';
 
 /** A method (+ exercise category) of the current mesocycle that contains a given exercise */
 export interface ExerciseMethodOption {
@@ -157,10 +158,9 @@ export function SessionColumnView({
     return Object.entries(sectionSupersets).find(([_, ids]) => ids.includes(exerciseId))?.[0];
   };
 
-  const getSupersetLabel = (supersetId: string): string => {
-    const match = supersetId.match(/superset-(\d+)/);
-    return match ? `SS${match[1]}` : 'SS';
-  };
+  // Superset labels (A1, A2 …) in session order — the same rule in every view (sessionSupersetLabels).
+  // Computed below, once the exercises are grouped (exercisesBySection).
+  const getSupersetLabel = (exerciseId: string): string => supersetLabelMap.get(exerciseId) ?? 'SS';
 
   const handleStartRenameSection = (section: SessionSection) => {
     setEditingSectionId(section.id);
@@ -225,6 +225,15 @@ export function SessionColumnView({
     
     return { unsectioned, sectioned, sortedSections };
   }, [exercises, sections]);
+
+  // In display order: the unsectioned exercises are shown above the sections in this view
+  const supersetLabelMap = useMemo(() => sessionSupersetLabels(
+    [
+      ...exercisesBySection.unsectioned,
+      ...exercisesBySection.sortedSections.flatMap(sec => exercisesBySection.sectioned[sec.id] ?? []),
+    ].map(ex => ({ key: ex.id, ids: [ex.id] })),
+    supersets,
+  ), [exercisesBySection, supersets]);
 
   // Safety check for undefined date
   if (!day || !day.date) {
@@ -396,7 +405,7 @@ export function SessionColumnView({
                     })()}
                     {supersetId && (
                       <Badge variant="default" className="text-[10px] mt-1 px-1.5 font-semibold">
-                        {getSupersetLabel(supersetId)}
+                        {getSupersetLabel(exercise.id)}
                       </Badge>
                     )}
                   </div>

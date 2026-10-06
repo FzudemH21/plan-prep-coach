@@ -3810,6 +3810,8 @@ export default function MicrocyclePlanningPage() {
       .filter(e => e.dayDate === dayDate && (e.sessionIndex ?? 0) === sessionIdx)
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     const sessionSupersets = supersets[dayDate]?.[sessionIdx] ?? {};
+    // Superset letters run through the whole session (same rule as every view)
+    const letters = new Map<string, string>();
 
     const describeExercise = (e: typeof sessionExercises[number]): string => {
       const exNote = e.notes ? ` [note: "${e.notes}"]` : '';
@@ -3846,7 +3848,6 @@ export default function MicrocyclePlanningPage() {
       Object.entries(groups).forEach(([sid, ids]) => {
         if ((ids as string[]).length >= 2) (ids as string[]).forEach(id => supersetOf.set(id, sid));
       });
-      const letters = new Map<string, string>();
       const done = new Set<string>();
       let pos = 0;
       exs.forEach(e => {

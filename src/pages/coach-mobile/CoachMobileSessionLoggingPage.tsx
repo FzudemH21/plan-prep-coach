@@ -39,6 +39,7 @@ import { previousValueFor, usePreviousExerciseValues, type PreviousExerciseValue
 import { SectionNavigator, nextUnfinishedSection } from '@/components/workout/SectionNavigator';
 import { getRestSeconds } from '@/utils/workoutRest';
 import { addCoachExerciseRemark, fetchCoachRemark, remarksAsText, removeCoachExerciseRemark, saveCoachRemark, type ExerciseComment } from '@/utils/sessionComments';
+import { supersetLettersForSections } from '@/utils/supersetUtils';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1562,12 +1563,12 @@ export default function CoachMobileSessionLoggingPage() {
     const workoutComplete = completeFlags.every(Boolean);
 
     // Build superset groups
-    const LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    // Letters run through the whole session (same rule in every view, supersetUtils)
+    const sessionLetters = supersetLettersForSections(sections);
     const supersetLabel = new Map<string, string>();
-    let labelCount = 0;
     for (const ex of sectionExercises) {
       if (ex.supersetId && !supersetLabel.has(ex.supersetId)) {
-        supersetLabel.set(ex.supersetId, LABELS[labelCount++ % 26]);
+        supersetLabel.set(ex.supersetId, sessionLetters.get(`${currentSection!.id}::${ex.supersetId}`) ?? 'A');
       }
     }
 
