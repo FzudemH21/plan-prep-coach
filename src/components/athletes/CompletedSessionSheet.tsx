@@ -190,9 +190,13 @@ function ExerciseLogCard({ entry }: { entry: SetLogEntry }) {
           <div className="divide-y divide-border/40">
             {exercises.map((cex, i) => {
               const params: string[] = [];
-              if (cex.enabledParams?.includes('Reps') && cex.reps) params.push(`${cex.reps} reps`);
-              if (cex.enabledParams?.includes('Time') && cex.time) params.push(`${cex.time}s`);
-              if (cex.enabledParams?.includes('Distance') && cex.distance) params.push(`${cex.distance}m`);
+              // Circuits store the toggled params in lowercase ('reps' | 'time' | 'distance'); checking
+              // for 'Reps' / 'Distance' matched nothing, so every exercise fell back to its reps.
+              // Default ['reps'], like the circuit builder and the phone apps.
+              const enabled = (cex.enabledParams ?? ['reps']).map(p => p.toLowerCase());
+              if (enabled.includes('reps') && cex.reps) params.push(`${cex.reps} reps`);
+              if (enabled.includes('time') && cex.time) params.push(`${cex.time}s`);
+              if (enabled.includes('distance') && cex.distance) params.push(`${cex.distance}m`);
               // fallback: show reps if no enabledParams
               if (params.length === 0 && cex.reps) params.push(`${cex.reps} reps`);
               return (
