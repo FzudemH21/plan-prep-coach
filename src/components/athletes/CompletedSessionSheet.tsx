@@ -416,16 +416,8 @@ function groupBySection(entries: SetLogEntry[]): SectionGroup[] {
   return Array.from(map.values()).sort((a, b) => a.sectionOrder - b.sectionOrder);
 }
 
-function groupBySupersetWithinSection(entries: SetLogEntry[]): ExerciseGroup[] {
+function groupBySupersetWithinSection(entries: SetLogEntry[], labelFor: (supersetId: string) => string): ExerciseGroup[] {
   const sorted = [...entries].sort((a, b) => (a.exerciseOrder ?? 0) - (b.exerciseOrder ?? 0));
-  const LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const supersetLabel = new Map<string, string>();
-  let labelCount = 0;
-  for (const entry of sorted) {
-    if (entry.supersetId && !supersetLabel.has(entry.supersetId)) {
-      supersetLabel.set(entry.supersetId, LABELS[labelCount++ % 26]);
-    }
-  }
 
   const groups: ExerciseGroup[] = [];
   const seenSuperset = new Set<string>();
@@ -434,7 +426,7 @@ function groupBySupersetWithinSection(entries: SetLogEntry[]): ExerciseGroup[] {
       if (seenSuperset.has(entry.supersetId)) continue;
       seenSuperset.add(entry.supersetId);
       const members = sorted.filter(e => e.supersetId === entry.supersetId);
-      groups.push({ kind: 'superset', supersetId: entry.supersetId, label: supersetLabel.get(entry.supersetId)!, members });
+      groups.push({ kind: 'superset', supersetId: entry.supersetId, label: labelFor(entry.supersetId), members });
     } else {
       groups.push({ kind: 'single', entry });
     }
@@ -445,12 +437,24 @@ function groupBySupersetWithinSection(entries: SetLogEntry[]): ExerciseGroup[] {
 function SessionExercises({ entries, renderAfter }: { entries: SetLogEntry[]; renderAfter?: (entry: SetLogEntry) => React.ReactNode }) {
   const hasStructure = entries.some(e => e.sectionId);
   const sections = groupBySection(entries);
+  // Superset letters run through the whole session (A, B, C … across sections) — counting per
+  // section labelled every section's first superset "A"
+  const supersetLabels = new Map<string, string>();
+  const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  sections.forEach(section => {
+    [...section.entries]
+      .sort((a, b) => (a.exerciseOrder ?? 0) - (b.exerciseOrder ?? 0))
+      .forEach(entry => {
+        const key = entry.supersetId ? `${section.sectionId}::${entry.supersetId}` : null;
+        if (key && !supersetLabels.has(key)) supersetLabels.set(key, LETTERS[supersetLabels.size % 26]);
+      });
+  });
   const showSectionHeaders = hasStructure && (sections.length > 1 || (sections[0]?.sectionName && sections[0].sectionName !== 'Workout'));
 
   return (
     <div className="space-y-5">
       {sections.map((section) => {
-        const groups = groupBySupersetWithinSection(section.entries);
+        const groups = groupBySupersetWithinSection(section.entries, id => supersetLabels.get(`${section.sectionId}::${id}`) ?? 'A');
         return (
           <div key={section.sectionId} className="space-y-2">
             {showSectionHeaders && (
