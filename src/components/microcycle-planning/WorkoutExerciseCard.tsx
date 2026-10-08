@@ -271,6 +271,26 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
       }
     }
 
+    // Every other parameter of the method in the Training Toolbox — also those without a value in
+    // the Periodization Table (e.g. RPE or Weight the athlete logs). Before, only planned parameters
+    // could be picked. Without a planned value they are hidden by default (Parameter Visibility).
+    if (toolboxParams) {
+      for (const tp of toolboxParams) {
+        if (tp.isCalculated || tp.isSetParameter || params.some(p => p.name === tp.parameterName)) continue;
+        params.push({
+          name: tp.parameterName,
+          type: tp.parameterType === 'qualitative' ? 'text' : 'number',
+          unit: tp.parameterType === 'quantitative' && tp.options.length > 0 ? tp.options[0] : undefined,
+          isSetParameter: false,
+          isRestParameter: !!tp.isRestParameter,
+          isFrequencyParameter: !!tp.isFrequencyParameter || /^frequency/i.test(tp.parameterName),
+          defaultValue: undefined,
+          showInGridByDefault: false,
+          isCalculated: false,
+        });
+      }
+    }
+
     // Columns in the method's Training Toolbox order (same order as the Periodization Table);
     // parameters no longer in the toolbox go last, keeping their relative order
     if (toolboxParams && toolboxParams.length > 0) {

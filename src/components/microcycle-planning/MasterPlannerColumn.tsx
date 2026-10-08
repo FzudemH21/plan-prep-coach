@@ -761,8 +761,9 @@ export function MasterPlannerColumn({
       return entry.category === methodMain && (!entry.subCategory || entry.subCategory === '');
     }) || [];
 
-    // Build methodParams from storedParams keys ONLY (no toolbox fallback)
-    // This ensures Master Planner shows exactly the same params as Workout Session Card
+    // Parameters with a value from the Periodization Table (or the exercise's own edits), plus every
+    // other parameter of the method in the Training Toolbox — hidden by default, can be shown via
+    // Parameter Visibility (same as the Workout Session Card)
     // In the method's Training Toolbox order (parameters no longer in the toolbox last)
     const tbIndex = (name: string) => {
       const i = toolboxEntries.findIndex(entry => entry.parameterName === name);
@@ -800,6 +801,25 @@ export function MasterPlannerColumn({
         unit,
       };
     });
+
+    const plannedNames = new Set(storedParamKeys);
+    toolboxEntries.forEach(entry => {
+      if (plannedNames.has(entry.parameterName) || entry.isCalculated || entry.isSetParameter) return;
+      const isQualitative = entry.parameterType === 'qualitative';
+      const hasOptions = !!entry.options && entry.options.length > 0;
+      methodParams.push({
+        name: entry.parameterName,
+        displayName: entry.parameterName.replace(/\s*\[.*?\]\s*$/, '').trim(),
+        type: (isQualitative && hasOptions) ? 'select' : 'number',
+        options: (isQualitative && hasOptions) ? entry.options : undefined,
+        isSetParameter: false,
+        isFrequencyParameter: !!entry.isFrequencyParameter || /^frequency/i.test(entry.parameterName),
+        showInGridByDefault: false,
+        unit: entry.parameterType === 'quantitative' && entry.options?.[0] ? entry.options[0] : undefined,
+      });
+    });
+    // Toolbox order (same as the Periodization Table)
+    methodParams.sort((a, b) => tbIndex(a.name) - tbIndex(b.name));
 
     return { storedParams, methodParams, chronologicalSessionIndex };
   }, [currentMesocycle, parameterValues, trainingDays, day.dateString, toolboxData, weekNumber, getMicrocycleDates, allExerciseDistribution]);
