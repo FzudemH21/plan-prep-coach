@@ -1325,6 +1325,9 @@ export default function AthleteSessionPage() {
       swapReason: swap?.reason || undefined,
       plannedSets: plannedSetCount,
       plannedParams: Object.keys(plannedParamsStr).length > 0 ? plannedParamsStr : undefined,
+      // The columns shown while logging — so a column left empty (e.g. Weight without a planned
+      // value) still shows in the logged session's table
+      columns: getParamColumns(ex),
       sectionId: ex.sectionId,
       sectionName: ex.sectionName,
       sectionOrder: ex.sectionOrder ?? 0,

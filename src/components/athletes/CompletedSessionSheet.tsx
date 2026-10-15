@@ -30,6 +30,8 @@ export interface RegularExerciseLog {
   exerciseName: string;
   isCircuit?: false;
   plannedSets?: number;
+  /** The columns shown while logging (newer logs) — also those left empty */
+  columns?: string[];
   /** Coach-prescribed values per param — used to show crossed-out planned values on removed/skipped rows */
   plannedParams?: Record<string, string>;
   /** Set when athlete swapped this exercise in-session */
@@ -214,10 +216,11 @@ function ExerciseLogCard({ entry }: { entry: SetLogEntry }) {
     );
   }
 
-  // Collect all param column names across logged sets only
+  // The columns shown while logging (also those left empty, e.g. Weight), plus every param with a
+  // logged value (older logs have only these)
   // (plannedParams may have per-set keys like Reps_set1 — don't use for column headers)
   const paramNames = Array.from(
-    new Set(entry.sets.flatMap((s) => Object.keys(s.values)))
+    new Set([...((entry as RegularExerciseLog).columns ?? []),...entry.sets.flatMap((s) => Object.keys(s.values))])
   );
 
   // Determine skipped sets: sets where completed is explicitly false,

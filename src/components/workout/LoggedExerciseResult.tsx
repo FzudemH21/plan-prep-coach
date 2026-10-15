@@ -17,6 +17,8 @@ export interface LoggedSet {
 export interface LoggedEntry {
   exerciseName: string;
   sets?: LoggedSet[];
+  /** The columns shown while logging (newer logs) — also those left empty */
+  columns?: string[];
   isCircuit?: boolean;
   roundsCompleted?: number;
   totalRounds?: number;
@@ -65,7 +67,7 @@ export function LoggedExerciseResult({ logged, isCircuit, plannedCount, units }:
   const sets = logged?.sets ?? [];
   const done = sets.filter(isSetDone).length;
   const total = sets.length > 0 ? sets.length : plannedCount;
-  const paramNames = Array.from(new Set(sets.flatMap(s => Object.keys(s.values ?? {}))));
+  const paramNames = Array.from(new Set([...(logged?.columns ?? []), ...sets.flatMap(s => Object.keys(s.values ?? {}))]));
   const hasTable = sets.length > 0 && paramNames.length > 0;
 
   return (
