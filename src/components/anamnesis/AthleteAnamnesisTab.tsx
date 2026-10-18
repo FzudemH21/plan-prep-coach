@@ -64,9 +64,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { contextFor, fieldState, formatAnswer } from '@/utils/anamnesisAnswers';
-import {
-  BodyMapInput, ListInput, MultiChoiceInput, ScaleInput, WeekGridInput, YesNoListInput,
-} from '@/components/anamnesis/AnamnesisInputs';
+import { AnamnesisFieldInput } from '@/components/anamnesis/AnamnesisInputs';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -101,123 +99,6 @@ function todayIso(): string {
 
 function blankCustomField(): AnamnesisField {
   return { id: uid(), label: '', fieldType: 'text' };
-}
-
-// ── Field renderer (display + input) ─────────────────────────────────────────
-
-function AnamnesisFieldInput({
-  field,
-  value,
-  onChange,
-  readOnly,
-}: {
-  field: AnamnesisField;
-  value: string;
-  onChange: (v: string) => void;
-  readOnly?: boolean;
-}) {
-  // Structured types — the same inputs as the athlete's form link, compact and in English
-  switch (field.fieldType) {
-    case 'info':
-      return field.helpText ? <p className="text-sm text-muted-foreground whitespace-pre-wrap">{field.helpText}</p> : null;
-    case 'yesnoList':
-      return <YesNoListInput lang="en" items={field.options ?? []} value={value} onChange={onChange} readOnly={readOnly} />;
-    case 'list':
-      return <ListInput lang="en" columns={field.listColumns ?? []} value={value} onChange={onChange} readOnly={readOnly} />;
-    case 'bodyMap':
-      return <BodyMapInput lang="en" field={field} value={value} onChange={onChange} readOnly={readOnly} />;
-    case 'weekGrid':
-      if (readOnly && !value) return <p className="text-sm text-muted-foreground italic">—</p>;
-      return <WeekGridInput lang="en" value={value} onChange={onChange} readOnly={readOnly} />;
-    default:
-      break;
-  }
-
-  if (readOnly) {
-    if (!value) return <p className="text-sm text-muted-foreground italic">—</p>;
-    if (field.fieldType === 'boolean') {
-      return (
-        <Badge variant={value === 'true' ? 'default' : 'secondary'} className="text-xs">
-          {value === 'true' ? 'Yes' : 'No'}
-        </Badge>
-      );
-    }
-    return <p className="text-sm whitespace-pre-wrap">{formatAnswer(field, value) || value}</p>;
-  }
-
-  switch (field.fieldType) {
-    case 'multiselect':
-      return <MultiChoiceInput options={field.options ?? []} value={value} onChange={onChange} />;
-    case 'scale':
-      return <ScaleInput field={field} value={value} onChange={onChange} />;
-    case 'date':
-      return <Input type="date" className="h-9 text-sm w-48" value={value} onChange={(e) => onChange(e.target.value)} />;
-    case 'textarea':
-      return (
-        <Textarea
-          className="min-h-[72px] resize-y text-sm"
-          placeholder={field.placeholder}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      );
-    case 'number':
-      return (
-        <Input
-          type="number"
-          className="h-9 text-sm"
-          placeholder={field.placeholder}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      );
-    case 'select':
-      return (
-        <Select value={value || ''} onValueChange={onChange}>
-          <SelectTrigger className="h-9 text-sm">
-            <SelectValue placeholder="Select…" />
-          </SelectTrigger>
-          <SelectContent>
-            {(field.options ?? []).map((opt) => (
-              <SelectItem key={opt} value={opt} className="text-sm">{opt}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      );
-    case 'boolean':
-      return (
-        <div className="flex gap-2">
-          {['Yes', 'No'].map((opt) => {
-            const val = opt === 'Yes' ? 'true' : 'false';
-            return (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => onChange(value === val ? '' : val)}
-                className={cn(
-                  'px-3 py-1 rounded-md text-sm border transition-colors',
-                  value === val
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-background text-foreground border-input hover:bg-accent',
-                )}
-              >
-                {opt}
-              </button>
-            );
-          })}
-        </div>
-      );
-    default:
-      return (
-        <Input
-          type="text"
-          className="h-9 text-sm"
-          placeholder={field.placeholder}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      );
-  }
 }
 
 // ── AI summary builder ────────────────────────────────────────────────────────
@@ -872,7 +753,7 @@ Where nothing is stated for a heading, write "- Not stated" (German: "- Keine An
                   onMoveUp={() => moveCustomQuestion(idx, -1)}
                   onMoveDown={() => moveCustomQuestion(idx, 1)}
                 />
-                {field.label && (
+                {(field.label || field.fieldType !== 'text') && (
                   <div className="pl-1 space-y-1">
                     {field.helpText && field.fieldType !== 'info' && (
                       <p className="text-xs text-muted-foreground whitespace-pre-wrap">{field.helpText}</p>

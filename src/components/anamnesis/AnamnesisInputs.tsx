@@ -9,6 +9,8 @@ import { Check, Eraser, Plus, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import {
   BACK_REGIONS, FRONT_REGIONS, nrsSeverityColor, nrsSeverityStroke, svgRegionKey,
@@ -16,7 +18,7 @@ import {
 import type { AnamnesisField, AnamnesisListColumn } from '@/types/anamnesis';
 import {
   DAY_LABELS, WEEK_GRID_COLORS, WEEK_GRID_HOURS, WEEK_GRID_LABELS,
-  parseBodyMap, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
+  formatAnswer, parseBodyMap, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
   type AnswerLang, type BodyMapSpot, type ListRow, type WeekGridCell,
 } from '@/utils/anamnesisAnswers';
 
@@ -647,4 +649,122 @@ export function WeekGridInput({ value, onChange, lang, size = 'sm', readOnly }: 
       </div>
     </div>
   );
+}
+
+// ── Field renderer (display + input) ─────────────────────────────────────────
+
+/** Answer field of any question type — compact, English (coach record, template editor preview) */
+export function AnamnesisFieldInput({
+  field,
+  value,
+  onChange,
+  readOnly,
+}: {
+  field: AnamnesisField;
+  value: string;
+  onChange: (v: string) => void;
+  readOnly?: boolean;
+}) {
+  // Structured types — the same inputs as the athlete's form link, compact and in English
+  switch (field.fieldType) {
+    case 'info':
+      return field.helpText ? <p className="text-sm text-muted-foreground whitespace-pre-wrap">{field.helpText}</p> : null;
+    case 'yesnoList':
+      return <YesNoListInput lang="en" items={field.options ?? []} value={value} onChange={onChange} readOnly={readOnly} />;
+    case 'list':
+      return <ListInput lang="en" columns={field.listColumns ?? []} value={value} onChange={onChange} readOnly={readOnly} />;
+    case 'bodyMap':
+      return <BodyMapInput lang="en" field={field} value={value} onChange={onChange} readOnly={readOnly} />;
+    case 'weekGrid':
+      if (readOnly && !value) return <p className="text-sm text-muted-foreground italic">—</p>;
+      return <WeekGridInput lang="en" value={value} onChange={onChange} readOnly={readOnly} />;
+    default:
+      break;
+  }
+
+  if (readOnly) {
+    if (!value) return <p className="text-sm text-muted-foreground italic">—</p>;
+    if (field.fieldType === 'boolean') {
+      return (
+        <Badge variant={value === 'true' ? 'default' : 'secondary'} className="text-xs">
+          {value === 'true' ? 'Yes' : 'No'}
+        </Badge>
+      );
+    }
+    return <p className="text-sm whitespace-pre-wrap">{formatAnswer(field, value) || value}</p>;
+  }
+
+  switch (field.fieldType) {
+    case 'multiselect':
+      return <MultiChoiceInput options={field.options ?? []} value={value} onChange={onChange} />;
+    case 'scale':
+      return <ScaleInput field={field} value={value} onChange={onChange} />;
+    case 'date':
+      return <Input type="date" className="h-9 text-sm w-48" value={value} onChange={(e) => onChange(e.target.value)} />;
+    case 'textarea':
+      return (
+        <Textarea
+          className="min-h-[72px] resize-y text-sm"
+          placeholder={field.placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+    case 'number':
+      return (
+        <Input
+          type="number"
+          className="h-9 text-sm"
+          placeholder={field.placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+    case 'select':
+      return (
+        <Select value={value || ''} onValueChange={onChange}>
+          <SelectTrigger className="h-9 text-sm">
+            <SelectValue placeholder="Select…" />
+          </SelectTrigger>
+          <SelectContent>
+            {(field.options ?? []).map((opt) => (
+              <SelectItem key={opt} value={opt} className="text-sm">{opt}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    case 'boolean':
+      return (
+        <div className="flex gap-2">
+          {['Yes', 'No'].map((opt) => {
+            const val = opt === 'Yes' ? 'true' : 'false';
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => onChange(value === val ? '' : val)}
+                className={cn(
+                  'px-3 py-1 rounded-md text-sm border transition-colors',
+                  value === val
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background text-foreground border-input hover:bg-accent',
+                )}
+              >
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+      );
+    default:
+      return (
+        <Input
+          type="text"
+          className="h-9 text-sm"
+          placeholder={field.placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+  }
 }

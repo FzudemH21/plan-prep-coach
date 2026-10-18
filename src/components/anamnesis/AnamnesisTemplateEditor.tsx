@@ -31,8 +31,9 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
-  Plus, Trash2, ChevronUp, ChevronDown, Edit, Loader2, ClipboardList, X, GitBranch,
+  Plus, Trash2, ChevronUp, ChevronDown, Edit, Loader2, ClipboardList, X, GitBranch, Eye, EyeOff,
 } from 'lucide-react';
+import { AnamnesisFieldInput } from '@/components/anamnesis/AnamnesisInputs';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
 import { DEFAULT_ANAMNESIS_TEMPLATE, PROFILE_SEX_SOURCE, isAthleteSection } from '@/types/anamnesis';
 import type {
@@ -65,9 +66,9 @@ const FIELD_TYPE_LABELS: Record<AnamnesisFieldType, string> = {
   select: 'Single choice',
   multiselect: 'Multiple choice',
   boolean: 'Yes / No',
-  yesnoList: 'Yes / No list',
+  yesnoList: 'Checklist (yes / no per item)',
   scale: 'Scale (e.g. 0–10)',
-  list: 'Repeatable list',
+  list: 'List of entries (e.g. injuries)',
   bodyMap: 'Body map',
   weekGrid: 'Weekly schedule',
   info: 'Info text (no answer)',
@@ -244,6 +245,8 @@ function FieldRow({
   onMoveDown: () => void;
 }) {
   const [showHelp, setShowHelp] = useState(!!field.helpText);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewValue, setPreviewValue] = useState('');
   const type = field.fieldType;
 
   return (
@@ -307,7 +310,10 @@ function FieldRow({
         </div>
       )}
       {type === 'list' && (
-        <ListColumnsEditor columns={field.listColumns ?? []} onChange={(listColumns) => onChange({ ...field, listColumns })} />
+        <>
+          <p className="text-xs text-muted-foreground">The athlete adds as many entries as needed ("Add another") — each entry has the columns below. E.g. injuries: When / What / Time out / Treatment; events: Type / From / To / Note.</p>
+          <ListColumnsEditor columns={field.listColumns ?? []} onChange={(listColumns) => onChange({ ...field, listColumns })} />
+        </>
       )}
       {type === 'bodyMap' && (
         <div className="space-y-1.5">
@@ -341,7 +347,17 @@ function FieldRow({
         <ConditionEditor condition={field.condition} sources={sources} onChange={(condition) => onChange({ ...field, condition })} />
       )}
 
-      {(!showHelp && type !== 'info') || (allowCondition && !field.condition) ? (
+      {showPreview && (
+        <div className="rounded-md border bg-muted/30 p-2.5 space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Preview (answers here are not saved)</p>
+          {field.label && <p className={cn(type === 'info' ? 'text-sm font-semibold' : 'text-xs font-medium')}>{field.label}</p>}
+          {field.helpText && type !== 'info' && <p className="text-xs text-muted-foreground whitespace-pre-wrap">{field.helpText}</p>}
+          <AnamnesisFieldInput field={field} value={previewValue} onChange={setPreviewValue} />
+        </div>
+      )}
+
+      {/* Preview only in the template editor — a record's own questions show the real answer field below */}
+      {(!showHelp && type !== 'info') || allowCondition ? (
         <div className="flex gap-1">
           {!showHelp && type !== 'info' && (
             <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs text-muted-foreground gap-1" onClick={() => setShowHelp(true)}>
@@ -352,6 +368,12 @@ function FieldRow({
             <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs text-muted-foreground gap-1"
               onClick={() => onChange({ ...field, condition: { sourceId: '', values: [] } })}>
               <GitBranch className="h-3 w-3" />Show only if…
+            </Button>
+          )}
+          {allowCondition && (
+            <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs text-muted-foreground gap-1 ml-auto"
+              onClick={() => setShowPreview((p) => !p)}>
+              {showPreview ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}{showPreview ? 'Hide preview' : 'Preview'}
             </Button>
           )}
         </div>
@@ -540,7 +562,8 @@ export function TemplateEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col gap-0 p-0">
+      {/* Opens over the anamnesis record too — its own, darker layer above that dialog */}
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col gap-0 p-0 z-[130]" overlayClassName="z-[120] bg-black/85">
         <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
           <DialogTitle>Edit Template</DialogTitle>
         </DialogHeader>
@@ -605,7 +628,7 @@ export function TemplateEditorDialog({
                   Delete
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent>
+              <AlertDialogContent className="z-[150]" overlayClassName="z-[140]">
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete this template?</AlertDialogTitle>
                   <AlertDialogDescription>
