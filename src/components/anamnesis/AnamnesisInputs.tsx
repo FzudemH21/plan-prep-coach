@@ -5,7 +5,7 @@
  * Values are the stored text of the answer (JSON for the structured types, see anamnesisAnswers).
  */
 import { useEffect, useRef, useState } from 'react';
-import { Check, Eraser, Plus, Trash2, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Eraser, Plus, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,8 +18,8 @@ import {
 import type { AnamnesisField, AnamnesisListColumn } from '@/types/anamnesis';
 import {
   DAY_LABELS, WEEK_GRID_COLORS, WEEK_GRID_HOURS, WEEK_GRID_LABELS,
-  formatAnswer, parseBodyMap, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
-  type AnswerLang, type BodyMapSpot, type ListRow, type WeekGridCell,
+  formatAnswer, parseBodyMap, parseDateRanges, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
+  type AnswerLang, type BodyMapSpot, type DatePeriod, type ListRow, type WeekGridCell,
 } from '@/utils/anamnesisAnswers';
 
 type Size = 'sm' | 'lg';
@@ -653,6 +653,250 @@ export function WeekGridInput({ value, onChange, lang, size = 'sm', readOnly }: 
 
 // ── Field renderer (display + input) ─────────────────────────────────────────
 
+// ── Calendar: mark periods (holidays, competitions, travel …) ─────────────────
+
+const PERIOD_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#64748b'];
+
+/** Colour of a period: by its type (the coach's list of types), otherwise by its position */
+export function periodColor(period: DatePeriod, index: number, kinds: string[]): string {
+  const k = period.kind ? kinds.indexOf(period.kind) : -1;
+  return PERIOD_COLORS[(k >= 0 ? k : index) % PERIOD_COLORS.length];
+}
+
+const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+const C_T = {
+  de: {
+    hint: 'Klicke auf den ersten Tag und ziehe bis zum letzten – oder tippe nacheinander auf den ersten und den letzten Tag.',
+    pickEnd: 'Jetzt auf den letzten Tag tippen (oder denselben Tag für einen einzelnen Tag).',
+    name: 'Bezeichnung, z. B. Urlaub Mallorca', type: 'Art', from: 'Von', to: 'Bis',
+    add: 'Übernehmen', save: 'Speichern', remove: 'Entfernen', cancel: 'Abbrechen',
+    prev: 'Vorheriger Monat', next: 'Nächster Monat', locale: 'de-DE',
+  },
+  en: {
+    hint: 'Click the first day and drag to the last — or tap the first and then the last day.',
+    pickEnd: 'Now tap the last day (or the same day for a single day).',
+    name: 'Name, e.g. holiday in Spain', type: 'Type', from: 'From', to: 'To',
+    add: 'Add', save: 'Save', remove: 'Remove', cancel: 'Cancel',
+    prev: 'Previous month', next: 'Next month', locale: 'en-GB',
+  },
+} as const;
+
+export function DateRangesInput({ field, value, onChange, lang, size = 'sm', readOnly }: {
+  field: AnamnesisField; value: string; onChange: (v: string) => void; lang: AnswerLang; size?: Size; readOnly?: boolean;
+}) {
+  const t = C_T[lang];
+  const kinds = field.options ?? [];
+  const periods = parseDateRanges(value);
+  const [month, setMonth] = useState(() => {
+    const first = periods[0]?.from;
+    const d = first ? new Date(`${first}T12:00:00`) : new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1, 12);
+  });
+  const [anchor, setAnchor] = useState<string | null>(null);
+  const [hover, setHoverState] = useState<string | null>(null);
+  // The day under the mouse, also for the mouseup handler (state is read late there)
+  const hoverRef = useRef<string | null>(null);
+  const setHover = (d: string | null) => { hoverRef.current = d; setHoverState(d); };
+  const [draft, setDraft] = useState<{ period: DatePeriod; isNew: boolean } | null>(null);
+  const dragging = useRef<string | null>(null);
+  const lastPointer = useRef('mouse');
+  const write = (next: DatePeriod[]) => onChange(next.length ? JSON.stringify([...next].sort((a, b) => a.from.localeCompare(b.from))) : '');
+
+  const fmt = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(t.locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const rangeLabel = (p: DatePeriod) => (p.from === p.to ? fmt(p.from) : `${fmt(p.from)} – ${fmt(p.to)}`);
+
+  const finish = (a: string, b: string) => {
+    const [from, to] = a <= b ? [a, b] : [b, a];
+    setAnchor(null);
+    setHover(null);
+    setDraft({ period: { id: uid(), from, to, label: '', kind: kinds.length === 1 ? kinds[0] : undefined }, isNew: true });
+  };
+
+  // Mouse: a drag ends where the button is released (a click without moving = tap mode: the next
+  // click sets the last day)
+  const finishRef = useRef(finish);
+  finishRef.current = finish;
+  useEffect(() => {
+    const up = () => {
+      const start = dragging.current;
+      dragging.current = null;
+      const end = hoverRef.current;
+      if (start && end && end !== start) finishRef.current(start, end);
+    };
+    window.addEventListener('mouseup', up);
+    return () => window.removeEventListener('mouseup', up);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const periodList = periods.length > 0 && (
+    <ul className="space-y-1">
+      {periods.map((p, i) => (
+        <li key={p.id}>
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={() => { setDraft({ period: p, isNew: false }); setMonth(new Date(Number(p.from.slice(0, 4)), Number(p.from.slice(5, 7)) - 1, 1, 12)); }}
+            className={cn('w-full text-left rounded-md flex items-start gap-2', size === 'lg' ? 'px-2 py-2 text-base' : 'px-1.5 py-1 text-sm',
+              !readOnly && 'hover:bg-accent active:bg-accent', draft?.period.id === p.id && 'bg-accent')}
+          >
+            <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: periodColor(p, i, kinds) }} />
+            <span className="flex-1 min-w-0">
+              <span className="font-medium">{rangeLabel(p)}</span>
+              {(p.kind || p.label) && <span className="text-muted-foreground"> · {[p.kind, p.label].filter(Boolean).join(': ')}</span>}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+
+  if (readOnly) {
+    return periods.length > 0 ? <>{periodList}</> : <p className="text-sm text-muted-foreground italic">—</p>;
+  }
+
+  // Monday-first month grid
+  const firstDay = new Date(month.getFullYear(), month.getMonth(), 1, 12);
+  const offset = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+  const cells: Array<string | null> = [
+    ...Array.from({ length: offset }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => isoOf(new Date(month.getFullYear(), month.getMonth(), i + 1, 12))),
+  ];
+  // Highlighted: the days being selected, or the period being named / edited
+  const pendingFrom = anchor && hover ? (anchor <= hover ? anchor : hover) : anchor ?? draft?.period.from ?? null;
+  const pendingTo = anchor && hover ? (anchor <= hover ? hover : anchor) : anchor ?? draft?.period.to ?? null;
+  const today = isoOf(new Date());
+  const monthTitle = month.toLocaleDateString(t.locale, { month: 'long', year: 'numeric' });
+
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-center justify-between">
+        <Button type="button" variant="ghost" size="icon" className={size === 'lg' ? 'h-11 w-11' : 'h-8 w-8'} aria-label={t.prev}
+          onClick={() => setMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1, 12))}>
+          <ChevronLeft className="h-5 w-5" />
+        </Button>
+        <span className={cn('font-semibold capitalize', size === 'lg' ? 'text-base' : 'text-sm')}>{monthTitle}</span>
+        <Button type="button" variant="ghost" size="icon" className={size === 'lg' ? 'h-11 w-11' : 'h-8 w-8'} aria-label={t.next}
+          onClick={() => setMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1, 12))}>
+          <ChevronRight className="h-5 w-5" />
+        </Button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 select-none">
+        {DAY_LABELS[lang].map(d => (
+          <div key={d} className={cn('text-center font-medium text-muted-foreground', size === 'lg' ? 'text-sm' : 'text-[11px]')}>{d}</div>
+        ))}
+        {cells.map((iso, idx) => {
+          if (!iso) return <div key={`e${idx}`} />;
+          const inPending = !!pendingFrom && !!pendingTo && iso >= pendingFrom && iso <= pendingTo;
+          const covering = periods.map((p, i) => ({ p, i })).filter(({ p }) => iso >= p.from && iso <= p.to);
+          return (
+            <button
+              key={iso}
+              type="button"
+              data-day={iso}
+              onPointerDown={e => { lastPointer.current = e.pointerType; }}
+              onMouseDown={e => {
+                if (lastPointer.current !== 'mouse') return;
+                e.preventDefault();
+                if (anchor) { finish(anchor, iso); return; }
+                dragging.current = iso;
+                setAnchor(iso);
+                setHover(iso);
+              }}
+              onMouseEnter={() => { if (dragging.current || anchor) setHover(iso); }}
+              onClick={() => {
+                if (lastPointer.current === 'mouse') return;
+                if (anchor) finish(anchor, iso);
+                else { setAnchor(iso); setHover(null); }
+              }}
+              className={cn(
+                'relative rounded-md flex flex-col items-center justify-start border transition-colors overflow-hidden',
+                size === 'lg' ? 'h-12 pt-1 text-base' : 'h-9 pt-0.5 text-sm',
+                inPending ? 'border-primary bg-primary/20' : 'border-transparent bg-muted/50 hover:border-primary/40',
+                iso === today && 'font-bold',
+              )}
+            >
+              <span className="leading-none">{Number(iso.slice(8))}</span>
+              {covering.length > 0 && (
+                <span className="absolute bottom-1 left-1 right-1 flex gap-0.5">
+                  {covering.slice(0, 3).map(({ p, i }) => (
+                    <span key={p.id} className="h-1.5 flex-1 rounded-full" style={{ backgroundColor: periodColor(p, i, kinds) }} />
+                  ))}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <p className={cn(anchor ? 'text-primary font-medium' : 'text-muted-foreground', size === 'lg' ? 'text-sm' : 'text-xs')}>
+        {anchor ? t.pickEnd : t.hint}
+      </p>
+
+      {draft && (
+        <div className={cn('rounded-lg border-2 border-primary/40 bg-primary/5 space-y-2.5', size === 'lg' ? 'p-3' : 'p-2.5')}>
+          <div className="flex items-center justify-between gap-2">
+            <p className={cn('font-semibold', size === 'lg' ? 'text-base' : 'text-sm')}>{rangeLabel(draft.period)}</p>
+            <button type="button" onClick={() => setDraft(null)} className="text-muted-foreground p-1" aria-label={t.cancel}>
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {(['from', 'to'] as const).map(k => (
+              <label key={k} className="space-y-1">
+                <span className={size === 'lg' ? 'text-sm' : 'text-xs text-muted-foreground'}>{k === 'from' ? t.from : t.to}</span>
+                <Input type="date" className={size === 'lg' ? 'h-11 text-base' : 'h-8 text-sm'} value={draft.period[k]}
+                  onChange={e => { const v = e.target.value; if (v) setDraft(d => d && ({ ...d, period: { ...d.period, [k]: v } })); }} />
+              </label>
+            ))}
+          </div>
+          {kinds.length > 0 && (
+            <div className="space-y-1">
+              <p className={size === 'lg' ? 'text-sm' : 'text-xs text-muted-foreground'}>{t.type}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {kinds.map((k, i) => (
+                  <button key={k} type="button"
+                    onClick={() => setDraft(d => d && ({ ...d, period: { ...d.period, kind: d.period.kind === k ? undefined : k } }))}
+                    className={cn('border flex items-center gap-1.5 transition-colors',
+                      size === 'lg' ? 'min-h-[44px] px-3 rounded-lg text-base' : 'h-7 px-2 rounded-md text-xs',
+                      draft.period.kind === k ? 'border-primary bg-primary/10 font-medium' : 'border-input bg-background')}>
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PERIOD_COLORS[i % PERIOD_COLORS.length] }} />{k}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <Input
+            autoFocus={draft.isNew}
+            className={size === 'lg' ? 'h-12 text-base' : 'h-8 text-sm'}
+            placeholder={field.placeholder || t.name}
+            value={draft.period.label}
+            onChange={e => { const label = e.target.value; setDraft(d => d && ({ ...d, period: { ...d.period, label } })); }}
+          />
+          <div className="flex gap-2">
+            {!draft.isNew && (
+              <Button type="button" variant="outline" className={cn('text-destructive hover:text-destructive', size === 'lg' && 'h-11')}
+                onClick={() => { write(periods.filter(p => p.id !== draft.period.id)); setDraft(null); }}>
+                {t.remove}
+              </Button>
+            )}
+            <Button type="button" className={cn('flex-1', size === 'lg' && 'h-11 text-base')}
+              onClick={() => {
+                const p = draft.period.from <= draft.period.to ? draft.period : { ...draft.period, from: draft.period.to, to: draft.period.from };
+                write(draft.isNew ? [...periods, p] : periods.map(x => (x.id === p.id ? p : x)));
+                setDraft(null);
+              }}>
+              {draft.isNew ? t.add : t.save}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {periodList}
+    </div>
+  );
+}
+
 /** Answer field of any question type — compact, English (coach record, template editor preview) */
 export function AnamnesisFieldInput({
   field,
@@ -678,6 +922,8 @@ export function AnamnesisFieldInput({
     case 'weekGrid':
       if (readOnly && !value) return <p className="text-sm text-muted-foreground italic">—</p>;
       return <WeekGridInput lang="en" value={value} onChange={onChange} readOnly={readOnly} />;
+    case 'dateRanges':
+      return <DateRangesInput lang="en" field={field} value={value} onChange={onChange} readOnly={readOnly} />;
     default:
       break;
   }

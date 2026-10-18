@@ -17,7 +17,7 @@ import { Document, Font, Image, Page, StyleSheet, Text, View } from '@react-pdf/
 import type { AnamnesisField, AnamnesisSection, AnamnesisConsent } from '@/types/anamnesis';
 import {
   DAY_LABELS, WEEK_GRID_COLORS, WEEK_GRID_HOURS, WEEK_GRID_LABELS, contextFor, conditionState, describeCondition, formatAnswer,
-  isAnswered, parseBodyMap, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
+  isAnswered, parseBodyMap, parseDateRanges, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
   type BodyMapSpot, type WeekGridCell,
 } from '@/utils/anamnesisAnswers';
 
@@ -245,6 +245,36 @@ function ListBlock({ field, value, lang }: { field: AnamnesisField; value: strin
   );
 }
 
+/** Marked periods as a table (From / To / Type / Name) — empty rows to fill in by hand */
+function PeriodsBlock({ field, value, lang }: { field: AnamnesisField; value: string; lang: AnamnesisPdfLang }) {
+  const t = L[lang];
+  const periods = parseDateRanges(value);
+  const head = lang === 'de' ? ['Von', 'Bis', 'Art', 'Bezeichnung'] : ['From', 'To', 'Type', 'Name'];
+  const rows = periods.length > 0
+    ? periods.map((p) => [formatDate(p.from, t.locale), formatDate(p.to, t.locale), p.kind ?? '', p.label])
+    : [['', '', '', ''], ['', '', '', ''], ['', '', '', '']];
+  const widths = [70, 70, 90, undefined];
+  return (
+    <View style={{ borderWidth: 0.5, borderColor: C.border, borderRadius: 2 }}>
+      {periods.length === 0 && (field.options?.length ?? 0) > 0 && (
+        <Text style={{ fontSize: 8, color: C.fg3, paddingHorizontal: 4, paddingTop: 3 }}>{head[2]}: {(field.options ?? []).join(' · ')}</Text>
+      )}
+      <View style={{ flexDirection: 'row', backgroundColor: C.box }}>
+        {head.map((h, i) => (
+          <Text key={h} style={{ width: widths[i], flex: widths[i] ? undefined : 1, fontSize: 8.5, fontWeight: 600, color: C.fg2, paddingVertical: 3, paddingHorizontal: 4 }}>{h}</Text>
+        ))}
+      </View>
+      {rows.map((r, ri) => (
+        <View key={ri} style={{ flexDirection: 'row', borderTopWidth: 0.5, borderTopColor: C.border, minHeight: periods.length > 0 ? 0 : LINE_H }}>
+          {r.map((cell, i) => (
+            <Text key={i} style={{ width: widths[i], flex: widths[i] ? undefined : 1, fontSize: 9.5, paddingVertical: 3, paddingHorizontal: 4 }}>{cell}</Text>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function YesNoListBlock({ field, value, lang }: { field: AnamnesisField; value: string; lang: AnamnesisPdfLang }) {
   const t = L[lang];
   const answers = parseYesNoList(value);
@@ -274,7 +304,7 @@ function FieldBlock({ field, value, lang, onlyIf }: {
   const answered = isAnswered(field, value) && field.fieldType !== 'info';
   const type = field.fieldType;
   // Big blocks may break across pages
-  const wrap = type === 'weekGrid' || type === 'list' || type === 'yesnoList';
+  const wrap = type === 'weekGrid' || type === 'list' || type === 'yesnoList' || type === 'dateRanges';
   return (
     <View wrap={wrap} style={{ marginBottom: 11 }}>
       <Text style={s.fieldLabel} minPresenceAhead={40}>{field.label}</Text>
@@ -287,6 +317,7 @@ function FieldBlock({ field, value, lang, onlyIf }: {
       {type === 'info' ? null
         : type === 'bodyMap' ? <BodyMapBlock spots={parseBodyMap(value)} lang={lang} />
         : type === 'weekGrid' ? <WeekGridBlock value={value} lang={lang} />
+        : type === 'dateRanges' ? <PeriodsBlock field={field} value={value} lang={lang} />
         : type === 'list' ? <ListBlock field={field} value={value} lang={lang} />
         : type === 'yesnoList' ? <YesNoListBlock field={field} value={value} lang={lang} />
         : type === 'multiselect' ? <Options labels={field.options ?? []} picked={parseMulti(value)} />

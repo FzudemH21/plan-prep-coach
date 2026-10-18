@@ -9,6 +9,7 @@ export type AnamnesisFieldType =
   | 'list'         // repeatable rows ("Add another"), columns in listColumns — JSON array of { columnId: value }
   | 'bodyMap'      // spots on the body (exact position) with a note — JSON array of BodyMapSpot
   | 'weekGrid'     // weekly schedule: available / regular training / other load per hour — JSON WeekGridValue
+  | 'dateRanges'   // calendar: periods marked by click-and-drag, named (holiday, competition …) — JSON array of DatePeriod; options = types
   | 'info';        // text only (label = heading, helpText = body), no answer
 
 /** One column of a 'list' question (e.g. injuries: When / What / Time out) */

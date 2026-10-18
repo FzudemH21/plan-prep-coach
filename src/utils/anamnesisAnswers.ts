@@ -7,6 +7,7 @@
  *   list         [{"colId":"value",…},…]
  *   bodyMap      [{"id":"…","view":"front","x":96.5,"y":140.2,"region":"16-L-F","note":"…","nrs":6},…]
  *   weekGrid     {"v":1,"cells":{"0-17":"a","0-18":"t"}}  (day 0 = Monday, hour 5–22, a/t/o)
+ *   dateRanges   [{"id":"…","from":"2026-07-12","to":"2026-07-19","label":"Mallorca","kind":"Urlaub"},…]
  * Unreadable JSON (e.g. a question whose type was changed) falls back to the plain text.
  */
 import type {
@@ -58,6 +59,22 @@ export interface BodyMapSpot {
 export function parseBodyMap(value: string | undefined): BodyMapSpot[] {
   return parseJson<BodyMapSpot[]>(value, v => Array.isArray(v))
     ?.filter(s => s && (s.view === 'front' || s.view === 'back') && Number.isFinite(s.x) && Number.isFinite(s.y)) ?? [];
+}
+
+/** A marked period in a 'dateRanges' question (from / to yyyy-MM-dd, both included) */
+export interface DatePeriod {
+  id: string;
+  from: string;
+  to: string;
+  label: string;
+  /** One of the question's types (options), e.g. "Urlaub" */
+  kind?: string;
+}
+export function parseDateRanges(value: string | undefined): DatePeriod[] {
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  return parseJson<DatePeriod[]>(value, v => Array.isArray(v))
+    ?.filter(p => p && iso.test(p.from) && iso.test(p.to))
+    .map(p => ({ ...p, label: p.label ?? '' })) ?? [];
 }
 
 /** a = available for training, t = regular training (team / club), o = other physical load */
@@ -126,6 +143,7 @@ export function isAnswered(field: AnamnesisField, value: string | undefined): bo
     case 'list': return parseList(value).some(r => Object.values(r).some(v => v?.trim()));
     case 'bodyMap': return parseBodyMap(value).length > 0;
     case 'weekGrid': return Object.keys(parseWeekGrid(value).cells).length > 0;
+    case 'dateRanges': return parseDateRanges(value).length > 0;
     default: return !!value?.trim();
   }
 }
@@ -194,6 +212,11 @@ export function formatAnswer(field: AnamnesisField, value: string | undefined, l
         + (s.note.trim() ? `: ${s.note.trim()}` : '')).join('\n');
     }
     case 'weekGrid': return weekGridLines(parseWeekGrid(v), lang).join('\n');
+    case 'dateRanges':
+      return parseDateRanges(v)
+        .map(p => `- ${p.from === p.to ? formatDate(p.from, lang) : `${formatDate(p.from, lang)} – ${formatDate(p.to, lang)}`}`
+          + ((p.kind || p.label) ? `: ${[p.kind, p.label].filter(Boolean).join(' – ')}` : ''))
+        .join('\n');
     case 'info': return '';
     default: return v;
   }

@@ -71,6 +71,7 @@ const FIELD_TYPE_LABELS: Record<AnamnesisFieldType, string> = {
   list: 'List of entries (e.g. injuries)',
   bodyMap: 'Body map',
   weekGrid: 'Weekly schedule',
+  dateRanges: 'Calendar (mark periods)',
   info: 'Info text (no answer)',
 };
 
@@ -325,6 +326,15 @@ function FieldRow({
           <Input className="h-7 text-xs" placeholder='Prompt for the note at each spot (default: "What happened / how does it feel?")'
             value={field.placeholder ?? ''} onChange={(e) => onChange({ ...field, placeholder: e.target.value || undefined })} />
         </div>
+      )}
+      {type === 'dateRanges' && (
+        <>
+          <p className="text-xs text-muted-foreground">The athlete marks a period in a month calendar (click and drag, or tap the first and the last day), then names it — e.g. holidays, competitions, travel, training camps.</p>
+          <LinesInput key={`${field.id}-${type}`} label="Types the athlete can pick (optional, one per line — each gets its own colour)" placeholder={'Wettkampf\nUrlaub\nReise\nTrainingslager'}
+            value={field.options ?? []} onCommit={(options) => onChange({ ...field, options })} />
+          <Input className="h-7 text-xs" placeholder='Prompt for the name (default: "Name, e.g. holiday in Spain")'
+            value={field.placeholder ?? ''} onChange={(e) => onChange({ ...field, placeholder: e.target.value || undefined })} />
+        </>
       )}
       {type === 'weekGrid' && (
         <p className="text-xs text-muted-foreground">Mon–Sun, 5:00–23:00 in hours. The athlete marks: available for training · regular training (team/club) · other physical load.</p>

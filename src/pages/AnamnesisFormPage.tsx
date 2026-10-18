@@ -37,7 +37,7 @@ import { cn } from '@/lib/utils';
 import type { AnamnesisField, AnamnesisProfileAnswers, AnamnesisSection } from '@/types/anamnesis';
 import { contextFor, fieldState, isAnswered as answerGiven, isQuestion } from '@/utils/anamnesisAnswers';
 import {
-  BodyMapInput, ListInput, MultiChoiceInput, ScaleInput, WeekGridInput, YesNoListInput,
+  BodyMapInput, DateRangesInput, ListInput, MultiChoiceInput, ScaleInput, WeekGridInput, YesNoListInput,
 } from '@/components/anamnesis/AnamnesisInputs';
 
 type Lang = 'de' | 'en';
@@ -617,6 +617,9 @@ export default function AnamnesisFormPage() {
         break;
       case 'weekGrid':
         body = <WeekGridInput size="lg" lang={lang} value={value} onChange={v => setValue(field.id, v)} />;
+        break;
+      case 'dateRanges':
+        body = <DateRangesInput size="lg" lang={lang} field={field} value={value} onChange={v => setValue(field.id, v)} />;
         break;
       case 'info':
         body = null;
