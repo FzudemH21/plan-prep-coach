@@ -16,7 +16,7 @@ import React from 'react';
 import { Document, Font, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import type { AnamnesisField, AnamnesisSection, AnamnesisConsent } from '@/types/anamnesis';
 import {
-  DAY_LABELS, WEEK_GRID_COLORS, WEEK_GRID_HOURS, WEEK_GRID_LABELS, contextFor, conditionState, describeCondition, formatAnswer,
+  DAY_LABELS, YESNO_OTHER, YESNO_OTHER_TEXT, WEEK_GRID_COLORS, WEEK_GRID_HOURS, WEEK_GRID_LABELS, contextFor, conditionState, describeCondition, formatAnswer,
   isAnswered, parseBodyMap, parseDateRanges, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
   type BodyMapSpot, type WeekGridCell,
 } from '@/utils/anamnesisAnswers';
@@ -277,7 +277,7 @@ function YesNoListBlock({ field, value, lang }: { field: AnamnesisField; value: 
   const answers = parseYesNoList(value);
   return (
     <View>
-      {(field.options ?? []).map((item) => (
+      {[...(field.options ?? []), ...(field.allowOther ? [YESNO_OTHER] : [])].map((item) => (
         <View key={item} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 2.5, borderBottomWidth: 0.4, borderBottomColor: C.border }}>
           {(['yes', 'no'] as const).map((a) => (
             <View key={a} style={{ flexDirection: 'row', alignItems: 'center', width: 40 }}>
@@ -285,7 +285,11 @@ function YesNoListBlock({ field, value, lang }: { field: AnamnesisField; value: 
               <Text style={{ fontSize: 8.5, color: C.fg3 }}>{a === 'yes' ? t.yes : t.no}</Text>
             </View>
           ))}
-          <Text style={{ flex: 1, fontSize: 9.5, color: C.fg1 }}>{item}</Text>
+          <Text style={{ flex: 1, fontSize: 9.5, color: C.fg1 }}>
+            {item === YESNO_OTHER
+              ? `${lang === 'de' ? 'Sonstiges' : 'Other'}: ${answers[YESNO_OTHER_TEXT] ?? '______________________________'}`
+              : item}
+          </Text>
         </View>
       ))}
     </View>

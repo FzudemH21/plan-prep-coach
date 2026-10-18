@@ -289,7 +289,7 @@ function FieldRow({
         <LinesInput key={`${field.id}-${type}`} label="Choices (one per line)" placeholder={'Option 1\nOption 2'}
           value={field.options ?? []} onCommit={(options) => onChange({ ...field, options })} />
       )}
-      {type === 'multiselect' && (
+      {(type === 'multiselect' || type === 'yesnoList') && (
         <label className="flex items-center gap-2 text-xs cursor-pointer w-fit">
           <Checkbox className="h-3.5 w-3.5" checked={!!field.allowOther}
             onCheckedChange={(v) => onChange({ ...field, allowOther: v === true || undefined })} />

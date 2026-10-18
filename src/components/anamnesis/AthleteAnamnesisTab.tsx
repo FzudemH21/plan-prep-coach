@@ -511,7 +511,15 @@ Where nothing is stated for a heading, write "- Not stated" (German: "- Keine An
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('[AnamnesisTab] PDF error', err);
-      toast({ title: 'PDF failed', description: 'Could not create the PDF.', variant: 'destructive' });
+      const message = err instanceof Error ? err.message : String(err);
+      // The PDF code is loaded on demand — after an update of the app an open tab still asks for the
+      // old file, which no longer exists
+      const stale = /dynamically imported module|Importing a module script failed|Loading chunk|error loading dynamically/i.test(message);
+      toast({
+        title: 'PDF failed',
+        description: stale ? 'The app was updated in the meantime — reload the page and try again.' : `Could not create the PDF: ${message}`,
+        variant: 'destructive',
+      });
     } finally {
       setPrinting(false);
     }

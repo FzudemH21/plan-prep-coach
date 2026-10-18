@@ -34,7 +34,10 @@ export function parseMulti(value: string | undefined): string[] {
   return parseJson<string[]>(value, v => Array.isArray(v))?.filter(x => typeof x === 'string') ?? [];
 }
 
-export type YesNoAnswers = Record<string, 'yes' | 'no'>;
+/** item → 'yes' | 'no'; with "Sonstiges": YESNO_OTHER → 'yes' | 'no' and YESNO_OTHER_TEXT → its text */
+export type YesNoAnswers = Record<string, string>;
+export const YESNO_OTHER = '__other';
+export const YESNO_OTHER_TEXT = '__otherText';
 export function parseYesNoList(value: string | undefined): YesNoAnswers {
   return parseJson<YesNoAnswers>(value, v => !!v && typeof v === 'object' && !Array.isArray(v)) ?? {};
 }
@@ -139,7 +142,7 @@ export function isAnswered(field: AnamnesisField, value: string | undefined): bo
   switch (field.fieldType) {
     case 'info': return true;
     case 'multiselect': return parseMulti(value).length > 0;
-    case 'yesnoList': return Object.keys(parseYesNoList(value)).length > 0;
+    case 'yesnoList': return Object.keys(parseYesNoList(value)).some(k => k !== YESNO_OTHER_TEXT);
     case 'list': return parseList(value).some(r => Object.values(r).some(v => v?.trim()));
     case 'bodyMap': return parseBodyMap(value).length > 0;
     case 'weekGrid': return Object.keys(parseWeekGrid(value).cells).length > 0;
@@ -196,8 +199,13 @@ export function formatAnswer(field: AnamnesisField, value: string | undefined, l
     case 'date': return formatDate(v, lang);
     case 'yesnoList': {
       const a = parseYesNoList(v);
-      const items = field.options ?? Object.keys(a);
-      return items.filter(i => a[i]).map(i => `${i}: ${a[i] === 'yes' ? yes : no}`).join('\n');
+      const items = field.options ?? Object.keys(a).filter(k => k !== YESNO_OTHER && k !== YESNO_OTHER_TEXT);
+      const lines = items.filter(i => a[i]).map(i => `${i}: ${a[i] === 'yes' ? yes : no}`);
+      if (a[YESNO_OTHER]) {
+        const label = lang === 'de' ? 'Sonstiges' : 'Other';
+        lines.push(`${label}${a[YESNO_OTHER_TEXT]?.trim() ? ` (${a[YESNO_OTHER_TEXT].trim()})` : ''}: ${a[YESNO_OTHER] === 'yes' ? yes : no}`);
+      }
+      return lines.join('\n');
     }
     case 'list': {
       const cols = field.listColumns ?? [];

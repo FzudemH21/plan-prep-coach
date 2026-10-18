@@ -228,7 +228,8 @@ function OptionList({ options, value, onPick }: {
             onClick={() => onPick(selected ? '' : o.value)}
             className={cn(
               'w-full min-h-[52px] flex items-center gap-3 rounded-lg border-2 px-3 py-2.5 text-left text-base transition-colors',
-              selected ? 'border-primary bg-primary/10' : 'border-input bg-background hover:bg-accent active:bg-accent',
+              // Hover colour only with a mouse — on phones the tapped spot kept it (option looked selected)
+              selected ? 'border-primary bg-primary/10' : 'border-input bg-background [@media(hover:hover)]:hover:bg-accent active:bg-accent',
             )}
           >
             <span className={cn(
@@ -627,13 +628,13 @@ export default function AnamnesisFormPage() {
         body = <MultiChoiceInput size="lg" lang={lang} options={field.options ?? []} allowOther={field.allowOther} value={value} onChange={v => setValue(field.id, v)} />;
         break;
       case 'scale':
-        body = <ScaleInput size="lg" field={field} value={value} onChange={v => setValue(field.id, v)} />;
+        body = <ScaleInput size="lg" lang={lang} field={field} value={value} onChange={v => setValue(field.id, v)} />;
         break;
       case 'date':
         body = <Input type="date" className={bigInput} value={value} onChange={e => setValue(field.id, e.target.value)} onKeyDown={onEnter} />;
         break;
       case 'yesnoList':
-        body = <YesNoListInput size="lg" lang={lang} items={field.options ?? []} value={value} onChange={v => setValue(field.id, v)} />;
+        body = <YesNoListInput size="lg" lang={lang} items={field.options ?? []} allowOther={field.allowOther} value={value} onChange={v => setValue(field.id, v)} />;
         break;
       case 'list':
         body = <ListInput size="lg" lang={lang} columns={field.listColumns ?? []} value={value} onChange={v => setValue(field.id, v)} />;

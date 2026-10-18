@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Eraser, Plus, Trash2, X } from 'lucide-react';
+import * as SliderPrimitive from '@radix-ui/react-slider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,11 +19,15 @@ import {
 import type { AnamnesisField, AnamnesisListColumn } from '@/types/anamnesis';
 import {
   DAY_LABELS, WEEK_GRID_COLORS, WEEK_GRID_HOURS, WEEK_GRID_LABELS,
-  formatAnswer, parseBodyMap, parseDateRanges, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
+  YESNO_OTHER, YESNO_OTHER_TEXT, formatAnswer, parseBodyMap, parseDateRanges, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
   type AnswerLang, type BodyMapSpot, type DatePeriod, type ListRow, type WeekGridCell,
 } from '@/utils/anamnesisAnswers';
 
 type Size = 'sm' | 'lg';
+
+/** Hover colour only on devices with a mouse — on phones the tapped spot kept it, so the option at the
+ *  same place on the next screen looked selected */
+const HOVER_BG = '[@media(hover:hover)]:hover:bg-accent';
 
 const T = {
   de: {
@@ -85,7 +90,7 @@ export function MultiChoiceInput({ options, value, onChange, size = 'sm', allowO
             className={cn(
               'flex items-center gap-2 border text-left transition-colors',
               size === 'lg' ? 'w-full min-h-[52px] rounded-lg border-2 px-3 py-2.5 text-base gap-3' : 'rounded-md px-2.5 py-1 text-sm',
-              on ? 'border-primary bg-primary/10' : 'border-input bg-background hover:bg-accent active:bg-accent',
+              on ? 'border-primary bg-primary/10' : `border-input bg-background ${HOVER_BG} active:bg-accent`,
             )}
           >
             <span className={cn(
@@ -114,82 +119,157 @@ export function MultiChoiceInput({ options, value, onChange, size = 'sm', allowO
 }
 
 // ── Scale ─────────────────────────────────────────────────────────────────────
+// Form link (lg): a slider with a big thumb and the value above it — nothing is picked until the
+// athlete touches it. Coach view (sm): a row of numbers.
 
-export function ScaleInput({ field, value, onChange, size = 'sm' }: {
-  field: AnamnesisField; value: string; onChange: (v: string) => void; size?: Size;
+export function ScaleInput({ field, value, onChange, size = 'sm', lang = 'en' }: {
+  field: AnamnesisField; value: string; onChange: (v: string) => void; size?: Size; lang?: AnswerLang;
 }) {
   const min = field.scaleMin ?? 0;
   const max = Math.max(min + 1, field.scaleMax ?? 10);
   const steps = Array.from({ length: max - min + 1 }, (_, i) => min + i);
+  const current = value.trim() === '' ? null : Number(value);
+  const labels = (field.scaleMinLabel || field.scaleMaxLabel) && (
+    <div className={cn('flex justify-between gap-4 text-muted-foreground', size === 'lg' ? 'text-sm' : 'text-xs')}>
+      <span>{min}{field.scaleMinLabel ? ` = ${field.scaleMinLabel}` : ''}</span>
+      {field.scaleMaxLabel && <span className="text-right">{max} = {field.scaleMaxLabel}</span>}
+    </div>
+  );
+
+  if (size === 'lg') {
+    const pick = (v: number[]) => onChange(String(v[0]));
+    return (
+      <div className="space-y-4">
+        <div className="text-center h-14 flex items-center justify-center">
+          {current === null
+            ? <span className="text-base text-muted-foreground">{lang === 'de' ? 'Schieb den Regler oder tippe auf die Skala' : 'Slide or tap the scale'}</span>
+            : <span className="text-5xl font-semibold tabular-nums">{current}</span>}
+        </div>
+        <SliderPrimitive.Root
+          className="relative flex w-full touch-none select-none items-center py-3"
+          min={min} max={max} step={1}
+          value={[current ?? Math.round((min + max) / 2)]}
+          onValueChange={pick}
+          onValueCommit={pick}
+        >
+          <SliderPrimitive.Track className="relative h-3 w-full grow overflow-hidden rounded-full bg-muted">
+            {current !== null && <SliderPrimitive.Range className="absolute h-full bg-primary" />}
+          </SliderPrimitive.Track>
+          <SliderPrimitive.Thumb
+            aria-label={field.label}
+            className={cn(
+              'block h-9 w-9 rounded-full border-2 shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              current === null ? 'border-muted-foreground/40 bg-background' : 'border-primary bg-primary',
+            )}
+          />
+        </SliderPrimitive.Root>
+        <div className="flex justify-between px-[14px] -mt-2">
+          {steps.map(n => (
+            <span key={n} className={cn('w-4 text-center text-xs tabular-nums', current === n ? 'font-bold text-foreground' : 'text-muted-foreground')}>{n}</span>
+          ))}
+        </div>
+        {labels}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-1.5">
-      <div className={cn(size === 'lg' ? 'grid grid-cols-6 gap-2' : 'flex flex-wrap gap-1')}>
+      <div className="flex flex-wrap gap-1">
         {steps.map(n => (
           <button
             key={n}
             type="button"
             onClick={() => onChange(value === String(n) ? '' : String(n))}
             className={cn(
-              'border font-medium tabular-nums transition-colors',
-              size === 'lg' ? 'h-12 rounded-lg border-2 text-lg' : 'h-8 w-8 rounded-md text-sm',
-              value === String(n) ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-input hover:bg-accent active:bg-accent',
+              'h-8 w-8 rounded-md border text-sm font-medium tabular-nums transition-colors',
+              value === String(n) ? 'bg-primary text-primary-foreground border-primary' : `bg-background border-input ${HOVER_BG} active:bg-accent`,
             )}
           >
             {n}
           </button>
         ))}
       </div>
-      {(field.scaleMinLabel || field.scaleMaxLabel) && (
-        <div className={cn('flex justify-between gap-4 text-muted-foreground', size === 'lg' ? 'text-sm' : 'text-xs')}>
-          <span>{min} = {field.scaleMinLabel}</span>
-          {field.scaleMaxLabel && <span className="text-right">{max} = {field.scaleMaxLabel}</span>}
-        </div>
-      )}
+      {labels}
     </div>
   );
 }
 
 // ── Yes / no list ─────────────────────────────────────────────────────────────
 
-export function YesNoListInput({ items, value, onChange, lang, size = 'sm', readOnly }: {
+export function YesNoListInput({ items, value, onChange, lang, size = 'sm', readOnly, allowOther }: {
   items: string[]; value: string; onChange: (v: string) => void; lang: AnswerLang; size?: Size; readOnly?: boolean;
+  /** An extra "Sonstiges" row — with "Ja", a text field for what it is */
+  allowOther?: boolean;
 }) {
   const t = T[lang];
   const answers = parseYesNoList(value);
+  const write = (next: Record<string, string>) => onChange(Object.keys(next).length ? JSON.stringify(next) : '');
   const set = (item: string, a: 'yes' | 'no') => {
     const next = { ...answers };
     if (next[item] === a) delete next[item]; else next[item] = a;
-    onChange(Object.keys(next).length ? JSON.stringify(next) : '');
+    if (item === YESNO_OTHER && next[item] !== 'yes') delete next[YESNO_OTHER_TEXT];
+    write(next);
   };
+  const rows = allowOther ? [...items, YESNO_OTHER] : items;
+  const allNo = rows.every(i => answers[i] === 'no');
+  const otherLabel = lang === 'de' ? 'Sonstiges' : 'Other';
+
   return (
-    <div className="divide-y rounded-lg border">
-      {items.map(item => (
-        <div key={item} className={cn('flex items-center gap-3', size === 'lg' ? 'px-3 py-2.5' : 'px-2.5 py-1.5')}>
-          <span className={cn('flex-1 min-w-0', size === 'lg' ? 'text-base' : 'text-sm')}>{item}</span>
-          {readOnly ? (
-            <span className={cn('text-sm font-medium shrink-0', answers[item] === 'yes' ? 'text-red-600' : 'text-muted-foreground')}>
-              {answers[item] === 'yes' ? t.yes : answers[item] === 'no' ? t.no : '—'}
-            </span>
-          ) : (
-            <div className="flex gap-1.5 shrink-0">
-              {(['yes', 'no'] as const).map(a => (
-                <button
-                  key={a}
-                  type="button"
-                  onClick={() => set(item, a)}
-                  className={cn(
-                    'border font-medium transition-colors',
-                    size === 'lg' ? 'h-11 min-w-[56px] px-3 rounded-lg border-2 text-base' : 'h-7 px-2.5 rounded-md text-xs',
-                    answers[item] === a ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-input hover:bg-accent active:bg-accent',
-                  )}
-                >
-                  {a === 'yes' ? t.yes : t.no}
-                </button>
-              ))}
+    <div className="space-y-2">
+      <div className="divide-y rounded-lg border">
+        {rows.map(item => {
+          const isOther = item === YESNO_OTHER;
+          return (
+            <div key={item} className={cn(size === 'lg' ? 'px-3 py-2.5' : 'px-2.5 py-1.5', 'space-y-2')}>
+              <div className="flex items-center gap-3">
+                <span className={cn('flex-1 min-w-0', size === 'lg' ? 'text-base' : 'text-sm')}>
+                  {isOther ? otherLabel : item}
+                  {isOther && readOnly && answers[YESNO_OTHER_TEXT] ? `: ${answers[YESNO_OTHER_TEXT]}` : ''}
+                </span>
+                {readOnly ? (
+                  <span className={cn('text-sm font-medium shrink-0', answers[item] === 'yes' ? 'text-red-600' : 'text-muted-foreground')}>
+                    {answers[item] === 'yes' ? t.yes : answers[item] === 'no' ? t.no : '—'}
+                  </span>
+                ) : (
+                  <div className="flex gap-1.5 shrink-0">
+                    {(['yes', 'no'] as const).map(a => (
+                      <button
+                        key={a}
+                        type="button"
+                        onClick={() => set(item, a)}
+                        className={cn(
+                          'border font-medium transition-colors',
+                          size === 'lg' ? 'h-11 min-w-[56px] px-3 rounded-lg border-2 text-base' : 'h-7 px-2.5 rounded-md text-xs',
+                          answers[item] === a ? 'bg-primary text-primary-foreground border-primary' : `bg-background border-input ${HOVER_BG} active:bg-accent`,
+                        )}
+                      >
+                        {a === 'yes' ? t.yes : t.no}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {isOther && !readOnly && answers[YESNO_OTHER] === 'yes' && (
+                <Input
+                  autoFocus={!answers[YESNO_OTHER_TEXT]}
+                  className={size === 'lg' ? 'h-12 text-base' : 'h-8 text-sm'}
+                  placeholder={lang === 'de' ? 'Was genau?' : 'What exactly?'}
+                  value={answers[YESNO_OTHER_TEXT] ?? ''}
+                  onChange={e => write({ ...answers, [YESNO_OTHER_TEXT]: e.target.value })}
+                />
+              )}
             </div>
-          )}
-        </div>
-      ))}
+          );
+        })}
+      </div>
+      {/* Most people answer "no" to everything — one tap instead of one per row */}
+      {!readOnly && !allNo && rows.length > 2 && (
+        <Button type="button" variant="outline" className={cn('w-full', size === 'lg' ? 'h-12 text-base' : 'h-8 text-xs')}
+          onClick={() => write(Object.fromEntries(rows.map(i => [i, 'no'])))}>
+          {lang === 'de' ? 'Nichts davon trifft zu' : 'None of these apply'}
+        </Button>
+      )}
     </div>
   );
 }
@@ -211,7 +291,7 @@ function ListCell({ column, value, onChange, size }: {
             className={cn(
               'border transition-colors',
               size === 'lg' ? 'min-h-[44px] px-3 rounded-lg text-base' : 'h-7 px-2 rounded-md text-xs',
-              value === o ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-input hover:bg-accent active:bg-accent',
+              value === o ? 'bg-primary text-primary-foreground border-primary' : `bg-background border-input ${HOVER_BG} active:bg-accent`,
             )}
           >
             {o}
@@ -387,7 +467,7 @@ export function BodyMapInput({ field, value, onChange, lang, size = 'sm', readOn
             className={cn(
               'w-full text-left rounded-md flex gap-2',
               size === 'lg' ? 'px-2 py-2 text-base' : 'px-1.5 py-1 text-sm',
-              !readOnly && 'hover:bg-accent active:bg-accent',
+              !readOnly && `${HOVER_BG} active:bg-accent`,
               editing?.spot.id === s.id && 'bg-accent',
             )}
           >
@@ -629,7 +709,7 @@ export function WeekGridInput({ value, onChange, lang, size = 'sm', readOnly }: 
         </div>
       )}
       <div ref={containerRef} className={cn('select-none', readOnly && 'max-w-[420px]')}>
-        <div className="grid gap-px" style={{ gridTemplateColumns: `${size === 'lg' ? '2.25rem' : '2rem'} repeat(7, minmax(0, 1fr))` }}>
+        <div className={cn('grid', readOnly ? 'gap-[3px]' : 'gap-px')} style={{ gridTemplateColumns: `${size === 'lg' ? '2.25rem' : '2rem'} repeat(7, minmax(0, 1fr))` }}>
           <div />
           {DAY_LABELS[lang].map(d => (
             <div key={d} className={cn('text-center font-medium text-muted-foreground', size === 'lg' ? 'text-sm pb-1' : 'text-[11px]')}>{d}</div>
@@ -652,7 +732,7 @@ export function WeekGridInput({ value, onChange, lang, size = 'sm', readOnly }: 
                     data-cell={key}
                     aria-label={`${DAY_LABELS[lang][day]} ${h}:00`}
                     aria-pressed={!!cell}
-                    className={cn(cellH, 'rounded-[3px] border border-transparent transition-colors', !cell && 'bg-muted hover:border-primary/40')}
+                    className={cn(cellH, 'rounded-[3px] border border-transparent transition-colors', !cell && 'bg-muted [@media(hover:hover)]:hover:border-primary/40')}
                     style={cell ? { backgroundColor: WEEK_GRID_COLORS[cell] } : undefined}
                     onPointerDown={e => { lastPointer.current = e.pointerType; }}
                     onMouseDown={e => {
@@ -752,7 +832,7 @@ export function DateRangesInput({ field, value, onChange, lang, size = 'sm', rea
             disabled={readOnly}
             onClick={() => { setDraft({ period: p, isNew: false }); setMonth(new Date(Number(p.from.slice(0, 4)), Number(p.from.slice(5, 7)) - 1, 1, 12)); }}
             className={cn('w-full text-left rounded-md flex items-start gap-2', size === 'lg' ? 'px-2 py-2 text-base' : 'px-1.5 py-1 text-sm',
-              !readOnly && 'hover:bg-accent active:bg-accent', draft?.period.id === p.id && 'bg-accent')}
+              !readOnly && `${HOVER_BG} active:bg-accent`, draft?.period.id === p.id && 'bg-accent')}
           >
             <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: periodColor(i) }} />
             <span className="flex-1 min-w-0">
@@ -815,7 +895,7 @@ export function DateRangesInput({ field, value, onChange, lang, size = 'sm', rea
                 // touch-manipulation: no zoom on a double tap
                 'relative rounded-md flex flex-col items-center justify-start border transition-colors overflow-hidden touch-manipulation',
                 size === 'lg' ? 'h-12 pt-1 text-base' : 'h-9 pt-0.5 text-sm',
-                inPending ? 'border-primary bg-primary/20' : 'border-transparent bg-muted/50 hover:border-primary/40',
+                inPending ? 'border-primary bg-primary/20' : 'border-transparent bg-muted/50 [@media(hover:hover)]:hover:border-primary/40',
                 iso === today && 'font-bold',
               )}
             >
@@ -900,7 +980,7 @@ export function AnamnesisFieldInput({
     case 'info':
       return field.helpText ? <p className="text-sm text-muted-foreground whitespace-pre-wrap">{field.helpText}</p> : null;
     case 'yesnoList':
-      return <YesNoListInput lang="en" items={field.options ?? []} value={value} onChange={onChange} readOnly={readOnly} />;
+      return <YesNoListInput lang="en" items={field.options ?? []} allowOther={field.allowOther} value={value} onChange={onChange} readOnly={readOnly} />;
     case 'list':
       return <ListInput lang="en" columns={field.listColumns ?? []} value={value} onChange={onChange} readOnly={readOnly} />;
     case 'bodyMap':
@@ -979,7 +1059,7 @@ export function AnamnesisFieldInput({
                   'px-3 py-1 rounded-md text-sm border transition-colors',
                   value === val
                     ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-background text-foreground border-input hover:bg-accent',
+                    : 'bg-background text-foreground border-input [@media(hover:hover)]:hover:bg-accent',
                 )}
               >
                 {opt}
