@@ -253,6 +253,9 @@ function OptionList({ options, value, onPick }: {
 export default function AnamnesisFormPage() {
   const { token = '' } = useParams<{ token: string }>();
   const [lang, setLang] = useState<Lang>(browserLang);
+  // First opening of the link: the athlete picks the language on a screen of its own (afterwards the
+  // switch stays at the top right); a language saved with the draft skips it
+  const [langChosen, setLangChosen] = useState(false);
   const [form, setForm] = useState<FormData | null>(null);
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'notFound' | 'error'>('loading');
   const [values, setValues] = useState<Record<string, string>>({});
@@ -284,7 +287,10 @@ export default function AnamnesisFormPage() {
       setValues(f.values ?? {});
       setProfile(f.profile ?? {});
       setSportsText((f.profile?.sports ?? []).join(', '));
-      if (f.language === 'de' || f.language === 'en') setLang(f.language);
+      // The language screen only when the template has its questions in both languages
+      const bilingual = (f.sections ?? []).some(sec => sec.fields.some(fl => Object.values(fl.translations ?? {}).some(tr => tr?.label?.trim())));
+      if (!bilingual) setLangChosen(true);
+      if (f.language === 'de' || f.language === 'en') { setLang(f.language); setLangChosen(true); }
       else {
         // No translation into the browser's language → start in the template's language, so the
         // questions and the form's own texts match (the athlete can still switch)
@@ -457,7 +463,7 @@ export default function AnamnesisFormPage() {
   );
 
   /** Full screen with its own scroll area (page scrolling is locked app-wide) */
-  const screen = (content: React.ReactNode, footer?: React.ReactNode, progress?: number, hideBrand = false) => (
+  const screen = (content: React.ReactNode, footer?: React.ReactNode, progress?: number, hideBrand = false, hideLang = false) => (
     <div className="fixed inset-0 flex flex-col bg-background">
       {progress !== undefined && (
         <div className="h-1 bg-muted shrink-0">
@@ -466,7 +472,7 @@ export default function AnamnesisFormPage() {
       )}
       <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2.5 max-w-[640px] w-full mx-auto">
         <div className="min-w-0 flex items-center">{hideBrand ? null : brand}</div>
-        {langSwitch}
+        {hideLang ? null : langSwitch}
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
         <div className="min-h-full flex flex-col justify-center max-w-[640px] w-full mx-auto px-5 py-6">
@@ -499,6 +505,35 @@ export default function AnamnesisFormPage() {
   if (submitted) return message(t.doneTitle, t.done(company), true);
   if (form.status === 'submitted') return message(t.doneTitle, t.doneAlready, true);
   if (form.status === 'expired') return message(t.expiredTitle, t.expired);
+
+  // ── Language (first opening) ───────────────────────────────────────────────
+  if (form.status === 'open' && !langChosen) {
+    const pick = (l: Lang) => { dirty.current = true; setLang(l); setLangChosen(true); };
+    return screen(
+      <div className="space-y-6 text-center animate-in fade-in slide-in-from-bottom-4 duration-300">
+        {form.logo ? (
+          <img src={form.logo} alt={form.companyName || ''} className="h-16 max-w-[240px] object-contain mx-auto" />
+        ) : form.companyName ? (
+          <p className="text-sm font-semibold uppercase tracking-wider text-primary">{form.companyName}</p>
+        ) : null}
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold">Sprache wählen</h1>
+          <p className="text-base text-muted-foreground">Choose your language</p>
+        </div>
+        <div className="grid gap-3 max-w-[320px] mx-auto">
+          {([['de', 'Deutsch'], ['en', 'English']] as const).map(([l, label]) => (
+            <Button key={l} variant={lang === l ? 'default' : 'outline'} className="h-14 text-lg" onClick={() => pick(l)}>
+              {label}
+            </Button>
+          ))}
+        </div>
+      </div>,
+      undefined,
+      undefined,
+      true,
+      true,
+    );
+  }
 
   // ── Welcome ────────────────────────────────────────────────────────────────
   if (step.kind === 'welcome') {
