@@ -47,23 +47,41 @@ function uid() { return Math.random().toString(36).slice(2, 10); }
 
 // ── Multiple choice ───────────────────────────────────────────────────────────
 
-export function MultiChoiceInput({ options, value, onChange, size = 'sm' }: {
+export function MultiChoiceInput({ options, value, onChange, size = 'sm', allowOther, lang = 'en' }: {
   options: string[]; value: string; onChange: (v: string) => void; size?: Size;
+  /** An extra "Sonstiges" choice with free text */
+  allowOther?: boolean;
+  lang?: AnswerLang;
 }) {
-  const picked = parseMulti(value);
-  const toggle = (o: string) => {
-    const next = picked.includes(o) ? picked.filter(p => p !== o) : [...picked, o];
-    onChange(next.length ? JSON.stringify(options.filter(x => next.includes(x))) : '');
+  const all = parseMulti(value);
+  const picked = all.filter(x => options.includes(x));
+  // The free text of "Sonstiges" is stored as an entry that isn't one of the choices
+  const otherText = all.find(x => !options.includes(x)) ?? '';
+  const [otherOn, setOtherOn] = useState(otherText !== '');
+  const write = (nextPicked: string[], other: string) => {
+    const next = [...options.filter(x => nextPicked.includes(x)), ...(other.trim() ? [other] : [])];
+    onChange(next.length ? JSON.stringify(next) : '');
   };
+  const toggle = (o: string) => {
+    write(picked.includes(o) ? picked.filter(p => p !== o) : [...picked, o], otherOn ? otherText : '');
+  };
+  const choices = allowOther ? [...options, '\u0000other'] : options;
+  const otherLabel = lang === 'de' ? 'Sonstiges' : 'Other';
   return (
+    <div className="space-y-2">
     <div className={size === 'lg' ? 'space-y-2' : 'flex flex-wrap gap-1.5'}>
-      {options.map(o => {
-        const on = picked.includes(o);
+      {choices.map(o => {
+        const isOther = o === '\u0000other';
+        const on = isOther ? otherOn : picked.includes(o);
         return (
           <button
             key={o}
             type="button"
-            onClick={() => toggle(o)}
+            onClick={() => {
+              if (!isOther) { toggle(o); return; }
+              if (otherOn) write(picked, '');
+              setOtherOn(!otherOn);
+            }}
             className={cn(
               'flex items-center gap-2 border text-left transition-colors',
               size === 'lg' ? 'w-full min-h-[52px] rounded-lg border-2 px-3 py-2.5 text-base gap-3' : 'rounded-md px-2.5 py-1 text-sm',
@@ -77,10 +95,20 @@ export function MultiChoiceInput({ options, value, onChange, size = 'sm' }: {
             )}>
               {on && <Check className={size === 'lg' ? 'h-4 w-4' : 'h-3 w-3'} />}
             </span>
-            <span className="flex-1 min-w-0">{o}</span>
+            <span className="flex-1 min-w-0">{isOther ? otherLabel : o}</span>
           </button>
         );
       })}
+    </div>
+      {allowOther && otherOn && (
+        <Input
+          autoFocus={!otherText}
+          className={size === 'lg' ? 'h-12 text-base' : 'h-8 text-sm'}
+          placeholder={lang === 'de' ? 'Was genau?' : 'What exactly?'}
+          value={otherText}
+          onChange={e => write(picked, e.target.value)}
+        />
+      )}
     </div>
   );
 }
@@ -900,7 +928,7 @@ export function AnamnesisFieldInput({
 
   switch (field.fieldType) {
     case 'multiselect':
-      return <MultiChoiceInput options={field.options ?? []} value={value} onChange={onChange} />;
+      return <MultiChoiceInput options={field.options ?? []} allowOther={field.allowOther} value={value} onChange={onChange} />;
     case 'scale':
       return <ScaleInput field={field} value={value} onChange={onChange} />;
     case 'date':

@@ -288,6 +288,13 @@ function FieldRow({
         <LinesInput key={`${field.id}-${type}`} label="Choices (one per line)" placeholder={'Option 1\nOption 2'}
           value={field.options ?? []} onCommit={(options) => onChange({ ...field, options })} />
       )}
+      {type === 'multiselect' && (
+        <label className="flex items-center gap-2 text-xs cursor-pointer w-fit">
+          <Checkbox className="h-3.5 w-3.5" checked={!!field.allowOther}
+            onCheckedChange={(v) => onChange({ ...field, allowOther: v === true || undefined })} />
+          Add "Sonstiges" with free text
+        </label>
+      )}
       {type === 'yesnoList' && (
         <LinesInput key={`${field.id}-${type}`} label="Items, each answered with yes / no (one per line)" placeholder={'Unintended weight loss\nFever or night sweats'}
           value={field.options ?? []} onCommit={(options) => onChange({ ...field, options })} />

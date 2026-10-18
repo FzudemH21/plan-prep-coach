@@ -317,7 +317,22 @@ function FieldBlock({ field, value, lang, onlyIf }: {
         : type === 'dateRanges' ? <PeriodsBlock value={value} lang={lang} />
         : type === 'list' ? <ListBlock field={field} value={value} lang={lang} />
         : type === 'yesnoList' ? <YesNoListBlock field={field} value={value} lang={lang} />
-        : type === 'multiselect' ? <Options labels={field.options ?? []} picked={parseMulti(value)} />
+        : type === 'multiselect' ? (
+          <View>
+            <Options labels={field.options ?? []} picked={parseMulti(value)} />
+            {field.allowOther && (() => {
+              const other = parseMulti(value).find((x) => !(field.options ?? []).includes(x));
+              return (
+                <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 9.5, color: C.fg2, marginRight: 4 }}>{lang === 'de' ? 'Sonstiges:' : 'Other:'}</Text>
+                  {other
+                    ? <Text style={{ fontSize: 9.5, color: C.fg1 }}>{other}</Text>
+                    : <View style={[s.writeLine, { flex: 1, height: 14 }]} />}
+                </View>
+              );
+            })()}
+          </View>
+        )
         : type === 'scale' ? (
           <View>
             <Options

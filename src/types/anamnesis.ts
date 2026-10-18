@@ -58,6 +58,8 @@ export interface AnamnesisField {
   listColumns?: AnamnesisListColumn[];
   /** bodyMap: also ask for the pain intensity (0–10) of each spot */
   bodyMapIntensity?: boolean;
+  /** multiselect: an extra "Sonstiges" choice with free text (stored in the answer as the text itself) */
+  allowOther?: boolean;
 }
 
 export interface AnamnesisSection {

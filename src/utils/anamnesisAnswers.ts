@@ -185,7 +185,13 @@ export function formatAnswer(field: AnamnesisField, value: string | undefined, l
   const no = lang === 'de' ? 'Nein' : 'No';
   switch (field.fieldType) {
     case 'boolean': return v === 'true' ? yes : v === 'false' ? no : v;
-    case 'multiselect': { const m = parseMulti(v); return m.length ? m.join(', ') : v; }
+    case 'multiselect': {
+      const m = parseMulti(v);
+      if (!m.length) return v;
+      // Entries that aren't one of the choices are the free text of "Sonstiges"
+      const opts = field.options ?? [];
+      return m.map(x => (opts.includes(x) ? x : `${lang === 'de' ? 'Sonstiges' : 'Other'}: ${x}`)).join(', ');
+    }
     case 'scale': return `${v} / ${field.scaleMax ?? 10}`;
     case 'date': return formatDate(v, lang);
     case 'yesnoList': {

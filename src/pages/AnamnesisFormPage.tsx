@@ -598,7 +598,7 @@ export default function AnamnesisFormPage() {
           onPick={v => { setValue(field.id, v); if (v) nextSoon(); }} />;
         break;
       case 'multiselect':
-        body = <MultiChoiceInput size="lg" options={field.options ?? []} value={value} onChange={v => setValue(field.id, v)} />;
+        body = <MultiChoiceInput size="lg" lang={lang} options={field.options ?? []} allowOther={field.allowOther} value={value} onChange={v => setValue(field.id, v)} />;
         break;
       case 'scale':
         body = <ScaleInput size="lg" field={field} value={value} onChange={v => setValue(field.id, v)} />;
