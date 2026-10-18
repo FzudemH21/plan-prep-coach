@@ -10,7 +10,6 @@ import * as SliderPrimitive from '@radix-ui/react-slider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import {
@@ -996,13 +995,6 @@ export function AnamnesisFieldInput({
 
   if (readOnly) {
     if (!value) return <p className="text-sm text-muted-foreground italic">—</p>;
-    if (field.fieldType === 'boolean') {
-      return (
-        <Badge variant={value === 'true' ? 'default' : 'secondary'} className="text-xs">
-          {value === 'true' ? 'Yes' : 'No'}
-        </Badge>
-      );
-    }
     return <p className="text-sm whitespace-pre-wrap">{formatAnswer(field, value) || value}</p>;
   }
 

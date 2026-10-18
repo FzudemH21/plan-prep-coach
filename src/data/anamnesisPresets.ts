@@ -119,7 +119,7 @@ const injuries: AnamnesisSection = {
   title: 'Frühere Verletzungen & Operationen',
   athleteFills: true,
   fields: [
-    q({ id: 'i-any', label: 'Hattest du in deinem Leben schon Verletzungen oder Operationen?', fieldType: 'boolean' }),
+    q({ id: 'i-any', label: 'Hattest du früher schon Verletzungen oder Operationen?', fieldType: 'boolean' }),
     q({ id: 'i-map', label: 'Wo?', fieldType: 'bodyMap',
       placeholder: 'Was ist passiert, wann, wie lange konntest du nicht trainieren, wie wurde es behandelt?',
       helpText: 'Tippe auf jede Stelle, an der du dich verletzt hast oder operiert wurdest – eine Stelle pro Verletzung. '
