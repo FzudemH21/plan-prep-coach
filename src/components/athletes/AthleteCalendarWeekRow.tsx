@@ -71,6 +71,7 @@ interface AthleteCalendarWeekRowProps {
   // Completed session logs forwarded to each DayCell
   sessionLogs?: Map<string, CoachSessionLog>;
   onCompletedSessionClick?: (log: CoachSessionLog) => void;
+  onUnfinishedSessionClick?: (log: CoachSessionLog) => void;
 }
 
 export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow({
@@ -101,6 +102,7 @@ export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow
   onDeleteCalendarEvent,
   sessionLogs,
   onCompletedSessionClick,
+  onUnfinishedSessionClick,
 }: AthleteCalendarWeekRowProps) {
   const weekStartDate = format(week[0].date, 'yyyy-MM-dd');
   const hasExercisesInWeek = week.some(day => day.sessions.length > 0);
@@ -189,6 +191,7 @@ export const AthleteCalendarWeekRow = React.memo(function AthleteCalendarWeekRow
             onDeleteCalendarEvent={onDeleteCalendarEvent}
             sessionLogs={sessionLogs}
             onCompletedSessionClick={onCompletedSessionClick}
+            onUnfinishedSessionClick={onUnfinishedSessionClick}
           />
         ))}
       </div>

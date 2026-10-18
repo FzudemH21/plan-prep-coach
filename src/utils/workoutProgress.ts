@@ -115,10 +115,12 @@ export async function findUnfinishedWorkout(
 export async function saveWorkoutProgress(logId: string, progress: WorkoutProgress, paused: boolean): Promise<void> {
   const pausedAt = paused ? new Date().toISOString() : null;
   writeLocal(logId, progress, pausedAt);
+  // Only while the workout is unfinished — the coach may have closed it in the meantime
   const { error } = await supabase
     .from('athlete_session_logs')
     .update({ progress, paused_at: pausedAt })
-    .eq('id', logId);
+    .eq('id', logId)
+    .is('completed_at', null);
   if (error) console.warn('[workoutProgress] progress saved on this device only:', error.message);
 }
 

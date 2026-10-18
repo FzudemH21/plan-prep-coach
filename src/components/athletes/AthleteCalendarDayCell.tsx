@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
-import { Dumbbell, Trophy, Calendar, Plus, MoreVertical, Trash2, CalendarPlus, Copy, ClipboardPaste, Settings, GripVertical, CheckCircle2, PlayCircle, Library } from 'lucide-react';
+import { Dumbbell, Trophy, Calendar, Plus, MoreVertical, Trash2, CalendarPlus, Copy, ClipboardPaste, Settings, GripVertical, CheckCircle2, PlayCircle, Library, CheckCheck } from 'lucide-react';
 import { IntensityLevel } from '@/types/training';
 import {
   DropdownMenu,
@@ -26,6 +26,7 @@ import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { ExerciseDistribution } from '@/types/microcycle-planning';
 import { AthletePerformanceParameter } from '@/types/athlete';
 import { CoachSessionLog } from './CompletedSessionSheet';
+import { isStaleUnfinished } from '@/utils/unfinishedSession';
 
 export interface AthleteCalendarSession {
   id: string;
@@ -95,6 +96,8 @@ interface AthleteCalendarDayCellProps {
   // Completed session logs — keyed by "${date}-${sessionIndex}" = session_id
   sessionLogs?: Map<string, CoachSessionLog>;
   onCompletedSessionClick?: (log: CoachSessionLog) => void;
+  /** A started, unfinished session — the coach can close or reset it */
+  onUnfinishedSessionClick?: (log: CoachSessionLog) => void;
 }
 
 export function AthleteCalendarDayCell({
@@ -121,6 +124,7 @@ export function AthleteCalendarDayCell({
   onDeleteCalendarEvent,
   sessionLogs,
   onCompletedSessionClick,
+  onUnfinishedSessionClick,
 }: AthleteCalendarDayCellProps) {
   const [testEventDialogOpen, setTestEventDialogOpen] = useState(false);
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
@@ -439,6 +443,10 @@ export function AthleteCalendarDayCell({
                   const sessionLog = sessionLogs?.get(session.id);
                   const isCompleted = !!sessionLog?.completed_at;
                   const isInProgress = !!sessionLog?.started_at && !sessionLog?.completed_at;
+                  // Started > 4 h ago and not paused: nobody trains it any more — "Unfinished", the
+                  // coach can close or reset it (and delete the session). Moving stays blocked: the log
+                  // is tied to the session's position.
+                  const isStale = isInProgress && isStaleUnfinished(sessionLog?.started_at, sessionLog?.paused_at);
                   const isLocked = isCompleted || isInProgress;
                   const completedLog = isCompleted ? sessionLog! : null;
                   const sRPE = completedLog?.borg_rating && completedLog?.duration_seconds
@@ -464,6 +472,8 @@ export function AthleteCalendarDayCell({
                             if (Date.now() - dragEndTime < 500) return;
                             if (isCompleted && completedLog && onCompletedSessionClick) {
                               onCompletedSessionClick(completedLog);
+                            } else if (isStale && sessionLog && onUnfinishedSessionClick) {
+                              onUnfinishedSessionClick(sessionLog);
                             } else {
                               // In-progress sessions are still openable by the coach.
                               onSessionClick?.(day.dateString, session.sessionIndex, session.assignmentId || day.assignmentId || '');
@@ -521,7 +531,18 @@ export function AthleteCalendarDayCell({
                                     <MoreVertical className="h-3 w-3 text-muted-foreground" />
                                   </button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-40 z-[100]">
+                                <DropdownMenuContent align="end" className="w-48 z-[100]">
+                                  {isInProgress && sessionLog && onUnfinishedSessionClick && (
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onUnfinishedSessionClick(sessionLog);
+                                      }}
+                                    >
+                                      <CheckCheck className="mr-2 h-4 w-4" />
+                                      Close unfinished…
+                                    </DropdownMenuItem>
+                                  )}
                                   {onCopySession && (
                                     <DropdownMenuItem
                                       onClick={(e) => {
@@ -533,7 +554,7 @@ export function AthleteCalendarDayCell({
                                       Copy session
                                     </DropdownMenuItem>
                                   )}
-                                  {onDeleteSession && !isLocked && (
+                                  {onDeleteSession && (!isLocked || isStale) && (
                                     <DropdownMenuItem
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -577,6 +598,10 @@ export function AthleteCalendarDayCell({
                               {sessionLog?.paused_at ? (
                                 <span className="text-[10px] text-amber-600 dark:text-amber-400">
                                   Paused
+                                </span>
+                              ) : isStale ? (
+                                <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                                  Unfinished · click to close
                                 </span>
                               ) : (
                                 <span className="text-[10px] text-amber-600 dark:text-amber-400 animate-pulse">

@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronDown, ChevronRight, Plus, Minus, Check,
   Info, RefreshCw, Dumbbell, Trash2, Link2, AlignLeft,
-  GripVertical, Settings2, MoreVertical, Copy, ClipboardList, CheckCircle2, History, Lock, Pencil, X,
+  GripVertical, Settings2, MoreVertical, Copy, ClipboardList, CheckCircle2, History, Lock, Pencil, X, PlayCircle,
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import type { DropResult, DragStart } from '@hello-pangea/dnd';
@@ -27,6 +27,8 @@ import { ExerciseHistorySheet } from '@/components/shared/ExerciseHistorySheet';
 import { SessionCommentsPanel } from '@/components/coach-mobile/SessionCommentsPanel';
 import { parseExerciseComments, selectWithOptionalColumns, type ExerciseComment } from '@/utils/sessionComments';
 import { LoggedExerciseResult, type LoggedEntry } from '@/components/workout/LoggedExerciseResult';
+import { UnfinishedSessionDialog } from '@/components/workout/UnfinishedSessionDialog';
+import { findUnfinishedLogId } from '@/utils/unfinishedSession';
 
 // ── Section helpers ───────────────────────────────────────────────────────────
 
@@ -1076,6 +1078,8 @@ export default function CoachMobileSessionEditPage() {
     setsLogged: Record<string, Record<string, Record<string, string>>> | null;
   } | null>(null);
   const session_ref_id = state?.entry?.sessions[state?.sessionIdx ?? 0]?.id ?? null;
+  // Bumped after the coach closed / reset an unfinished session — reloads the logs
+  const [logVersion, setLogVersion] = useState(0);
   useEffect(() => {
     if (!connectionId || !state?.entry?.date || !session_ref_id) return;
     const query = (columns: string) => supabase
@@ -1104,7 +1108,18 @@ export default function CoachMobileSessionEditPage() {
           });
         }
       });
-  }, [connectionId, state?.entry?.date, session_ref_id]);
+  }, [connectionId, state?.entry?.date, session_ref_id, logVersion]);
+
+  // A started, unfinished log of this session (athlete or coach) — the coach can close or reset it
+  const [unfinishedLogId, setUnfinishedLogId] = useState<string | null>(null);
+  const [unfinishedDialogOpen, setUnfinishedDialogOpen] = useState(false);
+  useEffect(() => {
+    if (!connectionId || !state?.entry?.date || !session_ref_id) return;
+    let cancelled = false;
+    void findUnfinishedLogId(connectionId, state.entry.date, session_ref_id)
+      .then(id => { if (!cancelled) setUnfinishedLogId(id); });
+    return () => { cancelled = true; };
+  }, [connectionId, state?.entry?.date, session_ref_id, logVersion]);
 
   // Logged entries by exercise name (sets_logged is an array of exercise entries)
   const loggedByName = useMemo(() => {
@@ -1119,7 +1134,7 @@ export default function CoachMobileSessionEditPage() {
   useEffect(() => {
     if (!connectionId || !state?.entry?.date || !session_ref_id) return;
     checkSessionLock(connectionId, state.entry.date, session_ref_id, 'coach').then(setSessionLock);
-  }, [connectionId, state?.entry?.date, session_ref_id]);
+  }, [connectionId, state?.entry?.date, session_ref_id, logVersion]);
 
 
   // ── Derived sections ───────────────────────────────────────────────────────
@@ -1815,6 +1830,21 @@ export default function CoachMobileSessionEditPage() {
                   </div>
                 </div>
               )}
+              {/* Started but never finished — the coach can mark it as done or reset it */}
+              {unfinishedLogId && !sessionLog && (
+                <div className="px-4 pt-3 pb-1">
+                  <button
+                    type="button"
+                    onClick={() => setUnfinishedDialogOpen(true)}
+                    className="w-full min-h-[44px] rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 flex items-center gap-2 text-left active:opacity-70"
+                  >
+                    <PlayCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                    <span className="flex-1 text-xs text-amber-800 leading-snug">
+                      {sessionLock ? 'Started and not finished yet.' : 'Started but never finished.'} Tap to mark it as done or reset it.
+                    </span>
+                  </button>
+                </div>
+              )}
               <div className="p-4 flex gap-2">
               {sessionLog ? (
                 <Button variant="outline" className="w-full" onClick={() => navigate(-1)}>{t('coachMobile.sessionEdit.close')}</Button>
@@ -1833,6 +1863,14 @@ export default function CoachMobileSessionEditPage() {
             </div>
           </>
         )}
+
+        <UnfinishedSessionDialog
+          open={unfinishedDialogOpen}
+          logId={unfinishedLogId}
+          connectionId={connectionId ?? null}
+          onClose={() => setUnfinishedDialogOpen(false)}
+          onChanged={() => setLogVersion(v => v + 1)}
+        />
 
         {/* Intensity pickers in view mode (auto-save) */}
         <IntensityPickerSheet open={dayIntensityOpen} title={t('coachMobile.sessionEdit.dayIntensity')} current={entry.intensity}

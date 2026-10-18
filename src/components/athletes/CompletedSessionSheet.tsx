@@ -91,6 +91,8 @@ export interface CoachSessionLog {
   exercise_comments?: unknown;
   /** 'coach' when the session was logged with the coach app */
   started_by?: string | null;
+  /** Set when the coach closed the athlete's unfinished session (needs its migration) */
+  closed_by_coach_at?: string | null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -437,7 +439,7 @@ function groupBySupersetWithinSection(entries: SetLogEntry[], labelFor: (superse
   return groups;
 }
 
-function SessionExercises({ entries, renderAfter }: { entries: SetLogEntry[]; renderAfter?: (entry: SetLogEntry) => React.ReactNode }) {
+export function SessionExercises({ entries, renderAfter }: { entries: SetLogEntry[]; renderAfter?: (entry: SetLogEntry) => React.ReactNode }) {
   const hasStructure = entries.some(e => e.sectionId);
   const sections = groupBySection(entries);
   // Superset letters run through the whole session (A, B, C … across sections) — counting per
@@ -658,9 +660,14 @@ export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddT
               {log.session_name ?? 'Session'}
             </SheetTitle>
           </div>
-          {completedAt && (
+          {completedAt && !log.closed_by_coach_at && (
             <p className="text-sm text-muted-foreground mt-0.5">
               Completed {format(completedAt, 'EEEE, MMM d yyyy')} at {format(completedAt, 'HH:mm')}
+            </p>
+          )}
+          {log.closed_by_coach_at && (
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Closed by you on {format(parseISO(log.closed_by_coach_at), 'EEEE, MMM d yyyy')} — the athlete didn't finish it in the app
             </p>
           )}
         </SheetHeader>
@@ -688,7 +695,7 @@ export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddT
               <StatCard
                 icon={<CheckCircle2 className="h-4 w-4 text-green-500" />}
                 label="Status"
-                value="Completed"
+                value={log.closed_by_coach_at ? 'Closed by coach' : 'Completed'}
                 valueClass="text-green-600"
               />
             </div>

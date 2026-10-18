@@ -40,6 +40,7 @@ import { SectionNavigator, nextUnfinishedSection } from '@/components/workout/Se
 import { getRestSeconds } from '@/utils/workoutRest';
 import { addCoachExerciseRemark, fetchCoachRemark, remarksAsText, removeCoachExerciseRemark, saveCoachRemark, type ExerciseComment } from '@/utils/sessionComments';
 import { supersetLettersForSections } from '@/utils/supersetUtils';
+import { getSetCount, getParamColumns, getPlannedValue, buildSetsLoggedPayload } from '@/utils/workoutLog';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -97,63 +98,6 @@ function sessionDateLabel(date?: string): string {
   const d = new Date(date.slice(0, 10) + 'T12:00:00');
   return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 }
-
-function getSetCount(ex: ExerciseSummary): number {
-  if (ex.isCircuit) return Math.max(1, Number(ex.circuitRounds ?? 3));
-  return ex.plannedSets && ex.plannedSets > 0 ? ex.plannedSets : 3;
-}
-
-function getParamColumns(ex: ExerciseSummary): string[] {
-  let candidates: string[];
-  if (ex.visibleParams && ex.visibleParams.length > 0) {
-    candidates = ex.visibleParams;
-  } else if (ex.plannedParams) {
-    const bases = new Set<string>();
-    for (const key of Object.keys(ex.plannedParams)) {
-      const m = key.match(/^(.+)_set\d+$/);
-      if (m) bases.add(m[1]);
-    }
-    candidates = bases.size > 0 ? Array.from(bases) : ['Reps'];
-  } else {
-    return ['Reps'];
-  }
-
-  // The rest parameter flagged in the Training Toolbox (restParamName) is not a log column — it
-  // drives the timer and shows above the table. Other "…rest…" parameters (e.g. rest between reps
-  // in intervals) are ordinary columns: the flag decides, not the name.
-  candidates = candidates.filter(p => p !== ex.restParamName);
-
-  // The coach chose these columns — show them all, also those without a planned value (e.g. Weight
-  // when the intensity is prescribed via RiR: the athlete's weight is entered while logging)
-  if (ex.visibleParams && ex.visibleParams.length > 0 && candidates.length > 0) return candidates;
-
-  if (ex.plannedParams) {
-    const withValues = candidates.filter(param => {
-      for (const [key, val] of Object.entries(ex.plannedParams!)) {
-        if (val === undefined || val === null || val === '') continue;
-        const m = key.match(/^(.+)_set\d+$/);
-        if (m && m[1] === param) return true;
-        if (key === param) return true;
-      }
-      return false;
-    });
-    if (withValues.length > 0) return withValues;
-    if (candidates.length > 0) return candidates;
-  }
-
-  return candidates.length > 0 ? candidates : ['Reps'];
-}
-
-
-function getPlannedValue(ex: ExerciseSummary, paramName: string, setIdx: number): string {
-  if (!ex.plannedParams) return '';
-  const perSetVal = ex.plannedParams[`${paramName}_set${setIdx + 1}`];
-  if (perSetVal !== undefined && perSetVal !== null && perSetVal !== '') return String(perSetVal);
-  const plainVal = ex.plannedParams[paramName];
-  if (plainVal !== undefined && plainVal !== null && plainVal !== '') return String(plainVal);
-  return '';
-}
-
 
 function formatTime(s: number): string {
   const m = Math.floor(s / 60);
@@ -1095,47 +1039,9 @@ export default function CoachMobileSessionLoggingPage() {
 
   // ── Sets payload ───────────────────────────────────────────────────────────
 
-  const setsLoggedPayload = session.exercises.map(ex => {
-    if (ex.isCircuit) {
-      return {
-        exerciseName: ex.name, isCircuit: true as const,
-        roundsCompleted: (completedSets[ex.id] ?? []).length,
-        totalRounds: Math.max(1, Number(ex.circuitRounds ?? 3)),
-        circuitRestBetweenRounds: ex.circuitRestBetweenRounds,
-        circuitRestBetweenExercises: ex.circuitRestBetweenExercises,
-        circuitComments: ex.circuitComments,
-        circuitExercises: ex.circuitExercises,
-        sectionId: ex.sectionId, sectionName: ex.sectionName,
-        sectionOrder: ex.sectionOrder ?? 0, supersetId: ex.supersetId, exerciseOrder: ex.order,
-      };
-    }
-    const plannedSetCount = getSetCount(ex);
-    const actualSetCount = setCountOverrides[ex.id] ?? plannedSetCount;
-    const exCompleted = completedSets[ex.id] ?? [];
-    const exLogged = loggedValues[ex.id] ?? {};
-    const plannedParamsStr: Record<string, string> = {};
-    if (ex.plannedParams) {
-      for (const [k, v] of Object.entries(ex.plannedParams)) plannedParamsStr[k] = String(v);
-    }
-    const swap = swappedExercises[ex.id];
-    return {
-      exerciseName: swap ? swap.replacementName : ex.name, methodId: ex.methodKey,
-      swappedFrom: swap ? swap.originalName : undefined,
-      swapDirection: swap ? swap.direction : undefined,
-      swapReason: swap?.reason || undefined,
-      plannedSets: plannedSetCount,
-      plannedParams: Object.keys(plannedParamsStr).length > 0 ? plannedParamsStr : undefined,
-      // The columns shown while logging — so a column left empty (e.g. Weight without a planned
-      // value) still shows in the logged session's table
-      columns: getParamColumns(ex),
-      sectionId: ex.sectionId, sectionName: ex.sectionName,
-      sectionOrder: ex.sectionOrder ?? 0, supersetId: ex.supersetId, exerciseOrder: ex.order,
-      sets: Array.from({ length: actualSetCount }, (_, setIdx) => ({
-        setNumber: setIdx + 1,
-        values: exLogged[setIdx] ?? {},
-        completed: exCompleted.includes(setIdx),
-      })),
-    };
+  // Build sets_logged payload — includes ALL exercises (with section/superset structure)
+  const setsLoggedPayload = buildSetsLoggedPayload(session.exercises, {
+    loggedValues, completedSets, setCountOverrides, swappedExercises,
   });
 
   // ── Abandon session ────────────────────────────────────────────────────────

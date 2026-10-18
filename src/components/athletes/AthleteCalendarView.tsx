@@ -70,6 +70,7 @@ import { IntensityLevel } from '@/types/training';
 import { cn } from '@/lib/utils';
 import { fetchCoachRemarks, parseExerciseComments, remarksAsText, selectWithOptionalColumns } from '@/utils/sessionComments';
 import type { SessionFeedbackEntry } from '@/hooks/useAthleteAIContext';
+import { UnfinishedSessionDialog } from '@/components/workout/UnfinishedSessionDialog';
 
 interface AthleteCalendarViewProps {
   athlete: Athlete;
@@ -207,6 +208,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   const [sessionLogsLoaded, setSessionLogsLoaded] = useState(false);
   const [completedSheetOpen, setCompletedSheetOpen] = useState(false);
   const [selectedCompletedLog, setSelectedCompletedLog] = useState<CoachSessionLog | null>(null);
+  // Started, unfinished session the coach is closing / resetting (UnfinishedSessionDialog)
+  const [unfinishedLogId, setUnfinishedLogId] = useState<string | null>(null);
   
   // Master planner state
   const [selectedDayOfWeek, setSelectedDayOfWeek] = useState<number>(1); // 1=Monday
@@ -1503,7 +1506,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       .lte('date', to);
     // paused_at (pause / resume), started_by and exercise_comments (session comments) — a column whose
     // migration hasn't been run is left out on its own (the others still load)
-    selectWithOptionalColumns(query, baseColumns, ['paused_at', 'started_by', 'exercise_comments'])
+    selectWithOptionalColumns(query, baseColumns, ['paused_at', 'started_by', 'exercise_comments', 'closed_by_coach_at'])
       .then(res => {
         const data = res.data as unknown as CoachSessionLog[] | null;
         if (cancelled) return;
@@ -3062,6 +3065,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                       onDeleteCalendarEvent={handleDeleteCalendarEvent}
                       sessionLogs={sessionLogs}
                       onCompletedSessionClick={handleCompletedSessionClick}
+                      onUnfinishedSessionClick={(log) => setUnfinishedLogId(log.id)}
                     />
                   ))}
                 </div>
@@ -3083,6 +3087,15 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           const note = { id: `note-${Date.now()}`, text, timestamp: new Date().toISOString() };
           await athleteData.updateAthlete(athlete.id, { notesHistory: [note, ...(current.notesHistory ?? [])] });
         }}
+      />
+
+      {/* Close / reset an unfinished session */}
+      <UnfinishedSessionDialog
+        open={!!unfinishedLogId}
+        logId={unfinishedLogId}
+        connectionId={getConnectionForAthlete(athlete.id)?.id ?? null}
+        onClose={() => setUnfinishedLogId(null)}
+        onChanged={() => setSessionLogsVersion(v => v + 1)}
       />
 
       {/* Plan Review Dialog */}
