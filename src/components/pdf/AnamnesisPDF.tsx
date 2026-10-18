@@ -304,10 +304,9 @@ function FieldBlock({ field, value, lang, onlyIf }: {
   const t = L[lang];
   const answered = isAnswered(field, value) && field.fieldType !== 'info';
   const type = field.fieldType;
-  // Big blocks may break across pages
-  const wrap = type === 'weekGrid' || type === 'list' || type === 'yesnoList' || type === 'dateRanges';
+  // A question is never split across two pages (a block taller than a page still breaks)
   return (
-    <View wrap={wrap} style={{ marginBottom: 11 }}>
+    <View wrap={false} style={{ marginBottom: 11 }}>
       <Text style={s.fieldLabel} minPresenceAhead={40}>{field.label}</Text>
       {onlyIf && <Text style={{ fontSize: 8, color: C.fg3, marginTop: -2, marginBottom: 3 }}>{t.onlyIf(onlyIf)}</Text>}
       {field.helpText && (
