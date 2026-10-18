@@ -7,9 +7,11 @@
  * Schmerzen oder Beschwerden?" (Nein / leichte / deutliche) decides: "leichte" shows a short
  * complaint block, "deutliche" the full one plus the psychosocial questions. Built from the practice's
  * anamnesis document (Anamnesebogen) with the review of 2026-10-18.
+ * English version: anamnesisPresetEn.ts (same ids and conditions) — keep both in step.
  */
 import type { AnamnesisCondition, AnamnesisField, AnamnesisSection, AnamnesisTemplateDraft } from '@/types/anamnesis';
 import { DEFAULT_ANAMNESIS_TEMPLATE, PROFILE_SEX_SOURCE } from '@/types/anamnesis';
+import { TRAINING_HEALTH_ANAMNESIS_EN } from '@/data/anamnesisPresetEn';
 
 // ── Check question and its answers (conditions refer to them) ───────────────
 
@@ -298,6 +300,7 @@ export const TRAINING_HEALTH_ANAMNESIS: AnamnesisTemplateDraft = {
 /** "Start from" choices in the template editor */
 export const ANAMNESIS_PRESETS: Array<{ id: string; label: string; draft: AnamnesisTemplateDraft }> = [
   { id: 'training-health', label: 'Anamnese – Training & Gesundheit (German)', draft: TRAINING_HEALTH_ANAMNESIS },
+  { id: 'training-health-en', label: 'Anamnesis – Training & Health (English)', draft: TRAINING_HEALTH_ANAMNESIS_EN },
   {
     id: 'general',
     label: 'General Anamnesis (English, with movement screening)',
