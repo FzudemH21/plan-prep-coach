@@ -214,12 +214,19 @@ function ListColumnsEditor({ columns, onChange }: { columns: AnamnesisListColumn
 }
 
 // ── Field row editor ──────────────────────────────────────────────────────────
+// Also used for the questions added to a single anamnesis record (AnamnesisQuestionEditor) — every
+// question type with its settings, without "show only if" there.
+
+export function AnamnesisQuestionEditor(props: Omit<Parameters<typeof FieldRow>[0], 'sources'>) {
+  return <FieldRow {...props} sources={[]} allowCondition={false} />;
+}
 
 function FieldRow({
   field,
   isFirst,
   isLast,
   sources,
+  allowCondition = true,
   onChange,
   onDelete,
   onMoveUp,
@@ -230,6 +237,7 @@ function FieldRow({
   isLast: boolean;
   /** Earlier questions this one can depend on */
   sources: ConditionSource[];
+  allowCondition?: boolean;
   onChange: (updated: AnamnesisField) => void;
   onDelete: () => void;
   onMoveUp: () => void;
@@ -329,18 +337,18 @@ function FieldRow({
         </div>
       ) : null}
 
-      {field.condition && (
+      {allowCondition && field.condition && (
         <ConditionEditor condition={field.condition} sources={sources} onChange={(condition) => onChange({ ...field, condition })} />
       )}
 
-      {(!showHelp && type !== 'info') || !field.condition ? (
+      {(!showHelp && type !== 'info') || (allowCondition && !field.condition) ? (
         <div className="flex gap-1">
           {!showHelp && type !== 'info' && (
             <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs text-muted-foreground gap-1" onClick={() => setShowHelp(true)}>
               <Plus className="h-3 w-3" />Help text
             </Button>
           )}
-          {!field.condition && (
+          {allowCondition && !field.condition && (
             <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs text-muted-foreground gap-1"
               onClick={() => onChange({ ...field, condition: { sourceId: '', values: [] } })}>
               <GitBranch className="h-3 w-3" />Show only if…

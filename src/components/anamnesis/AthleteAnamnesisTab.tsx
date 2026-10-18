@@ -47,7 +47,7 @@ import { AnamnesisChangeHistory } from '@/components/anamnesis/AnamnesisChangeHi
 import { diffAnamnesis, logAnamnesisChange, type AnamnesisAnswersSnapshot } from '@/utils/anamnesisChangeLog';
 import { useAthleteAnamneses } from '@/hooks/useAthleteAnamneses';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
-import { TemplateEditorDialog } from '@/components/anamnesis/AnamnesisTemplateEditor';
+import { AnamnesisQuestionEditor, TemplateEditorDialog } from '@/components/anamnesis/AnamnesisTemplateEditor';
 import { FormLinkBox, PrivacyNoticeDialog, ProfileAnswersBanner, SendFormLinkDialog } from '@/components/anamnesis/AnamnesisFormLink';
 import { useCoachPrivacyNotice, isPrivacyNoticeComplete } from '@/hooks/useCoachPrivacyNotice';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -57,7 +57,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { SEX_LABELS, type Athlete } from '@/types/athlete';
 import {
   isAthleteSection,
-  type AthleteAnamnesis, type AnamnesisField, type AnamnesisFieldType, type AnamnesisSection, type AnamnesisAttachment,
+  type AthleteAnamnesis, type AnamnesisField, type AnamnesisSection, type AnamnesisAttachment,
   type AnamnesisTemplateDraft, type AnamnesisConsent, type AnamnesisNote,
   noteEntriesOf, notesAsText,
 } from '@/types/anamnesis';
@@ -102,15 +102,6 @@ function todayIso(): string {
 function blankCustomField(): AnamnesisField {
   return { id: uid(), label: '', fieldType: 'text' };
 }
-
-/** Types for the record's own questions (the structured ones need settings — use the template editor) */
-const FIELD_TYPE_LABELS: Partial<Record<AnamnesisFieldType, string>> = {
-  text: 'Short text',
-  textarea: 'Long text',
-  number: 'Number',
-  date: 'Date',
-  boolean: 'Yes / No',
-};
 
 // ── Field renderer (display + input) ─────────────────────────────────────────
 
@@ -227,61 +218,6 @@ function AnamnesisFieldInput({
         />
       );
   }
-}
-
-// ── Custom question editor row ────────────────────────────────────────────────
-
-function CustomFieldEditor({
-  field,
-  isFirst,
-  isLast,
-  onChange,
-  onDelete,
-  onMoveUp,
-  onMoveDown,
-}: {
-  field: AnamnesisField;
-  isFirst: boolean;
-  isLast: boolean;
-  onChange: (f: AnamnesisField) => void;
-  onDelete: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-}) {
-  return (
-    <div className="flex gap-2 items-center p-2 rounded border bg-background">
-      <Input
-        className="flex-1 h-8 text-sm"
-        placeholder="Question label"
-        value={field.label}
-        onChange={(e) => onChange({ ...field, label: e.target.value })}
-      />
-      <Select
-        value={field.fieldType}
-        onValueChange={(v) => onChange({ ...field, fieldType: v as AnamnesisFieldType })}
-      >
-        <SelectTrigger className="w-32 h-8 text-xs">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {(Object.entries(FIELD_TYPE_LABELS) as [AnamnesisFieldType, string][]).map(([val, label]) => (
-            <SelectItem key={val} value={val} className="text-xs">{label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <div className="flex gap-0.5 shrink-0">
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onMoveUp} disabled={isFirst}>
-          <ChevronUp className="h-3 w-3" />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onMoveDown} disabled={isLast}>
-          <ChevronDown className="h-3 w-3" />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={onDelete}>
-          <X className="h-3 w-3" />
-        </Button>
-      </div>
-    </div>
-  );
 }
 
 // ── AI summary builder ────────────────────────────────────────────────────────
@@ -927,7 +863,7 @@ Where nothing is stated for a heading, write "- Not stated" (German: "- Keine An
             )}
             {customQuestions.map((field, idx) => (
               <div key={field.id} className="space-y-1.5">
-                <CustomFieldEditor
+                <AnamnesisQuestionEditor
                   field={field}
                   isFirst={idx === 0}
                   isLast={idx === customQuestions.length - 1}
@@ -937,7 +873,10 @@ Where nothing is stated for a heading, write "- Not stated" (German: "- Keine An
                   onMoveDown={() => moveCustomQuestion(idx, 1)}
                 />
                 {field.label && (
-                  <div className="pl-1">
+                  <div className="pl-1 space-y-1">
+                    {field.helpText && field.fieldType !== 'info' && (
+                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">{field.helpText}</p>
+                    )}
                     <AnamnesisFieldInput
                       field={field}
                       value={customFieldValues[field.id] ?? ''}
