@@ -966,47 +966,53 @@ export function DateRangesInput({ field, value, onChange, lang, size = 'sm', rea
   );
 }
 
-/** Answer field of any question type — compact, English (coach record, template editor preview) */
+/**
+ * Answer field of any question type — compact (coach record, template editor preview). `field` may be a
+ * localized copy (localizeField): choices are shown with their labels, values stay as stored; `lang`
+ * is the language of the answer texts (body regions, yes / no, schedule legend).
+ */
 export function AnamnesisFieldInput({
   field,
   value,
   onChange,
   readOnly,
+  lang = 'en',
 }: {
   field: AnamnesisField;
   value: string;
   onChange: (v: string) => void;
   readOnly?: boolean;
+  lang?: AnswerLang;
 }) {
-  // Structured types — the same inputs as the athlete's form link, compact and in English
+  // Structured types — the same inputs as the athlete's form link, compact
   switch (field.fieldType) {
     case 'info':
       return field.helpText ? <p className="text-sm text-muted-foreground whitespace-pre-wrap">{field.helpText}</p> : null;
     case 'yesnoList':
-      return <YesNoListInput lang="en" items={field.options ?? []} allowOther={field.allowOther} value={value} onChange={onChange} readOnly={readOnly} />;
+      return <YesNoListInput lang={lang} items={field.options ?? []} itemLabels={field.optionLabels} allowOther={field.allowOther} value={value} onChange={onChange} readOnly={readOnly} />;
     case 'list':
-      return <ListInput lang="en" columns={field.listColumns ?? []} value={value} onChange={onChange} readOnly={readOnly} />;
+      return <ListInput lang={lang} columns={field.listColumns ?? []} value={value} onChange={onChange} readOnly={readOnly} />;
     case 'bodyMap':
-      return <BodyMapInput lang="en" field={field} value={value} onChange={onChange} readOnly={readOnly} />;
+      return <BodyMapInput lang={lang} field={field} value={value} onChange={onChange} readOnly={readOnly} />;
     case 'weekGrid':
       if (readOnly && !value) return <p className="text-sm text-muted-foreground italic">—</p>;
-      return <WeekGridInput lang="en" value={value} onChange={onChange} readOnly={readOnly} />;
+      return <WeekGridInput lang={lang} value={value} onChange={onChange} readOnly={readOnly} />;
     case 'dateRanges':
-      return <DateRangesInput lang="en" field={field} value={value} onChange={onChange} readOnly={readOnly} />;
+      return <DateRangesInput lang={lang} field={field} value={value} onChange={onChange} readOnly={readOnly} />;
     default:
       break;
   }
 
   if (readOnly) {
     if (!value) return <p className="text-sm text-muted-foreground italic">—</p>;
-    return <p className="text-sm whitespace-pre-wrap">{formatAnswer(field, value) || value}</p>;
+    return <p className="text-sm whitespace-pre-wrap">{formatAnswer(field, value, lang) || value}</p>;
   }
 
   switch (field.fieldType) {
     case 'multiselect':
-      return <MultiChoiceInput options={field.options ?? []} allowOther={field.allowOther} value={value} onChange={onChange} />;
+      return <MultiChoiceInput lang={lang} options={field.options ?? []} labels={field.optionLabels} allowOther={field.allowOther} value={value} onChange={onChange} />;
     case 'scale':
-      return <ScaleInput field={field} value={value} onChange={onChange} />;
+      return <ScaleInput lang={lang} field={field} value={value} onChange={onChange} />;
     case 'date':
       return <Input type="date" className="h-9 text-sm w-48" value={value} onChange={(e) => onChange(e.target.value)} />;
     case 'textarea':
@@ -1035,8 +1041,8 @@ export function AnamnesisFieldInput({
             <SelectValue placeholder="Select…" />
           </SelectTrigger>
           <SelectContent>
-            {(field.options ?? []).map((opt) => (
-              <SelectItem key={opt} value={opt} className="text-sm">{opt}</SelectItem>
+            {(field.options ?? []).map((opt, i) => (
+              <SelectItem key={opt} value={opt} className="text-sm">{field.optionLabels?.[i] ?? opt}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -1058,7 +1064,7 @@ export function AnamnesisFieldInput({
                     : 'bg-background text-foreground border-input [@media(hover:hover)]:hover:bg-accent',
                 )}
               >
-                {opt}
+                {lang === 'de' ? (opt === 'Yes' ? 'Ja' : 'Nein') : opt}
               </button>
             );
           })}

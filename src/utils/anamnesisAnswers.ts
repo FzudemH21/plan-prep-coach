@@ -250,6 +250,45 @@ export function formatAnswer(field: AnamnesisField, value: string | undefined, l
   }
 }
 
+// ── "No / none" answers (the report can leave them out) ───────────────────────
+
+/** A choice that only says no / none — "Nein", "Keine", "Nichts davon", "Nein, noch nichts", "None" … */
+const NEGATIVE_CHOICE = /^(nein|no|nope|kein|keine|keiner|none|nichts|nothing)\b/i;
+
+/**
+ * Whether a CHOICE answer only says "no / none" (yes/no = No, a choice like "Keine", a multiple choice
+ * of only such options, a checklist without any "yes"). Free text is never treated as negative — a
+ * text answer "keine" stays.
+ */
+export function isNegativeChoice(field: AnamnesisField, value: string | undefined): boolean {
+  const v = (value ?? '').trim();
+  if (!v) return false;
+  switch (field.fieldType) {
+    case 'boolean': return v === 'false';
+    case 'select': return NEGATIVE_CHOICE.test(v);
+    case 'multiselect': {
+      const picked = parseMulti(v);
+      const opts = field.options ?? [];
+      // Free text of "Sonstiges" is never negative
+      return picked.length > 0 && picked.every(p => opts.includes(p) && NEGATIVE_CHOICE.test(p));
+    }
+    case 'yesnoList': {
+      const a = parseYesNoList(v);
+      return Object.keys(a).some(k => k !== YESNO_OTHER_TEXT) && !Object.entries(a).some(([k, x]) => k !== YESNO_OTHER_TEXT && x === 'yes');
+    }
+    default: return false;
+  }
+}
+
+/** A checklist answer with only its "yes" items (and the "Sonstiges" text when that is yes) */
+export function onlyYesItems(value: string | undefined): string {
+  const a = parseYesNoList(value);
+  const kept: YesNoAnswers = {};
+  for (const [k, x] of Object.entries(a)) if (k !== YESNO_OTHER_TEXT && x === 'yes') kept[k] = x;
+  if (kept[YESNO_OTHER] === 'yes' && a[YESNO_OTHER_TEXT]) kept[YESNO_OTHER_TEXT] = a[YESNO_OTHER_TEXT];
+  return Object.keys(kept).length ? JSON.stringify(kept) : '';
+}
+
 // ── Conditions ────────────────────────────────────────────────────────────────
 
 /** Types an answer can be a condition on */

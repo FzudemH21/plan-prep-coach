@@ -23,6 +23,10 @@ export interface CoachBranding {
   primaryColor?: string;
   /** Business / organisation name shown in PDF footer */
   businessName?: string;
+  /** Postal address of the business (several lines) — sender of the anamnesis report */
+  businessAddress?: string;
+  /** Business phone — sender of the anamnesis report */
+  businessPhone?: string;
   /** Short welcome / hello message shown on the athlete app splash screen */
   welcomeMessage?: string;
 }

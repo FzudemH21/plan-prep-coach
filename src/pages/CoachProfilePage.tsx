@@ -452,6 +452,8 @@ function BrandingCard() {
   const { toast } = useToast();
 
   const [businessName, setBusinessName] = useState(profile?.branding?.businessName ?? "");
+  const [businessAddress, setBusinessAddress] = useState(profile?.branding?.businessAddress ?? "");
+  const [businessPhone, setBusinessPhone] = useState(profile?.branding?.businessPhone ?? "");
   const [primaryColor, setPrimaryColor] = useState(profile?.branding?.primaryColor ?? "#2563eb");
   const [welcomeMessage, setWelcomeMessage] = useState(profile?.branding?.welcomeMessage ?? "");
   const [logoBase64, setLogoBase64] = useState<string | undefined>(
@@ -469,6 +471,8 @@ function BrandingCard() {
     const b = profile?.branding ?? recoveredFromApp;
     if (!b) return;
     setBusinessName(b.businessName ?? "");
+    setBusinessAddress(profile?.branding?.businessAddress ?? "");
+    setBusinessPhone(profile?.branding?.businessPhone ?? "");
     setPrimaryColor(profile?.branding?.primaryColor ?? "#2563eb");
     setWelcomeMessage(b.welcomeMessage ?? "");
     setLogoBase64(b.logoBase64);
@@ -490,7 +494,7 @@ function BrandingCard() {
   const handleSave = async () => {
     if (!profile) return;
     await saveProfile({
-      branding: { logoBase64, primaryColor, businessName, welcomeMessage },
+      branding: { logoBase64, primaryColor, businessName, welcomeMessage, businessAddress, businessPhone },
     });
     // Sync logo + welcome message to every athlete connection so the
     // athlete app splash screen can read it without extra RLS queries.
@@ -527,6 +531,29 @@ function BrandingCard() {
           <p className="text-xs text-muted-foreground">
             {t('branding.businessNameHint')}
           </p>
+        </div>
+
+        {/* Address + phone — sender block of the anamnesis report */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>{t('branding.businessAddress')}</Label>
+            <Textarea
+              className="min-h-[72px] resize-y"
+              placeholder={t('branding.businessAddressPlaceholder')}
+              value={businessAddress}
+              onChange={(e) => { setBusinessAddress(e.target.value); setDirty(true); }}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('branding.businessPhone')}</Label>
+            <Input
+              type="tel"
+              placeholder={t('branding.businessPhonePlaceholder')}
+              value={businessPhone}
+              onChange={(e) => { setBusinessPhone(e.target.value); setDirty(true); }}
+            />
+            <p className="text-xs text-muted-foreground">{t('branding.businessContactHint')}</p>
+          </div>
         </div>
 
         {/* Accent color */}

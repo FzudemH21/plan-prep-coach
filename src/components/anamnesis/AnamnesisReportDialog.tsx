@@ -67,6 +67,7 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
   const [notes, setNotes] = useState(true);
   const [summary, setSummary] = useState(true);
   const [attachments, setAttachments] = useState(true);
+  const [hideNegatives, setHideNegatives] = useState(true);
   const [audience, setAudience] = useState<'internal' | 'third'>('internal');
   const [recipient, setRecipient] = useState('');
   const [consented, setConsented] = useState(false);
@@ -76,7 +77,7 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
     if (!open) return;
     setLang(defaultLang);
     setSectionIds(answeredSections.map((s) => s.id));
-    setCustom(true); setNotes(true); setSummary(true); setAttachments(true);
+    setCustom(true); setNotes(true); setSummary(true); setAttachments(true); setHideNegatives(true);
     setAudience('internal'); setRecipient(''); setConsented(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -93,7 +94,7 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
         import('@react-pdf/renderer'),
         import('@/components/pdf/AnamnesisPDF'),
       ]);
-      const include = { sectionIds, customQuestions: custom, notes, summary, attachments };
+      const include = { sectionIds, customQuestions: custom, notes, summary, attachments, hideNegatives };
       const blob = await pdf(
         <AnamnesisReportPDF {...source} lang={lang} include={include} recipient={third ? recipient.trim() : undefined} />,
       ).toBlob();
@@ -185,6 +186,11 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
               <Check checked={notes} onChange={setNotes} disabled={source.notes.length === 0}>Notes from the appointment ({source.notes.length})</Check>
               <Check checked={summary} onChange={setSummary} disabled={!source.aiSummary}>AI summary</Check>
               <Check checked={attachments} onChange={setAttachments} disabled={source.attachments.length === 0}>List of attachments ({source.attachments.length})</Check>
+              <div className="border-t my-1.5" />
+              <Check checked={hideNegatives} onChange={setHideNegatives}>
+                Leave out "no / none" answers
+                <span className="block text-xs text-muted-foreground">Only selected answers (e.g. "Nein", "Keine", checklist items answered "Nein") — text answers always stay.</span>
+              </Check>
             </div>
           </div>
 

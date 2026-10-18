@@ -60,11 +60,12 @@ import {
   isAthleteSection,
   type AthleteAnamnesis, type AnamnesisField, type AnamnesisSection, type AnamnesisAttachment,
   type AnamnesisTemplateDraft, type AnamnesisConsent, type AnamnesisNote,
-  noteEntriesOf, notesAsText, snapshotOf,
+  noteEntriesOf, notesAsText, snapshotOf, type AnamnesisLang,
 } from '@/types/anamnesis';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { contextFor, fieldState, formatAnswer } from '@/utils/anamnesisAnswers';
+import { localizeField, localizeSection } from '@/utils/anamnesisI18n';
 import { AnamnesisFieldInput } from '@/components/anamnesis/AnamnesisInputs';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -199,6 +200,10 @@ function RecordForm({
   // Saved records open read-only; "Edit" switches to the form (no accidental changes)
   const [mode, setMode] = useState<'view' | 'edit'>(initial ? 'view' : 'edit');
   const conditionSex = initial?.athleteProfileAnswers?.sex ?? athlete?.sex ?? null;
+  // Questions and answers in the language the athlete used in the form (switchable when the template
+  // has a translation); answers are stored the same way in every language
+  const [displayLang, setDisplayLang] = useState<AnamnesisLang>(
+    formLanguage === 'en' || formLanguage === 'de' ? formLanguage : (initial?.templateSnapshot.language ?? 'de'));
 
   const [showNewTemplate, setShowNewTemplate] = useState(false);
   const [savingNewTemplate, setSavingNewTemplate] = useState(false);
@@ -444,13 +449,14 @@ Your only task is to SUMMARISE what is written. Strict rules:
 - No interpretation, conclusions, diagnoses, assessments, recommendations or advice of your own.
 - Do NOT derive contraindications, precautions, training consequences or goals from findings. List them only when the answers or notes state them explicitly — then as stated.
 - Keep the meaning and the level of certainty of the source ("suspected", "possibly" stays as it is). Condense wording, keep all facts (values, sides, dates, durations, medications).
+- Leave out what is negative or empty: no complaints, no medication, no allergies, no concussion, "none" / "nothing" answers, denied single items. Exception: for the screening checklists (warning signs, exercise / heart check) write ONE short line when everything was denied (e.g. "Warnzeichen und Belastungs-Check: unauffällig"); list a screening item only when it was answered with yes.
 - Dictated notes are speech-to-text: correct obvious recognition errors only where the meaning is unambiguous; otherwise keep the wording.
 
-Structure: exactly these six headings, each as a Markdown "## " heading, with short "- " bullet points below:
+Structure: these headings in this order (only those with content), each as a Markdown "## " heading, with short "- " bullet points below:
 English: Current status & complaints / Relevant history / Findings from the appointment / Contraindications & precautions (as stated) / Goals & training focus (as stated) / Open points (as noted)
 German: Aktueller Stand & Beschwerden / Relevante Vorgeschichte / Befunde aus dem Termin / Kontraindikationen & Vorsichtsmaßnahmen (laut Angaben) / Ziele & Trainingsfokus (laut Angaben) / Offene Punkte (laut Notizen)
 Write in the language most of the answers and notes are in (German or English), headings included.
-Where nothing is stated for a heading, write "- Not stated" (German: "- Keine Angaben").`,
+Leave out a heading completely when nothing is stated for it.`,
         AI_MODEL,
         // Room for long notes — at 1,500 tokens the summary was cut off mid-sentence
         4096,
@@ -573,6 +579,7 @@ Where nothing is stated for a heading, write "- Not stated" (German: "- Keine An
   const customWithLabels = customQuestions.filter((f) => f.label.trim());
 
   const allSections: (AnamnesisSection & { isCustom?: boolean })[] = templateSnapshot.sections;
+  const hasTranslation = templateSnapshot.sections.some((sec) => sec.fields.some((f) => f.translations && Object.keys(f.translations).length > 0));
   // "Show only if" — the same questions as in the athlete's form (sex: as entered in the form, else the profile)
   const conditionCtx = contextFor(templateSnapshot.sections, fieldValues, conditionSex);
 
@@ -584,6 +591,19 @@ Where nothing is stated for a heading, write "- Not stated" (German: "- Keine An
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
             <span><span className="text-xs text-muted-foreground mr-1.5">Date of session</span>{conductedLabel}</span>
             <span><span className="text-xs text-muted-foreground mr-1.5">Template</span>{templateSnapshot.name || '—'}</span>
+            {hasTranslation && (
+              <span className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">Shown in</span>
+                <span className="flex rounded-md border overflow-hidden text-xs">
+                  {(['de', 'en'] as const).map((l) => (
+                    <button key={l} type="button" onClick={() => setDisplayLang(l)}
+                      className={cn('px-2 py-0.5', displayLang === l ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-accent')}>
+                      {l.toUpperCase()}
+                    </button>
+                  ))}
+                </span>
+              </span>
+            )}
             <span className="text-xs text-muted-foreground ml-auto">Read-only — click "Edit" to change answers</span>
           </div>
         ) : (
@@ -690,7 +710,7 @@ Where nothing is stated for a heading, write "- Not stated" (German: "- Keine An
             return (
             <div key={section.id} className="space-y-3">
               <div className="flex items-end justify-between gap-3 border-b pb-1">
-                <h3 className="text-sm font-semibold text-foreground">{section.title}</h3>
+                <h3 className="text-sm font-semibold text-foreground">{localizeSection(section, displayLang).title}</h3>
                 {/* Whether the athlete fills in this section through the form link — for this anamnesis */}
                 {readOnly ? (
                   isAthleteSection(section) && <span className="text-xs text-muted-foreground shrink-0">Filled in by athlete</span>
@@ -708,9 +728,13 @@ Where nothing is stated for a heading, write "- Not stated" (German: "- Keine An
                 </label>
                 )}
               </div>
-              {section.helpText && <p className="text-xs text-muted-foreground -mt-1.5 whitespace-pre-wrap">{section.helpText}</p>}
+              {localizeSection(section, displayLang).helpText && (
+                <p className="text-xs text-muted-foreground -mt-1.5 whitespace-pre-wrap">{localizeSection(section, displayLang).helpText}</p>
+              )}
               <div className="space-y-3">
-                {shownFields.map((field) => (
+                {shownFields.map((original) => {
+                  const field = localizeField(original, displayLang);
+                  return (
                   <div key={field.id} className="space-y-1">
                     <Label className={cn(field.fieldType === 'info' ? 'text-sm font-semibold' : 'text-xs')}>{field.label}</Label>
                     {field.helpText && field.fieldType !== 'info' && (
@@ -718,12 +742,14 @@ Where nothing is stated for a heading, write "- Not stated" (German: "- Keine An
                     )}
                     <AnamnesisFieldInput
                       field={field}
+                      lang={displayLang}
                       value={fieldValues[field.id] ?? ''}
                       onChange={(v) => setFieldValue(field.id, v)}
                       readOnly={readOnly}
                     />
                   </div>
-                ))}
+                  );
+                })}
                 {hiddenCount > 0 && (
                   <p className="text-xs text-muted-foreground italic">
                     {hiddenCount} question{hiddenCount === 1 ? '' : 's'} not shown — {hiddenCount === 1 ? 'its' : 'their'} "show only if" condition isn't met.
@@ -1408,7 +1434,7 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
         onClose={() => setSendOpen(false)}
         athleteName={athleteName}
         privacy={privacy}
-        onCreate={(templateId, snapshot) => sendFormLink(templateId, snapshot)}
+        onCreate={(templateId, snapshot, language) => sendFormLink(templateId, snapshot, language)}
         onRenew={(id) => updateFormLink(id, 'renew')}
         onWithdraw={(id) => updateFormLink(id, 'withdraw')}
       />

@@ -17,7 +17,7 @@ import { Document, Font, Image, Page, StyleSheet, Text, View } from '@react-pdf/
 import type { AnamnesisAttachment, AnamnesisField, AnamnesisNote, AnamnesisSection, AnamnesisConsent } from '@/types/anamnesis';
 import {
   DAY_LABELS, YESNO_OTHER, YESNO_OTHER_TEXT, WEEK_GRID_COLORS, WEEK_GRID_HOURS, WEEK_GRID_LABELS, contextFor, conditionState, describeCondition, formatAnswer,
-  isAnswered, parseBodyMap, parseDateRanges, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
+  isAnswered, isNegativeChoice, onlyYesItems, parseBodyMap, parseDateRanges, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
   type BodyMapSpot, type WeekGridCell,
 } from '@/utils/anamnesisAnswers';
 import { localizeField, localizeSection } from '@/utils/anamnesisI18n';
@@ -52,7 +52,7 @@ export interface AnamnesisPdfProps {
     sports?: string[];
     occupation?: string;
   };
-  branding?: { logoBase64?: string; primaryColor?: string; businessName?: string };
+  branding?: { logoBase64?: string; primaryColor?: string; businessName?: string; businessAddress?: string; businessPhone?: string };
   coachName?: string;
 }
 
@@ -537,6 +537,8 @@ export interface AnamnesisReportContent {
   notes: boolean;
   summary: boolean;
   attachments: boolean;
+  /** Leave out choice answers that only say no / none (never free text) */
+  hideNegatives?: boolean;
 }
 
 export interface AnamnesisReportProps extends AnamnesisPdfProps {
@@ -598,11 +600,13 @@ export function AnamnesisReportPDF(props: AnamnesisReportProps) {
       sec,
       fields: sec.fields.filter((f) => f.fieldType !== 'info'
         && conditionState(f.condition, ctx) !== 'notMet'
-        && isAnswered(f, props.fieldValues[f.id])),
+        && isAnswered(f, props.fieldValues[f.id])
+        && !(include.hideNegatives && isNegativeChoice(f, props.fieldValues[f.id]))),
     }))
     .filter((x) => x.fields.length > 0);
   const customs = include.customQuestions
-    ? props.customQuestions.filter((f) => f.label.trim() && isAnswered(f, props.customFieldValues[f.id]))
+    ? props.customQuestions.filter((f) => f.label.trim() && isAnswered(f, props.customFieldValues[f.id])
+      && !(include.hideNegatives && isNegativeChoice(f, props.customFieldValues[f.id])))
     : [];
 
   const info: Array<[string, string]> = [
@@ -626,7 +630,12 @@ export function AnamnesisReportPDF(props: AnamnesisReportProps) {
               : null}
             {studio ? <Text style={{ fontSize: 10, fontWeight: 700 }}>{studio}</Text> : null}
             {props.coachName && props.coachName !== studio ? <Text style={{ fontSize: 9, color: C.fg2 }}>{props.coachName}</Text> : null}
-            {props.contactEmail ? <Text style={{ fontSize: 9, color: C.fg2 }}>{props.contactEmail}</Text> : null}
+            {(branding?.businessAddress ?? '').split('\n').map((l) => l.trim()).filter(Boolean).map((l, i) => (
+              <Text key={i} style={{ fontSize: 9, color: C.fg2 }}>{l}</Text>
+            ))}
+            {[branding?.businessPhone?.trim(), props.contactEmail].filter(Boolean).length > 0
+              ? <Text style={{ fontSize: 9, color: C.fg2 }}>{[branding?.businessPhone?.trim(), props.contactEmail].filter(Boolean).join(' · ')}</Text>
+              : null}
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={{ fontSize: 19, fontWeight: 700 }}>{r.title}</Text>
@@ -655,7 +664,10 @@ export function AnamnesisReportPDF(props: AnamnesisReportProps) {
         {sections.map(({ sec, fields }) => (
           <View key={sec.id}>
             <SectionTitle title={localizeSection(sec, lang).title} accent={accent} />
-            {fields.map((f) => <ReportAnswer key={f.id} field={f} value={props.fieldValues[f.id] ?? ''} lang={lang} />)}
+            {fields.map((f) => (
+              <ReportAnswer key={f.id} field={f} lang={lang}
+                value={include.hideNegatives && f.fieldType === 'yesnoList' ? onlyYesItems(props.fieldValues[f.id]) : (props.fieldValues[f.id] ?? '')} />
+            ))}
           </View>
         ))}
 
