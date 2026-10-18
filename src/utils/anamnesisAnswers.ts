@@ -15,6 +15,7 @@ import type {
 } from '@/types/anamnesis';
 import { PROFILE_SEX_SOURCE } from '@/types/anamnesis';
 import { BODY_REGIONS, getRegionKeyLabel } from '@/lib/bodyMapData';
+import { optionLabel } from '@/utils/anamnesisI18n';
 
 export type AnswerLang = 'de' | 'en';
 
@@ -180,27 +181,33 @@ export function weekGridLines(grid: WeekGridValue, lang: AnswerLang): string[] {
   return lines;
 }
 
-/** Plain-text answer — for the change history, the AI, the PDF and read-only fallbacks */
+/**
+ * Plain-text answer — for the change history, the AI, the PDF and read-only fallbacks. Choices and
+ * checklist items are shown in `lang` when the question has a translation into it (the PDF in the
+ * template's other language); otherwise as stored.
+ */
 export function formatAnswer(field: AnamnesisField, value: string | undefined, lang: AnswerLang = 'en'): string {
   const v = (value ?? '').trim();
   if (!v) return '';
+  const label = (x: string) => optionLabel(field, x, lang);
   const yes = lang === 'de' ? 'Ja' : 'Yes';
   const no = lang === 'de' ? 'Nein' : 'No';
   switch (field.fieldType) {
     case 'boolean': return v === 'true' ? yes : v === 'false' ? no : v;
+    case 'select': return label(v);
     case 'multiselect': {
       const m = parseMulti(v);
       if (!m.length) return v;
       // Entries that aren't one of the choices are the free text of "Sonstiges"
       const opts = field.options ?? [];
-      return m.map(x => (opts.includes(x) ? x : `${lang === 'de' ? 'Sonstiges' : 'Other'}: ${x}`)).join(', ');
+      return m.map(x => (opts.includes(x) ? label(x) : `${lang === 'de' ? 'Sonstiges' : 'Other'}: ${x}`)).join(', ');
     }
     case 'scale': return `${v} / ${field.scaleMax ?? 10}`;
     case 'date': return formatDate(v, lang);
     case 'yesnoList': {
       const a = parseYesNoList(v);
       const items = field.options ?? Object.keys(a).filter(k => k !== YESNO_OTHER && k !== YESNO_OTHER_TEXT);
-      const lines = items.filter(i => a[i]).map(i => `${i}: ${a[i] === 'yes' ? yes : no}`);
+      const lines = items.filter(i => a[i]).map(i => `${label(i)}: ${a[i] === 'yes' ? yes : no}`);
       if (a[YESNO_OTHER]) {
         const label = lang === 'de' ? 'Sonstiges' : 'Other';
         lines.push(`${label}${a[YESNO_OTHER_TEXT]?.trim() ? ` (${a[YESNO_OTHER_TEXT].trim()})` : ''}: ${a[YESNO_OTHER] === 'yes' ? yes : no}`);
@@ -212,7 +219,14 @@ export function formatAnswer(field: AnamnesisField, value: string | undefined, l
       return parseList(v)
         .filter(r => Object.values(r).some(x => x?.trim()))
         .map(r => cols.length
-          ? cols.filter(c => r[c.id]?.trim()).map(c => `${c.label}: ${c.type === 'date' ? formatDate(r[c.id], lang) : r[c.id]}`).join(', ')
+          ? cols.filter(c => r[c.id]?.trim()).map(c => {
+            // Column label and choice in `lang` when translated
+            const ci = cols.indexOf(c);
+            const tc = field.translations?.[lang]?.listColumns?.[ci];
+            const val = c.type === 'date' ? formatDate(r[c.id], lang)
+              : c.type === 'select' ? (tc?.options?.[(c.options ?? []).indexOf(r[c.id])]?.trim() || r[c.id]) : r[c.id];
+            return `${tc?.label?.trim() || c.label}: ${val}`;
+          }).join(', ')
           : Object.values(r).join(', '))
         .map(line => `- ${line}`)
         .join('\n');

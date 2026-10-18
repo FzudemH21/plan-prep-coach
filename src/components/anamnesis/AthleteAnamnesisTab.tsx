@@ -59,7 +59,7 @@ import {
   isAthleteSection,
   type AthleteAnamnesis, type AnamnesisField, type AnamnesisSection, type AnamnesisAttachment,
   type AnamnesisTemplateDraft, type AnamnesisConsent, type AnamnesisNote,
-  noteEntriesOf, notesAsText,
+  noteEntriesOf, notesAsText, snapshotOf,
 } from '@/types/anamnesis';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -331,15 +331,15 @@ function RecordForm({
     const t = templates.find((x) => x.id === id);
     if (!t) return;
     setTemplateId(id);
-    setTemplateSnapshot({ name: t.name, sections: t.sections, ...(t.introText ? { introText: t.introText } : {}) });
+    setTemplateSnapshot(snapshotOf(t));
     setFieldValues({});
     setCustomFieldValues({});
     setAiSummary(null);
   };
 
-  const handleSaveNewTemplate = async ({ name, sections, introText }: AnamnesisTemplateDraft) => {
+  const handleSaveNewTemplate = async ({ name, sections, introText, language, translations }: AnamnesisTemplateDraft) => {
     setSavingNewTemplate(true);
-    const created = await createTemplate(name, sections, introText);
+    const created = await createTemplate(name, sections, introText, { language, translations });
     setSavingNewTemplate(false);
     if (created) {
       setShowNewTemplate(false);
@@ -347,20 +347,20 @@ function RecordForm({
     }
   };
 
-  const handleSaveEditTemplate = async ({ name, sections, introText }: AnamnesisTemplateDraft) => {
+  const handleSaveEditTemplate = async ({ name, sections, introText, language, translations }: AnamnesisTemplateDraft) => {
     if (!templateId) return;
     setSavingEditTemplate(true);
-    const ok = await updateTemplate(templateId, { name, sections, introText });
+    const ok = await updateTemplate(templateId, { name, sections, introText, language, translations });
     setSavingEditTemplate(false);
     if (ok) {
       setShowEditTemplate(false);
-      setTemplateSnapshot({ name, sections, ...(introText.trim() ? { introText: introText.trim() } : {}) });
+      setTemplateSnapshot(snapshotOf({ name, sections, introText, language, translations }));
     }
   };
 
-  const handleSaveEditAsNewTemplate = async ({ name, sections, introText }: AnamnesisTemplateDraft) => {
+  const handleSaveEditAsNewTemplate = async ({ name, sections, introText, language, translations }: AnamnesisTemplateDraft) => {
     setSavingEditAsNew(true);
-    const created = await createTemplate(name, sections, introText);
+    const created = await createTemplate(name, sections, introText, { language, translations });
     setSavingEditAsNew(false);
     if (created) {
       setShowEditTemplate(false);
@@ -641,7 +641,7 @@ Where nothing is stated for a heading, write "- Not stated" (German: "- Keine An
             return t ? (
               <TemplateEditorDialog
                 key={`edit-${templateId}`}
-                initial={{ name: t.name, sections: t.sections, introText: t.introText }}
+                initial={{ name: t.name, sections: t.sections, introText: t.introText, language: t.language, translations: t.translations }}
                 open
                 onClose={() => setShowEditTemplate(false)}
                 onSave={handleSaveEditTemplate}

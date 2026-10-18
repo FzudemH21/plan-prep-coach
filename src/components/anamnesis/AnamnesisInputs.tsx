@@ -51,8 +51,10 @@ function uid() { return Math.random().toString(36).slice(2, 10); }
 
 // ── Multiple choice ───────────────────────────────────────────────────────────
 
-export function MultiChoiceInput({ options, value, onChange, size = 'sm', allowOther, lang = 'en' }: {
+export function MultiChoiceInput({ options, labels, value, onChange, size = 'sm', allowOther, lang = 'en' }: {
   options: string[]; value: string; onChange: (v: string) => void; size?: Size;
+  /** The choices as shown (translation) — the stored values stay `options` */
+  labels?: string[];
   /** An extra "Sonstiges" choice with free text */
   allowOther?: boolean;
   lang?: AnswerLang;
@@ -99,7 +101,7 @@ export function MultiChoiceInput({ options, value, onChange, size = 'sm', allowO
             )}>
               {on && <Check className={size === 'lg' ? 'h-4 w-4' : 'h-3 w-3'} />}
             </span>
-            <span className="flex-1 min-w-0">{isOther ? otherLabel : o}</span>
+            <span className="flex-1 min-w-0">{isOther ? otherLabel : (labels?.[options.indexOf(o)] ?? o)}</span>
           </button>
         );
       })}
@@ -196,8 +198,10 @@ export function ScaleInput({ field, value, onChange, size = 'sm', lang = 'en' }:
 
 // ── Yes / no list ─────────────────────────────────────────────────────────────
 
-export function YesNoListInput({ items, value, onChange, lang, size = 'sm', readOnly, allowOther }: {
+export function YesNoListInput({ items, itemLabels, value, onChange, lang, size = 'sm', readOnly, allowOther }: {
   items: string[]; value: string; onChange: (v: string) => void; lang: AnswerLang; size?: Size; readOnly?: boolean;
+  /** The items as shown (translation) — the stored keys stay `items` */
+  itemLabels?: string[];
   /** An extra "Sonstiges" row — with "Ja", a text field for what it is */
   allowOther?: boolean;
 }) {
@@ -223,7 +227,7 @@ export function YesNoListInput({ items, value, onChange, lang, size = 'sm', read
             <div key={item} className={cn(size === 'lg' ? 'px-3 py-2.5' : 'px-2.5 py-1.5', 'space-y-2')}>
               <div className="flex items-center gap-3">
                 <span className={cn('flex-1 min-w-0', size === 'lg' ? 'text-base' : 'text-sm')}>
-                  {isOther ? otherLabel : item}
+                  {isOther ? otherLabel : (itemLabels?.[items.indexOf(item)] ?? item)}
                   {isOther && readOnly && answers[YESNO_OTHER_TEXT] ? `: ${answers[YESNO_OTHER_TEXT]}` : ''}
                 </span>
                 {readOnly ? (
@@ -282,7 +286,7 @@ function ListCell({ column, value, onChange, size }: {
   if (column.type === 'select') {
     return (
       <div className="flex flex-wrap gap-1.5">
-        {(column.options ?? []).map(o => (
+        {(column.options ?? []).map((o, oi) => (
           <button
             key={o}
             type="button"
@@ -293,7 +297,7 @@ function ListCell({ column, value, onChange, size }: {
               value === o ? 'bg-primary text-primary-foreground border-primary' : `bg-background border-input ${HOVER_BG} active:bg-accent`,
             )}
           >
-            {o}
+            {column.optionLabels?.[oi] ?? o}
           </button>
         ))}
       </div>

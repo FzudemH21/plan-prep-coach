@@ -18,7 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
 import { isPrivacyNoticeComplete, type CoachPrivacyNoticeState } from '@/hooks/useCoachPrivacyNotice';
 import { anamnesisFormUrl, FORM_LINK_DAYS } from '@/hooks/useAthleteAnamneses';
-import { isAthleteSection, type AthleteAnamnesis, type AnamnesisTemplateSnapshot, type AnamnesisProfileAnswers } from '@/types/anamnesis';
+import { isAthleteSection, snapshotOf, type AthleteAnamnesis, type AnamnesisTemplateSnapshot, type AnamnesisProfileAnswers } from '@/types/anamnesis';
 import { ACTIVITY_LEVEL_LABELS, SEX_LABELS, formatBillingAddress, normalizeBillingAddress, type Athlete } from '@/types/athlete';
 
 // ── Privacy notice ────────────────────────────────────────────────────────────
@@ -228,7 +228,7 @@ export function SendFormLinkDialog({ open, onClose, athleteName, privacy, onCrea
     if (!template) return;
     setCreating(true);
     try {
-      const rec = await onCreate(template.id, { name: template.name, sections: template.sections, ...(template.introText ? { introText: template.introText } : {}) });
+      const rec = await onCreate(template.id, snapshotOf(template));
       setCreated(rec);
     } catch (err) {
       toast({ title: 'Could not create the link', description: err instanceof Error ? err.message : String(err), variant: 'destructive' });

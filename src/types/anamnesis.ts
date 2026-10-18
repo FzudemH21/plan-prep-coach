@@ -18,6 +18,8 @@ export interface AnamnesisListColumn {
   label: string;
   type: 'text' | 'number' | 'date' | 'select';
   options?: string[];
+  /** Display only (never stored): the choices as shown in the current language */
+  optionLabels?: string[];
 }
 
 /**
@@ -31,6 +33,37 @@ export interface AnamnesisCondition {
 }
 
 export const PROFILE_SEX_SOURCE = 'profile.sex';
+
+// ── Language versions ─────────────────────────────────────────────────────────
+// A template is written in its main language (`language`, default German) and can carry a
+// translation into the other one. Answers are always stored with the main language's values (choices,
+// checklist items), so conditions and the coach's view don't depend on the language the athlete used;
+// the translation is only what the athlete sees (and the PDF in that language).
+
+export type AnamnesisLang = 'de' | 'en';
+export const ANAMNESIS_LANG_LABELS: Record<AnamnesisLang, string> = { de: 'German', en: 'English' };
+export const otherLang = (lang: AnamnesisLang): AnamnesisLang => (lang === 'de' ? 'en' : 'de');
+
+/** The translated texts of a question — options / items / list columns by position */
+export interface AnamnesisFieldTranslation {
+  label?: string;
+  helpText?: string;
+  placeholder?: string;
+  options?: string[];
+  scaleMinLabel?: string;
+  scaleMaxLabel?: string;
+  listColumns?: Array<{ label?: string; options?: string[] }>;
+}
+
+export interface AnamnesisSectionTranslation {
+  title?: string;
+  helpText?: string;
+}
+
+export interface AnamnesisTemplateTranslation {
+  name?: string;
+  introText?: string;
+}
 
 export interface AnamnesisAttachment {
   name: string;
@@ -60,6 +93,10 @@ export interface AnamnesisField {
   bodyMapIntensity?: boolean;
   /** multiselect: an extra "Sonstiges" choice with free text (stored in the answer as the text itself) */
   allowOther?: boolean;
+  /** The question in the template's other language */
+  translations?: Partial<Record<AnamnesisLang, AnamnesisFieldTranslation>>;
+  /** Display only (never stored): the options as shown in the current language — set by localizeField */
+  optionLabels?: string[];
 }
 
 export interface AnamnesisSection {
@@ -69,6 +106,7 @@ export interface AnamnesisSection {
   helpText?: string;
   condition?: AnamnesisCondition;
   fields: AnamnesisField[];
+  translations?: Partial<Record<AnamnesisLang, AnamnesisSectionTranslation>>;
   /** Filled in by the athlete through the online form link. Default (unset): yes — only an explicit
    *  false keeps the section for the coach (e.g. movement screening). */
   athleteFills?: boolean;
@@ -84,6 +122,9 @@ export interface AnamnesisTemplate {
   sections: AnamnesisSection[];
   /** Start-screen text of the online form link; empty = the standard text */
   introText?: string;
+  /** Main language (default: German) and the translation of name / intro (migration 20261019) */
+  language?: AnamnesisLang;
+  translations?: Partial<Record<AnamnesisLang, AnamnesisTemplateTranslation>>;
   createdAt: string;
   updatedAt: string;
 }
@@ -92,6 +133,8 @@ export interface AnamnesisTemplateSnapshot {
   name: string;
   sections: AnamnesisSection[];
   introText?: string;
+  language?: AnamnesisLang;
+  translations?: Partial<Record<AnamnesisLang, AnamnesisTemplateTranslation>>;
 }
 
 /** What the template editor saves */
@@ -99,6 +142,20 @@ export interface AnamnesisTemplateDraft {
   name: string;
   sections: AnamnesisSection[];
   introText: string;
+  language?: AnamnesisLang;
+  translations?: Partial<Record<AnamnesisLang, AnamnesisTemplateTranslation>>;
+}
+
+/** The copy of a template an anamnesis keeps (its questions as they were when it was created) */
+export function snapshotOf(t: { name: string; sections: AnamnesisSection[]; introText?: string; language?: AnamnesisLang;
+  translations?: Partial<Record<AnamnesisLang, AnamnesisTemplateTranslation>> }): AnamnesisTemplateSnapshot {
+  return {
+    name: t.name,
+    sections: t.sections,
+    ...(t.introText?.trim() ? { introText: t.introText.trim() } : {}),
+    ...(t.language ? { language: t.language } : {}),
+    ...(t.translations && Object.keys(t.translations).length ? { translations: t.translations } : {}),
+  };
 }
 
 export interface AthleteAnamnesis {

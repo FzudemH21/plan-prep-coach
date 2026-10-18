@@ -12,6 +12,7 @@
 import type { AnamnesisCondition, AnamnesisField, AnamnesisSection, AnamnesisTemplateDraft } from '@/types/anamnesis';
 import { DEFAULT_ANAMNESIS_TEMPLATE, PROFILE_SEX_SOURCE } from '@/types/anamnesis';
 import { TRAINING_HEALTH_ANAMNESIS_EN } from '@/data/anamnesisPresetEn';
+import { withTranslation } from '@/utils/anamnesisI18n';
 
 // ── Check question and its answers (conditions refer to them) ───────────────
 
@@ -299,8 +300,18 @@ export const TRAINING_HEALTH_ANAMNESIS: AnamnesisTemplateDraft = {
 
 /** "Start from" choices in the template editor */
 export const ANAMNESIS_PRESETS: Array<{ id: string; label: string; draft: AnamnesisTemplateDraft }> = [
-  { id: 'training-health', label: 'Anamnese – Training & Gesundheit (German)', draft: TRAINING_HEALTH_ANAMNESIS },
-  { id: 'training-health-en', label: 'Anamnesis – Training & Health (English)', draft: TRAINING_HEALTH_ANAMNESIS_EN },
+  // Bilingual: German questions with the English version (the athlete switches DE / EN in the form) —
+  // or the other way round for an English-speaking practice
+  {
+    id: 'training-health',
+    label: 'Anamnese – Training & Gesundheit (German + English)',
+    draft: withTranslation({ ...TRAINING_HEALTH_ANAMNESIS, language: 'de' }, TRAINING_HEALTH_ANAMNESIS_EN, 'en'),
+  },
+  {
+    id: 'training-health-en',
+    label: 'Anamnesis – Training & Health (English + German)',
+    draft: withTranslation({ ...TRAINING_HEALTH_ANAMNESIS_EN, language: 'en' }, TRAINING_HEALTH_ANAMNESIS, 'de'),
+  },
   {
     id: 'general',
     label: 'General Anamnesis (English, with movement screening)',

@@ -20,6 +20,7 @@ import {
   isAnswered, parseBodyMap, parseDateRanges, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
   type BodyMapSpot, type WeekGridCell,
 } from '@/utils/anamnesisAnswers';
+import { localizeField, localizeSection } from '@/utils/anamnesisI18n';
 
 Font.register({
   family: 'Geist',
@@ -126,8 +127,10 @@ function Lines({ count }: { count: number }) {
   return <View>{Array.from({ length: count }, (_, i) => <View key={i} style={s.writeLine} />)}</View>;
 }
 
-function Options({ labels, picked }: { labels: string[]; picked?: string | string[] }) {
-  const isPicked = (label: string) => (Array.isArray(picked) ? picked.includes(label) : picked === label);
+/** Tick boxes — `values` are what is stored (main language), `labels` what is printed (may be translated) */
+function Options({ labels, values, picked }: { labels: string[]; values?: string[]; picked?: string | string[] }) {
+  const valueOf = (label: string) => values?.[labels.indexOf(label)] ?? label;
+  const isPicked = (label: string) => (Array.isArray(picked) ? picked.includes(valueOf(label)) : picked === valueOf(label));
   return (
     <View style={s.optionRow}>
       {labels.map((label) => (
@@ -236,7 +239,8 @@ function ListBlock({ field, value, lang }: { field: AnamnesisField; value: strin
         <View key={i} style={{ flexDirection: 'row', borderTopWidth: 0.5, borderTopColor: C.border, minHeight: rows.length > 0 ? 0 : LINE_H }}>
           {cols.map((c) => (
             <Text key={c.id} style={{ flex: 1, fontSize: 9.5, paddingVertical: 3, paddingHorizontal: 4 }}>
-              {c.type === 'date' && r[c.id] ? formatDate(r[c.id], L[lang].locale) : (r[c.id] ?? '')}
+              {c.type === 'date' && r[c.id] ? formatDate(r[c.id], L[lang].locale)
+                : c.type === 'select' && r[c.id] ? (c.optionLabels?.[(c.options ?? []).indexOf(r[c.id])] ?? r[c.id]) : (r[c.id] ?? '')}
             </Text>
           ))}
         </View>
@@ -288,7 +292,7 @@ function YesNoListBlock({ field, value, lang }: { field: AnamnesisField; value: 
           <Text style={{ flex: 1, fontSize: 9.5, color: C.fg1 }}>
             {item === YESNO_OTHER
               ? `${lang === 'de' ? 'Sonstiges' : 'Other'}: ${answers[YESNO_OTHER_TEXT] ?? '______________________________'}`
-              : item}
+              : (field.optionLabels?.[(field.options ?? []).indexOf(item)] ?? item)}
           </Text>
         </View>
       ))}
@@ -296,12 +300,14 @@ function YesNoListBlock({ field, value, lang }: { field: AnamnesisField; value: 
   );
 }
 
-function FieldBlock({ field, value, lang, onlyIf }: {
+function FieldBlock({ field: original, value, lang, onlyIf }: {
   field: AnamnesisField; value: string; lang: AnamnesisPdfLang;
   /** Shown when it depends on an earlier answer that isn't known yet */
   onlyIf?: string;
 }) {
   const t = L[lang];
+  // The question in the PDF's language when the template has a translation into it
+  const field = localizeField(original, lang);
   const answered = isAnswered(field, value) && field.fieldType !== 'info';
   const type = field.fieldType;
   // A question is never split across two pages (a block taller than a page still breaks)
@@ -322,7 +328,7 @@ function FieldBlock({ field, value, lang, onlyIf }: {
         : type === 'yesnoList' ? <YesNoListBlock field={field} value={value} lang={lang} />
         : type === 'multiselect' ? (
           <View>
-            <Options labels={field.options ?? []} picked={parseMulti(value)} />
+            <Options labels={field.optionLabels ?? field.options ?? []} values={field.options} picked={parseMulti(value)} />
             {field.allowOther && (() => {
               const other = parseMulti(value).find((x) => !(field.options ?? []).includes(x));
               return (
@@ -356,7 +362,7 @@ function FieldBlock({ field, value, lang, onlyIf }: {
             <View style={s.noteLine} />
           </>
         ) : type === 'select' && (field.options?.length ?? 0) > 0 ? (
-          <Options labels={field.options ?? []} />
+          <Options labels={field.optionLabels ?? field.options ?? []} />
         ) : type === 'boolean' ? (
           <Options labels={[t.yes, t.no]} />
         ) : type === 'textarea' ? (
@@ -453,13 +459,13 @@ export function AnamnesisPDF(props: AnamnesisPdfProps) {
           if (fields.length === 0) return null;
           return (
             <View key={section.id}>
-              <SectionTitle title={section.title} accent={accent} />
+              <SectionTitle title={localizeSection(section, lang).title} accent={accent} />
               {sectionState === 'unknown' && section.condition && (
                 <Text style={{ fontSize: 8, color: C.fg3, marginTop: -6, marginBottom: 6 }}>
                   {t.onlyIf(describeCondition(section.condition, allFields, lang))}
                 </Text>
               )}
-              {section.helpText && <Text style={{ fontSize: 8.5, color: C.fg3, marginTop: -4, marginBottom: 8 }}>{section.helpText}</Text>}
+              {localizeSection(section, lang).helpText && <Text style={{ fontSize: 8.5, color: C.fg3, marginTop: -4, marginBottom: 8 }}>{localizeSection(section, lang).helpText}</Text>}
               {fields.map((field) => (
                 <FieldBlock
                   key={field.id}

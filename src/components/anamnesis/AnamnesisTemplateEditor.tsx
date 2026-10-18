@@ -35,8 +35,10 @@ import {
 } from 'lucide-react';
 import { AnamnesisFieldInput } from '@/components/anamnesis/AnamnesisInputs';
 import { ANAMNESIS_PRESETS } from '@/data/anamnesisPresets';
+import { AnamnesisTranslationEditor } from '@/components/anamnesis/AnamnesisTranslationEditor';
+import { translationProgress } from '@/utils/anamnesisI18n';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
-import { DEFAULT_ANAMNESIS_TEMPLATE, PROFILE_SEX_SOURCE, isAthleteSection } from '@/types/anamnesis';
+import { ANAMNESIS_LANG_LABELS, DEFAULT_ANAMNESIS_TEMPLATE, PROFILE_SEX_SOURCE, isAthleteSection, otherLang, type AnamnesisLang } from '@/types/anamnesis';
 import type {
   AnamnesisTemplate, AnamnesisTemplateDraft, AnamnesisSection, AnamnesisField, AnamnesisFieldType, AnamnesisCondition, AnamnesisListColumn,
 } from '@/types/anamnesis';
@@ -541,7 +543,7 @@ export function TemplateEditorDialog({
   isDeleting,
   showPresets,
 }: {
-  initial: { name: string; sections: AnamnesisSection[]; introText?: string };
+  initial: { name: string; sections: AnamnesisSection[]; introText?: string } & Pick<AnamnesisTemplateDraft, 'language' | 'translations'>;
   /** New template: offer the built-in templates to start from (ANAMNESIS_PRESETS) */
   showPresets?: boolean;
   open: boolean;
@@ -556,7 +558,17 @@ export function TemplateEditorDialog({
   const [name, setName] = useState(initial.name);
   const [sections, setSections] = useState<AnamnesisSection[]>(initial.sections);
   const [introText, setIntroText] = useState(initial.introText ?? '');
-  const draft = (): AnamnesisTemplateDraft => ({ name, sections, introText });
+  // Language versions: the main language and the template-level translations (name / intro); the
+  // questions' translations live in the sections
+  const [language, setLanguage] = useState<AnamnesisLang>(initial.language ?? 'de');
+  const [translations, setTranslations] = useState(initial.translations);
+  const [mode, setMode] = useState<'questions' | 'translation'>('questions');
+  const translationLang = otherLang(language);
+  const draft = (): AnamnesisTemplateDraft => ({ name, sections, introText, language, translations });
+  const applyDraft = (d: AnamnesisTemplateDraft) => {
+    setName(d.name); setSections(d.sections); setIntroText(d.introText); setLanguage(d.language ?? 'de'); setTranslations(d.translations);
+  };
+  const [doneTr, totalTr] = translationProgress(draft(), translationLang);
   const [presetId, setPresetId] = useState('');
   const startFrom = (id: string) => {
     const preset = ANAMNESIS_PRESETS.find((p) => p.id === id);
@@ -564,10 +576,8 @@ export function TemplateEditorDialog({
     const hasContent = sections.some((s) => s.title.trim() || s.fields.some((f) => f.label.trim()));
     if (hasContent && !window.confirm('Replace what you have entered with this template?')) return;
     setPresetId(id);
-    setName(preset.draft.name);
-    setIntroText(preset.draft.introText ?? '');
     // A copy — editing must not change the built-in template
-    setSections(JSON.parse(JSON.stringify(preset.draft.sections)) as AnamnesisSection[]);
+    applyDraft(JSON.parse(JSON.stringify({ ...preset.draft, introText: preset.draft.introText ?? '' })) as AnamnesisTemplateDraft);
   };
 
   // Reset local state when dialog opens
@@ -599,6 +609,39 @@ export function TemplateEditorDialog({
           <DialogTitle>Edit Template</DialogTitle>
         </DialogHeader>
 
+        {/* Main language + the translation into the other one */}
+        <div className="px-6 pb-3 shrink-0 flex flex-wrap items-center gap-2">
+          <div className="flex rounded-md border overflow-hidden text-xs">
+            <button type="button" onClick={() => setMode('questions')}
+              className={cn('px-3 py-1.5', mode === 'questions' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-accent')}>
+              Questions ({ANAMNESIS_LANG_LABELS[language]})
+            </button>
+            <button type="button" onClick={() => setMode('translation')}
+              className={cn('px-3 py-1.5 border-l', mode === 'translation' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-accent')}>
+              {ANAMNESIS_LANG_LABELS[translationLang]} version · {doneTr}/{totalTr}
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5 ml-auto">
+            <Label className="text-xs text-muted-foreground">Main language</Label>
+            <Select value={language} onValueChange={(v) => {
+              if (v === language) return;
+              if ((doneTr > 0) && !window.confirm('Change the main language? The questions stay as written — only the label of the language changes; the existing translation is then treated as the other language.')) return;
+              setLanguage(v as AnamnesisLang);
+            }}>
+              <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="de" className="text-xs">German</SelectItem>
+                <SelectItem value="en" className="text-xs">English</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {mode === 'translation' ? (
+          <div className="flex-1 min-h-0 overflow-y-auto px-6">
+            <AnamnesisTranslationEditor draft={draft()} lang={translationLang} onChange={applyDraft} />
+          </div>
+        ) : (<>
         <div className="px-6 pb-2 shrink-0">
           {showPresets && (
             <div className="mb-3 rounded-md border bg-muted/30 p-2.5 flex items-center gap-2">
@@ -656,6 +699,8 @@ export function TemplateEditorDialog({
             </Button>
           </div>
         </div>
+
+        </>)}
 
         <DialogFooter className="px-6 py-4 border-t shrink-0 flex-row items-center">
           {onDelete && (
@@ -737,9 +782,9 @@ export function AnamnesisTemplateEditor() {
     setIsCreating(true);
   };
 
-  const handleSaveNew = async ({ name, sections, introText }: AnamnesisTemplateDraft) => {
+  const handleSaveNew = async ({ name, sections, introText, language, translations }: AnamnesisTemplateDraft) => {
     setIsSaving(true);
-    const created = await createTemplate(name, sections, introText);
+    const created = await createTemplate(name, sections, introText, { language, translations });
     setIsSaving(false);
     if (created) {
       toast({ title: 'Template created', description: `"${name}" is ready to use.` });
@@ -749,10 +794,10 @@ export function AnamnesisTemplateEditor() {
     }
   };
 
-  const handleSaveEdit = async ({ name, sections, introText }: AnamnesisTemplateDraft) => {
+  const handleSaveEdit = async ({ name, sections, introText, language, translations }: AnamnesisTemplateDraft) => {
     if (!editingTemplate) return;
     setIsSaving(true);
-    const ok = await updateTemplate(editingTemplate.id, { name, sections, introText });
+    const ok = await updateTemplate(editingTemplate.id, { name, sections, introText, language, translations });
     setIsSaving(false);
     if (ok) {
       toast({ title: 'Template saved' });
@@ -762,9 +807,9 @@ export function AnamnesisTemplateEditor() {
     }
   };
 
-  const handleSaveEditAsNew = async ({ name, sections, introText }: AnamnesisTemplateDraft) => {
+  const handleSaveEditAsNew = async ({ name, sections, introText, language, translations }: AnamnesisTemplateDraft) => {
     setIsSavingAsNew(true);
-    const created = await createTemplate(name, sections, introText);
+    const created = await createTemplate(name, sections, introText, { language, translations });
     setIsSavingAsNew(false);
     if (created) {
       toast({ title: 'Template created', description: `"${name}" saved as a new template.` });
@@ -906,7 +951,7 @@ export function AnamnesisTemplateEditor() {
       {editingTemplate && (
         <TemplateEditorDialog
           key={editingTemplate.id}
-          initial={{ name: editingTemplate.name, sections: editingTemplate.sections, introText: editingTemplate.introText }}
+          initial={{ name: editingTemplate.name, sections: editingTemplate.sections, introText: editingTemplate.introText, language: editingTemplate.language, translations: editingTemplate.translations }}
           open
           onClose={() => setEditingTemplate(null)}
           onSave={handleSaveEdit}

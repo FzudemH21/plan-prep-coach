@@ -36,6 +36,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { cn } from '@/lib/utils';
 import type { AnamnesisField, AnamnesisProfileAnswers, AnamnesisSection } from '@/types/anamnesis';
 import { contextFor, fieldState, isAnswered as answerGiven, isQuestion } from '@/utils/anamnesisAnswers';
+import { localizeField, localizeSection } from '@/utils/anamnesisI18n';
 import {
   BodyMapInput, DateRangesInput, ListInput, MultiChoiceInput, ScaleInput, WeekGridInput, YesNoListInput,
 } from '@/components/anamnesis/AnamnesisInputs';
@@ -57,6 +58,9 @@ interface FormData {
   contactEmail?: string;
   /** The template's own start-screen text (empty = standard text) */
   introText?: string | null;
+  /** Language versions (migration 20261019): the template's main language and its translations */
+  templateLanguage?: Lang | null;
+  translations?: Partial<Record<Lang, { name?: string; introText?: string }>> | null;
   /** Coach branding: logo (data URL) and accent colour (hex) */
   logo?: string | null;
   brandColor?: string | null;
@@ -281,6 +285,14 @@ export default function AnamnesisFormPage() {
       setProfile(f.profile ?? {});
       setSportsText((f.profile?.sports ?? []).join(', '));
       if (f.language === 'de' || f.language === 'en') setLang(f.language);
+      else {
+        // No translation into the browser's language → start in the template's language, so the
+        // questions and the form's own texts match (the athlete can still switch)
+        const main: Lang = f.templateLanguage === 'en' ? 'en' : 'de';
+        const browser = browserLang();
+        const hasBrowserLang = browser === main || (f.sections ?? []).some(sec => sec.fields.some(fl => fl.translations?.[browser]?.label));
+        if (!hasBrowserLang) setLang(main);
+      }
       setLoadState('ready');
     })();
     return () => { cancelled = true; };
@@ -383,7 +395,7 @@ export default function AnamnesisFormPage() {
   /** Text under the question: the section's text on its first question, then the question's help text */
   const sectionIntro = step.kind === 'question'
     && steps.findIndex(s => s.kind === 'question' && s.section.id === step.section.id) === stepIdx
-    ? step.section.helpText : undefined;
+    ? localizeSection(step.section, lang).helpText : undefined;
 
   // ── Consent / submit ───────────────────────────────────────────────────────
   const company = form?.companyName || (lang === 'de' ? 'deinem Trainerteam' : 'your coaching team');
@@ -500,7 +512,7 @@ export default function AnamnesisFormPage() {
         ) : null}
         <h1 className="text-3xl font-semibold">{t.title}</h1>
         <p className="text-base leading-relaxed whitespace-pre-wrap">
-          {form.introText?.trim() || t.intro(company)}
+          {(form.templateLanguage !== lang && form.translations?.[lang]?.introText?.trim()) || form.introText?.trim() || t.intro(company)}
         </p>
         <p className="text-sm text-muted-foreground leading-relaxed">
           {t.savedNote}<br />
@@ -603,7 +615,9 @@ export default function AnamnesisFormPage() {
         break;
     }
   } else if (step.kind === 'question') {
-    const { field, section } = step;
+    // In the selected language when the template has a translation (values stay the main language's)
+    const field = localizeField(step.field, lang);
+    const section = localizeSection(step.section, lang);
     kicker = section.title;
     heading = field.label;
     const value = values[field.id] ?? '';
@@ -617,7 +631,7 @@ export default function AnamnesisFormPage() {
           value={value} onChange={e => setValue(field.id, e.target.value)} onKeyDown={onEnter} />;
         break;
       case 'select':
-        body = <OptionList value={value} options={(field.options ?? []).map(o => ({ value: o, label: o }))}
+        body = <OptionList value={value} options={(field.options ?? []).map((o, i) => ({ value: o, label: field.optionLabels?.[i] ?? o }))}
           onPick={v => { setValue(field.id, v); if (v) nextSoon(); }} />;
         break;
       case 'boolean':
@@ -625,7 +639,7 @@ export default function AnamnesisFormPage() {
           onPick={v => { setValue(field.id, v); if (v) nextSoon(); }} />;
         break;
       case 'multiselect':
-        body = <MultiChoiceInput size="lg" lang={lang} options={field.options ?? []} allowOther={field.allowOther} value={value} onChange={v => setValue(field.id, v)} />;
+        body = <MultiChoiceInput size="lg" lang={lang} options={field.options ?? []} labels={field.optionLabels} allowOther={field.allowOther} value={value} onChange={v => setValue(field.id, v)} />;
         break;
       case 'scale':
         body = <ScaleInput size="lg" lang={lang} field={field} value={value} onChange={v => setValue(field.id, v)} />;
@@ -634,7 +648,7 @@ export default function AnamnesisFormPage() {
         body = <Input type="date" className={bigInput} value={value} onChange={e => setValue(field.id, e.target.value)} onKeyDown={onEnter} />;
         break;
       case 'yesnoList':
-        body = <YesNoListInput size="lg" lang={lang} items={field.options ?? []} allowOther={field.allowOther} value={value} onChange={v => setValue(field.id, v)} />;
+        body = <YesNoListInput size="lg" lang={lang} items={field.options ?? []} itemLabels={field.optionLabels} allowOther={field.allowOther} value={value} onChange={v => setValue(field.id, v)} />;
         break;
       case 'list':
         body = <ListInput size="lg" lang={lang} columns={field.listColumns ?? []} value={value} onChange={v => setValue(field.id, v)} />;
@@ -697,8 +711,8 @@ export default function AnamnesisFormPage() {
           {heading}
         </h1>
         {sectionIntro && <p className="text-sm text-muted-foreground whitespace-pre-wrap">{sectionIntro}</p>}
-        {step.kind === 'question' && step.field.helpText && (
-          <p className={cn('whitespace-pre-wrap', isQuestion(step.field) ? 'text-base text-muted-foreground' : 'text-lg leading-relaxed')}>{step.field.helpText}</p>
+        {step.kind === 'question' && localizeField(step.field, lang).helpText && (
+          <p className={cn('whitespace-pre-wrap', isQuestion(step.field) ? 'text-base text-muted-foreground' : 'text-lg leading-relaxed')}>{localizeField(step.field, lang).helpText}</p>
         )}
       </div>
       {body}
