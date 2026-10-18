@@ -63,6 +63,10 @@ import {
 } from '@/types/anamnesis';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { contextFor, fieldState, formatAnswer } from '@/utils/anamnesisAnswers';
+import {
+  BodyMapInput, ListInput, MultiChoiceInput, ScaleInput, WeekGridInput, YesNoListInput,
+} from '@/components/anamnesis/AnamnesisInputs';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -99,11 +103,12 @@ function blankCustomField(): AnamnesisField {
   return { id: uid(), label: '', fieldType: 'text' };
 }
 
-const FIELD_TYPE_LABELS: Record<AnamnesisFieldType, string> = {
+/** Types for the record's own questions (the structured ones need settings — use the template editor) */
+const FIELD_TYPE_LABELS: Partial<Record<AnamnesisFieldType, string>> = {
   text: 'Short text',
   textarea: 'Long text',
   number: 'Number',
-  select: 'Dropdown',
+  date: 'Date',
   boolean: 'Yes / No',
 };
 
@@ -120,6 +125,23 @@ function AnamnesisFieldInput({
   onChange: (v: string) => void;
   readOnly?: boolean;
 }) {
+  // Structured types — the same inputs as the athlete's form link, compact and in English
+  switch (field.fieldType) {
+    case 'info':
+      return field.helpText ? <p className="text-sm text-muted-foreground whitespace-pre-wrap">{field.helpText}</p> : null;
+    case 'yesnoList':
+      return <YesNoListInput lang="en" items={field.options ?? []} value={value} onChange={onChange} readOnly={readOnly} />;
+    case 'list':
+      return <ListInput lang="en" columns={field.listColumns ?? []} value={value} onChange={onChange} readOnly={readOnly} />;
+    case 'bodyMap':
+      return <BodyMapInput lang="en" field={field} value={value} onChange={onChange} readOnly={readOnly} />;
+    case 'weekGrid':
+      if (readOnly && !value) return <p className="text-sm text-muted-foreground italic">—</p>;
+      return <WeekGridInput lang="en" value={value} onChange={onChange} readOnly={readOnly} />;
+    default:
+      break;
+  }
+
   if (readOnly) {
     if (!value) return <p className="text-sm text-muted-foreground italic">—</p>;
     if (field.fieldType === 'boolean') {
@@ -129,10 +151,16 @@ function AnamnesisFieldInput({
         </Badge>
       );
     }
-    return <p className="text-sm whitespace-pre-wrap">{value}</p>;
+    return <p className="text-sm whitespace-pre-wrap">{formatAnswer(field, value) || value}</p>;
   }
 
   switch (field.fieldType) {
+    case 'multiselect':
+      return <MultiChoiceInput options={field.options ?? []} value={value} onChange={onChange} />;
+    case 'scale':
+      return <ScaleInput field={field} value={value} onChange={onChange} />;
+    case 'date':
+      return <Input type="date" className="h-9 text-sm w-48" value={value} onChange={(e) => onChange(e.target.value)} />;
     case 'textarea':
       return (
         <Textarea
@@ -261,15 +289,19 @@ function CustomFieldEditor({
 function buildSummaryPrompt(
   record: Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'createdAt' | 'updatedAt'>,
   athleteName: string,
+  sex?: string | null,
 ): string {
   const sections = record.templateSnapshot.sections;
   const parts: string[] = [`Athlete: ${athleteName}`, `Date: ${record.conductedAt}`, ''];
+  const ctx = contextFor(sections, record.fieldValues, sex);
 
   for (const section of sections) {
     const rows: string[] = [];
     for (const field of section.fields) {
-      const val = record.fieldValues[field.id];
-      if (val) rows.push(`  ${field.label}: ${val}`);
+      // Answers of questions hidden by their condition (e.g. the earlier answer was changed) don't count
+      if (fieldState(section, field, ctx) === 'notMet') continue;
+      const val = formatAnswer(field, record.fieldValues[field.id]);
+      if (val) rows.push(val.includes('\n') ? `  ${field.label}:\n${val.split('\n').map((l) => `    ${l}`).join('\n')}` : `  ${field.label}: ${val}`);
     }
     if (rows.length > 0) {
       parts.push(`${section.title}:`);
@@ -281,7 +313,7 @@ function buildSummaryPrompt(
   if (record.customQuestions.length > 0) {
     const rows: string[] = [];
     for (const field of record.customQuestions) {
-      const val = record.customFieldValues[field.id];
+      const val = formatAnswer(field, record.customFieldValues[field.id]);
       if (val) rows.push(`  ${field.label}: ${val}`);
     }
     if (rows.length > 0) {
@@ -348,6 +380,7 @@ function RecordForm({
   const [printing, setPrinting] = useState(false);
   // Saved records open read-only; "Edit" switches to the form (no accidental changes)
   const [mode, setMode] = useState<'view' | 'edit'>(initial ? 'view' : 'edit');
+  const conditionSex = initial?.athleteProfileAnswers?.sex ?? athlete?.sex ?? null;
 
   const [showNewTemplate, setShowNewTemplate] = useState(false);
   const [savingNewTemplate, setSavingNewTemplate] = useState(false);
@@ -582,7 +615,7 @@ function RecordForm({
         aiSummary: null,
         attachments,
       };
-      const prompt = buildSummaryPrompt(dataSnapshot, athleteName);
+      const prompt = buildSummaryPrompt(dataSnapshot, athleteName, conditionSex);
       const summary = await sendMessage(
         [{ role: 'user', content: prompt }],
         `You summarise an athlete's intake assessment (anamnesis) for the coach's documentation.
@@ -705,6 +738,8 @@ Where nothing is stated for a heading, write "- Not stated" (German: "- Keine An
   const customWithLabels = customQuestions.filter((f) => f.label.trim());
 
   const allSections: (AnamnesisSection & { isCustom?: boolean })[] = templateSnapshot.sections;
+  // "Show only if" — the same questions as in the athlete's form (sex: as entered in the form, else the profile)
+  const conditionCtx = contextFor(templateSnapshot.sections, fieldValues, conditionSex);
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -806,7 +841,17 @@ Where nothing is stated for a heading, write "- Not stated" (German: "- Keine An
           )}
 
           {/* Template sections */}
-          {allSections.map((section) => (
+          {allSections.map((section) => {
+            const shownFields = section.fields.filter((f) => fieldState(section, f, conditionCtx) === 'met');
+            const hiddenCount = section.fields.length - shownFields.length;
+            if (shownFields.length === 0 && hiddenCount > 0) {
+              return (
+                <p key={section.id} className="text-xs text-muted-foreground border-b pb-1">
+                  <span className="font-semibold text-foreground">{section.title}</span> — not shown (its condition isn't met)
+                </p>
+              );
+            }
+            return (
             <div key={section.id} className="space-y-3">
               <div className="flex items-end justify-between gap-3 border-b pb-1">
                 <h3 className="text-sm font-semibold text-foreground">{section.title}</h3>
@@ -827,10 +872,14 @@ Where nothing is stated for a heading, write "- Not stated" (German: "- Keine An
                 </label>
                 )}
               </div>
+              {section.helpText && <p className="text-xs text-muted-foreground -mt-1.5 whitespace-pre-wrap">{section.helpText}</p>}
               <div className="space-y-3">
-                {section.fields.map((field) => (
+                {shownFields.map((field) => (
                   <div key={field.id} className="space-y-1">
-                    <Label className="text-xs">{field.label}</Label>
+                    <Label className={cn(field.fieldType === 'info' ? 'text-sm font-semibold' : 'text-xs')}>{field.label}</Label>
+                    {field.helpText && field.fieldType !== 'info' && (
+                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">{field.helpText}</p>
+                    )}
                     <AnamnesisFieldInput
                       field={field}
                       value={fieldValues[field.id] ?? ''}
@@ -839,9 +888,15 @@ Where nothing is stated for a heading, write "- Not stated" (German: "- Keine An
                     />
                   </div>
                 ))}
+                {hiddenCount > 0 && (
+                  <p className="text-xs text-muted-foreground italic">
+                    {hiddenCount} question{hiddenCount === 1 ? '' : 's'} not shown — {hiddenCount === 1 ? 'its' : 'their'} "show only if" condition isn't met.
+                  </p>
+                )}
               </div>
             </div>
-          ))}
+            );
+          })}
 
           {/* Custom questions */}
           {readOnly ? (

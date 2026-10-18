@@ -1,10 +1,15 @@
 import { useMemo } from 'react';
 import { useAthleteAnamneses } from '@/hooks/useAthleteAnamneses';
-import { noteEntriesOf, type AthleteAnamnesis } from '@/types/anamnesis';
+import { noteEntriesOf, type AnamnesisField, type AthleteAnamnesis } from '@/types/anamnesis';
+import { contextFor, fieldState, formatAnswer } from '@/utils/anamnesisAnswers';
 
-function answerText(value: string, fieldType: string): string {
-  if (fieldType === 'boolean') return value === 'true' ? 'Yes' : value === 'false' ? 'No' : value;
-  return value;
+/** Readable answer; multi-line answers (lists, body map, schedule) indented below the label */
+function answerLine(field: AnamnesisField, value: string | undefined): string | null {
+  const text = formatAnswer(field, value);
+  if (!text) return null;
+  return text.includes('\n')
+    ? `  **${field.label}:**\n${text.split('\n').map((l) => `    ${l}`).join('\n')}`
+    : `  **${field.label}:** ${text}`;
 }
 
 function formatRecord(rec: AthleteAnamnesis, index: number): string {
@@ -23,11 +28,14 @@ function formatRecord(rec: AthleteAnamnesis, index: number): string {
   }
 
   // All sections and their filled fields — works for any template structure
+  const ctx = contextFor(rec.templateSnapshot?.sections ?? [], rec.fieldValues, rec.athleteProfileAnswers?.sex);
   for (const section of rec.templateSnapshot?.sections ?? []) {
     const sectionLines: string[] = [];
     for (const field of section.fields) {
-      const val = rec.fieldValues[field.id]?.trim();
-      if (val) sectionLines.push(`  **${field.label}:** ${answerText(val, field.fieldType)}`);
+      // Answers of questions hidden by their "show only if" condition don't count
+      if (fieldState(section, field, ctx) === 'notMet') continue;
+      const line = answerLine(field, rec.fieldValues[field.id]);
+      if (line) sectionLines.push(line);
     }
     if (sectionLines.length > 0) {
       lines.push(`**${section.title}:**`);
@@ -37,8 +45,9 @@ function formatRecord(rec: AthleteAnamnesis, index: number): string {
 
   // Questions added to this record only
   const customLines = rec.customQuestions
-    .filter((f) => f.label.trim() && rec.customFieldValues[f.id]?.trim())
-    .map((f) => `  **${f.label}:** ${answerText(rec.customFieldValues[f.id].trim(), f.fieldType)}`);
+    .filter((f) => f.label.trim())
+    .map((f) => answerLine(f, rec.customFieldValues[f.id]))
+    .filter((l): l is string => !!l);
   if (customLines.length > 0) {
     lines.push('**Additional questions:**');
     lines.push(...customLines);

@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import type {
   AnamnesisAttachment, AnamnesisChange, AnamnesisChangeLogEntry, AnamnesisField, AnamnesisTemplateSnapshot,
 } from '@/types/anamnesis';
+import { formatAnswer } from '@/utils/anamnesisAnswers';
 
 /** The parts of an anamnesis that edit mode changes */
 export interface AnamnesisAnswersSnapshot {
@@ -24,8 +25,8 @@ const LOG_CHANGED_EVENT = 'anamnesis-change-log-updated';
 function shown(field: AnamnesisField | undefined, value: string | undefined): string {
   const v = (value ?? '').trim();
   if (!v) return '—';
-  if (field?.fieldType === 'boolean') return v === 'true' ? 'Yes' : v === 'false' ? 'No' : v;
-  return v;
+  // Readable text also for the structured types (body map, schedule grid, lists …)
+  return (field ? formatAnswer(field, v) : v) || '—';
 }
 
 /** What changed between two versions of the answers (empty when nothing did) */

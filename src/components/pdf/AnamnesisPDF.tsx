@@ -15,6 +15,11 @@
 import React from 'react';
 import { Document, Font, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import type { AnamnesisField, AnamnesisSection, AnamnesisConsent } from '@/types/anamnesis';
+import {
+  DAY_LABELS, WEEK_GRID_COLORS, WEEK_GRID_HOURS, WEEK_GRID_LABELS, contextFor, conditionState, describeCondition, formatAnswer,
+  isAnswered, parseBodyMap, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
+  type BodyMapSpot, type WeekGridCell,
+} from '@/utils/anamnesisAnswers';
 
 Font.register({
   family: 'Geist',
@@ -56,6 +61,7 @@ const L = {
     name: 'Name', birthday: 'Geburtsdatum', sex: 'Geschlecht', sports: 'Sportart(en)', occupation: 'Beruf', date: 'Termin',
     years: 'Jahre', sexes: { male: 'männlich', female: 'weiblich', other: 'divers' } as Record<string, string>,
     yes: 'Ja', no: 'Nein', notes: 'Notizen', custom: 'Weitere Fragen',
+    onlyIf: (c: string) => `Nur falls: ${c}`,
     online: (d: string) => `Online-Formular ausgefüllt am ${d}`,
     consent: 'Einwilligung zur Verarbeitung der Gesundheitsdaten erteilt',
     guardian: (n: string) => ` (durch Erziehungsberechtigte/n: ${n})`,
@@ -68,6 +74,7 @@ const L = {
     name: 'Name', birthday: 'Date of birth', sex: 'Sex', sports: 'Sport(s)', occupation: 'Occupation', date: 'Appointment',
     years: 'years', sexes: { male: 'male', female: 'female', other: 'other' } as Record<string, string>,
     yes: 'Yes', no: 'No', notes: 'Notes', custom: 'Further questions',
+    onlyIf: (c: string) => `Only if: ${c}`,
     online: (d: string) => `Online form completed on ${d}`,
     consent: 'Consent to processing of health data given',
     guardian: (n: string) => ` (by parent/guardian: ${n})`,
@@ -119,12 +126,13 @@ function Lines({ count }: { count: number }) {
   return <View>{Array.from({ length: count }, (_, i) => <View key={i} style={s.writeLine} />)}</View>;
 }
 
-function Options({ labels, picked }: { labels: string[]; picked?: string }) {
+function Options({ labels, picked }: { labels: string[]; picked?: string | string[] }) {
+  const isPicked = (label: string) => (Array.isArray(picked) ? picked.includes(label) : picked === label);
   return (
     <View style={s.optionRow}>
       {labels.map((label) => (
         <View key={label} style={s.option}>
-          <View style={[s.tick, picked === label ? { backgroundColor: C.fg1, borderColor: C.fg1 } : {}]} />
+          <View style={[s.tick, isPicked(label) ? { backgroundColor: C.fg1, borderColor: C.fg1 } : {}]} />
           <Text style={{ fontSize: 9.5, color: C.fg2 }}>{label}</Text>
         </View>
       ))}
@@ -132,32 +140,186 @@ function Options({ labels, picked }: { labels: string[]; picked?: string }) {
   );
 }
 
-function FieldBlock({ field, value, lang }: { field: AnamnesisField; value: string; lang: AnamnesisPdfLang }) {
-  const t = L[lang];
-  const answered = value.trim().length > 0;
-  const shown = field.fieldType === 'boolean'
-    ? (value === 'true' ? t.yes : value === 'false' ? t.no : value)
-    : value;
+// ── Body map: both views with the marked spots (numbered), or empty to mark by hand ──
+const BODY_VIEWBOX = { front: { w: 193, h: 306 }, back: { w: 211, h: 317 } } as const;
+const BODY_PDF_H = 190;
+
+function BodyMapBlock({ spots, lang }: { spots: BodyMapSpot[]; lang: AnamnesisPdfLang }) {
+  const sideLabel = lang === 'de' ? { front: 'Vorne', back: 'Hinten' } : { front: 'Front', back: 'Back' };
   return (
-    <View wrap={false} style={{ marginBottom: 11 }}>
-      <Text style={s.fieldLabel}>{field.label}</Text>
-      {answered ? (
-        <>
-          <Text style={s.answer}>{shown}</Text>
-          <View style={s.noteLine} />
-          <View style={s.noteLine} />
-        </>
-      ) : field.fieldType === 'select' && (field.options?.length ?? 0) > 0 ? (
-        <Options labels={field.options ?? []} />
-      ) : field.fieldType === 'boolean' ? (
-        <Options labels={[t.yes, t.no]} />
-      ) : field.fieldType === 'textarea' ? (
-        <Lines count={4} />
-      ) : field.fieldType === 'number' ? (
-        <View style={[s.writeLine, { width: 140 }]} />
-      ) : (
-        <Lines count={2} />
+    <View>
+      <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+        {(['front', 'back'] as const).map((view) => {
+          const vb = BODY_VIEWBOX[view];
+          const scale = BODY_PDF_H / vb.h;
+          const w = vb.w * scale;
+          return (
+            <View key={view} style={{ marginRight: 24, alignItems: 'center' }}>
+              <Text style={{ fontSize: 8, color: C.fg3, marginBottom: 2 }}>{sideLabel[view]}</Text>
+              <View style={{ position: 'relative', width: w, height: BODY_PDF_H }}>
+                <Image src={`/bodymap-${view}.png`} style={{ width: w, height: BODY_PDF_H }} />
+                {spots.map((spot, i) => (spot.view !== view ? null : (
+                  <View key={spot.id} style={{
+                    position: 'absolute', left: spot.x * scale - 6, top: spot.y * scale - 6, width: 12, height: 12,
+                    borderRadius: 6, backgroundColor: '#1e40af', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Text style={{ fontSize: 6.5, fontWeight: 700, color: '#ffffff' }}>{i + 1}</Text>
+                  </View>
+                )))}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+      {spots.map((spot, i) => (
+        <Text key={spot.id} style={{ fontSize: 9.5, color: C.fg1, marginBottom: 2 }}>
+          {i + 1}. {regionLabel(spot.region, lang)} ({sideLabel[spot.view].toLowerCase()})
+          {spot.nrs !== undefined ? ` – ${lang === 'de' ? 'Schmerz' : 'pain'} ${spot.nrs}/10` : ''}
+          {spot.note.trim() ? `: ${spot.note.trim()}` : ''}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+// ── Weekly schedule: hours × days, coloured cells (empty grid to fill in by hand) ──
+function WeekGridBlock({ value, lang }: { value: string; lang: AnamnesisPdfLang }) {
+  const grid = parseWeekGrid(value);
+  const cellW = 52;
+  const cellH = 9;
+  return (
+    <View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 4 }}>
+        {(['a', 't', 'o'] as WeekGridCell[]).map((k) => (
+          <View key={k} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 12 }}>
+            <View style={{ width: 8, height: 8, backgroundColor: WEEK_GRID_COLORS[k], marginRight: 3, borderRadius: 1 }} />
+            <Text style={{ fontSize: 8, color: C.fg2 }}>{WEEK_GRID_LABELS[lang][k]}</Text>
+          </View>
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row' }}>
+        <View style={{ width: 22 }} />
+        {DAY_LABELS[lang].map((d) => (
+          <Text key={d} style={{ width: cellW, fontSize: 8, color: C.fg3, textAlign: 'center' }}>{d}</Text>
+        ))}
+      </View>
+      {WEEK_GRID_HOURS.map((h) => (
+        <View key={h} style={{ flexDirection: 'row' }}>
+          <Text style={{ width: 22, fontSize: 7, color: C.fg3, textAlign: 'right', paddingRight: 3 }}>{h}</Text>
+          {Array.from({ length: 7 }, (_, day) => {
+            const cell = grid.cells[`${day}-${h}`];
+            return (
+              <View key={day} style={{
+                width: cellW, height: cellH, borderWidth: 0.4, borderColor: C.line, marginLeft: -0.4, marginTop: -0.4,
+                backgroundColor: cell ? WEEK_GRID_COLORS[cell] : undefined,
+              }} />
+            );
+          })}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function ListBlock({ field, value, lang }: { field: AnamnesisField; value: string; lang: AnamnesisPdfLang }) {
+  const cols = field.listColumns ?? [];
+  const rows = parseList(value).filter((r) => Object.values(r).some((v) => v?.trim()));
+  const shownRows: Array<Record<string, string>> = rows.length > 0 ? rows : [{}, {}, {}];
+  return (
+    <View style={{ borderWidth: 0.5, borderColor: C.border, borderRadius: 2 }}>
+      <View style={{ flexDirection: 'row', backgroundColor: C.box }}>
+        {cols.map((c) => (
+          <Text key={c.id} style={{ flex: 1, fontSize: 8.5, fontWeight: 600, color: C.fg2, paddingVertical: 3, paddingHorizontal: 4 }}>{c.label}</Text>
+        ))}
+      </View>
+      {shownRows.map((r, i) => (
+        <View key={i} style={{ flexDirection: 'row', borderTopWidth: 0.5, borderTopColor: C.border, minHeight: rows.length > 0 ? 0 : LINE_H }}>
+          {cols.map((c) => (
+            <Text key={c.id} style={{ flex: 1, fontSize: 9.5, paddingVertical: 3, paddingHorizontal: 4 }}>
+              {c.type === 'date' && r[c.id] ? formatDate(r[c.id], L[lang].locale) : (r[c.id] ?? '')}
+            </Text>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function YesNoListBlock({ field, value, lang }: { field: AnamnesisField; value: string; lang: AnamnesisPdfLang }) {
+  const t = L[lang];
+  const answers = parseYesNoList(value);
+  return (
+    <View>
+      {(field.options ?? []).map((item) => (
+        <View key={item} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 2.5, borderBottomWidth: 0.4, borderBottomColor: C.border }}>
+          {(['yes', 'no'] as const).map((a) => (
+            <View key={a} style={{ flexDirection: 'row', alignItems: 'center', width: 40 }}>
+              <View style={[s.tick, answers[item] === a ? { backgroundColor: C.fg1, borderColor: C.fg1 } : {}]} />
+              <Text style={{ fontSize: 8.5, color: C.fg3 }}>{a === 'yes' ? t.yes : t.no}</Text>
+            </View>
+          ))}
+          <Text style={{ flex: 1, fontSize: 9.5, color: C.fg1 }}>{item}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function FieldBlock({ field, value, lang, onlyIf }: {
+  field: AnamnesisField; value: string; lang: AnamnesisPdfLang;
+  /** Shown when it depends on an earlier answer that isn't known yet */
+  onlyIf?: string;
+}) {
+  const t = L[lang];
+  const answered = isAnswered(field, value) && field.fieldType !== 'info';
+  const type = field.fieldType;
+  // Big blocks may break across pages
+  const wrap = type === 'weekGrid' || type === 'list' || type === 'yesnoList';
+  return (
+    <View wrap={wrap} style={{ marginBottom: 11 }}>
+      <Text style={s.fieldLabel} minPresenceAhead={40}>{field.label}</Text>
+      {onlyIf && <Text style={{ fontSize: 8, color: C.fg3, marginTop: -2, marginBottom: 3 }}>{t.onlyIf(onlyIf)}</Text>}
+      {field.helpText && (
+        <Text style={type === 'info'
+          ? { fontSize: 9.5, color: C.fg2, lineHeight: 1.4 }
+          : { fontSize: 8.5, color: C.fg3, marginTop: -2, marginBottom: 4 }}>{field.helpText}</Text>
       )}
+      {type === 'info' ? null
+        : type === 'bodyMap' ? <BodyMapBlock spots={parseBodyMap(value)} lang={lang} />
+        : type === 'weekGrid' ? <WeekGridBlock value={value} lang={lang} />
+        : type === 'list' ? <ListBlock field={field} value={value} lang={lang} />
+        : type === 'yesnoList' ? <YesNoListBlock field={field} value={value} lang={lang} />
+        : type === 'multiselect' ? <Options labels={field.options ?? []} picked={parseMulti(value)} />
+        : type === 'scale' ? (
+          <View>
+            <Options
+              labels={Array.from({ length: (field.scaleMax ?? 10) - (field.scaleMin ?? 0) + 1 }, (_, i) => String((field.scaleMin ?? 0) + i))}
+              picked={value.trim()}
+            />
+            {(field.scaleMinLabel || field.scaleMaxLabel) && (
+              <Text style={{ fontSize: 8, color: C.fg3 }}>
+                {[field.scaleMinLabel && `${field.scaleMin ?? 0} = ${field.scaleMinLabel}`, field.scaleMaxLabel && `${field.scaleMax ?? 10} = ${field.scaleMaxLabel}`].filter(Boolean).join(' · ')}
+              </Text>
+            )}
+          </View>
+        )
+        : answered ? (
+          <>
+            <Text style={s.answer}>{formatAnswer(field, value, lang)}</Text>
+            <View style={s.noteLine} />
+            <View style={s.noteLine} />
+          </>
+        ) : type === 'select' && (field.options?.length ?? 0) > 0 ? (
+          <Options labels={field.options ?? []} />
+        ) : type === 'boolean' ? (
+          <Options labels={[t.yes, t.no]} />
+        ) : type === 'textarea' ? (
+          <Lines count={4} />
+        ) : type === 'number' || type === 'date' ? (
+          <View style={[s.writeLine, { width: 140 }]} />
+        ) : (
+          <Lines count={2} />
+        )}
     </View>
   );
 }
@@ -188,6 +350,8 @@ export function AnamnesisPDF(props: AnamnesisPdfProps) {
   ];
 
   const customs = props.customQuestions.filter((f) => f.label.trim());
+  const ctx = contextFor(props.sections, props.fieldValues, athlete.sex);
+  const allFields = props.sections.flatMap((sec) => sec.fields);
 
   return (
     <Document title={`${t.title} – ${athlete.name}`} author={studio || undefined}>
@@ -234,15 +398,35 @@ export function AnamnesisPDF(props: AnamnesisPdfProps) {
           </Text>
         ) : null}
 
-        {/* Sections */}
-        {props.sections.map((section) => (
-          <View key={section.id}>
-            <SectionTitle title={section.title} accent={accent} />
-            {section.fields.map((field) => (
-              <FieldBlock key={field.id} field={field} value={props.fieldValues[field.id] ?? ''} lang={lang} />
-            ))}
-          </View>
-        ))}
+        {/* Sections — questions whose "show only if" clearly doesn't hold are left out; those that
+            depend on an answer not given yet are printed with "Only if: …" */}
+        {props.sections.map((section) => {
+          const sectionState = conditionState(section.condition, ctx);
+          if (sectionState === 'notMet') return null;
+          const fields = section.fields.filter((f) => conditionState(f.condition, ctx) !== 'notMet');
+          if (fields.length === 0) return null;
+          return (
+            <View key={section.id}>
+              <SectionTitle title={section.title} accent={accent} />
+              {sectionState === 'unknown' && section.condition && (
+                <Text style={{ fontSize: 8, color: C.fg3, marginTop: -6, marginBottom: 6 }}>
+                  {t.onlyIf(describeCondition(section.condition, allFields, lang))}
+                </Text>
+              )}
+              {section.helpText && <Text style={{ fontSize: 8.5, color: C.fg3, marginTop: -4, marginBottom: 8 }}>{section.helpText}</Text>}
+              {fields.map((field) => (
+                <FieldBlock
+                  key={field.id}
+                  field={field}
+                  value={props.fieldValues[field.id] ?? ''}
+                  lang={lang}
+                  onlyIf={field.condition && conditionState(field.condition, ctx) === 'unknown'
+                    ? describeCondition(field.condition, allFields, lang) : undefined}
+                />
+              ))}
+            </View>
+          );
+        })}
 
         {customs.length > 0 && (
           <View>

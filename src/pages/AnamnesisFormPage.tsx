@@ -15,6 +15,10 @@
  * The form's own texts are German or English (browser language, switchable); the questions appear
  * as the coach wrote them.
  *
+ * Question types: text, number, date, choice, multiple choice, yes/no, yes/no list, scale, repeatable
+ * list, body map, weekly schedule grid, info text (AnamnesisInputs). Questions / sections with a
+ * "show only if" condition appear only when the earlier answer (or the sex from "About you") matches.
+ *
  * Branding from the coach profile: the logo in the header (large on the start screen) and the
  * accent colour for buttons, progress bar and selected answers. The start screen shows the
  * template's own introduction text when there is one; the notes about saving, number of questions
@@ -31,6 +35,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import type { AnamnesisField, AnamnesisProfileAnswers, AnamnesisSection } from '@/types/anamnesis';
+import { contextFor, fieldState, isAnswered as answerGiven, isQuestion } from '@/utils/anamnesisAnswers';
+import {
+  BodyMapInput, ListInput, MultiChoiceInput, ScaleInput, WeekGridInput, YesNoListInput,
+} from '@/components/anamnesis/AnamnesisInputs';
 
 type Lang = 'de' | 'en';
 
@@ -304,14 +312,22 @@ export default function AnamnesisFormPage() {
   }, [form?.brandColor]);
 
   // ── Steps ──────────────────────────────────────────────────────────────────
-  const steps = useMemo<Step[]>(() => [
-    { kind: 'welcome' },
-    ...PROFILE_STEPS.map(key => ({ kind: 'profile' as const, key })),
-    ...(form?.sections ?? []).flatMap(section => section.fields.map(field => ({ kind: 'question' as const, section, field }))),
-    { kind: 'consent' },
-  ], [form?.sections]);
+  // Questions with a "show only if" appear once the earlier answer matches (conditions only refer
+  // to earlier questions, so answering the current one never changes the steps before it)
+  const steps = useMemo<Step[]>(() => {
+    const sections = form?.sections ?? [];
+    const ctx = contextFor(sections, values, profile.sex);
+    return [
+      { kind: 'welcome' },
+      ...PROFILE_STEPS.map(key => ({ kind: 'profile' as const, key })),
+      ...sections.flatMap(section => section.fields
+        .filter(field => fieldState(section, field, ctx) === 'met')
+        .map(field => ({ kind: 'question' as const, section, field }))),
+      { kind: 'consent' },
+    ];
+  }, [form?.sections, values, profile.sex]);
   const step = steps[Math.min(stepIdx, steps.length - 1)];
-  const questionCount = steps.length - 2;
+  const questionCount = steps.filter(s => s.kind === 'profile' || (s.kind === 'question' && isQuestion(s.field))).length;
 
   const goTo = (i: number) => {
     if (advanceTimer.current) { clearTimeout(advanceTimer.current); advanceTimer.current = null; }
@@ -332,7 +348,7 @@ export default function AnamnesisFormPage() {
   };
 
   const isAnswered = (s: Step): boolean => {
-    if (s.kind === 'question') return !!values[s.field.id]?.trim();
+    if (s.kind === 'question') return answerGiven(s.field, values[s.field.id]);
     if (s.kind !== 'profile') return false;
     switch (s.key) {
       case 'name': return !!(profile.firstName?.trim() && profile.lastName?.trim());
@@ -344,6 +360,10 @@ export default function AnamnesisFormPage() {
     }
   };
   const hasAnswers = Object.values(values).some(v => v?.trim());
+  /** Text under the question: the section's text on its first question, then the question's help text */
+  const sectionIntro = step.kind === 'question'
+    && steps.findIndex(s => s.kind === 'question' && s.section.id === step.section.id) === stepIdx
+    ? step.section.helpText : undefined;
 
   // ── Consent / submit ───────────────────────────────────────────────────────
   const company = form?.companyName || (lang === 'de' ? 'deinem Trainerteam' : 'your coaching team');
@@ -563,6 +583,30 @@ export default function AnamnesisFormPage() {
         body = <OptionList value={value} options={[{ value: 'true', label: t.yes }, { value: 'false', label: t.no }]}
           onPick={v => { setValue(field.id, v); if (v) nextSoon(); }} />;
         break;
+      case 'multiselect':
+        body = <MultiChoiceInput size="lg" options={field.options ?? []} value={value} onChange={v => setValue(field.id, v)} />;
+        break;
+      case 'scale':
+        body = <ScaleInput size="lg" field={field} value={value} onChange={v => setValue(field.id, v)} />;
+        break;
+      case 'date':
+        body = <Input type="date" className={bigInput} value={value} onChange={e => setValue(field.id, e.target.value)} onKeyDown={onEnter} />;
+        break;
+      case 'yesnoList':
+        body = <YesNoListInput size="lg" lang={lang} items={field.options ?? []} value={value} onChange={v => setValue(field.id, v)} />;
+        break;
+      case 'list':
+        body = <ListInput size="lg" lang={lang} columns={field.listColumns ?? []} value={value} onChange={v => setValue(field.id, v)} />;
+        break;
+      case 'bodyMap':
+        body = <BodyMapInput size="lg" lang={lang} field={field} value={value} onChange={v => setValue(field.id, v)} />;
+        break;
+      case 'weekGrid':
+        body = <WeekGridInput size="lg" lang={lang} value={value} onChange={v => setValue(field.id, v)} />;
+        break;
+      case 'info':
+        body = null;
+        break;
       default:
         body = <Input className={bigInput} autoFocus placeholder={field.placeholder || t.typeHere}
           value={value} onChange={e => setValue(field.id, e.target.value)} onKeyDown={onEnter} />;
@@ -605,12 +649,16 @@ export default function AnamnesisFormPage() {
       <div className="space-y-2">
         {kicker && <p className="text-sm font-medium text-primary">{kicker}</p>}
         <h1 className="text-2xl font-semibold leading-snug">
-          {!isConsent && <span className="text-muted-foreground font-normal mr-2">{stepIdx}.</span>}
+          {!isConsent && !(step.kind === 'question' && !isQuestion(step.field)) && <span className="text-muted-foreground font-normal mr-2">{stepIdx}.</span>}
           {heading}
         </h1>
+        {sectionIntro && <p className="text-sm text-muted-foreground whitespace-pre-wrap">{sectionIntro}</p>}
+        {step.kind === 'question' && step.field.helpText && (
+          <p className={cn('whitespace-pre-wrap', isQuestion(step.field) ? 'text-base text-muted-foreground' : 'text-lg leading-relaxed')}>{step.field.helpText}</p>
+        )}
       </div>
       {body}
-      {!isConsent && step.kind !== 'profile' && step.field.fieldType !== 'textarea' && step.field.fieldType !== 'select' && step.field.fieldType !== 'boolean' && (
+      {step.kind === 'question' && ['text', 'number', 'date'].includes(step.field.fieldType) && (
         <p className="text-xs text-muted-foreground hidden sm:block">{t.enterHint}</p>
       )}
 

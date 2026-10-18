@@ -16,6 +16,8 @@ import { format, subMonths } from 'date-fns';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import type { AthletePerformanceParameter } from '@/types/athlete';
 import type { ParameterV2 } from '@/types/parametersV2';
+import type { AnamnesisSection } from '@/types/anamnesis';
+import { contextFor, fieldState, formatAnswer } from '@/utils/anamnesisAnswers';
 
 // ── System prompt ──────────────────────────────────────────────────────────────
 
@@ -145,7 +147,7 @@ async function fetchAndBuildContext(
   const testResults = testRes.data ?? [];
   const anamnesisRows = (anamnesisRes.data ?? []) as Array<{
     conducted_at: string;
-    template_snapshot: { name?: string; sections?: Array<{ fields: Array<{ id: string; label: string }> }> };
+    template_snapshot: { name?: string; sections?: AnamnesisSection[] };
     field_values: Record<string, string>;
     ai_summary: string | null;
     notes: string;
@@ -263,10 +265,13 @@ async function fetchAndBuildContext(
     const templateName = row.template_snapshot?.name ?? 'Anamnesis';
     // Include all filled fields from all sections — works for any template structure
     const sections: Array<{ section: string; fields: Record<string, string> }> = [];
+    const ctx = contextFor(row.template_snapshot?.sections ?? [], row.field_values ?? {});
     for (const section of row.template_snapshot?.sections ?? []) {
       const fields: Record<string, string> = {};
       for (const field of section.fields) {
-        const val = row.field_values?.[field.id]?.trim();
+        // Readable answers (body map, schedule, lists …); nothing from questions hidden by their condition
+        if (fieldState(section, field, ctx) === 'notMet') continue;
+        const val = formatAnswer(field, row.field_values?.[field.id]);
         if (val) fields[field.label] = val;
       }
       if (Object.keys(fields).length > 0) {

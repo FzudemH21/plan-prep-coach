@@ -31,11 +31,14 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
-  Plus, Trash2, ChevronUp, ChevronDown, Edit, Loader2, ClipboardList, X,
+  Plus, Trash2, ChevronUp, ChevronDown, Edit, Loader2, ClipboardList, X, GitBranch,
 } from 'lucide-react';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
-import { DEFAULT_ANAMNESIS_TEMPLATE, isAthleteSection } from '@/types/anamnesis';
-import type { AnamnesisTemplate, AnamnesisTemplateDraft, AnamnesisSection, AnamnesisField, AnamnesisFieldType } from '@/types/anamnesis';
+import { DEFAULT_ANAMNESIS_TEMPLATE, PROFILE_SEX_SOURCE, isAthleteSection } from '@/types/anamnesis';
+import type {
+  AnamnesisTemplate, AnamnesisTemplateDraft, AnamnesisSection, AnamnesisField, AnamnesisFieldType, AnamnesisCondition, AnamnesisListColumn,
+} from '@/types/anamnesis';
+import { CONDITION_SOURCE_TYPES, conditionChoices } from '@/utils/anamnesisAnswers';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -58,9 +61,157 @@ const FIELD_TYPE_LABELS: Record<AnamnesisFieldType, string> = {
   text: 'Short text',
   textarea: 'Long text',
   number: 'Number',
-  select: 'Dropdown',
+  date: 'Date',
+  select: 'Single choice',
+  multiselect: 'Multiple choice',
   boolean: 'Yes / No',
+  yesnoList: 'Yes / No list',
+  scale: 'Scale (e.g. 0–10)',
+  list: 'Repeatable list',
+  bodyMap: 'Body map',
+  weekGrid: 'Weekly schedule',
+  info: 'Info text (no answer)',
 };
+
+const LIST_COLUMN_TYPES: Record<AnamnesisListColumn['type'], string> = {
+  text: 'Text', number: 'Number', date: 'Date', select: 'Choice',
+};
+
+/** Defaults when a question gets a new type (existing settings are kept) */
+function withType(field: AnamnesisField, fieldType: AnamnesisFieldType): AnamnesisField {
+  const next: AnamnesisField = { ...field, fieldType };
+  if ((fieldType === 'select' || fieldType === 'multiselect') && !(field.options?.length)) next.options = ['Option 1', 'Option 2'];
+  if (fieldType === 'yesnoList' && !(field.options?.length)) next.options = ['Item 1', 'Item 2'];
+  if (fieldType === 'scale') { next.scaleMin = field.scaleMin ?? 0; next.scaleMax = field.scaleMax ?? 10; }
+  if (fieldType === 'list' && !(field.listColumns?.length)) next.listColumns = [{ id: uid(), label: '', type: 'text' }];
+  return next;
+}
+
+/** A question an earlier answer can be a condition on */
+interface ConditionSource { id: string; label: string; field: AnamnesisField | 'sex' }
+
+const SEX_SOURCE: ConditionSource = { id: PROFILE_SEX_SOURCE, label: 'Sex (from the profile)', field: 'sex' };
+
+function conditionSources(fields: AnamnesisField[]): ConditionSource[] {
+  return [
+    ...fields
+      .filter((f) => CONDITION_SOURCE_TYPES.has(f.fieldType) && f.label.trim())
+      .map((f) => ({ id: f.id, label: f.label, field: f })),
+    SEX_SOURCE,
+  ];
+}
+
+/** Text area with one entry per line — written back when leaving the box */
+function LinesInput({ label, value, onCommit, placeholder }: {
+  label: string; value: string[]; onCommit: (lines: string[]) => void; placeholder: string;
+}) {
+  const [text, setText] = useState(value.join('\n'));
+  return (
+    <div>
+      <Label className="text-xs text-muted-foreground mb-1 block">{label}</Label>
+      <Textarea
+        className="min-h-[64px] text-xs resize-y"
+        placeholder={placeholder}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => onCommit(text.split('\n').map((o) => o.trim()).filter(Boolean))}
+      />
+    </div>
+  );
+}
+
+// ── "Show only if" ────────────────────────────────────────────────────────────
+
+function ConditionEditor({ condition, sources, onChange }: {
+  condition: AnamnesisCondition;
+  sources: ConditionSource[];
+  onChange: (c: AnamnesisCondition | undefined) => void;
+}) {
+  const source = sources.find((s) => s.id === condition.sourceId);
+  const choices = source ? conditionChoices(source.field) : [];
+  const missing = !!condition.sourceId && !source;
+  return (
+    <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 p-2 space-y-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium shrink-0">Show only if</span>
+        <Select
+          value={source ? condition.sourceId : ''}
+          onValueChange={(v) => onChange({ sourceId: v, values: [] })}
+        >
+          <SelectTrigger className="h-7 text-xs flex-1 min-w-0">
+            <SelectValue placeholder={sources.length > 1 ? 'Pick an earlier question…' : 'No earlier choice / yes-no question'} />
+          </SelectTrigger>
+          <SelectContent>
+            {sources.map((s) => (
+              <SelectItem key={s.id} value={s.id} className="text-xs">{s.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => onChange(undefined)} title="Remove condition">
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
+      {missing && (
+        <p className="text-xs text-amber-700">The question this depended on was removed or moved below — the condition is ignored until you pick another one.</p>
+      )}
+      {source && (
+        <div className="flex flex-wrap gap-x-3 gap-y-1 pl-0.5">
+          <span className="text-xs text-muted-foreground">is</span>
+          {choices.map(([val, label]) => (
+            <label key={val} className="flex items-center gap-1 text-xs cursor-pointer">
+              <Checkbox
+                className="h-3.5 w-3.5"
+                checked={condition.values.includes(val)}
+                onCheckedChange={(v) => onChange({
+                  ...condition,
+                  values: v === true ? [...condition.values, val] : condition.values.filter((x) => x !== val),
+                })}
+              />
+              {label}
+            </label>
+          ))}
+          {condition.values.length === 0 && <span className="text-xs text-amber-700">pick at least one answer</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── List columns ──────────────────────────────────────────────────────────────
+
+function ListColumnsEditor({ columns, onChange }: { columns: AnamnesisListColumn[]; onChange: (c: AnamnesisListColumn[]) => void }) {
+  const update = (idx: number, col: AnamnesisListColumn) => onChange(columns.map((c, i) => (i === idx ? col : c)));
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground block">Columns of each entry</Label>
+      {columns.map((col, idx) => (
+        <div key={col.id} className="flex gap-1.5 items-start">
+          <Input className="h-7 text-xs flex-1" placeholder="Column label, e.g. When" value={col.label}
+            onChange={(e) => update(idx, { ...col, label: e.target.value })} />
+          <Select value={col.type} onValueChange={(v) => update(idx, { ...col, type: v as AnamnesisListColumn['type'], options: v === 'select' ? (col.options ?? []) : undefined })}>
+            <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {(Object.entries(LIST_COLUMN_TYPES) as [AnamnesisListColumn['type'], string][]).map(([v, l]) => (
+                <SelectItem key={v} value={v} className="text-xs">{l}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {col.type === 'select' && (
+            <Input className="h-7 text-xs flex-1" placeholder="Choices, comma-separated" defaultValue={(col.options ?? []).join(', ')}
+              onBlur={(e) => update(idx, { ...col, options: e.target.value.split(',').map((o) => o.trim()).filter(Boolean) })} />
+          )}
+          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+            disabled={columns.length <= 1} onClick={() => onChange(columns.filter((_, i) => i !== idx))}>
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      ))}
+      <Button variant="ghost" size="sm" className="h-6 text-xs gap-1 px-1.5" onClick={() => onChange([...columns, { id: uid(), label: '', type: 'text' }])}>
+        <Plus className="h-3 w-3" />Add column
+      </Button>
+    </div>
+  );
+}
 
 // ── Field row editor ──────────────────────────────────────────────────────────
 
@@ -68,6 +219,7 @@ function FieldRow({
   field,
   isFirst,
   isLast,
+  sources,
   onChange,
   onDelete,
   onMoveUp,
@@ -76,20 +228,15 @@ function FieldRow({
   field: AnamnesisField;
   isFirst: boolean;
   isLast: boolean;
+  /** Earlier questions this one can depend on */
+  sources: ConditionSource[];
   onChange: (updated: AnamnesisField) => void;
   onDelete: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
 }) {
-  const [optionsInput, setOptionsInput] = useState((field.options ?? []).join(', '));
-
-  const handleOptionsBlur = () => {
-    const parsed = optionsInput
-      .split(',')
-      .map((o) => o.trim())
-      .filter(Boolean);
-    onChange({ ...field, options: parsed });
-  };
+  const [showHelp, setShowHelp] = useState(!!field.helpText);
+  const type = field.fieldType;
 
   return (
     <div className="flex flex-col gap-1.5 p-2.5 rounded-md border bg-background">
@@ -97,15 +244,12 @@ function FieldRow({
         <div className="flex-1 flex gap-2">
           <Input
             className="flex-1 h-8 text-sm"
-            placeholder="Field label"
+            placeholder={type === 'info' ? 'Heading' : 'Question'}
             value={field.label}
             onChange={(e) => onChange({ ...field, label: e.target.value })}
           />
-          <Select
-            value={field.fieldType}
-            onValueChange={(v) => onChange({ ...field, fieldType: v as AnamnesisFieldType, options: v === 'select' ? (field.options ?? ['Option 1', 'Option 2']) : undefined })}
-          >
-            <SelectTrigger className="w-36 h-8 text-xs">
+          <Select value={type} onValueChange={(v) => onChange(withType(field, v as AnamnesisFieldType))}>
+            <SelectTrigger className="w-40 h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -127,18 +271,83 @@ function FieldRow({
           </Button>
         </div>
       </div>
-      {field.fieldType === 'select' && (
-        <div className="pl-0.5">
-          <Label className="text-xs text-muted-foreground mb-1 block">Options (comma-separated)</Label>
-          <Input
-            className="h-7 text-xs"
-            placeholder="Option 1, Option 2, Option 3"
-            value={optionsInput}
-            onChange={(e) => setOptionsInput(e.target.value)}
-            onBlur={handleOptionsBlur}
-          />
+
+      {(type === 'select' || type === 'multiselect') && (
+        <LinesInput key={`${field.id}-${type}`} label="Choices (one per line)" placeholder={'Option 1\nOption 2'}
+          value={field.options ?? []} onCommit={(options) => onChange({ ...field, options })} />
+      )}
+      {type === 'yesnoList' && (
+        <LinesInput key={`${field.id}-${type}`} label="Items, each answered with yes / no (one per line)" placeholder={'Unintended weight loss\nFever or night sweats'}
+          value={field.options ?? []} onCommit={(options) => onChange({ ...field, options })} />
+      )}
+      {type === 'scale' && (
+        <div className="grid grid-cols-[64px_64px_1fr_1fr] gap-1.5 items-end">
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1 block">From</Label>
+            <Input type="number" className="h-7 text-xs" value={field.scaleMin ?? 0}
+              onChange={(e) => onChange({ ...field, scaleMin: Number(e.target.value) || 0 })} />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1 block">To</Label>
+            <Input type="number" className="h-7 text-xs" value={field.scaleMax ?? 10}
+              onChange={(e) => onChange({ ...field, scaleMax: Number(e.target.value) || 10 })} />
+          </div>
+          <Input className="h-7 text-xs" placeholder="Low end, e.g. no pain" value={field.scaleMinLabel ?? ''}
+            onChange={(e) => onChange({ ...field, scaleMinLabel: e.target.value || undefined })} />
+          <Input className="h-7 text-xs" placeholder="High end, e.g. worst imaginable pain" value={field.scaleMaxLabel ?? ''}
+            onChange={(e) => onChange({ ...field, scaleMaxLabel: e.target.value || undefined })} />
         </div>
       )}
+      {type === 'list' && (
+        <ListColumnsEditor columns={field.listColumns ?? []} onChange={(listColumns) => onChange({ ...field, listColumns })} />
+      )}
+      {type === 'bodyMap' && (
+        <div className="space-y-1.5">
+          <label className="flex items-center gap-2 text-xs cursor-pointer w-fit">
+            <Checkbox className="h-3.5 w-3.5" checked={!!field.bodyMapIntensity}
+              onCheckedChange={(v) => onChange({ ...field, bodyMapIntensity: v === true || undefined })} />
+            Also ask for the pain intensity (0–10) of each spot
+          </label>
+          <Input className="h-7 text-xs" placeholder='Prompt for the note at each spot (default: "What happened / how does it feel?")'
+            value={field.placeholder ?? ''} onChange={(e) => onChange({ ...field, placeholder: e.target.value || undefined })} />
+        </div>
+      )}
+      {type === 'weekGrid' && (
+        <p className="text-xs text-muted-foreground">Mon–Sun, 5:00–23:00 in hours. The athlete marks: available for training · regular training (team/club) · other physical load.</p>
+      )}
+
+      {type === 'info' ? (
+        <Textarea className="min-h-[56px] text-xs resize-y" placeholder="Text shown to the athlete (no answer)"
+          value={field.helpText ?? ''} onChange={(e) => onChange({ ...field, helpText: e.target.value || undefined })} />
+      ) : showHelp ? (
+        <div className="flex gap-1.5">
+          <Input className="h-7 text-xs flex-1" placeholder="Help text under the question, e.g. an explanation in plain words" autoFocus={!field.helpText}
+            value={field.helpText ?? ''} onChange={(e) => onChange({ ...field, helpText: e.target.value || undefined })} />
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setShowHelp(false); onChange({ ...field, helpText: undefined }); }}>
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      ) : null}
+
+      {field.condition && (
+        <ConditionEditor condition={field.condition} sources={sources} onChange={(condition) => onChange({ ...field, condition })} />
+      )}
+
+      {(!showHelp && type !== 'info') || !field.condition ? (
+        <div className="flex gap-1">
+          {!showHelp && type !== 'info' && (
+            <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs text-muted-foreground gap-1" onClick={() => setShowHelp(true)}>
+              <Plus className="h-3 w-3" />Help text
+            </Button>
+          )}
+          {!field.condition && (
+            <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs text-muted-foreground gap-1"
+              onClick={() => onChange({ ...field, condition: { sourceId: '', values: [] } })}>
+              <GitBranch className="h-3 w-3" />Show only if…
+            </Button>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -149,6 +358,7 @@ function SectionEditor({
   section,
   isFirst,
   isLast,
+  previousFields,
   onChange,
   onDelete,
   onMoveUp,
@@ -157,11 +367,14 @@ function SectionEditor({
   section: AnamnesisSection;
   isFirst: boolean;
   isLast: boolean;
+  /** Questions of the sections above (conditions can only refer to earlier questions) */
+  previousFields: AnamnesisField[];
   onChange: (updated: AnamnesisSection) => void;
   onDelete: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
 }) {
+  const [showHelp, setShowHelp] = useState(!!section.helpText);
   const updateField = (idx: number, updated: AnamnesisField) => {
     const fields = section.fields.map((f, i) => (i === idx ? updated : f));
     onChange({ ...section, fields });
@@ -201,15 +414,44 @@ function SectionEditor({
         </div>
       </div>
 
+      {showHelp && (
+        <div className="flex gap-1.5 pl-1">
+          <Input className="h-7 text-xs flex-1" placeholder="Short text under the section title (optional)" autoFocus={!section.helpText}
+            value={section.helpText ?? ''} onChange={(e) => onChange({ ...section, helpText: e.target.value || undefined })} />
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setShowHelp(false); onChange({ ...section, helpText: undefined }); }}>
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
+      {section.condition && (
+        <div className="pl-1">
+          <ConditionEditor condition={section.condition} sources={conditionSources(previousFields)}
+            onChange={(condition) => onChange({ ...section, condition })} />
+        </div>
+      )}
+
       {/* Who fills in this section: the athlete via the online form link, or the coach */}
-      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer w-fit pl-1">
-        <Checkbox
-          checked={isAthleteSection(section)}
-          onCheckedChange={(v) => onChange({ ...section, athleteFills: v === true })}
-          className="h-3.5 w-3.5"
-        />
-        Filled in by the athlete (online form link)
-      </label>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-1">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer w-fit">
+          <Checkbox
+            checked={isAthleteSection(section)}
+            onCheckedChange={(v) => onChange({ ...section, athleteFills: v === true })}
+            className="h-3.5 w-3.5"
+          />
+          Filled in by the athlete (online form link)
+        </label>
+        {!showHelp && (
+          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs text-muted-foreground gap-1" onClick={() => setShowHelp(true)}>
+            <Plus className="h-3 w-3" />Section text
+          </Button>
+        )}
+        {!section.condition && (
+          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs text-muted-foreground gap-1"
+            onClick={() => onChange({ ...section, condition: { sourceId: '', values: [] } })}>
+            <GitBranch className="h-3 w-3" />Show section only if…
+          </Button>
+        )}
+      </div>
 
       <div className="space-y-1.5 pl-1">
         {section.fields.map((field, idx) => (
@@ -218,6 +460,7 @@ function SectionEditor({
             field={field}
             isFirst={idx === 0}
             isLast={idx === section.fields.length - 1}
+            sources={conditionSources([...previousFields, ...section.fields.slice(0, idx)])}
             onChange={(u) => updateField(idx, u)}
             onDelete={() => deleteField(idx)}
             onMoveUp={() => moveField(idx, -1)}
@@ -231,7 +474,7 @@ function SectionEditor({
           onClick={() => onChange({ ...section, fields: [...section.fields, blankField()] })}
         >
           <Plus className="h-3 w-3" />
-          Add field
+          Add question
         </Button>
       </div>
     </div>
@@ -289,7 +532,7 @@ export function TemplateEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col gap-0 p-0">
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col gap-0 p-0">
         <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
           <DialogTitle>Edit Template</DialogTitle>
         </DialogHeader>
@@ -322,6 +565,7 @@ export function TemplateEditorDialog({
                 section={section}
                 isFirst={idx === 0}
                 isLast={idx === sections.length - 1}
+                previousFields={sections.slice(0, idx).flatMap((s) => s.fields)}
                 onChange={(u) => updateSection(idx, u)}
                 onDelete={() => deleteSection(idx)}
                 onMoveUp={() => moveSection(idx, -1)}
@@ -480,7 +724,7 @@ export function AnamnesisTemplateEditor() {
   };
 
   const totalFields = (t: AnamnesisTemplate) =>
-    t.sections.reduce((sum, s) => sum + s.fields.length, 0);
+    t.sections.reduce((sum, s) => sum + s.fields.filter((f) => f.fieldType !== 'info').length, 0);
 
   return (
     <div className="space-y-4">

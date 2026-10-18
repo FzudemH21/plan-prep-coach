@@ -1,4 +1,35 @@
-export type AnamnesisFieldType = 'text' | 'textarea' | 'number' | 'select' | 'boolean';
+export type AnamnesisFieldType =
+  | 'text' | 'textarea' | 'number' | 'select' | 'boolean'
+  // Added 2026-10-18 — answers are stored as text too (JSON for the structured ones, see
+  // src/utils/anamnesisAnswers.ts)
+  | 'multiselect'  // several options — JSON array of the picked options
+  | 'scale'        // e.g. pain 0–10 — the number as text
+  | 'date'         // yyyy-MM-dd
+  | 'yesnoList'    // several yes/no items on one screen (options = items) — JSON { item: 'yes' | 'no' }
+  | 'list'         // repeatable rows ("Add another"), columns in listColumns — JSON array of { columnId: value }
+  | 'bodyMap'      // spots on the body (exact position) with a note — JSON array of BodyMapSpot
+  | 'weekGrid'     // weekly schedule: available / regular training / other load per hour — JSON WeekGridValue
+  | 'info';        // text only (label = heading, helpText = body), no answer
+
+/** One column of a 'list' question (e.g. injuries: When / What / Time out) */
+export interface AnamnesisListColumn {
+  id: string;
+  label: string;
+  type: 'text' | 'number' | 'date' | 'select';
+  options?: string[];
+}
+
+/**
+ * "Show only if": the question / section is shown when the answer to an earlier question is one of
+ * `values` (yes/no: 'true' / 'false'; choices: the option; body map: region ids from bodyMapData,
+ * e.g. '1' head, '2' neck) — or the athlete's sex (sourceId 'profile.sex': 'male' / 'female' / 'other').
+ */
+export interface AnamnesisCondition {
+  sourceId: string;
+  values: string[];
+}
+
+export const PROFILE_SEX_SOURCE = 'profile.sex';
 
 export interface AnamnesisAttachment {
   name: string;
@@ -14,11 +45,26 @@ export interface AnamnesisField {
   fieldType: AnamnesisFieldType;
   options?: string[];
   placeholder?: string;
+  /** Explanation under the question (plain words, e.g. what a "minor trauma" is) */
+  helpText?: string;
+  condition?: AnamnesisCondition;
+  /** scale: range (default 0–10) and the words at both ends */
+  scaleMin?: number;
+  scaleMax?: number;
+  scaleMinLabel?: string;
+  scaleMaxLabel?: string;
+  /** list: the columns of each row */
+  listColumns?: AnamnesisListColumn[];
+  /** bodyMap: also ask for the pain intensity (0–10) of each spot */
+  bodyMapIntensity?: boolean;
 }
 
 export interface AnamnesisSection {
   id: string;
   title: string;
+  /** Short text under the section title (shown with the section's first question) */
+  helpText?: string;
+  condition?: AnamnesisCondition;
   fields: AnamnesisField[];
   /** Filled in by the athlete through the online form link. Default (unset): yes — only an explicit
    *  false keeps the section for the coach (e.g. movement screening). */
