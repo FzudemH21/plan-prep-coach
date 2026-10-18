@@ -245,20 +245,17 @@ function ListBlock({ field, value, lang }: { field: AnamnesisField; value: strin
   );
 }
 
-/** Marked periods as a table (From / To / Type / Name) — empty rows to fill in by hand */
-function PeriodsBlock({ field, value, lang }: { field: AnamnesisField; value: string; lang: AnamnesisPdfLang }) {
+/** Marked periods as a table (From / To / What) — empty rows to fill in by hand */
+function PeriodsBlock({ value, lang }: { value: string; lang: AnamnesisPdfLang }) {
   const t = L[lang];
   const periods = parseDateRanges(value);
-  const head = lang === 'de' ? ['Von', 'Bis', 'Art', 'Bezeichnung'] : ['From', 'To', 'Type', 'Name'];
+  const head = lang === 'de' ? ['Von', 'Bis', 'Was'] : ['From', 'To', 'What'];
   const rows = periods.length > 0
-    ? periods.map((p) => [formatDate(p.from, t.locale), formatDate(p.to, t.locale), p.kind ?? '', p.label])
-    : [['', '', '', ''], ['', '', '', ''], ['', '', '', '']];
-  const widths = [70, 70, 90, undefined];
+    ? periods.map((p) => [formatDate(p.from, t.locale), formatDate(p.to, t.locale), [p.kind, p.label].filter(Boolean).join(': ')])
+    : [['', '', ''], ['', '', ''], ['', '', '']];
+  const widths = [70, 70, undefined];
   return (
     <View style={{ borderWidth: 0.5, borderColor: C.border, borderRadius: 2 }}>
-      {periods.length === 0 && (field.options?.length ?? 0) > 0 && (
-        <Text style={{ fontSize: 8, color: C.fg3, paddingHorizontal: 4, paddingTop: 3 }}>{head[2]}: {(field.options ?? []).join(' · ')}</Text>
-      )}
       <View style={{ flexDirection: 'row', backgroundColor: C.box }}>
         {head.map((h, i) => (
           <Text key={h} style={{ width: widths[i], flex: widths[i] ? undefined : 1, fontSize: 8.5, fontWeight: 600, color: C.fg2, paddingVertical: 3, paddingHorizontal: 4 }}>{h}</Text>
@@ -317,7 +314,7 @@ function FieldBlock({ field, value, lang, onlyIf }: {
       {type === 'info' ? null
         : type === 'bodyMap' ? <BodyMapBlock spots={parseBodyMap(value)} lang={lang} />
         : type === 'weekGrid' ? <WeekGridBlock value={value} lang={lang} />
-        : type === 'dateRanges' ? <PeriodsBlock field={field} value={value} lang={lang} />
+        : type === 'dateRanges' ? <PeriodsBlock value={value} lang={lang} />
         : type === 'list' ? <ListBlock field={field} value={value} lang={lang} />
         : type === 'yesnoList' ? <YesNoListBlock field={field} value={value} lang={lang} />
         : type === 'multiselect' ? <Options labels={field.options ?? []} picked={parseMulti(value)} />

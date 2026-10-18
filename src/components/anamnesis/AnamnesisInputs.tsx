@@ -657,10 +657,9 @@ export function WeekGridInput({ value, onChange, lang, size = 'sm', readOnly }: 
 
 const PERIOD_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#64748b'];
 
-/** Colour of a period: by its type (the coach's list of types), otherwise by its position */
-export function periodColor(period: DatePeriod, index: number, kinds: string[]): string {
-  const k = period.kind ? kinds.indexOf(period.kind) : -1;
-  return PERIOD_COLORS[(k >= 0 ? k : index) % PERIOD_COLORS.length];
+/** Colour of a period — by its position, so neighbouring periods are told apart */
+export function periodColor(index: number): string {
+  return PERIOD_COLORS[index % PERIOD_COLORS.length];
 }
 
 const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -669,14 +668,14 @@ const C_T = {
   de: {
     hint: 'Tippe auf den ersten und dann auf den letzten Tag. Ein einzelner Tag: doppelt tippen.',
     pickEnd: 'Jetzt auf den letzten Tag tippen – oder denselben Tag noch einmal für nur diesen Tag.',
-    name: 'Bezeichnung, z. B. Urlaub Mallorca', type: 'Art', from: 'Von', to: 'Bis',
+    name: 'Was ist es? z. B. Urlaub Mallorca, Wettkampf, Trainingslager', from: 'Von', to: 'Bis',
     add: 'Übernehmen', save: 'Speichern', remove: 'Entfernen', cancel: 'Abbrechen',
     prev: 'Vorheriger Monat', next: 'Nächster Monat', locale: 'de-DE',
   },
   en: {
     hint: 'Tap the first day, then the last day. A single day: tap it twice.',
     pickEnd: 'Now tap the last day — or the same day again for just that day.',
-    name: 'Name, e.g. holiday in Spain', type: 'Type', from: 'From', to: 'To',
+    name: 'What is it? e.g. holiday in Spain, competition, training camp', from: 'From', to: 'To',
     add: 'Add', save: 'Save', remove: 'Remove', cancel: 'Cancel',
     prev: 'Previous month', next: 'Next month', locale: 'en-GB',
   },
@@ -686,7 +685,7 @@ export function DateRangesInput({ field, value, onChange, lang, size = 'sm', rea
   field: AnamnesisField; value: string; onChange: (v: string) => void; lang: AnswerLang; size?: Size; readOnly?: boolean;
 }) {
   const t = C_T[lang];
-  const kinds = field.options ?? [];
+  // Free text only — the athlete types what it is (older answers may carry a `kind`, shown with the name)
   const periods = parseDateRanges(value);
   const [month, setMonth] = useState(() => {
     const first = periods[0]?.from;
@@ -706,7 +705,7 @@ export function DateRangesInput({ field, value, onChange, lang, size = 'sm', rea
     const [from, to] = a <= b ? [a, b] : [b, a];
     setAnchor(null);
     setHover(null);
-    setDraft({ period: { id: uid(), from, to, label: '', kind: kinds.length === 1 ? kinds[0] : undefined }, isNew: true });
+    setDraft({ period: { id: uid(), from, to, label: '' }, isNew: true });
   };
 
   // Phone and computer alike: the first click / tap sets the first day, the next one the last day
@@ -727,7 +726,7 @@ export function DateRangesInput({ field, value, onChange, lang, size = 'sm', rea
             className={cn('w-full text-left rounded-md flex items-start gap-2', size === 'lg' ? 'px-2 py-2 text-base' : 'px-1.5 py-1 text-sm',
               !readOnly && 'hover:bg-accent active:bg-accent', draft?.period.id === p.id && 'bg-accent')}
           >
-            <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: periodColor(p, i, kinds) }} />
+            <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: periodColor(i) }} />
             <span className="flex-1 min-w-0">
               <span className="font-medium">{rangeLabel(p)}</span>
               {(p.kind || p.label) && <span className="text-muted-foreground"> · {[p.kind, p.label].filter(Boolean).join(': ')}</span>}
@@ -796,7 +795,7 @@ export function DateRangesInput({ field, value, onChange, lang, size = 'sm', rea
               {covering.length > 0 && (
                 <span className="absolute bottom-1 left-1 right-1 flex gap-0.5">
                   {covering.slice(0, 3).map(({ p, i }) => (
-                    <span key={p.id} className="h-1.5 flex-1 rounded-full" style={{ backgroundColor: periodColor(p, i, kinds) }} />
+                    <span key={p.id} className="h-1.5 flex-1 rounded-full" style={{ backgroundColor: periodColor(i) }} />
                   ))}
                 </span>
               )}
@@ -825,22 +824,6 @@ export function DateRangesInput({ field, value, onChange, lang, size = 'sm', rea
               </label>
             ))}
           </div>
-          {kinds.length > 0 && (
-            <div className="space-y-1">
-              <p className={size === 'lg' ? 'text-sm' : 'text-xs text-muted-foreground'}>{t.type}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {kinds.map((k, i) => (
-                  <button key={k} type="button"
-                    onClick={() => setDraft(d => d && ({ ...d, period: { ...d.period, kind: d.period.kind === k ? undefined : k } }))}
-                    className={cn('border flex items-center gap-1.5 transition-colors',
-                      size === 'lg' ? 'min-h-[44px] px-3 rounded-lg text-base' : 'h-7 px-2 rounded-md text-xs',
-                      draft.period.kind === k ? 'border-primary bg-primary/10 font-medium' : 'border-input bg-background')}>
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PERIOD_COLORS[i % PERIOD_COLORS.length] }} />{k}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
           <Input
             autoFocus={draft.isNew}
             className={size === 'lg' ? 'h-12 text-base' : 'h-8 text-sm'}

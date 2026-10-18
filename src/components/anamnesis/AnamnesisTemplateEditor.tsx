@@ -329,10 +329,8 @@ function FieldRow({
       )}
       {type === 'dateRanges' && (
         <>
-          <p className="text-xs text-muted-foreground">The athlete marks a period in a month calendar (click and drag, or tap the first and the last day), then names it — e.g. holidays, competitions, travel, training camps.</p>
-          <LinesInput key={`${field.id}-${type}`} label="Types the athlete can pick (optional, one per line — each gets its own colour)" placeholder={'Wettkampf\nUrlaub\nReise\nTrainingslager'}
-            value={field.options ?? []} onCommit={(options) => onChange({ ...field, options })} />
-          <Input className="h-7 text-xs" placeholder='Prompt for the name (default: "Name, e.g. holiday in Spain")'
+          <p className="text-xs text-muted-foreground">The athlete marks a period in a month calendar (tap the first and then the last day, double-tap for a single day) and types what it is — e.g. holidays, competitions, travel, training camps.</p>
+          <Input className="h-7 text-xs" placeholder='Prompt for the name (default: "What is it? e.g. holiday in Spain, competition, training camp")'
             value={field.placeholder ?? ''} onChange={(e) => onChange({ ...field, placeholder: e.target.value || undefined })} />
         </>
       )}
