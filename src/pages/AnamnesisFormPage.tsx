@@ -42,6 +42,9 @@ import {
 
 type Lang = 'de' | 'en';
 
+/** Longest answer the form link stores (save_anamnesis_form, migration 20261002) */
+const ANSWER_MAX_CHARS = 5000;
+
 interface FormData {
   status: 'open' | 'submitted' | 'expired';
   expiresAt?: string;
@@ -106,6 +109,7 @@ const TEXT = {
     guardianConsent: (athlete: string, company: string, email: string) => `Ich bin erziehungsberechtigt für ${athlete} und willige ausdrücklich ein, dass ${company} die in diesem Formular angegebenen Gesundheitsdaten meines Kindes sowie die im Erstgespräch erhobenen Befunde zum Zweck der Trainingsbetreuung und physiotherapeutischen Versorgung verarbeitet – einschließlich einer KI-gestützten Zusammenfassung ohne Namensnennung durch einen Dienstleister in den USA, wie in den Datenschutzhinweisen beschrieben. Die Einwilligung ist freiwillig und jederzeit mit Wirkung für die Zukunft widerrufbar, z. B. per E-Mail an ${email}.`,
     submit: 'Absenden', submitting: 'Wird gesendet…',
     saved: 'Gespeichert', saving: 'Speichert…', saveFailed: 'Nicht gespeichert – Verbindung prüfen',
+    tooLong: 'Diese Antwort ist zu lang – bitte kürze sie etwas (z. B. die Notizen).',
     submitError: 'Das Absenden hat nicht geklappt. Bitte versuche es noch einmal.',
     doneTitle: 'Vielen Dank!',
     done: (company: string) => `Deine Antworten wurden an ${company} gesendet.`,
@@ -152,6 +156,7 @@ const TEXT = {
     guardianConsent: (athlete: string, company: string, email: string) => `I am the parent or legal guardian of ${athlete} and explicitly consent to ${company} processing my child's health data provided in this form and the findings from the first appointment for the purpose of training support and physiotherapy care – including an AI-assisted summary without the name by a provider in the USA, as described in the privacy notice. This consent is voluntary and can be withdrawn at any time with effect for the future, e.g. by email to ${email}.`,
     submit: 'Submit', submitting: 'Submitting…',
     saved: 'Saved', saving: 'Saving…', saveFailed: 'Not saved — check your connection',
+    tooLong: 'This answer is too long — please shorten it a little (e.g. the notes).',
     submitError: 'Submitting did not work. Please try again.',
     doneTitle: 'Thank you!',
     done: (company: string) => `Your answers have been sent to ${company}.`,
@@ -341,7 +346,16 @@ export default function AnamnesisFormPage() {
     advanceTimer.current = setTimeout(() => { advanceTimer.current = null; setStepIdx(i => Math.min(steps.length - 1, i + 1)); }, 250);
   };
 
-  const setValue = (id: string, v: string) => { dirty.current = true; setValues(prev => ({ ...prev, [id]: v })); };
+  // The server keeps at most ANSWER_MAX_CHARS per answer and cuts off the rest — for the structured
+  // answers (JSON: body map, lists, grid) that would make the whole answer unreadable, so a change
+  // beyond the limit is not taken
+  const [tooLongId, setTooLongId] = useState<string | null>(null);
+  const setValue = (id: string, v: string) => {
+    if (v.length > ANSWER_MAX_CHARS) { setTooLongId(id); return; }
+    setTooLongId(null);
+    dirty.current = true;
+    setValues(prev => ({ ...prev, [id]: v }));
+  };
   const setProfileField = <K extends keyof AnamnesisProfileAnswers>(key: K, v: AnamnesisProfileAnswers[K]) => {
     dirty.current = true;
     setProfile(prev => ({ ...prev, [key]: v }));
@@ -658,6 +672,9 @@ export default function AnamnesisFormPage() {
         )}
       </div>
       {body}
+      {step.kind === 'question' && tooLongId === step.field.id && (
+        <p className="text-sm text-destructive">{t.tooLong}</p>
+      )}
       {step.kind === 'question' && ['text', 'number', 'date'].includes(step.field.fieldType) && (
         <p className="text-xs text-muted-foreground hidden sm:block">{t.enterHint}</p>
       )}
