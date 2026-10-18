@@ -667,15 +667,15 @@ const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSta
 
 const C_T = {
   de: {
-    hint: 'Klicke auf den ersten Tag und ziehe bis zum letzten – oder tippe nacheinander auf den ersten und den letzten Tag.',
-    pickEnd: 'Jetzt auf den letzten Tag tippen (oder denselben Tag für einen einzelnen Tag).',
+    hint: 'Tippe auf den ersten und dann auf den letzten Tag. Ein einzelner Tag: doppelt tippen.',
+    pickEnd: 'Jetzt auf den letzten Tag tippen – oder denselben Tag noch einmal für nur diesen Tag.',
     name: 'Bezeichnung, z. B. Urlaub Mallorca', type: 'Art', from: 'Von', to: 'Bis',
     add: 'Übernehmen', save: 'Speichern', remove: 'Entfernen', cancel: 'Abbrechen',
     prev: 'Vorheriger Monat', next: 'Nächster Monat', locale: 'de-DE',
   },
   en: {
-    hint: 'Click the first day and drag to the last — or tap the first and then the last day.',
-    pickEnd: 'Now tap the last day (or the same day for a single day).',
+    hint: 'Tap the first day, then the last day. A single day: tap it twice.',
+    pickEnd: 'Now tap the last day — or the same day again for just that day.',
     name: 'Name, e.g. holiday in Spain', type: 'Type', from: 'From', to: 'To',
     add: 'Add', save: 'Save', remove: 'Remove', cancel: 'Cancel',
     prev: 'Previous month', next: 'Next month', locale: 'en-GB',
@@ -694,13 +694,9 @@ export function DateRangesInput({ field, value, onChange, lang, size = 'sm', rea
     return new Date(d.getFullYear(), d.getMonth(), 1, 12);
   });
   const [anchor, setAnchor] = useState<string | null>(null);
-  const [hover, setHoverState] = useState<string | null>(null);
-  // The day under the mouse, also for the mouseup handler (state is read late there)
-  const hoverRef = useRef<string | null>(null);
-  const setHover = (d: string | null) => { hoverRef.current = d; setHoverState(d); };
+  // The day under the mouse after the first click — previews the range
+  const [hover, setHover] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ period: DatePeriod; isNew: boolean } | null>(null);
-  const dragging = useRef<string | null>(null);
-  const lastPointer = useRef('mouse');
   const write = (next: DatePeriod[]) => onChange(next.length ? JSON.stringify([...next].sort((a, b) => a.from.localeCompare(b.from))) : '');
 
   const fmt = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(t.locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -713,21 +709,12 @@ export function DateRangesInput({ field, value, onChange, lang, size = 'sm', rea
     setDraft({ period: { id: uid(), from, to, label: '', kind: kinds.length === 1 ? kinds[0] : undefined }, isNew: true });
   };
 
-  // Mouse: a drag ends where the button is released (a click without moving = tap mode: the next
-  // click sets the last day)
-  const finishRef = useRef(finish);
-  finishRef.current = finish;
-  useEffect(() => {
-    const up = () => {
-      const start = dragging.current;
-      dragging.current = null;
-      const end = hoverRef.current;
-      if (start && end && end !== start) finishRef.current(start, end);
-    };
-    window.addEventListener('mouseup', up);
-    return () => window.removeEventListener('mouseup', up);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Phone and computer alike: the first click / tap sets the first day, the next one the last day
+  // (the same day again — a double click / double tap — selects just that day)
+  const pickDay = (iso: string) => {
+    if (anchor) finish(anchor, iso);
+    else { setAnchor(iso); setHover(null); }
+  };
 
   const periodList = periods.length > 0 && (
     <ul className="space-y-1">
@@ -795,23 +782,11 @@ export function DateRangesInput({ field, value, onChange, lang, size = 'sm', rea
               key={iso}
               type="button"
               data-day={iso}
-              onPointerDown={e => { lastPointer.current = e.pointerType; }}
-              onMouseDown={e => {
-                if (lastPointer.current !== 'mouse') return;
-                e.preventDefault();
-                if (anchor) { finish(anchor, iso); return; }
-                dragging.current = iso;
-                setAnchor(iso);
-                setHover(iso);
-              }}
-              onMouseEnter={() => { if (dragging.current || anchor) setHover(iso); }}
-              onClick={() => {
-                if (lastPointer.current === 'mouse') return;
-                if (anchor) finish(anchor, iso);
-                else { setAnchor(iso); setHover(null); }
-              }}
+              onMouseEnter={() => { if (anchor) setHover(iso); }}
+              onClick={() => pickDay(iso)}
               className={cn(
-                'relative rounded-md flex flex-col items-center justify-start border transition-colors overflow-hidden',
+                // touch-manipulation: no zoom on a double tap
+                'relative rounded-md flex flex-col items-center justify-start border transition-colors overflow-hidden touch-manipulation',
                 size === 'lg' ? 'h-12 pt-1 text-base' : 'h-9 pt-0.5 text-sm',
                 inPending ? 'border-primary bg-primary/20' : 'border-transparent bg-muted/50 hover:border-primary/40',
                 iso === today && 'font-bold',
