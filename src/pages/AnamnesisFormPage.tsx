@@ -64,14 +64,14 @@ interface FormData {
   noticeEn?: string;
 }
 
-type ProfileStep = 'name' | 'birthday' | 'sex' | 'sports' | 'occupation' | 'activity';
+type ProfileStep = 'name' | 'birthday' | 'sex' | 'sports' | 'occupation' | 'activity' | 'address';
 type Step =
   | { kind: 'welcome' }
   | { kind: 'profile'; key: ProfileStep }
   | { kind: 'question'; section: AnamnesisSection; field: AnamnesisField }
   | { kind: 'consent' };
 
-const PROFILE_STEPS: ProfileStep[] = ['name', 'birthday', 'sex', 'sports', 'occupation', 'activity'];
+const PROFILE_STEPS: ProfileStep[] = ['name', 'birthday', 'sex', 'sports', 'occupation', 'activity', 'address'];
 
 const TEXT = {
   de: {
@@ -90,6 +90,8 @@ const TEXT = {
     qSports: 'Welche Sportart(en) machst du?', sportsHint: 'Mehrere mit Komma trennen',
     qOccupation: 'Was machst du beruflich?',
     qActivity: 'Wie aktiv bist du im Alltag?',
+    qAddress: 'Wie lautet deine Rechnungsadresse?', addressHint: 'Für die Rechnungen.',
+    street: 'Straße und Hausnummer', postalCode: 'PLZ', city: 'Ort', country: 'Land',
     sexes: { male: 'Männlich', female: 'Weiblich', other: 'Divers' },
     activities: {
       sedentary: 'Kaum aktiv (wenig oder kein Sport)',
@@ -137,6 +139,8 @@ const TEXT = {
     qSports: 'Which sport(s) do you do?', sportsHint: 'Separate several with commas',
     qOccupation: 'What is your occupation?',
     qActivity: 'How active are you in daily life?',
+    qAddress: 'What is your billing address?', addressHint: 'For the invoices.',
+    street: 'Street and number', postalCode: 'Postcode', city: 'City', country: 'Country',
     sexes: { male: 'Male', female: 'Female', other: 'Other' },
     activities: {
       sedentary: 'Sedentary (little or no exercise)',
@@ -371,6 +375,7 @@ export default function AnamnesisFormPage() {
       case 'sports': return !!sportsText.trim();
       case 'occupation': return !!profile.occupation?.trim();
       case 'activity': return !!profile.dailyActivityLevel;
+      case 'address': return !!(profile.billingAddress?.street?.trim() && profile.billingAddress?.city?.trim());
     }
   };
   const hasAnswers = Object.values(values).some(v => v?.trim());
@@ -564,6 +569,27 @@ export default function AnamnesisFormPage() {
         body = <Input className={bigInput} autoFocus placeholder={t.typeHere} value={profile.occupation ?? ''}
           onChange={e => setProfileField('occupation', e.target.value)} onKeyDown={onEnter} />;
         break;
+      case 'address': {
+        heading = t.qAddress;
+        const addr = profile.billingAddress ?? { street: '', postalCode: '', city: '', country: '' };
+        const setAddr = (key: keyof typeof addr, v: string) => setProfileField('billingAddress', { ...addr, [key]: v });
+        body = (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground -mt-3">{t.addressHint}</p>
+            <Input className={bigInput} placeholder={t.street} autoComplete="street-address" autoFocus={!addr.street}
+              value={addr.street} onChange={e => setAddr('street', e.target.value)} />
+            <div className="grid grid-cols-[7rem_1fr] gap-3">
+              <Input className={bigInput} placeholder={t.postalCode} autoComplete="postal-code" inputMode="numeric"
+                value={addr.postalCode} onChange={e => setAddr('postalCode', e.target.value)} />
+              <Input className={bigInput} placeholder={t.city} autoComplete="address-level2"
+                value={addr.city} onChange={e => setAddr('city', e.target.value)} />
+            </div>
+            <Input className={bigInput} placeholder={t.country} autoComplete="country-name"
+              value={addr.country} onChange={e => setAddr('country', e.target.value)} onKeyDown={onEnter} />
+          </div>
+        );
+        break;
+      }
       case 'activity':
         heading = t.qActivity;
         body = (

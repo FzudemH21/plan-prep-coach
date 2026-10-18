@@ -34,6 +34,7 @@ import {
   Plus, Trash2, ChevronUp, ChevronDown, Edit, Loader2, ClipboardList, X, GitBranch, Eye, EyeOff,
 } from 'lucide-react';
 import { AnamnesisFieldInput } from '@/components/anamnesis/AnamnesisInputs';
+import { ANAMNESIS_PRESETS } from '@/data/anamnesisPresets';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
 import { DEFAULT_ANAMNESIS_TEMPLATE, PROFILE_SEX_SOURCE, isAthleteSection } from '@/types/anamnesis';
 import type {
@@ -538,8 +539,11 @@ export function TemplateEditorDialog({
   isSavingAsNew,
   onDelete,
   isDeleting,
+  showPresets,
 }: {
   initial: { name: string; sections: AnamnesisSection[]; introText?: string };
+  /** New template: offer the built-in templates to start from (ANAMNESIS_PRESETS) */
+  showPresets?: boolean;
   open: boolean;
   onClose: () => void;
   onSave: (draft: AnamnesisTemplateDraft) => Promise<void>;
@@ -553,6 +557,18 @@ export function TemplateEditorDialog({
   const [sections, setSections] = useState<AnamnesisSection[]>(initial.sections);
   const [introText, setIntroText] = useState(initial.introText ?? '');
   const draft = (): AnamnesisTemplateDraft => ({ name, sections, introText });
+  const [presetId, setPresetId] = useState('');
+  const startFrom = (id: string) => {
+    const preset = ANAMNESIS_PRESETS.find((p) => p.id === id);
+    if (!preset) return;
+    const hasContent = sections.some((s) => s.title.trim() || s.fields.some((f) => f.label.trim()));
+    if (hasContent && !window.confirm('Replace what you have entered with this template?')) return;
+    setPresetId(id);
+    setName(preset.draft.name);
+    setIntroText(preset.draft.introText ?? '');
+    // A copy — editing must not change the built-in template
+    setSections(JSON.parse(JSON.stringify(preset.draft.sections)) as AnamnesisSection[]);
+  };
 
   // Reset local state when dialog opens
   const handleOpenChange = (o: boolean) => {
@@ -584,6 +600,17 @@ export function TemplateEditorDialog({
         </DialogHeader>
 
         <div className="px-6 pb-2 shrink-0">
+          {showPresets && (
+            <div className="mb-3 rounded-md border bg-muted/30 p-2.5 flex items-center gap-2">
+              <Label className="text-sm shrink-0">Start from</Label>
+              <Select value={presetId} onValueChange={startFrom}>
+                <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder="Blank template — or pick a ready-made one…" /></SelectTrigger>
+                <SelectContent>
+                  {ANAMNESIS_PRESETS.map((p) => <SelectItem key={p.id} value={p.id} className="text-sm">{p.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <Label className="text-sm mb-1 block">Template Name</Label>
           <Input
             value={name}
@@ -870,6 +897,7 @@ export function AnamnesisTemplateEditor() {
           open
           onClose={() => setIsCreating(false)}
           onSave={handleSaveNew}
+          showPresets
           isSaving={isSaving}
         />
       )}

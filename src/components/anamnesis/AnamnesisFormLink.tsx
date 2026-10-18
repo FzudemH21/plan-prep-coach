@@ -19,7 +19,7 @@ import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
 import { isPrivacyNoticeComplete, type CoachPrivacyNoticeState } from '@/hooks/useCoachPrivacyNotice';
 import { anamnesisFormUrl, FORM_LINK_DAYS } from '@/hooks/useAthleteAnamneses';
 import { isAthleteSection, type AthleteAnamnesis, type AnamnesisTemplateSnapshot, type AnamnesisProfileAnswers } from '@/types/anamnesis';
-import { ACTIVITY_LEVEL_LABELS, SEX_LABELS, type Athlete } from '@/types/athlete';
+import { ACTIVITY_LEVEL_LABELS, SEX_LABELS, formatBillingAddress, normalizeBillingAddress, type Athlete } from '@/types/athlete';
 
 // ── Privacy notice ────────────────────────────────────────────────────────────
 
@@ -316,7 +316,7 @@ export function SendFormLinkDialog({ open, onClose, athleteName, privacy, onCrea
 
 // ── Profile answers → athlete profile ─────────────────────────────────────────
 
-type ProfilePatch = Partial<Pick<Athlete, 'firstName' | 'lastName' | 'birthday' | 'sex' | 'sports' | 'occupation' | 'dailyActivityLevel'>>;
+type ProfilePatch = Partial<Pick<Athlete, 'firstName' | 'lastName' | 'birthday' | 'sex' | 'sports' | 'occupation' | 'dailyActivityLevel' | 'billingAddress'>>;
 
 interface ProfileChange { label: string; from: string; to: string }
 
@@ -353,6 +353,12 @@ export function profileChanges(athlete: Athlete, answers: AnamnesisProfileAnswer
       from: athlete.dailyActivityLevel ? ACTIVITY_LEVEL_LABELS[athlete.dailyActivityLevel] : '—',
       to: ACTIVITY_LEVEL_LABELS[answers.dailyActivityLevel],
     });
+  }
+  // Billing address — only when the athlete entered one, and it differs from the profile
+  const nextAddress = normalizeBillingAddress(answers.billingAddress);
+  if (nextAddress && formatBillingAddress(nextAddress) !== formatBillingAddress(athlete.billingAddress)) {
+    patch.billingAddress = nextAddress;
+    changes.push({ label: 'Billing address', from: formatBillingAddress(athlete.billingAddress) || '—', to: formatBillingAddress(nextAddress) });
   }
   return { patch, changes };
 }

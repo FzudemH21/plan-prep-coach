@@ -186,6 +186,8 @@ export interface AnamnesisProfileAnswers {
   sports?: string[];
   occupation?: string;
   dailyActivityLevel?: 'sedentary' | 'lightly_active' | 'moderately_active' | 'very_active' | 'extremely_active';
+  /** Needs migration 20261018_anamnesis_form_billing_address (without it, the server drops it) */
+  billingAddress?: { street: string; postalCode: string; city: string; country: string };
 }
 
 /** Consent given in the form, as stored by the server on submit */

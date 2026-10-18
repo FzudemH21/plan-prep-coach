@@ -624,6 +624,7 @@ Where nothing is stated for a heading, write "- Not stated" (German: "- Keine An
               open
               onClose={() => setShowNewTemplate(false)}
               onSave={handleSaveNewTemplate}
+              showPresets
               isSaving={savingNewTemplate}
             />
           )}
