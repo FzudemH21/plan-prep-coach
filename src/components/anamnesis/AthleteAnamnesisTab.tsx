@@ -44,6 +44,7 @@ import { useCoachProfile } from '@/hooks/useCoachProfile';
 import type { AnamnesisPdfLang } from '@/components/pdf/AnamnesisPDF';
 import { AnamnesisNotesPanel, type NotesChange } from '@/components/anamnesis/AnamnesisNotesPanel';
 import { AnamnesisChangeHistory } from '@/components/anamnesis/AnamnesisChangeHistory';
+import { AnamnesisReportDialog } from '@/components/anamnesis/AnamnesisReportDialog';
 import { diffAnamnesis, logAnamnesisChange, type AnamnesisAnswersSnapshot } from '@/utils/anamnesisChangeLog';
 import { useAthleteAnamneses } from '@/hooks/useAthleteAnamneses';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
@@ -525,6 +526,15 @@ Where nothing is stated for a heading, write "- Not stated" (German: "- Keine An
     }
   };
   const printLangs: AnamnesisPdfLang[] = formLanguage === 'en' ? ['en', 'de'] : ['de', 'en'];
+  // Report (Befundbericht) after the appointment — saved records only (the export is recorded)
+  const [reportOpen, setReportOpen] = useState(false);
+  const pdfAthlete = {
+    name: athleteName,
+    birthday: athlete?.birthday,
+    sex: athlete?.sex,
+    sports: athlete?.sports?.length ? athlete.sports : athlete?.sport ? [athlete.sport] : [],
+    occupation: athlete?.occupation,
+  };
 
   const handleSave = async () => {
     const answers = currentAnswers();
@@ -961,6 +971,47 @@ Where nothing is stated for a heading, write "- Not stated" (German: "- Keine An
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+          {recordId && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={templateSnapshot.sections.length === 0 || (mode === 'edit' && dirty)}
+              title={mode === 'edit' && dirty ? 'Save your changes first' : 'Compact report after the appointment: answered questions, notes, summary'}
+              onClick={() => setReportOpen(true)}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Report
+            </Button>
+          )}
+          {recordId && reportOpen && (
+            <AnamnesisReportDialog
+              open
+              onClose={() => setReportOpen(false)}
+              recordId={recordId}
+              defaultLang={printLangs[0]}
+              changedByName={changedByName}
+              generatingSummary={generatingSummary}
+              onGenerateSummary={handleGenerateSummary}
+              source={{
+                templateName: templateSnapshot.name,
+                sections: templateSnapshot.sections,
+                customQuestions,
+                fieldValues,
+                customFieldValues,
+                conductedAt,
+                consent,
+                athlete: pdfAthlete,
+                branding: coachProfile?.branding,
+                coachName: coachProfile?.name,
+                contactEmail: coachProfile?.contactEmail,
+                notes: noteEntries,
+                aiSummary,
+                attachments,
+                formSubmittedAt: initial?.formSubmittedAt ?? null,
+              }}
+            />
+          )}
           {readOnly ? (
             <Button size="sm" className="gap-1.5" onClick={() => setMode('edit')}>
               <Pencil className="h-3.5 w-3.5" />

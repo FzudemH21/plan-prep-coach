@@ -14,7 +14,7 @@
  */
 import React from 'react';
 import { Document, Font, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
-import type { AnamnesisField, AnamnesisSection, AnamnesisConsent } from '@/types/anamnesis';
+import type { AnamnesisAttachment, AnamnesisField, AnamnesisNote, AnamnesisSection, AnamnesisConsent } from '@/types/anamnesis';
 import {
   DAY_LABELS, YESNO_OTHER, YESNO_OTHER_TEXT, WEEK_GRID_COLORS, WEEK_GRID_HOURS, WEEK_GRID_LABELS, contextFor, conditionState, describeCondition, formatAnswer,
   isAnswered, parseBodyMap, parseDateRanges, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
@@ -504,6 +504,206 @@ export function AnamnesisPDF(props: AnamnesisPdfProps) {
             borderTopWidth: 0.5, borderTopColor: C.border, paddingTop: 6,
           }}
         >
+          <Text style={{ fontSize: 7.5, color: C.fg3 }}>{[studio, t.confidential].filter(Boolean).join(' · ')}</Text>
+          <Text style={{ fontSize: 7.5, color: C.fg3 }} render={({ pageNumber, totalPages }) => t.page(pageNumber, totalPages)} />
+        </View>
+      </Page>
+    </Document>
+  );
+}
+
+// ── Report (Befundbericht) — after the appointment ───────────────────────────
+// Compact: sender, athlete details, only the answered questions (no space to write), the
+// appointment's notes, the AI summary, the list of attachments, signature line. The coach picks the
+// content before exporting (data minimisation, e.g. for a doctor).
+
+const R = {
+  de: {
+    title: 'Befundbericht', created: 'Erstellt am', for: 'Für', notes: 'Notizen aus dem Termin', dictated: 'diktiert',
+    summary: 'Zusammenfassung', attachments: 'Anhänge (separat)', place: 'Ort, Datum', signature: 'Unterschrift',
+    appointment: 'Termin', athlete: 'Athlet/in',
+  },
+  en: {
+    title: 'Assessment report', created: 'Created on', for: 'For', notes: 'Notes from the appointment', dictated: 'dictated',
+    summary: 'Summary', attachments: 'Attachments (separate)', place: 'Place, date', signature: 'Signature',
+    appointment: 'Appointment', athlete: 'Athlete',
+  },
+} as const;
+
+export interface AnamnesisReportContent {
+  /** Sections to include (ids) */
+  sectionIds: string[];
+  customQuestions: boolean;
+  notes: boolean;
+  summary: boolean;
+  attachments: boolean;
+}
+
+export interface AnamnesisReportProps extends AnamnesisPdfProps {
+  include: AnamnesisReportContent;
+  notes: AnamnesisNote[];
+  aiSummary: string | null;
+  attachments: AnamnesisAttachment[];
+  /** e.g. "Dr. Müller (Orthopädie)" — shown under the title */
+  recipient?: string;
+  contactEmail?: string;
+}
+
+/** One answered question: label + answer (structured answers as their block) */
+function ReportAnswer({ field: original, value, lang }: { field: AnamnesisField; value: string; lang: AnamnesisPdfLang }) {
+  const field = localizeField(original, lang);
+  const type = field.fieldType;
+  const block = type === 'bodyMap' ? <BodyMapBlock spots={parseBodyMap(value)} lang={lang} />
+    : type === 'weekGrid' ? <WeekGridBlock value={value} lang={lang} />
+    : type === 'list' ? <ListBlock field={field} value={value} lang={lang} />
+    : type === 'dateRanges' ? <PeriodsBlock value={value} lang={lang} />
+    : null;
+  return (
+    <View wrap={false} style={{ marginBottom: 7 }}>
+      <Text style={{ fontSize: 9, fontWeight: 600, color: C.fg2, marginBottom: 2 }}>{field.label}</Text>
+      {block ?? <Text style={{ fontSize: 10, lineHeight: 1.4, color: C.fg1 }}>{formatAnswer(field, value, lang)}</Text>}
+    </View>
+  );
+}
+
+/** "## Heading" / "- item" / "**bold**" of the AI summary as PDF text */
+function SummaryText({ text }: { text: string }) {
+  return (
+    <View>
+      {text.split('\n').filter((l) => l.trim()).map((line, i) => {
+        const heading = /^#{1,3}\s+/.test(line);
+        const bullet = /^\s*[-*]\s+/.test(line);
+        const clean = line.replace(/^#{1,3}\s+/, '').replace(/^\s*[-*]\s+/, '').replace(/\*\*([^*]+)\*\*/g, '$1');
+        return heading
+          ? <Text key={i} style={{ fontSize: 10, fontWeight: 700, marginTop: i === 0 ? 0 : 6, marginBottom: 2 }}>{clean}</Text>
+          : <Text key={i} style={{ fontSize: 9.5, lineHeight: 1.4, marginLeft: bullet ? 8 : 0, color: C.fg1 }}>{bullet ? `• ${clean}` : clean}</Text>;
+      })}
+    </View>
+  );
+}
+
+export function AnamnesisReportPDF(props: AnamnesisReportProps) {
+  const { lang, athlete, branding, include } = props;
+  const t = L[lang];
+  const r = R[lang];
+  const accent = branding?.primaryColor && /^#[0-9a-f]{6}$/i.test(branding.primaryColor) ? branding.primaryColor : DEFAULT_ACCENT;
+  const studio = branding?.businessName || props.coachName || '';
+  const age = ageFrom(athlete.birthday);
+  const ctx = contextFor(props.sections, props.fieldValues, athlete.sex);
+  const today = formatDate(new Date().toISOString(), t.locale);
+
+  const sections = props.sections
+    .filter((sec) => include.sectionIds.includes(sec.id) && conditionState(sec.condition, ctx) !== 'notMet')
+    .map((sec) => ({
+      sec,
+      fields: sec.fields.filter((f) => f.fieldType !== 'info'
+        && conditionState(f.condition, ctx) !== 'notMet'
+        && isAnswered(f, props.fieldValues[f.id])),
+    }))
+    .filter((x) => x.fields.length > 0);
+  const customs = include.customQuestions
+    ? props.customQuestions.filter((f) => f.label.trim() && isAnswered(f, props.customFieldValues[f.id]))
+    : [];
+
+  const info: Array<[string, string]> = [
+    [r.athlete, athlete.name],
+    [t.birthday, athlete.birthday ? `${formatDate(athlete.birthday, t.locale)}${age !== null ? ` (${age} ${t.years})` : ''}` : ''],
+    [t.sports, (athlete.sports ?? []).join(', ')],
+    [r.appointment, formatDate(props.conductedAt, t.locale)],
+  ].filter(([, v]) => v) as Array<[string, string]>;
+
+  return (
+    <Document title={`${r.title} – ${athlete.name}`} author={studio || undefined}>
+      <Page size="A4" style={s.page}>
+        <Text fixed style={{ position: 'absolute', top: 20, left: 44, right: 44, fontSize: 8, color: C.fg3 }}
+          render={({ pageNumber }) => (pageNumber > 1 ? `${r.title} · ${athlete.name}` : '')} />
+
+        {/* Sender */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+          <View style={{ maxWidth: 280 }}>
+            {branding?.logoBase64
+              ? <Image src={branding.logoBase64} style={{ height: 32, objectFit: 'contain', objectPosition: 'left', marginBottom: 4 }} />
+              : null}
+            {studio ? <Text style={{ fontSize: 10, fontWeight: 700 }}>{studio}</Text> : null}
+            {props.coachName && props.coachName !== studio ? <Text style={{ fontSize: 9, color: C.fg2 }}>{props.coachName}</Text> : null}
+            {props.contactEmail ? <Text style={{ fontSize: 9, color: C.fg2 }}>{props.contactEmail}</Text> : null}
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={{ fontSize: 19, fontWeight: 700 }}>{r.title}</Text>
+            <Text style={{ fontSize: 9, color: C.fg3, marginTop: 2 }}>{r.created} {today}</Text>
+            {props.recipient ? <Text style={{ fontSize: 9, color: C.fg2, marginTop: 2 }}>{r.for}: {props.recipient}</Text> : null}
+          </View>
+        </View>
+        <View style={{ height: 2, backgroundColor: accent, marginBottom: 12 }} />
+
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 6 }}>
+          {info.map(([label, value]) => (
+            <View key={label} style={{ width: '50%', paddingRight: 14, marginBottom: 6 }}>
+              <Text style={{ fontSize: 8, color: C.fg3, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 1 }}>{label}</Text>
+              <Text style={{ fontSize: 10.5, fontWeight: 500 }}>{value}</Text>
+            </View>
+          ))}
+        </View>
+
+        {include.summary && props.aiSummary?.trim() ? (
+          <View>
+            <SectionTitle title={r.summary} accent={accent} />
+            <SummaryText text={props.aiSummary} />
+          </View>
+        ) : null}
+
+        {sections.map(({ sec, fields }) => (
+          <View key={sec.id}>
+            <SectionTitle title={localizeSection(sec, lang).title} accent={accent} />
+            {fields.map((f) => <ReportAnswer key={f.id} field={f} value={props.fieldValues[f.id] ?? ''} lang={lang} />)}
+          </View>
+        ))}
+
+        {customs.length > 0 && (
+          <View>
+            <SectionTitle title={t.custom} accent={accent} />
+            {customs.map((f) => <ReportAnswer key={f.id} field={f} value={props.customFieldValues[f.id] ?? ''} lang={lang} />)}
+          </View>
+        )}
+
+        {include.notes && props.notes.length > 0 && (
+          <View>
+            <SectionTitle title={r.notes} accent={accent} />
+            {props.notes.map((n) => (
+              <View key={n.id} wrap={false} style={{ marginBottom: 6 }}>
+                <Text style={{ fontSize: 8, color: C.fg3, marginBottom: 1 }}>
+                  {formatDate(n.createdAt, t.locale)}{n.source === 'dictated' ? ` · ${r.dictated}` : ''}
+                </Text>
+                <Text style={{ fontSize: 9.5, lineHeight: 1.4 }}>{n.text}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {include.attachments && props.attachments.length > 0 && (
+          <View>
+            <SectionTitle title={r.attachments} accent={accent} />
+            {props.attachments.map((a) => <Text key={a.path} style={{ fontSize: 9.5, marginBottom: 2 }}>• {a.name}</Text>)}
+          </View>
+        )}
+
+        {/* Signature */}
+        <View wrap={false} style={{ flexDirection: 'row', marginTop: 28 }}>
+          <View style={{ flex: 1, marginRight: 30 }}>
+            <View style={{ height: 22, borderBottomWidth: 0.6, borderBottomColor: C.fg3 }} />
+            <Text style={{ fontSize: 8, color: C.fg3, marginTop: 2 }}>{r.place}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={{ height: 22, borderBottomWidth: 0.6, borderBottomColor: C.fg3 }} />
+            <Text style={{ fontSize: 8, color: C.fg3, marginTop: 2 }}>{r.signature}{props.coachName ? ` – ${props.coachName}` : ''}</Text>
+          </View>
+        </View>
+
+        <View fixed style={{
+          position: 'absolute', bottom: 24, left: 44, right: 44,
+          flexDirection: 'row', justifyContent: 'space-between',
+          borderTopWidth: 0.5, borderTopColor: C.border, paddingTop: 6,
+        }}>
           <Text style={{ fontSize: 7.5, color: C.fg3 }}>{[studio, t.confidential].filter(Boolean).join(' · ')}</Text>
           <Text style={{ fontSize: 7.5, color: C.fg3 }} render={({ pageNumber, totalPages }) => t.page(pageNumber, totalPages)} />
         </View>
