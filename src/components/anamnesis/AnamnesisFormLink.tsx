@@ -203,15 +203,13 @@ export function SendFormLinkDialog({ open, onClose, athleteName, privacy, onCrea
   privacy: CoachPrivacyNoticeState;
   onClose: () => void;
   athleteName: string;
-  onCreate: (templateId: string, snapshot: AnamnesisTemplateSnapshot, language: 'de' | 'en' | null) => Promise<AthleteAnamnesis>;
+  onCreate: (templateId: string, snapshot: AnamnesisTemplateSnapshot) => Promise<AthleteAnamnesis>;
   onRenew: (id: string) => Promise<boolean>;
   onWithdraw: (id: string) => Promise<boolean>;
 }) {
   const { templates, loading } = useAnamnesisTemplates();
   const { toast } = useToast();
   const [templateId, setTemplateId] = useState('');
-  // Form language: 'auto' = the athlete's phone language (they can switch in the form either way)
-  const [formLang, setFormLang] = useState<'auto' | 'de' | 'en'>('auto');
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<AthleteAnamnesis | null>(null);
   const [privacyOpen, setPrivacyOpen] = useState(false);
@@ -230,7 +228,7 @@ export function SendFormLinkDialog({ open, onClose, athleteName, privacy, onCrea
     if (!template) return;
     setCreating(true);
     try {
-      const rec = await onCreate(template.id, snapshotOf(template), formLang === 'auto' ? null : formLang);
+      const rec = await onCreate(template.id, snapshotOf(template));
       setCreated(rec);
     } catch (err) {
       toast({ title: 'Could not create the link', description: err instanceof Error ? err.message : String(err), variant: 'destructive' });
@@ -282,24 +280,6 @@ export function SendFormLinkDialog({ open, onClose, athleteName, privacy, onCrea
                     </p>
                   )
                 )}
-              </div>
-              <div className="space-y-1.5">
-                <Label>Form language</Label>
-                <Select value={formLang} onValueChange={(v) => setFormLang(v as 'auto' | 'de' | 'en')}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">Automatic — the language of the athlete's phone</SelectItem>
-                    <SelectItem value="de">Deutsch</SelectItem>
-                    <SelectItem value="en">English</SelectItem>
-                  </SelectContent>
-                </Select>
-                {template && formLang !== 'auto' && formLang !== (template.language ?? 'de')
-                  && !template.sections.some(s => s.fields.some(f => f.translations?.[formLang]?.label?.trim())) && (
-                  <p className="text-xs text-amber-700">
-                    This template has no {formLang === 'en' ? 'English' : 'German'} version yet — the questions would stay in {(template.language ?? 'de') === 'de' ? 'German' : 'English'}. Add it in the template editor ("{formLang === 'en' ? 'English' : 'German'} version").
-                  </p>
-                )}
-                <p className="text-xs text-muted-foreground">The athlete can switch between Deutsch and English in the form at any time.</p>
               </div>
               {!noticeReady && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 space-y-2">

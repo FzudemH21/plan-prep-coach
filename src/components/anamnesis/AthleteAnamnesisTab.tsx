@@ -1434,7 +1434,7 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
         onClose={() => setSendOpen(false)}
         athleteName={athleteName}
         privacy={privacy}
-        onCreate={(templateId, snapshot, language) => sendFormLink(templateId, snapshot, language)}
+        onCreate={(templateId, snapshot) => sendFormLink(templateId, snapshot)}
         onRenew={(id) => updateFormLink(id, 'renew')}
         onWithdraw={(id) => updateFormLink(id, 'withdraw')}
       />

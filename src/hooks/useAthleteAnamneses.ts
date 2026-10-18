@@ -197,7 +197,7 @@ export function useAthleteAnamneses(athleteLocalId: string) {
 
   /** New record waiting for the athlete: the template's athlete sections are filled in online */
   const sendFormLink = useCallback(
-    async (templateId: string | null, templateSnapshot: AnamnesisTemplateSnapshot, language?: 'de' | 'en' | null): Promise<AthleteAnamnesis> => {
+    async (templateId: string | null, templateSnapshot: AnamnesisTemplateSnapshot): Promise<AthleteAnamnesis> => {
       if (!user) throw new Error('Not signed in');
       const today = new Date();
       const conductedAt = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -212,8 +212,6 @@ export function useAthleteAnamneses(athleteLocalId: string) {
           form_token: newFormToken(),
           form_status: 'sent',
           form_expires_at: linkExpiry(),
-          // The form opens in this language (the athlete can still switch); unset = the phone's language
-          ...(language ? { form_language: language } : {}),
         })
         .select()
         .single();
