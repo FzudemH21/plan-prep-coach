@@ -755,6 +755,8 @@
       "startSection": "Abschnitt starten",
       "rest": "Pause",
       "skipRest": "Pause überspringen",
+      "soundOn": "Ton des Pausentimers einschalten",
+      "soundOff": "Ton des Pausentimers ausschalten",
       "regression": "↓ Regression",
       "progression": "↑ Progression",
       "insteadOf": "statt {{name}}",

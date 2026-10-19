@@ -9,6 +9,8 @@ import {
   TrendingUp, TrendingDown, Send, Loader2, Link2, Lock, Pause, Play, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { RestSoundToggle } from '@/components/workout/RestSoundToggle';
+import { useRestCountdown } from '@/hooks/useRestCountdown';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
@@ -616,8 +618,13 @@ export default function CoachMobileSessionLoggingPage() {
 
   const [phase, setPhase] = useState<Phase>('overview');
   const [sectionIdx, setSectionIdx] = useState(0);
-  const [restSecondsLeft, setRestSecondsLeft] = useState(90);
   const nextAfterRestRef = useRef<(() => void) | null>(null);
+  // Rest timer (timestamp-based, ticks + sound at the end) — when it runs out, on with the stored next step
+  const rest = useRestCountdown(phase === 'rest', () => {
+    const next = nextAfterRestRef.current;
+    nextAfterRestRef.current = null;
+    next?.();
+  });
   const [loggedValues, setLoggedValues] = useState<Record<string, Record<number, Record<string, string>>>>({});
   const [completedSets, setCompletedSets] = useState<Record<string, number[]>>({});
   const [borgSheetOpen, setBorgSheetOpen] = useState(false);
@@ -838,30 +845,18 @@ export default function CoachMobileSessionLoggingPage() {
     setExpandedSections(new Set(sections.map(s => s.id)));
   }, [sections]);
 
-  useEffect(() => {
-    if (phase !== 'rest') return;
-    if (restSecondsLeft <= 0) {
-      const next = nextAfterRestRef.current;
-      nextAfterRestRef.current = null;
-      next?.();
-      return;
-    }
-    const timer = setTimeout(() => setRestSecondsLeft(s => s - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [phase, restSecondsLeft]);
-
   function startRest(seconds: number, next: () => void) {
     // No rest planned (e.g. after the interval timer, which already ran every planned rest)
     if (seconds <= 0) { nextAfterRestRef.current = null; next(); return; }
     nextAfterRestRef.current = next;
-    setRestSecondsLeft(seconds);
+    rest.start(seconds);
     setPhase('rest');
   }
 
   function skipRest() {
     const next = nextAfterRestRef.current;
     nextAfterRestRef.current = null;
-    setRestSecondsLeft(0);
+    rest.stop();
     next?.();
   }
 
@@ -1376,6 +1371,8 @@ export default function CoachMobileSessionLoggingPage() {
   if (phase === 'rest') {
     return (
       <div className="relative flex flex-col h-full bg-background items-center justify-center gap-8 px-6">
+        <RestSoundToggle on={rest.soundOn} onToggle={rest.toggleSound}
+          labelOn={t('coachMobile.sessionLogging.soundOff')} labelOff={t('coachMobile.sessionLogging.soundOn')} />
         {sessionLogId && (
           <button onClick={() => setAbandonWarning('leave')}
             className="absolute top-2 right-2 w-11 h-11 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors"
@@ -1387,10 +1384,10 @@ export default function CoachMobileSessionLoggingPage() {
           <Timer className="h-8 w-8 text-primary opacity-70" />
           <p className="text-lg font-semibold text-muted-foreground">{t('coachMobile.sessionLogging.rest')}</p>
         </div>
-        <p className="text-[80px] font-bold tabular-nums leading-none">{formatTime(restSecondsLeft)}</p>
+        <p className="text-[80px] font-bold tabular-nums leading-none">{formatTime(rest.secondsLeft)}</p>
         <div className="flex gap-4">
-          <Button variant="outline" size="lg" className="w-24" onClick={() => setRestSecondsLeft(s => Math.max(1, s - 30))}>−30s</Button>
-          <Button variant="outline" size="lg" className="w-24" onClick={() => setRestSecondsLeft(s => s + 30)}>+30s</Button>
+          <Button variant="outline" size="lg" className="w-24" onClick={() => rest.adjust(-30)}>−30s</Button>
+          <Button variant="outline" size="lg" className="w-24" onClick={() => rest.adjust(30)}>+30s</Button>
         </div>
         <button onClick={skipRest} className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors">
           {t('coachMobile.sessionLogging.skipRest')}

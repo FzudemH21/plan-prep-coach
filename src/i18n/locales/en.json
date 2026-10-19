@@ -755,6 +755,8 @@
       "startSection": "Start Section",
       "rest": "Rest",
       "skipRest": "Skip rest",
+      "soundOn": "Turn rest timer sound on",
+      "soundOff": "Turn rest timer sound off",
       "regression": "↓ Regression",
       "progression": "↑ Progression",
       "insteadOf": "instead of {{name}}",

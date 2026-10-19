@@ -8,6 +8,8 @@ import {
   MessageSquare, Send, Loader2, History, Link2, Pause, Play, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { RestSoundToggle } from '@/components/workout/RestSoundToggle';
+import { useRestCountdown } from '@/hooks/useRestCountdown';
 import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -663,8 +665,13 @@ export default function AthleteSessionPage() {
 
   const [phase, setPhase] = useState<Phase>('overview');
   const [sectionIdx, setSectionIdx] = useState(0);
-  const [restSecondsLeft, setRestSecondsLeft] = useState(90);
   const nextAfterRestRef = useRef<(() => void) | null>(null);
+  // Rest timer (timestamp-based, ticks + sound at the end) — when it runs out, on with the stored next step
+  const rest = useRestCountdown(phase === 'rest', () => {
+    const next = nextAfterRestRef.current;
+    nextAfterRestRef.current = null;
+    next?.();
+  });
 
   // loggedValues: exerciseId -> setIdx -> paramName -> actual value string
   const [loggedValues, setLoggedValues] = useState<Record<string, Record<number, Record<string, string>>>>({});
@@ -955,30 +962,18 @@ export default function AthleteSessionPage() {
 
   // ── Rest timer ─────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    if (phase !== 'rest') return;
-    if (restSecondsLeft <= 0) {
-      const next = nextAfterRestRef.current;
-      nextAfterRestRef.current = null;
-      next?.();
-      return;
-    }
-    const timer = setTimeout(() => setRestSecondsLeft(s => s - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [phase, restSecondsLeft]);
-
   function startRest(seconds: number, next: () => void) {
     // No rest planned (e.g. after the interval timer, which already ran every planned rest)
     if (seconds <= 0) { nextAfterRestRef.current = null; next(); return; }
     nextAfterRestRef.current = next;
-    setRestSecondsLeft(seconds);
+    rest.start(seconds);
     setPhase('rest');
   }
 
   function skipRest() {
     const next = nextAfterRestRef.current;
     nextAfterRestRef.current = null;
-    setRestSecondsLeft(0);
+    rest.stop();
     next?.();
   }
 
@@ -1675,6 +1670,7 @@ export default function AthleteSessionPage() {
   if (phase === 'rest') {
     return (
       <div className="absolute inset-0 flex flex-col bg-background items-center justify-center gap-8 px-6 max-w-[480px] mx-auto overflow-hidden">
+        <RestSoundToggle on={rest.soundOn} onToggle={rest.toggleSound} labelOn="Turn rest timer sound off" labelOff="Turn rest timer sound on" />
         {sessionLogId && (
           <button
             onClick={() => setAbandonTarget('leave')}
@@ -1691,7 +1687,7 @@ export default function AthleteSessionPage() {
 
         {/* Big countdown */}
         <p className="text-[80px] font-bold tabular-nums leading-none">
-          {formatTime(restSecondsLeft)}
+          {formatTime(rest.secondsLeft)}
         </p>
 
         {/* Adjust buttons */}
@@ -1700,7 +1696,7 @@ export default function AthleteSessionPage() {
             variant="outline"
             size="lg"
             className="w-24"
-            onClick={() => setRestSecondsLeft(s => Math.max(1, s - 30))}
+            onClick={() => rest.adjust(-30)}
           >
             −30s
           </Button>
@@ -1708,7 +1704,7 @@ export default function AthleteSessionPage() {
             variant="outline"
             size="lg"
             className="w-24"
-            onClick={() => setRestSecondsLeft(s => s + 30)}
+            onClick={() => rest.adjust(30)}
           >
             +30s
           </Button>
