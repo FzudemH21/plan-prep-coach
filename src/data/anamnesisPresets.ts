@@ -190,9 +190,9 @@ const nutrition: AnamnesisSection = {
     q({ id: 'n-meals', label: 'Wie viele Mahlzeiten isst du am Tag?', fieldType: 'select',
       options: ['1–2', '3', '4–5', 'Mehr als 5', 'Sehr unterschiedlich'] }),
     q({ id: 'n-diet', label: 'Ernährst du dich auf eine bestimmte Art?', fieldType: 'multiselect', allowOther: true,
-      options: ['Nein, ganz normal', 'Vegetarisch', 'Vegan', 'Pescetarisch', 'Low Carb oder Keto', 'Intervallfasten'] }),
+      options: ['Nein, ich esse alles', 'Vegetarisch', 'Vegan', 'Pescetarisch', 'Low Carb oder Keto', 'Intervallfasten'] }),
     q({ id: 'n-intolerances', label: 'Hast du Unverträglichkeiten?', fieldType: 'multiselect', allowOther: true,
-      options: ['Keine', 'Laktose', 'Gluten / Zöliakie', 'Fruktose', 'Histamin'] }),
+      options: ['Keine bekannten', 'Laktose', 'Gluten / Zöliakie', 'Fruktose', 'Histamin'] }),
     q({ id: 'n-enough', label: 'Hast du das Gefühl, genug zu essen, um dein Training gut zu schaffen?', fieldType: 'select',
       options: ['Ja', 'Nicht immer', 'Eher nicht'] }),
     q({ id: 'n-weight', label: 'Möchtest du gerade dein Gewicht verändern?', fieldType: 'select',
@@ -246,7 +246,6 @@ const goals: AnamnesisSection = {
   fields: [
     q({ id: 'g-goal', label: 'Was möchtest du mit dem Training erreichen?', fieldType: 'textarea',
       helpText: 'So konkret wie möglich – z. B. schneller sprinten, fit für die Saison, ohne Knieschmerzen joggen, stärker werden.' }),
-    q({ id: 'g-restore', label: 'Was soll wieder ohne Beschwerden möglich sein?', fieldType: 'textarea', condition: markedComplaints }),
     q({ id: 'g-rts', label: 'Bis wann möchtest du wieder voll trainieren oder spielen können?', fieldType: 'date', condition: markedComplaints }),
   ],
 };
@@ -272,7 +271,7 @@ const training: AnamnesisSection = {
       fieldType: 'dateRanges',
       helpText: 'z. B. Wettkämpfe, Urlaub, Reisen, Trainingslager, Prüfungen – tippe auf den ersten und dann auf den letzten Tag.' }),
     q({ id: 't-where', label: 'Wo kannst du trainieren?', fieldType: 'multiselect', allowOther: true,
-      options: ['Fitnessstudio', 'Zuhause', 'Sportplatz oder Laufbahn', 'Sporthalle', 'Draußen (z. B. Park)', 'Bei uns vor Ort'] }),
+      options: ['Fitnessstudio', 'Zuhause', 'Sportplatz oder Laufbahn', 'Sporthalle', 'Draußen (z. B. Park)'] }),
     q({ id: 't-equipment', label: 'Welche Ausstattung hast du dort?', fieldType: 'multiselect', allowOther: true,
       options: ['Langhantel mit Hantelscheiben', 'Squat- oder Power-Rack', 'Hantelbank', 'Kurzhanteln', 'Kettlebells',
         'Geräte / Kabelzug', 'Klimmzugstange', 'Widerstandsbänder', 'Plyo-Box', 'Medizinball', 'Sprintstrecke (mind. 30 m)',

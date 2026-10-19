@@ -32,6 +32,7 @@ const T = {
   de: {
     yes: 'Ja', no: 'Nein', addRow: 'Weitere hinzufügen', removeRow: 'Entfernen',
     front: 'Vorne', back: 'Hinten', tapBody: 'Tippe auf die Stelle am Körper.',
+    tapMore: 'Noch eine Stelle betroffen? Tippe einfach noch einmal auf den Körper.',
     whatHappened: 'Was ist passiert / wie fühlt es sich an?', pain: 'Schmerz (0 = kein, 10 = stärkster vorstellbarer)',
     add: 'Übernehmen', save: 'Speichern', remove: 'Entfernen', cancel: 'Abbrechen',
     gridHint: 'Feld antippen zum Eintragen – gedrückt halten und ziehen, um mehrere Felder zu füllen.',
@@ -40,6 +41,7 @@ const T = {
   en: {
     yes: 'Yes', no: 'No', addRow: 'Add another', removeRow: 'Remove',
     front: 'Front', back: 'Back', tapBody: 'Tap the spot on the body.',
+    tapMore: 'Another spot affected? Just tap the body again.',
     whatHappened: 'What happened / how does it feel?', pain: 'Pain (0 = none, 10 = worst imaginable)',
     add: 'Add', save: 'Save', remove: 'Remove', cancel: 'Cancel',
     gridHint: 'Tap a slot to fill it in — press, hold and drag to fill several.',
@@ -123,6 +125,44 @@ export function MultiChoiceInput({ options, labels, value, onChange, size = 'sm'
 // Form link (lg): a slider with a big thumb and the value above it — nothing is picked until the
 // athlete touches it. Coach view (sm): a row of numbers.
 
+/** The slider of the form link — the thumb waits in the middle until touched (a tap on it picks
+ *  that value, a tap on the track jumps there) */
+function ScaleSlider({ min, max, current, onPick, label }: {
+  min: number; max: number; current: number | null; onPick: (n: number) => void; label: string;
+}) {
+  const steps = Array.from({ length: max - min + 1 }, (_, i) => min + i);
+  const mid = Math.round((min + max) / 2);
+  const pick = (v: number[]) => onPick(v[0]);
+  return (
+    <div>
+      <SliderPrimitive.Root
+        className="relative flex w-full touch-none select-none items-center py-3"
+        min={min} max={max} step={1}
+        value={[current ?? mid]}
+        onValueChange={pick}
+        onValueCommit={pick}
+      >
+        <SliderPrimitive.Track className="relative h-3 w-full grow overflow-hidden rounded-full bg-muted">
+          {current !== null && <SliderPrimitive.Range className="absolute h-full bg-primary" />}
+        </SliderPrimitive.Track>
+        <SliderPrimitive.Thumb
+          aria-label={label}
+          onPointerDown={() => { if (current === null) onPick(mid); }}
+          className={cn(
+            'block h-9 w-9 rounded-full border-2 shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            current === null ? 'border-muted-foreground/40 bg-background' : 'border-primary bg-primary',
+          )}
+        />
+      </SliderPrimitive.Root>
+      <div className="flex justify-between px-[14px]">
+        {steps.map(n => (
+          <span key={n} className={cn('w-4 text-center text-xs tabular-nums', current === n ? 'font-bold text-foreground' : 'text-muted-foreground')}>{n}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ScaleInput({ field, value, onChange, size = 'sm', lang = 'en' }: {
   field: AnamnesisField; value: string; onChange: (v: string) => void; size?: Size; lang?: AnswerLang;
 }) {
@@ -138,7 +178,6 @@ export function ScaleInput({ field, value, onChange, size = 'sm', lang = 'en' }:
   );
 
   if (size === 'lg') {
-    const pick = (v: number[]) => onChange(String(v[0]));
     return (
       <div className="space-y-4">
         <div className="text-center h-14 flex items-center justify-center">
@@ -146,29 +185,7 @@ export function ScaleInput({ field, value, onChange, size = 'sm', lang = 'en' }:
             ? <span className="text-base text-muted-foreground">{lang === 'de' ? 'Schieb den Regler oder tippe auf die Skala' : 'Slide or tap the scale'}</span>
             : <span className="text-5xl font-semibold tabular-nums">{current}</span>}
         </div>
-        <SliderPrimitive.Root
-          className="relative flex w-full touch-none select-none items-center py-3"
-          min={min} max={max} step={1}
-          value={[current ?? Math.round((min + max) / 2)]}
-          onValueChange={pick}
-          onValueCommit={pick}
-        >
-          <SliderPrimitive.Track className="relative h-3 w-full grow overflow-hidden rounded-full bg-muted">
-            {current !== null && <SliderPrimitive.Range className="absolute h-full bg-primary" />}
-          </SliderPrimitive.Track>
-          <SliderPrimitive.Thumb
-            aria-label={field.label}
-            className={cn(
-              'block h-9 w-9 rounded-full border-2 shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              current === null ? 'border-muted-foreground/40 bg-background' : 'border-primary bg-primary',
-            )}
-          />
-        </SliderPrimitive.Root>
-        <div className="flex justify-between px-[14px] -mt-2">
-          {steps.map(n => (
-            <span key={n} className={cn('w-4 text-center text-xs tabular-nums', current === n ? 'font-bold text-foreground' : 'text-muted-foreground')}>{n}</span>
-          ))}
-        </div>
+        <ScaleSlider min={min} max={max} current={current} onPick={n => onChange(String(n))} label={field.label} />
         {labels}
       </div>
     );
@@ -522,7 +539,9 @@ export function BodyMapInput({ field, value, onChange, lang, size = 'sm', readOn
           </button>
         ))}
       </div>
-      <p className={cn('text-center text-muted-foreground', size === 'lg' ? 'text-sm' : 'text-xs')}>{t.tapBody}</p>
+      <p className={cn('text-center text-muted-foreground', size === 'lg' ? 'text-sm' : 'text-xs')}>
+        {spots.length > 0 && !editing ? t.tapMore : t.tapBody}
+      </p>
       <BodyFigure
         view={view}
         spots={spots}
@@ -542,14 +561,25 @@ export function BodyMapInput({ field, value, onChange, lang, size = 'sm', readOn
               <X className="h-4 w-4" />
             </button>
           </div>
-          {field.bodyMapIntensity && (
+          {field.bodyMapIntensity && size === 'lg' && (
+            // Form link: the same slider as the scale questions
             <div className="space-y-1">
-              <p className={size === 'lg' ? 'text-sm' : 'text-xs text-muted-foreground'}>{t.pain}</p>
-              <div className={cn(size === 'lg' ? 'grid grid-cols-6 gap-1.5' : 'flex flex-wrap gap-1')}>
+              <p className="text-sm">
+                {t.pain}
+                {editing.spot.nrs !== undefined && <span className="font-semibold tabular-nums"> · {editing.spot.nrs}/10</span>}
+              </p>
+              <ScaleSlider min={0} max={10} current={editing.spot.nrs ?? null} label={t.pain}
+                onPick={n => setEditing(e => e && ({ spot: { ...e.spot, nrs: n }, isNew: e.isNew }))} />
+            </div>
+          )}
+          {field.bodyMapIntensity && size !== 'lg' && (
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">{t.pain}</p>
+              <div className="flex flex-wrap gap-1">
                 {Array.from({ length: 11 }, (_, n) => (
                   <button key={n} type="button"
                     onClick={() => setEditing(e => e && ({ spot: { ...e.spot, nrs: e.spot.nrs === n ? undefined : n }, isNew: e.isNew }))}
-                    className={cn('border font-medium tabular-nums', size === 'lg' ? 'h-11 rounded-lg text-base' : 'h-7 w-7 rounded-md text-xs',
+                    className={cn('border font-medium tabular-nums h-7 w-7 rounded-md text-xs',
                       editing.spot.nrs === n ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-input')}>
                     {n}
                   </button>

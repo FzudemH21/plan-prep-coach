@@ -174,9 +174,9 @@ const nutrition: AnamnesisSection = {
     q({ id: 'n-meals', label: 'How many meals do you eat a day?', fieldType: 'select',
       options: ['1–2', '3', '4–5', 'More than 5', 'It varies a lot'] }),
     q({ id: 'n-diet', label: 'Do you follow a particular diet?', fieldType: 'multiselect', allowOther: true,
-      options: ['No, nothing special', 'Vegetarian', 'Vegan', 'Pescatarian', 'Low carb or keto', 'Intermittent fasting'] }),
+      options: ['No, I eat everything', 'Vegetarian', 'Vegan', 'Pescatarian', 'Low carb or keto', 'Intermittent fasting'] }),
     q({ id: 'n-intolerances', label: 'Do you have any food intolerances?', fieldType: 'multiselect', allowOther: true,
-      options: ['None', 'Lactose', 'Gluten / coeliac disease', 'Fructose', 'Histamine'] }),
+      options: ['None known', 'Lactose', 'Gluten / coeliac disease', 'Fructose', 'Histamine'] }),
     q({ id: 'n-enough', label: 'Do you feel you eat enough to get through your training well?', fieldType: 'select',
       options: ['Yes', 'Not always', 'Not really'] }),
     q({ id: 'n-weight', label: 'Are you currently trying to change your weight?', fieldType: 'select',
@@ -230,7 +230,6 @@ const goals: AnamnesisSection = {
   fields: [
     q({ id: 'g-goal', label: 'What would you like to achieve with the training?', fieldType: 'textarea',
       helpText: 'As specific as possible – e.g. sprint faster, be fit for the season, jog without knee pain, get stronger.' }),
-    q({ id: 'g-restore', label: 'What should you be able to do again without complaints?', fieldType: 'textarea', condition: markedComplaints }),
     q({ id: 'g-rts', label: 'By when would you like to be back to full training or playing?', fieldType: 'date', condition: markedComplaints }),
   ],
 };
@@ -256,7 +255,7 @@ const training: AnamnesisSection = {
       fieldType: 'dateRanges',
       helpText: 'e.g. competitions, holidays, travel, training camps, exams – tap the first and then the last day.' }),
     q({ id: 't-where', label: 'Where can you train?', fieldType: 'multiselect', allowOther: true,
-      options: ['Gym', 'At home', 'Sports ground or track', 'Sports hall', 'Outdoors (e.g. park)', 'With us on site'] }),
+      options: ['Gym', 'At home', 'Sports ground or track', 'Sports hall', 'Outdoors (e.g. park)'] }),
     q({ id: 't-equipment', label: 'What equipment do you have there?', fieldType: 'multiselect', allowOther: true,
       options: ['Barbell with plates', 'Squat or power rack', 'Bench', 'Dumbbells', 'Kettlebells',
         'Machines / cable tower', 'Pull-up bar', 'Resistance bands', 'Plyo box', 'Medicine ball', 'Sprint track (at least 30 m)',
