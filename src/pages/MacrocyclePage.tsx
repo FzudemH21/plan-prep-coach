@@ -110,6 +110,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const [addEventMode, setAddEventMode] = useState(false);
   // Step 2: the day clicked in the calendar (day dialog: test or event on that day)
   const [dayDialogDate, setDayDialogDate] = useState<string | null>(null);
+  // Main goals whose suggestions (parameters linked to the goal) are shown
+  const [openSuggestions, setOpenSuggestions] = useState<Set<string>>(new Set());
   // A new sub-goal started from the day dialog gets that day as its test date
   const pendingSubGoalDateRef = useRef<string | null>(null);
 
@@ -197,9 +199,10 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     return derived;
   }, [smartGoals, parametersDataV2.interactions, parametersDataV2.parameters, subGoals, athleteParamsForGoals]);
 
-  // Group sub-goals by parent goal (including derived ones)
+  // Group the chosen sub-goals by parent goal (suggestions from the parameter links are listed
+  // separately and only count once added)
   const subGoalsByParent = useMemo(() => {
-    const allSubGoals = [...subGoals, ...derivedSubGoals];
+    const allSubGoals = subGoals;
     const grouped: Record<string, SubGoal[]> = {};
     const unlinked: SubGoal[] = [];
     
@@ -213,7 +216,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     });
     
     return { grouped, unlinked };
-  }, [subGoals, derivedSubGoals]);
+  }, [subGoals]);
 
   // Group athletes alphabetically by their groups
   const groupedAthletes = useMemo(() => {
@@ -1405,21 +1408,10 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         {/* Two-column layout: Items on left, Calendar on right */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
-          {/* Left Column: Sub-Goals & Events (compact cards) */}
+          {/* Left: the goals — main goals and the sub-goals chosen for them (with their values) */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-sm">Sub-Goals & Events</h3>
-              <Button
-                onClick={() => {
-                  setAddEventMode(true);
-                  setIsAddSubGoalDialogOpen(true);
-                }}
-                size="sm"
-                className="bg-foreground text-background hover:bg-foreground/90"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add Event
-              </Button>
+            <div className="flex items-center justify-between min-h-9">
+              <h3 className="font-semibold text-sm">Goals</h3>
             </div>
             
             {/* Hierarchical Sub-Goals organized under Primary Goals */}
@@ -1512,21 +1504,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                      <Badge 
-                                        variant={subGoal.isDerived ? "secondary" : "outline"} 
-                                        className={cn("text-xs shrink-0", subGoal.isDerived && "border-blue-500/50 bg-blue-500/10 text-blue-600")}
-                                      >
-                                        {subGoal.isDerived ? (
-                                          <span className="flex items-center gap-1">
-                                            <Link className="h-3 w-3" />
-                                            Linked
-                                          </span>
-                                        ) : (
-                                          "Test"
-                                        )}
-                                      </Badge>
                                       {subGoal.interactionStrength && (
-                                        <Badge variant="outline" className="text-xs shrink-0">
+                                        <Badge variant="outline" className="text-xs shrink-0"
+                                          title={`${subGoal.interactionStrength === 'strong' ? 'Strong' : subGoal.interactionStrength === 'moderate' ? 'Moderate' : 'Weak'} link to the main goal (parameter database)`}>
                                           {subGoal.interactionStrength === 'strong' ? '↑↑' : subGoal.interactionStrength === 'moderate' ? '↑' : '→'}
                                         </Badge>
                                       )}
@@ -1535,9 +1515,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                       </span>
                                     </div>
                                     <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                      {subGoal.isDerived ? (
-                                        <span className="text-xs text-muted-foreground italic">
-                                          Click edit to set test values
+                                      {subGoal.isDerived || (!subGoal.preTestValue && !subGoal.goalValue) ? (
+                                        <span className="text-xs text-amber-700">
+                                          No values set yet — set baseline and goal with the pencil
                                         </span>
                                       ) : (
                                         <>
@@ -1609,6 +1589,54 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                             );
                           })}
                           
+                          {/* Suggestions: parameters linked to this main goal in the parameter database —
+                              they only count (calendar, step 3) once added */}
+                          {(() => {
+                            const suggestions = derivedSubGoals.filter(d => d.parentGoalId === goal.id);
+                            if (suggestions.length === 0) return null;
+                            const open = openSuggestions.has(goal.id);
+                            return (
+                              <div className="border-b px-3 py-2 space-y-1.5">
+                                <button
+                                  type="button"
+                                  className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                                  onClick={() => setOpenSuggestions(prev => {
+                                    const next = new Set(prev);
+                                    if (next.has(goal.id)) next.delete(goal.id); else next.add(goal.id);
+                                    return next;
+                                  })}
+                                >
+                                  <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !open && "-rotate-90")} />
+                                  Suggested from the parameter database ({suggestions.length})
+                                </button>
+                                {open && (
+                                  <>
+                                    <p className="text-xs text-muted-foreground">
+                                      Parameters that contribute to this main goal (arrows: how strongly). Add the ones you want as sub-goals — only added sub-goals appear in the calendar and in step 3.
+                                    </p>
+                                    {suggestions.map(sg => (
+                                      <div key={sg.id} className="flex items-center gap-2 rounded-md bg-muted/30 px-2 py-1.5">
+                                        {sg.interactionStrength && (
+                                          <Badge variant="outline" className="text-xs shrink-0"
+                                            title={`${sg.interactionStrength === 'strong' ? 'Strong' : sg.interactionStrength === 'moderate' ? 'Moderate' : 'Weak'} link to the main goal`}>
+                                            {sg.interactionStrength === 'strong' ? '↑↑' : sg.interactionStrength === 'moderate' ? '↑' : '→'}
+                                          </Badge>
+                                        )}
+                                        <span className="flex-1 min-w-0 truncate text-sm">{sg.description}</span>
+                                        {sg.preTestValue ? (
+                                          <span className="text-xs text-muted-foreground shrink-0">last {sg.preTestValue} {sg.unit}</span>
+                                        ) : null}
+                                        <Button variant="outline" size="sm" className="h-7 px-2 shrink-0" onClick={() => handlePromoteDerivedSubGoal(sg)}>
+                                          <Plus className="h-3 w-3 mr-0.5" />Add
+                                        </Button>
+                                      </div>
+                                    ))}
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })()}
+
                           {/* Add Sub-Goal button for this primary goal */}
                           <Button
                             variant="ghost"
@@ -1629,16 +1657,36 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                 );
               })}
               
-              {/* Events Section */}
+            </div>
+          </div>
+
+          {/* Right: events */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between min-h-9">
+              <h3 className="font-semibold text-sm">Events</h3>
+              <Button
+                onClick={() => {
+                  setAddEventMode(true);
+                  setIsAddSubGoalDialogOpen(true);
+                }}
+                size="sm"
+                variant="outline"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Event
+              </Button>
+            </div>
+            <div className="space-y-3 max-h-[500px] overflow-y-auto px-1 -mx-1 pr-3">
+              {events.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground border border-dashed rounded-lg">
+                  <CalendarIcon className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No events yet</p>
+                  <p className="text-xs">Competitions, holidays, camps — add one here or click a day in the calendar</p>
+                </div>
+              )}
               {events.length > 0 && (
                 <div className="border rounded-lg overflow-hidden">
-                  <div className="p-3 bg-muted/20">
-                    <div className="flex items-center gap-2">
-                      <CalendarIcon className="h-4 w-4 text-orange-500" />
-                      <span className="font-medium text-sm">Events</span>
-                    </div>
-                  </div>
-                  
+                                    
                   <div className="divide-y">
                     {events.map((event) => {
                       const isExpanded = expandedSubGoals.has(event.id);
@@ -1702,36 +1750,16 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                 </div>
               )}
               
-              {/* Add Event Button */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => {
-                  setAddEventMode(true);
-                  setIsAddSubGoalDialogOpen(true);
-                }}
-              >
-                <Plus className="h-3 w-3 mr-1" />
-                Add Event
-              </Button>
-              
-              {/* Empty state when there are primary goals but no sub-goals */}
-              {smartGoals.length > 0 && subGoals.length === 0 && events.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-2">
-                  Expand a primary goal and click "Add Sub-Goal" to get started
-                </p>
-              )}
             </div>
-            
-            <p className="text-xs text-muted-foreground text-center bg-muted/50 p-2 rounded">
-              Click a day in the calendar to add a test or an event
-            </p>
           </div>
-          
-          {/* Right Column: Calendar */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-sm">Calendar Scheduling</h3>
+        </div>
+
+          {/* Calendar: click a day → the tests and events of that day (day dialog) */}
+          <div className="space-y-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <h3 className="font-semibold text-sm">Calendar</h3>
+              <p className="text-xs text-muted-foreground">Click a day to add a test or an event</p>
+            </div>
             {planDuration?.startDate && planDuration?.endDate ? (
               <div className="border rounded-lg p-4 bg-muted/30 flex flex-col items-center">
                 {/* Plan Duration Summary */}
@@ -1994,7 +2022,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
               </div>
             )}
           </div>
-        </div>
 
         {/* Add/Edit Sub-Goal Dialog */}
         {dayDialogDate && (
@@ -2005,7 +2032,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             planEndDate={planDuration?.endDate ? format(planDuration.endDate, 'yyyy-MM-dd') : undefined}
             smartGoals={smartGoals}
             subGoals={subGoals}
-            derivedSubGoals={derivedSubGoals}
             events={events}
             existingOnDay={[
               ...athleteExistingTestsAndEvents.tests.filter(t => t.testDates?.some(d => d.startsWith(dayDialogDate))).map(t => `test ${t.testMethod}`),
@@ -2025,9 +2051,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                 }));
                 return;
               }
-              // A suggested sub-goal becomes the athlete's own, with this day
-              const derived = derivedSubGoals.find(sg => sg.id === subGoalId);
-              if (derived) setSubGoals(prev => [...prev, { ...derived, testDates: [dayDialogDate], isDerived: false }]);
             }}
             onNewSubGoal={() => {
               pendingSubGoalDateRef.current = dayDialogDate;
@@ -2121,7 +2144,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       const directMethods = getMethodsForParameter(goal.linkedParameterId);
 
       // Get sub-goals for this primary goal and their methods
-      const allSubGoals = [...subGoals, ...derivedSubGoals].filter(
+      const allSubGoals = subGoals.filter(
         sg => sg.parentGoalId === goal.id
       );
 
@@ -2177,7 +2200,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     );
     
     // Get all sub-goal parameter IDs with their parent goal info
-    const allSubGoals = [...subGoals, ...derivedSubGoals];
+    const allSubGoals = subGoals;
     const subGoalToParentGoal = new Map<string, SmartGoal>();
     allSubGoals.forEach(sg => {
       const parentGoal = smartGoals.find(g => g.id === sg.parentGoalId);

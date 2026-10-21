@@ -1,8 +1,8 @@
 /**
  * Wizard phase 1, step 2: click a day in the plan calendar → schedule on that day.
  *
- * Test: a test of a main goal or of one of its sub-goals (suggested sub-goals included — they
- * become the athlete's own when scheduled), or a new sub-goal with the day already set. Event: a
+ * Test: a test of a main goal or of one of the sub-goals chosen for it (in the goals list), or a
+ * new sub-goal with the day already set. Event: a
  * new event (name, description, end date for an event over several days) or the day added to an
  * event that already exists. What is already on the day is listed with an X to take it off.
  * Main goals are folded: their sub-goals show after opening them. The info icon shows a goal's
@@ -32,13 +32,10 @@ interface DayScheduleDialogProps {
   planEndDate?: string;
   smartGoals: SmartGoal[];
   subGoals: SubGoal[];
-  /** Suggested sub-goals (not the athlete's own yet) */
-  derivedSubGoals: SubGoal[];
   events: Event[];
   /** Tests / events already in the athlete's calendar on this day (other programs) — shown only */
   existingOnDay?: string[];
   onToggleGoalTest: (goalId: string) => void;
-  /** A suggested sub-goal is made the athlete's own with this day */
   onToggleSubGoalTest: (subGoalId: string) => void;
   onNewSubGoal: () => void;
   onCreateEvent: (event: { name: string; comments: string; dates: string[] }) => void;
@@ -57,7 +54,7 @@ function valuesText(baseline: number | undefined, goal: number | undefined, unit
 }
 
 export function DayScheduleDialog({
-  open, onOpenChange, date, planEndDate, smartGoals, subGoals, derivedSubGoals, events, existingOnDay = [],
+  open, onOpenChange, date, planEndDate, smartGoals, subGoals, events, existingOnDay = [],
   onToggleGoalTest, onToggleSubGoalTest, onNewSubGoal, onCreateEvent, onAddEventDays, onRemoveEventDays,
 }: DayScheduleDialogProps) {
   const [type, setType] = useState<'test' | 'event'>('test');
@@ -94,7 +91,7 @@ export function DayScheduleDialog({
 
   /** One goal / sub-goal row: ticked = its test is on this day */
   const testRow = (key: string, label: string, scheduled: boolean, onToggle: () => void,
-    opts: { main?: boolean; suggested?: boolean; dates?: string[]; values?: string | null } = {}) => (
+    opts: { main?: boolean; dates?: string[]; values?: string | null } = {}) => (
     <button
       key={key}
       type="button"
@@ -113,7 +110,6 @@ export function DayScheduleDialog({
           {opts.main ? <Target className="h-3.5 w-3.5 text-primary shrink-0" /> : <Trophy className="h-3.5 w-3.5 text-amber-600 shrink-0" />}
           <span className={cn('truncate', opts.main && 'font-medium')}>{label}</span>
           {opts.main && <span className="text-[11px] text-muted-foreground shrink-0">main goal</span>}
-          {opts.suggested && <span className="text-[11px] text-muted-foreground shrink-0">suggested</span>}
           {/* Baseline → goal on hover, so the list stays short */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -123,7 +119,7 @@ export function DayScheduleDialog({
               </span>
             </TooltipTrigger>
             <TooltipContent side="left" className="z-[200] max-w-[240px] text-xs">
-              {opts.values ?? (opts.suggested ? 'Suggested from the parameter links — no values set yet (set them with the pencil in the goals list).' : 'No baseline or goal value set yet.')}
+              {opts.values ?? 'No baseline or goal value set yet — set them with the pencil in the goals list.'}
             </TooltipContent>
           </Tooltip>
         </span>
@@ -217,8 +213,7 @@ export function DayScheduleDialog({
                 )}
                 {smartGoals.map(g => {
                   const own = subGoals.filter(sg => sg.parentGoalId === g.id);
-                  const suggested = derivedSubGoals.filter(sg => sg.parentGoalId === g.id);
-                  const count = own.length + suggested.length;
+                  const count = own.length;
                   const onDay = own.filter(sg => sg.testDates?.includes(date)).length;
                   const isOpen = openGoals.has(g.id);
                   return (
@@ -243,7 +238,6 @@ export function DayScheduleDialog({
                         <div className="ml-7 space-y-1.5">
                           {own.map(sg => testRow(sg.id, subGoalLabel(sg), !!sg.testDates?.includes(date), () => onToggleSubGoalTest(sg.id),
                             { dates: sg.testDates, values: valuesText(sg.preTestValue, sg.goalValue, sg.unit, sg.percentChange) }))}
-                          {suggested.map(sg => testRow(sg.id, subGoalLabel(sg), false, () => onToggleSubGoalTest(sg.id), { suggested: true }))}
                         </div>
                       )}
                     </div>
