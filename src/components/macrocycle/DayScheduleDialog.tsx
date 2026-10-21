@@ -5,11 +5,13 @@
  * become the athlete's own when scheduled), or a new sub-goal with the day already set. Event: a
  * new event (name, description, end date for an event over several days) or the day added to an
  * event that already exists. What is already on the day is listed with an X to take it off.
- * Selecting an item in the list and then clicking days still works as before.
+ * Main goals are folded: their sub-goals show after opening them. The info icon shows a goal's
+ * baseline and goal value on hover.
  */
 import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
-import { Calendar, Check, Plus, Target, Trophy, X } from 'lucide-react';
+import { Calendar, Check, ChevronDown, Info, Plus, Target, Trophy, X } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,6 +48,14 @@ interface DayScheduleDialogProps {
 
 const subGoalLabel = (sg: SubGoal) => sg.testMethod || sg.description || 'Sub-goal';
 
+/** "11.9 → 11.5 s (−3.4 %)"; null when no values are set */
+function valuesText(baseline: number | undefined, goal: number | undefined, unit: string, pct: number | undefined): string | null {
+  if (!baseline && !goal) return null;
+  const u = unit ? ` ${unit}` : '';
+  const p = pct ? ` (${pct > 0 ? '+' : '−'}${Math.abs(pct).toFixed(1)} %)` : '';
+  return `Baseline ${baseline ?? 0}${u} → goal ${goal ?? 0}${u}${p}`;
+}
+
 export function DayScheduleDialog({
   open, onOpenChange, date, planEndDate, smartGoals, subGoals, derivedSubGoals, events, existingOnDay = [],
   onToggleGoalTest, onToggleSubGoalTest, onNewSubGoal, onCreateEvent, onAddEventDays, onRemoveEventDays,
@@ -54,10 +64,12 @@ export function DayScheduleDialog({
   const [name, setName] = useState('');
   const [comments, setComments] = useState('');
   const [endDate, setEndDate] = useState('');
+  // Main goals whose sub-goals are shown (folded by default)
+  const [openGoals, setOpenGoals] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!open) return;
-    setName(''); setComments(''); setEndDate('');
+    setName(''); setComments(''); setEndDate(''); setOpenGoals(new Set());
   }, [open, date]);
 
   const dayLabel = date ? format(parseDateStr(date), 'EEE, d MMM yyyy') : '';
@@ -81,14 +93,14 @@ export function DayScheduleDialog({
   };
 
   /** One goal / sub-goal row: ticked = its test is on this day */
-  const testRow = (key: string, label: string, scheduled: boolean, onToggle: () => void, opts: { main?: boolean; suggested?: boolean; dates?: string[] } = {}) => (
+  const testRow = (key: string, label: string, scheduled: boolean, onToggle: () => void,
+    opts: { main?: boolean; suggested?: boolean; dates?: string[]; values?: string | null } = {}) => (
     <button
       key={key}
       type="button"
       onClick={onToggle}
       className={cn(
-        'w-full flex items-start gap-2 rounded-md border px-2.5 py-2 text-left text-sm transition-colors',
-        opts.main ? '' : 'ml-5 w-[calc(100%-1.25rem)]',
+        'flex-1 min-w-0 w-full flex items-start gap-2 rounded-md border px-2.5 py-2 text-left text-sm transition-colors',
         scheduled ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/30' : 'border-input hover:bg-muted/60',
       )}
     >
@@ -102,6 +114,18 @@ export function DayScheduleDialog({
           <span className={cn('truncate', opts.main && 'font-medium')}>{label}</span>
           {opts.main && <span className="text-[11px] text-muted-foreground shrink-0">main goal</span>}
           {opts.suggested && <span className="text-[11px] text-muted-foreground shrink-0">suggested</span>}
+          {/* Baseline → goal on hover, so the list stays short */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span role="img" aria-label={opts.values ?? 'No values set yet'} className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
+                onClick={e => e.stopPropagation()}>
+                <Info className="h-3.5 w-3.5" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="left" className="z-[200] max-w-[240px] text-xs">
+              {opts.values ?? (opts.suggested ? 'Suggested from the parameter links — no values set yet (set them with the pencil in the goals list).' : 'No baseline or goal value set yet.')}
+            </TooltipContent>
+          </Tooltip>
         </span>
         {(opts.dates?.filter(d => d !== date).length ?? 0) > 0 && (
           <span className="block text-xs text-muted-foreground mt-0.5">
@@ -191,17 +215,43 @@ export function DayScheduleDialog({
                 {smartGoals.length === 0 && unlinkedSubGoals.length === 0 && (
                   <p className="text-sm text-muted-foreground">No goals yet — add a main goal in step 1.</p>
                 )}
-                {smartGoals.map(g => (
-                  <div key={g.id} className="space-y-1.5">
-                    {testRow(g.id, g.description || 'Main goal', !!g.testDates?.includes(date), () => onToggleGoalTest(g.id), { main: true, dates: g.testDates })}
-                    {subGoals.filter(sg => sg.parentGoalId === g.id).map(sg =>
-                      testRow(sg.id, subGoalLabel(sg), !!sg.testDates?.includes(date), () => onToggleSubGoalTest(sg.id), { dates: sg.testDates }))}
-                    {derivedSubGoals.filter(sg => sg.parentGoalId === g.id).map(sg =>
-                      testRow(sg.id, subGoalLabel(sg), false, () => onToggleSubGoalTest(sg.id), { suggested: true }))}
-                  </div>
-                ))}
+                {smartGoals.map(g => {
+                  const own = subGoals.filter(sg => sg.parentGoalId === g.id);
+                  const suggested = derivedSubGoals.filter(sg => sg.parentGoalId === g.id);
+                  const count = own.length + suggested.length;
+                  const onDay = own.filter(sg => sg.testDates?.includes(date)).length;
+                  const isOpen = openGoals.has(g.id);
+                  return (
+                    <div key={g.id} className="space-y-1.5">
+                      <div className="flex items-start gap-1">
+                        <button type="button" disabled={count === 0}
+                          aria-label={isOpen ? 'Hide sub-goals' : 'Show sub-goals'} aria-expanded={isOpen}
+                          onClick={() => setOpenGoals(prev => { const next = new Set(prev); if (next.has(g.id)) next.delete(g.id); else next.add(g.id); return next; })}
+                          className="mt-1.5 h-6 w-6 shrink-0 rounded flex items-center justify-center text-muted-foreground hover:bg-muted disabled:opacity-30">
+                          <ChevronDown className={cn('h-4 w-4 transition-transform', !isOpen && '-rotate-90')} />
+                        </button>
+                        {testRow(g.id, g.description || 'Main goal', !!g.testDates?.includes(date), () => onToggleGoalTest(g.id),
+                          { main: true, dates: g.testDates, values: valuesText(g.baselineValue, g.desiredValue, g.unit, g.percentChange) })}
+                      </div>
+                      {count > 0 && !isOpen && (
+                        <button type="button" className="ml-7 text-xs text-muted-foreground hover:text-foreground"
+                          onClick={() => setOpenGoals(prev => new Set(prev).add(g.id))}>
+                          {count} sub-goal{count === 1 ? '' : 's'}{onDay > 0 ? ` · ${onDay} on this day` : ''}
+                        </button>
+                      )}
+                      {isOpen && (
+                        <div className="ml-7 space-y-1.5">
+                          {own.map(sg => testRow(sg.id, subGoalLabel(sg), !!sg.testDates?.includes(date), () => onToggleSubGoalTest(sg.id),
+                            { dates: sg.testDates, values: valuesText(sg.preTestValue, sg.goalValue, sg.unit, sg.percentChange) }))}
+                          {suggested.map(sg => testRow(sg.id, subGoalLabel(sg), false, () => onToggleSubGoalTest(sg.id), { suggested: true }))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
                 {unlinkedSubGoals.map(sg =>
-                  testRow(sg.id, subGoalLabel(sg), !!sg.testDates?.includes(date), () => onToggleSubGoalTest(sg.id), { main: false, dates: sg.testDates }))}
+                  testRow(sg.id, subGoalLabel(sg), !!sg.testDates?.includes(date), () => onToggleSubGoalTest(sg.id),
+                    { dates: sg.testDates, values: valuesText(sg.preTestValue, sg.goalValue, sg.unit, sg.percentChange) }))}
                 <Button type="button" variant="outline" size="sm" className="w-full mt-1" onClick={onNewSubGoal}>
                   <Plus className="h-3.5 w-3.5 mr-1" />New sub-goal / test on this day
                 </Button>

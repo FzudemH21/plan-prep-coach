@@ -101,7 +101,6 @@ export default function MacrocyclePage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedTest, setSelectedTest] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
-  const [selectedSmartGoal, setSelectedSmartGoal] = useState<string | null>(null);
   const [expandedSubGoals, setExpandedSubGoals] = useState<Set<string>>(new Set());
   const [expandedPrimaryGoals, setExpandedPrimaryGoals] = useState<Set<string>>(new Set());
   const [addSubGoalForParent, setAddSubGoalForParent] = useState<string | undefined>(undefined);
@@ -719,28 +718,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     }
     if (event) {
       toast({ title: 'Event Removed', description: `Deleted event "${event.name}"` });
-    }
-  };
-
-  const scheduleEvent = (eventId: string, date: Date) => {
-    const updated = [...events];
-    const eventIndex = updated.findIndex(e => e.id === eventId);
-    if (eventIndex !== -1) {
-      const dateStr = format(date, 'yyyy-MM-dd');
-      const currentDates = updated[eventIndex].eventDates || [];
-      const isAlreadyScheduled = currentDates.some(eventDate => 
-        eventDate === dateStr
-      );
-      if (isAlreadyScheduled) {
-        updated[eventIndex].eventDates = currentDates.filter(eventDate => 
-          eventDate !== dateStr
-        );
-        toast({ title: 'Event Unscheduled', description: `Removed "${updated[eventIndex].name}" from ${format(date, 'PPP')}` });
-      } else {
-        updated[eventIndex].eventDates = [...currentDates, dateStr];
-        toast({ title: 'Event Scheduled', description: `Added "${updated[eventIndex].name}" to ${format(date, 'PPP')}` });
-      }
-      setEvents(updated);
     }
   };
 
@@ -1486,19 +1463,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                       </Button>
                       
                       {/* Goal Content - clickable for selection */}
-                      <div 
-                        className={cn(
-                          "flex-1 cursor-pointer transition-colors rounded p-1 -m-1 min-w-0",
-                          selectedSmartGoal === goal.id 
-                            ? "ring-2 ring-inset ring-primary bg-primary/5" 
-                            : "hover:bg-muted/50"
-                        )}
-                        onClick={() => {
-                          setSelectedSmartGoal(selectedSmartGoal === goal.id ? null : goal.id);
-                          setSelectedTest(null);
-                          setSelectedEvent(null);
-                        }}
-                      >
+                      <div className="flex-1 rounded p-1 -m-1 min-w-0">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 min-w-0">
                             <Target className="h-4 w-4 shrink-0 text-primary" />
@@ -1542,20 +1507,10 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                             return (
                               <div 
                                 key={subGoal.id} 
-                                className={cn(
-                                  "p-2 pl-3 border-b last:border-b-0 transition-colors",
-                                  selectedTest === subGoal.id ? "ring-2 ring-inset ring-primary bg-primary/5" : "hover:bg-muted/30"
-                                )}
+                                className="p-2 pl-3 border-b last:border-b-0"
                               >
                                 <div className="flex items-start justify-between gap-2">
-                                  <div 
-                                    className="flex-1 cursor-pointer min-w-0"
-                                    onClick={() => {
-                                      setSelectedTest(selectedTest === subGoal.id ? null : subGoal.id);
-                                      setSelectedSmartGoal(null);  // Clear main goal selection
-                                      setSelectedEvent(null);
-                                    }}
-                                  >
+                                  <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
                                       <Badge 
                                         variant={subGoal.isDerived ? "secondary" : "outline"} 
@@ -1701,22 +1656,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                       };
                       
                       return (
-                        <div 
-                          key={event.id} 
-                          className={cn(
-                            "p-3 transition-colors",
-                            selectedEvent === event.id ? "ring-2 ring-inset ring-orange-500 bg-orange-500/5" : "hover:bg-muted/50"
-                          )}
-                        >
+                        <div key={event.id} className="p-3">
                           <div className="flex items-start justify-between gap-2">
-                            <div 
-                              className="flex-1 cursor-pointer min-w-0"
-                              onClick={() => {
-                                setSelectedEvent(selectedEvent === event.id ? null : event.id);
-                                setSelectedTest(null);
-                                setSelectedSmartGoal(null);
-                              }}
-                            >
+                            <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <Badge variant="outline" className="text-xs border-orange-500 text-orange-600 shrink-0">Event</Badge>
                                 <span className="font-medium text-sm truncate">{event.name}</span>
@@ -1783,9 +1725,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             </div>
             
             <p className="text-xs text-muted-foreground text-center bg-muted/50 p-2 rounded">
-              {(selectedSmartGoal || selectedTest || selectedEvent)
-                ? 'Click dates in the calendar to schedule the selected item (click it again to deselect)'
-                : 'Click a day in the calendar to add a test or an event'}
+              Click a day in the calendar to add a test or an event
             </p>
           </div>
           
@@ -1878,63 +1818,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                         e.preventDefault();
                         e.stopPropagation();
                         
-                        // Handle primary (SMART) goal scheduling
-                        if (selectedSmartGoal) {
-                          setSmartGoals(prev => prev.map(goal => {
-                            if (goal.id === selectedSmartGoal) {
-                              const currentDates = goal.testDates || [];
-                              const isAlreadyScheduled = currentDates.includes(dateStr);
-                              if (isAlreadyScheduled) {
-                                toast({ title: 'Test Unscheduled', description: `Removed test from ${format(date, 'PPP')}` });
-                                return { ...goal, testDates: currentDates.filter(d => d !== dateStr) };
-                              } else {
-                                toast({ title: 'Test Scheduled', description: `Scheduled test for ${format(date, 'PPP')}` });
-                                return { ...goal, testDates: [...currentDates, dateStr] };
-                              }
-                            }
-                            return goal;
-                          }));
-                        } else if (selectedTest) {
-                          // First check user-created subGoals
-                          const updated = [...subGoals];
-                          const subGoalIndex = updated.findIndex(sg => sg.id === selectedTest);
-                          if (subGoalIndex !== -1) {
-                            const currentDates = updated[subGoalIndex].testDates || [];
-                            const isAlreadyScheduled = currentDates.some(testDate => 
-                              testDate === dateStr
-                            );
-                            if (isAlreadyScheduled) {
-                              updated[subGoalIndex].testDates = currentDates.filter(testDate => 
-                                testDate !== dateStr
-                              );
-                              toast({ title: 'Test Unscheduled', description: `Removed "${updated[subGoalIndex].testMethod}" from ${format(date, 'PPP')}` });
-                            } else {
-                              updated[subGoalIndex].testDates = [...currentDates, dateStr];
-                              toast({ title: 'Test Scheduled', description: `Added "${updated[subGoalIndex].testMethod}" to ${format(date, 'PPP')}` });
-                            }
-                            setSubGoals(updated);
-                          } else {
-                            // Check if it's a derived sub-goal and "promote" it
-                            const derivedSubGoal = derivedSubGoals.find(sg => sg.id === selectedTest);
-                            if (derivedSubGoal) {
-                              const promotedSubGoal: SubGoal = {
-                                ...derivedSubGoal,
-                                testDates: [dateStr],
-                                isDerived: false,
-                              };
-                              setSubGoals(prev => [...prev, promotedSubGoal]);
-                              toast({ 
-                                title: 'Test Scheduled', 
-                                description: `Scheduled "${derivedSubGoal.description}" for ${format(date, 'PPP')}` 
-                              });
-                            }
-                          }
-                        } else if (selectedEvent) {
-                          scheduleEvent(selectedEvent, date);
-                        } else {
-                          // Nothing selected in the list: choose what happens on this day
-                          setDayDialogDate(dateStr);
-                        }
+                        // Tests and events are scheduled from the day dialog (no more "select in the
+                        // list, then click days")
+                        setDayDialogDate(dateStr);
                       };
                       
                       // Check date type for styling (dateStr already defined above)
