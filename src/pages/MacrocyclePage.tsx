@@ -110,7 +110,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const [addEventMode, setAddEventMode] = useState(false);
   // Step 2: the day clicked in the calendar (day dialog: test or event on that day)
   const [dayDialogDate, setDayDialogDate] = useState<string | null>(null);
-  // Step 2 calendar: as many months side by side as fit its column (a month is ~270 px wide)
+  // Step 2 calendar: as many months side by side as fit (up to 5; a month is ~270 px wide)
   const [calendarMonths, setCalendarMonths] = useState(1);
   const calendarObserver = useRef<ResizeObserver | null>(null);
   const calendarBoxRef = useCallback((el: HTMLDivElement | null) => {
@@ -119,7 +119,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     if (!el || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(([entry]) => {
       const w = entry.contentRect.width;
-      setCalendarMonths(Math.max(1, Math.min(3, Math.floor((w - 8) / 268))));
+      setCalendarMonths(Math.max(1, Math.min(5, Math.floor((w - 8) / 268))));
     });
     ro.observe(el);
     calendarObserver.current = ro;
@@ -1420,9 +1420,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Two-column layout: Items on left, Calendar on right */}
+        {/* Goals | events side by side, the calendar below over the full width */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          {/* Left: goals, events below */}
-          <div className="space-y-6 min-w-0">
           {/* The goals — main goals and the sub-goals chosen for them (with their values) */}
           <div className="space-y-4">
             <div className="flex items-center justify-between min-h-9">
@@ -1676,7 +1675,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           </div>
 
           {/* Events */}
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
             <div className="flex items-center justify-between min-h-9">
               <h3 className="font-semibold text-sm">Events</h3>
               <Button
@@ -1767,11 +1766,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
               
             </div>
           </div>
-          </div>
+        </div>
 
-          {/* Right: the calendar — click a day → the tests and events of that day (day dialog);
-              as many months side by side as fit */}
-          <div className="space-y-3 min-w-0 lg:sticky lg:top-4">
+          {/* The calendar — click a day → the tests and events of that day (day dialog);
+              as many months side by side as fit (up to 5) */}
+          <div className="space-y-3 min-w-0">
             <div className="flex items-baseline justify-between gap-2">
               <h3 className="font-semibold text-sm">Calendar</h3>
               <p className="text-xs text-muted-foreground">Click a day to add a test or an event</p>
@@ -2040,7 +2039,6 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
               </div>
             )}
           </div>
-        </div>
 
         {/* Add/Edit Sub-Goal Dialog */}
         {dayDialogDate && (
