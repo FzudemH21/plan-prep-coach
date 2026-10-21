@@ -1896,8 +1896,10 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                       // The plan is always visible: every plan day grey, first and last day green.
                       // Tests / events only add a coloured frame (orange / blue; both: two frames)
                       let dateStyle = 'rounded-[4px]';
-                      if (isStartDate || isEndDate) {
+                      if (isStartDate) {
                         dateStyle += ' bg-[hsl(142_76%_36%)] text-white font-bold';
+                      } else if (isEndDate) {
+                        dateStyle += ' bg-[hsl(347_77%_50%)] text-white font-bold';
                       } else if (isMiddleDate) {
                         dateStyle += ' bg-foreground/10 text-foreground';
                       }
@@ -1926,7 +1928,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                       // If there are scheduled items, show hover card
                       if (hasAnyTests || hasAnyEvents) {
                         return (
-                          <HoverCard>
+                          <HoverCard openDelay={120} closeDelay={60}>
                             <HoverCardTrigger asChild>
                               {dayContent}
                             </HoverCardTrigger>
@@ -1992,6 +1994,27 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                       </div>
                                     </div>
                                   ))}
+                                  {/* Tests / events in the athlete's calendar (entered there, or from the anamnesis) —
+                                      those already listed above (from an assigned program) only once */}
+                                  {hookItems
+                                    .filter(it => !(it.type === 'event'
+                                      ? athleteExistingEventsOnDay.some(e => e.name === it.title) || scheduledEvents.some(e => e.name === it.title)
+                                      : athleteExistingTestsOnDay.some(t => t.testMethod === it.title)))
+                                    .map(it => (
+                                      <div key={`cal-${it.id}`} className="text-xs">
+                                        <div className="font-medium flex items-center gap-1">
+                                          <span className={it.type === 'test' ? 'text-amber-600' : 'text-blue-600'}>{it.type === 'test' ? '📋' : '📅'}</span>
+                                          {it.title} <span className="font-normal text-muted-foreground">(athlete calendar{it.source ? ', anamnesis' : ''})</span>
+                                        </div>
+                                        {it.endDate && it.endDate > it.date && (
+                                          <div className="text-muted-foreground">
+                                            {format(parseDateStr(it.date), 'd MMM')} – {format(parseDateStr(it.endDate), 'd MMM yyyy')}
+                                          </div>
+                                        )}
+                                        {it.type === 'test' && it.targetValue && <div className="text-muted-foreground">Target: {it.targetValue}</div>}
+                                        {it.notes && <div className="text-muted-foreground">{it.notes}</div>}
+                                      </div>
+                                    ))}
                                 </div>
                               </div>
                             </HoverCardContent>
@@ -2006,7 +2029,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                 
                 {/* Legend */}
                 <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-[3px] bg-[hsl(142_76%_36%)]" />Start / end</span>
+                  <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-[3px] bg-[hsl(142_76%_36%)]" />Start</span>
+                  <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-[3px] bg-[hsl(347_77%_50%)]" />End</span>
                   <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-[3px] bg-foreground/10" />Plan</span>
                   <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-[3px]" style={{ boxShadow: `inset 0 0 0 2px ${TEST_COLOR}` }} />Test</span>
                   <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-[3px]" style={{ boxShadow: `inset 0 0 0 2px ${EVENT_COLOR}` }} />Event</span>
