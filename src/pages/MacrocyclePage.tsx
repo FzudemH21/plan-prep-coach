@@ -110,6 +110,20 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const [addEventMode, setAddEventMode] = useState(false);
   // Step 2: the day clicked in the calendar (day dialog: test or event on that day)
   const [dayDialogDate, setDayDialogDate] = useState<string | null>(null);
+  // Step 2 calendar: as many months side by side as fit its column (a month is ~270 px wide)
+  const [calendarMonths, setCalendarMonths] = useState(1);
+  const calendarObserver = useRef<ResizeObserver | null>(null);
+  const calendarBoxRef = useCallback((el: HTMLDivElement | null) => {
+    calendarObserver.current?.disconnect();
+    calendarObserver.current = null;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([entry]) => {
+      const w = entry.contentRect.width;
+      setCalendarMonths(Math.max(1, Math.min(3, Math.floor((w - 8) / 268))));
+    });
+    ro.observe(el);
+    calendarObserver.current = ro;
+  }, []);
   // Main goals whose suggestions (parameters linked to the goal) are shown
   const [openSuggestions, setOpenSuggestions] = useState<Set<string>>(new Set());
   // A new sub-goal started from the day dialog gets that day as its test date
@@ -1406,9 +1420,10 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Two-column layout: Items on left, Calendar on right */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
-          {/* Left: the goals — main goals and the sub-goals chosen for them (with their values) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          {/* Left: goals, events below */}
+          <div className="space-y-6 min-w-0">
+          {/* The goals — main goals and the sub-goals chosen for them (with their values) */}
           <div className="space-y-4">
             <div className="flex items-center justify-between min-h-9">
               <h3 className="font-semibold text-sm">Goals</h3>
@@ -1660,7 +1675,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             </div>
           </div>
 
-          {/* Right: events */}
+          {/* Events */}
           <div className="space-y-4">
             <div className="flex items-center justify-between min-h-9">
               <h3 className="font-semibold text-sm">Events</h3>
@@ -1752,16 +1767,17 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
               
             </div>
           </div>
-        </div>
+          </div>
 
-          {/* Calendar: click a day → the tests and events of that day (day dialog) */}
-          <div className="space-y-3">
+          {/* Right: the calendar — click a day → the tests and events of that day (day dialog);
+              as many months side by side as fit */}
+          <div className="space-y-3 min-w-0 lg:sticky lg:top-4">
             <div className="flex items-baseline justify-between gap-2">
               <h3 className="font-semibold text-sm">Calendar</h3>
               <p className="text-xs text-muted-foreground">Click a day to add a test or an event</p>
             </div>
             {planDuration?.startDate && planDuration?.endDate ? (
-              <div className="border rounded-lg p-4 bg-muted/30 flex flex-col items-center">
+              <div ref={calendarBoxRef} className="border rounded-lg p-4 bg-muted/30 flex flex-col items-center">
                 {/* Plan Duration Summary */}
                 <div className="text-center text-sm text-muted-foreground space-y-1 mb-4">
                   <p className="font-medium">Plan Duration: {planDuration.totalWeeks} weeks</p>
@@ -1772,6 +1788,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                 <Calendar
                   mode="single"
                   selected={undefined}
+                  numberOfMonths={calendarMonths}
+                  defaultMonth={planDuration.startDate > new Date() ? planDuration.startDate : new Date()}
                   className="rounded-md"
                   disabled={(date) => {
                     return date < planDuration.startDate || date > planDuration.endDate;
@@ -2022,6 +2040,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
               </div>
             )}
           </div>
+        </div>
 
         {/* Add/Edit Sub-Goal Dialog */}
         {dayDialogDate && (
