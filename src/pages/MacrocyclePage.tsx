@@ -1893,29 +1893,22 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                       const hasAnyTests = hasPlanTests || hasHookTests;
                       const hasAnyEvents = hasPlanEvents || hasHookEvents;
 
-                      // Circle style — same amber/blue for both sources
-                      let circleClass = '';
-                      let circleInlineStyle: React.CSSProperties | undefined;
-                      if (hasAnyTests && hasAnyEvents) {
-                        circleClass = 'rounded-full text-white font-bold';
-                        circleInlineStyle = { background: testEventGradient() };
-                      } else if (hasAnyTests) {
-                        circleClass = 'rounded-full text-white font-bold';
-                        circleInlineStyle = { background: TEST_COLOR };
-                      } else if (hasAnyEvents) {
-                        circleClass = 'rounded-full text-white font-bold';
-                        circleInlineStyle = { background: EVENT_COLOR };
+                      // The plan is always visible: every plan day grey, first and last day green.
+                      // Tests / events only add a coloured frame (orange / blue; both: two frames)
+                      let dateStyle = 'rounded-[4px]';
+                      if (isStartDate || isEndDate) {
+                        dateStyle += ' bg-[hsl(142_76%_36%)] text-white font-bold';
+                      } else if (isMiddleDate) {
+                        dateStyle += ' bg-foreground/10 text-foreground';
                       }
-
-                      // Start/end/middle styles only apply when no test/event circle
-                      let dateStyle = '';
-                      if (!circleInlineStyle) {
-                        if (isStartDate || isEndDate) {
-                          dateStyle = 'bg-[hsl(142_76%_36%)] text-white font-bold rounded-[4px]';
-                        } else if (isMiddleDate) {
-                          dateStyle = 'bg-muted text-foreground';
-                        }
-                      }
+                      const circleClass = hasAnyTests || hasAnyEvents ? 'font-semibold' : '';
+                      const circleInlineStyle: React.CSSProperties | undefined = hasAnyTests && hasAnyEvents
+                        ? { boxShadow: `inset 0 0 0 2px ${TEST_COLOR}, inset 0 0 0 4px ${EVENT_COLOR}` }
+                        : hasAnyTests
+                          ? { boxShadow: `inset 0 0 0 2px ${TEST_COLOR}` }
+                          : hasAnyEvents
+                            ? { boxShadow: `inset 0 0 0 2px ${EVENT_COLOR}` }
+                            : undefined;
 
                       const dayContent = (
                         <button
@@ -2011,6 +2004,14 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                   }}
                 />
                 
+                {/* Legend */}
+                <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-[3px] bg-[hsl(142_76%_36%)]" />Start / end</span>
+                  <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-[3px] bg-foreground/10" />Plan</span>
+                  <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-[3px]" style={{ boxShadow: `inset 0 0 0 2px ${TEST_COLOR}` }} />Test</span>
+                  <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-[3px]" style={{ boxShadow: `inset 0 0 0 2px ${EVENT_COLOR}` }} />Event</span>
+                </div>
+
                 {/* Clear button - always visible */}
                 <div className="mt-4 flex justify-center">
                   <AlertDialog>
