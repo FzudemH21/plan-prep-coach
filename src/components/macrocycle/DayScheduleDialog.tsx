@@ -1,0 +1,262 @@
+/**
+ * Wizard phase 1, step 2: click a day in the plan calendar → schedule on that day.
+ *
+ * Test: a test of a main goal or of one of its sub-goals (suggested sub-goals included — they
+ * become the athlete's own when scheduled), or a new sub-goal with the day already set. Event: a
+ * new event (name, description, end date for an event over several days) or the day added to an
+ * event that already exists. What is already on the day is listed with an X to take it off.
+ * Selecting an item in the list and then clicking days still works as before.
+ */
+import { useEffect, useState } from 'react';
+import { format } from 'date-fns';
+import { Calendar, Check, Plus, Target, Trophy, X } from 'lucide-react';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { cn } from '@/lib/utils';
+import { parseDateStr } from '@/utils/dateUtils';
+import { eventDateList, groupConsecutiveDates } from '@/hooks/useCalendarEvents';
+import type { Event, SmartGoal, SubGoal } from '@/types/training';
+
+interface DayScheduleDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** 'yyyy-MM-dd' */
+  date: string;
+  /** Last day of the plan — an event can't run past it */
+  planEndDate?: string;
+  smartGoals: SmartGoal[];
+  subGoals: SubGoal[];
+  /** Suggested sub-goals (not the athlete's own yet) */
+  derivedSubGoals: SubGoal[];
+  events: Event[];
+  /** Tests / events already in the athlete's calendar on this day (other programs) — shown only */
+  existingOnDay?: string[];
+  onToggleGoalTest: (goalId: string) => void;
+  /** A suggested sub-goal is made the athlete's own with this day */
+  onToggleSubGoalTest: (subGoalId: string) => void;
+  onNewSubGoal: () => void;
+  onCreateEvent: (event: { name: string; comments: string; dates: string[] }) => void;
+  onAddEventDays: (eventId: string, dates: string[]) => void;
+  onRemoveEventDays: (eventId: string, dates: string[]) => void;
+}
+
+const subGoalLabel = (sg: SubGoal) => sg.testMethod || sg.description || 'Sub-goal';
+
+export function DayScheduleDialog({
+  open, onOpenChange, date, planEndDate, smartGoals, subGoals, derivedSubGoals, events, existingOnDay = [],
+  onToggleGoalTest, onToggleSubGoalTest, onNewSubGoal, onCreateEvent, onAddEventDays, onRemoveEventDays,
+}: DayScheduleDialogProps) {
+  const [type, setType] = useState<'test' | 'event'>('test');
+  const [name, setName] = useState('');
+  const [comments, setComments] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    setName(''); setComments(''); setEndDate('');
+  }, [open, date]);
+
+  const dayLabel = date ? format(parseDateStr(date), 'EEE, d MMM yyyy') : '';
+  const fmtShort = (d: string) => format(parseDateStr(d), 'd MMM');
+  const rangeOf = (dates: string[]) => groupConsecutiveDates(dates).find(([a, b]) => date >= a && date <= b);
+
+  // What is on this day
+  const goalsOnDay = smartGoals.filter(g => g.testDates?.includes(date));
+  const subGoalsOnDay = subGoals.filter(sg => sg.testDates?.includes(date));
+  const eventsOnDay = events.filter(e => e.eventDates?.includes(date));
+  const nothingOnDay = goalsOnDay.length + subGoalsOnDay.length + eventsOnDay.length + existingOnDay.length === 0;
+
+  const endError = endDate && endDate < date ? 'The end date must be on or after the start date.'
+    : endDate && planEndDate && endDate > planEndDate ? 'The end date must lie within the plan.' : null;
+  const newEventDays = eventDateList({ date, endDate: endDate && !endError ? endDate : undefined });
+
+  const createEvent = () => {
+    if (!name.trim() || endError) return;
+    onCreateEvent({ name: name.trim(), comments: comments.trim(), dates: newEventDays });
+    setName(''); setComments(''); setEndDate('');
+  };
+
+  /** One goal / sub-goal row: ticked = its test is on this day */
+  const testRow = (key: string, label: string, scheduled: boolean, onToggle: () => void, opts: { main?: boolean; suggested?: boolean; dates?: string[] } = {}) => (
+    <button
+      key={key}
+      type="button"
+      onClick={onToggle}
+      className={cn(
+        'w-full flex items-start gap-2 rounded-md border px-2.5 py-2 text-left text-sm transition-colors',
+        opts.main ? '' : 'ml-5 w-[calc(100%-1.25rem)]',
+        scheduled ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/30' : 'border-input hover:bg-muted/60',
+      )}
+    >
+      <span className={cn('mt-0.5 h-4 w-4 shrink-0 rounded border flex items-center justify-center',
+        scheduled ? 'bg-amber-500 border-amber-500 text-white' : 'border-muted-foreground/40')}>
+        {scheduled && <Check className="h-3 w-3" />}
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="flex items-center gap-1.5">
+          {opts.main ? <Target className="h-3.5 w-3.5 text-primary shrink-0" /> : <Trophy className="h-3.5 w-3.5 text-amber-600 shrink-0" />}
+          <span className={cn('truncate', opts.main && 'font-medium')}>{label}</span>
+          {opts.main && <span className="text-[11px] text-muted-foreground shrink-0">main goal</span>}
+          {opts.suggested && <span className="text-[11px] text-muted-foreground shrink-0">suggested</span>}
+        </span>
+        {(opts.dates?.filter(d => d !== date).length ?? 0) > 0 && (
+          <span className="block text-xs text-muted-foreground mt-0.5">
+            Also on {opts.dates!.filter(d => d !== date).sort().map(fmtShort).join(', ')}
+          </span>
+        )}
+      </span>
+    </button>
+  );
+
+  const unlinkedSubGoals = subGoals.filter(sg => !sg.parentGoalId || !smartGoals.some(g => g.id === sg.parentGoalId));
+  const otherEvents = events.filter(e => !e.eventDates?.includes(date));
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[500px] max-h-[88vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Tests & events — {dayLabel}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-1">
+          {/* On this day */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">On this day</Label>
+            {nothingOnDay ? (
+              <p className="text-sm text-muted-foreground">Nothing scheduled yet.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {goalsOnDay.map(g => (
+                  <div key={g.id} className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/20 px-2.5 py-1.5 text-sm">
+                    <Target className="h-3.5 w-3.5 text-primary shrink-0" />
+                    <span className="flex-1 min-w-0 truncate">Test: {g.description || 'Main goal'}</span>
+                    <button type="button" className="text-muted-foreground hover:text-destructive" aria-label="Remove from this day" onClick={() => onToggleGoalTest(g.id)}>
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+                {subGoalsOnDay.map(sg => (
+                  <div key={sg.id} className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/20 px-2.5 py-1.5 text-sm">
+                    <Trophy className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                    <span className="flex-1 min-w-0 truncate">Test: {subGoalLabel(sg)}</span>
+                    <button type="button" className="text-muted-foreground hover:text-destructive" aria-label="Remove from this day" onClick={() => onToggleSubGoalTest(sg.id)}>
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+                {eventsOnDay.map(e => {
+                  const run = rangeOf(e.eventDates);
+                  const multi = run && run[0] !== run[1];
+                  return (
+                    <div key={e.id} className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/20 px-2.5 py-1.5 text-sm">
+                      <Calendar className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                      <span className="flex-1 min-w-0">
+                        <span className="block truncate">{e.name}</span>
+                        {multi && <span className="block text-xs text-muted-foreground">{fmtShort(run[0])} – {format(parseDateStr(run[1]), 'd MMM yyyy')}</span>}
+                      </span>
+                      <button type="button" className="text-muted-foreground hover:text-destructive"
+                        aria-label={multi ? 'Remove these days' : 'Remove from this day'}
+                        title={multi ? 'Removes all days of this period' : undefined}
+                        onClick={() => onRemoveEventDays(e.id, run ? eventDateList({ date: run[0], endDate: run[1] }) : [date])}>
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+                {existingOnDay.map((label, i) => (
+                  <p key={`x${i}`} className="text-xs text-muted-foreground px-1">Already in the athlete's calendar: {label}</p>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Add */}
+          <div className="space-y-3 pt-2 border-t">
+            <ToggleGroup type="single" value={type} onValueChange={v => { if (v) setType(v as 'test' | 'event'); }} className="justify-start">
+              <ToggleGroupItem value="test" className="flex-1 data-[state=on]:bg-amber-100 data-[state=on]:text-amber-700 data-[state=on]:border-amber-400">
+                <Trophy className="h-4 w-4 mr-2" />Test
+              </ToggleGroupItem>
+              <ToggleGroupItem value="event" className="flex-1 data-[state=on]:bg-blue-100 data-[state=on]:text-blue-700 data-[state=on]:border-blue-400">
+                <Calendar className="h-4 w-4 mr-2" />Event
+              </ToggleGroupItem>
+            </ToggleGroup>
+
+            {type === 'test' ? (
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">Tick what is tested on this day.</p>
+                {smartGoals.length === 0 && unlinkedSubGoals.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No goals yet — add a main goal in step 1.</p>
+                )}
+                {smartGoals.map(g => (
+                  <div key={g.id} className="space-y-1.5">
+                    {testRow(g.id, g.description || 'Main goal', !!g.testDates?.includes(date), () => onToggleGoalTest(g.id), { main: true, dates: g.testDates })}
+                    {subGoals.filter(sg => sg.parentGoalId === g.id).map(sg =>
+                      testRow(sg.id, subGoalLabel(sg), !!sg.testDates?.includes(date), () => onToggleSubGoalTest(sg.id), { dates: sg.testDates }))}
+                    {derivedSubGoals.filter(sg => sg.parentGoalId === g.id).map(sg =>
+                      testRow(sg.id, subGoalLabel(sg), false, () => onToggleSubGoalTest(sg.id), { suggested: true }))}
+                  </div>
+                ))}
+                {unlinkedSubGoals.map(sg =>
+                  testRow(sg.id, subGoalLabel(sg), !!sg.testDates?.includes(date), () => onToggleSubGoalTest(sg.id), { main: false, dates: sg.testDates }))}
+                <Button type="button" variant="outline" size="sm" className="w-full mt-1" onClick={onNewSubGoal}>
+                  <Plus className="h-3.5 w-3.5 mr-1" />New sub-goal / test on this day
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="day-event-name">Event name</Label>
+                  <Input id="day-event-name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Competition, holiday, training camp"
+                    onKeyDown={e => { if (e.key === 'Enter') createEvent(); }} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Start date</Label>
+                    <Input value={date ? format(parseDateStr(date), 'd MMM yyyy') : ''} readOnly tabIndex={-1} className="bg-muted text-muted-foreground cursor-default" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="day-event-end" className="text-xs text-muted-foreground">End date <span className="font-normal">(optional)</span></Label>
+                    <Input id="day-event-end" type="date" min={date} max={planEndDate} value={endDate} onChange={e => setEndDate(e.target.value)} />
+                  </div>
+                </div>
+                <p className={cn('text-xs', endError ? 'text-destructive' : 'text-muted-foreground')}>
+                  {endError ?? (newEventDays.length > 1 ? `${newEventDays.length} days, ${fmtShort(newEventDays[0])} – ${format(parseDateStr(newEventDays[newEventDays.length - 1]), 'd MMM yyyy')}.` : 'Leave the end date empty for a one-day event.')}
+                </p>
+                <div className="space-y-1.5">
+                  <Label htmlFor="day-event-notes">Description <span className="text-xs text-muted-foreground font-normal">(optional)</span></Label>
+                  <Textarea id="day-event-notes" rows={2} className="text-sm" value={comments} onChange={e => setComments(e.target.value)} placeholder="e.g. venue, what matters for the training" />
+                </div>
+                <Button type="button" className="w-full" disabled={!name.trim() || !!endError} onClick={createEvent}>
+                  <Plus className="h-4 w-4 mr-1.5" />Add event
+                </Button>
+
+                {otherEvents.length > 0 && (
+                  <div className="space-y-1.5 pt-2 border-t">
+                    <p className="text-xs text-muted-foreground">Or add this day to an event you already have (e.g. a second match day):</p>
+                    {otherEvents.map(e => (
+                      <div key={e.id} className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm">
+                        <Calendar className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                        <span className="flex-1 min-w-0 truncate">{e.name}</span>
+                        <Button type="button" size="sm" variant="outline" className="h-7 px-2" onClick={() => onAddEventDays(e.id, [date])}>
+                          <Plus className="h-3 w-3 mr-0.5" />Add this day
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

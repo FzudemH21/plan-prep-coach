@@ -15,7 +15,6 @@ import { Label } from '@/components/ui/label';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Trophy, Calendar, X, Plus, ChevronsUpDown, Check } from 'lucide-react';
 import { CalendarEvent, eventEndDate, isMultiDayEvent } from '@/hooks/useCalendarEvents';
-import { Checkbox } from '@/components/ui/checkbox';
 import { format } from 'date-fns';
 import { parseDateStr } from '@/utils/dateUtils';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
@@ -72,8 +71,7 @@ export function CalendarEventDialog({
 
   const [type, setType] = useState<'test' | 'event'>('test');
   const [eventTitle, setEventTitle] = useState(''); // For event type only
-  // Event over several days: the clicked day is the first day, this the last (inclusive)
-  const [multiDay, setMultiDay] = useState(false);
+  // Event over several days: the clicked day is the start date, this the end date (inclusive; empty = one day)
   const [lastDay, setLastDay] = useState('');
   const [notes, setNotes] = useState('');
   const [selectedParameterId, setSelectedParameterId] = useState<string | null>(null);
@@ -126,7 +124,6 @@ export function CalendarEventDialog({
     : parameters.find(p => p.id === selectedParameterId);
 
   const resetForm = () => {
-    setMultiDay(false);
     setLastDay('');
     setEventTitle('');
     setNotes('');
@@ -144,10 +141,9 @@ export function CalendarEventDialog({
       onAdd(type, testTitle, notes.trim() || undefined, selectedParameterId, targetValue.trim() || undefined);
     } else {
       if (!eventTitle.trim()) return;
-      const endDate = multiDay && lastDay > date ? lastDay : undefined;
+      const endDate = lastDay > date ? lastDay : undefined;
       onAdd(type, eventTitle.trim(), notes.trim() || undefined, undefined, undefined, endDate);
     }
-    setMultiDay(false);
     setLastDay('');
     setEventTitle('');
     setNotes('');
@@ -197,7 +193,8 @@ export function CalendarEventDialog({
     return ev.title;
   };
 
-  const isAddDisabled = type === 'test' ? !selectedParameterId : (!eventTitle.trim() || (multiDay && !(lastDay > date)));
+  const endDateError = lastDay !== '' && lastDay < date;
+  const isAddDisabled = type === 'test' ? !selectedParameterId : (!eventTitle.trim() || endDateError);
   /** "1 Aug – 14 Aug 2026" for an event over several days */
   const rangeLabel = (ev: CalendarEvent) =>
     `${format(parseDateStr(ev.date), 'd MMM')} – ${format(parseDateStr(eventEndDate(ev)), 'd MMM yyyy')}`;
@@ -476,26 +473,21 @@ export function CalendarEventDialog({
                         if (e.key === 'Enter' && !isAddDisabled) handleAdd();
                       }}
                     />
-                    {/* Several days, e.g. a holiday or a training camp */}
-                    <label className="flex items-center gap-2 pt-1 text-sm cursor-pointer select-none">
-                      <Checkbox checked={multiDay} onCheckedChange={v => setMultiDay(v === true)} />
-                      Several days
-                    </label>
-                    {multiDay && (
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <Label className="text-xs text-muted-foreground">First day</Label>
-                          <Input value={format(parseDateStr(date), 'd MMM yyyy')} readOnly tabIndex={-1} className="bg-muted text-muted-foreground cursor-default" />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor="cal-event-last-day" className="text-xs text-muted-foreground">Last day</Label>
-                          <Input id="cal-event-last-day" type="date" min={date} value={lastDay} onChange={e => setLastDay(e.target.value)} />
-                        </div>
-                        {lastDay !== '' && !(lastDay > date) && (
-                          <p className="col-span-2 text-xs text-destructive">The last day must be after the first day.</p>
-                        )}
+                    {/* Start date = the clicked day; an end date makes it an event over several days
+                        (e.g. a holiday or a training camp) */}
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Start date</Label>
+                        <Input value={format(parseDateStr(date), 'd MMM yyyy')} readOnly tabIndex={-1} className="bg-muted text-muted-foreground cursor-default" />
                       </div>
-                    )}
+                      <div className="space-y-1">
+                        <Label htmlFor="cal-event-last-day" className="text-xs text-muted-foreground">End date <span className="font-normal">(optional)</span></Label>
+                        <Input id="cal-event-last-day" type="date" min={date} value={lastDay} onChange={e => setLastDay(e.target.value)} />
+                      </div>
+                    </div>
+                    <p className={cn('text-xs', endDateError ? 'text-destructive' : 'text-muted-foreground')}>
+                      {endDateError ? 'The end date must be on or after the start date.' : 'Leave the end date empty for a one-day event.'}
+                    </p>
                   </div>
                 )}
 

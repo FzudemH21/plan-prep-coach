@@ -1,5 +1,5 @@
 import { parseMeasuredNumber } from '@/utils/latestParameterValue';
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ import { useAthletes } from "@/hooks/useAthletes";
 import { getAthleteDisplayName, Athlete } from "@/types/athlete";
 import { cn } from "@/lib/utils";
 import { AddSmartGoalDialog, AddSubGoalDialog, AddAdditionalMethodDialog, EVIDENCE_QUALITY_OPTIONS } from "@/components/macrocycle";
+import { DayScheduleDialog } from "@/components/macrocycle/DayScheduleDialog";
 import type { EvidenceQuality } from "@/components/macrocycle/AddAdditionalMethodDialog";
 import { AddParameterDialogV2 } from "@/components/goals/AddParameterDialogV2";
 import { useToolboxData } from "@/hooks/useToolboxData";
@@ -108,6 +109,10 @@ export default function MacrocyclePage() {
 const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [addEventMode, setAddEventMode] = useState(false);
+  // Step 2: the day clicked in the calendar (day dialog: test or event on that day)
+  const [dayDialogDate, setDayDialogDate] = useState<string | null>(null);
+  // A new sub-goal started from the day dialog gets that day as its test date
+  const pendingSubGoalDateRef = useRef<string | null>(null);
 
   // State for parameter creation from sub-goal dialog (links to a parent SMART goal)
   const [createParameterForGoalId, setCreateParameterForGoalId] = useState<string | null>(null);
@@ -902,7 +907,13 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
 
   // Handlers for Sub-goals
   const handleAddSubGoal = (subGoal: Omit<SubGoal, 'id'>) => {
-    const newSubGoal: SubGoal = { ...subGoal, id: `subgoal-${Date.now()}` };
+    const pendingDate = pendingSubGoalDateRef.current;
+    pendingSubGoalDateRef.current = null;
+    const newSubGoal: SubGoal = {
+      ...subGoal,
+      id: `subgoal-${Date.now()}`,
+      ...(pendingDate ? { testDates: [...new Set([...(subGoal.testDates ?? []), pendingDate])] } : {}),
+    };
     setSubGoals(prev => [...prev, newSubGoal]);
     toast({ title: 'Sub-Goal Added', description: `Created sub-goal "${subGoal.description}"` });
   };
@@ -1771,11 +1782,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
               )}
             </div>
             
-            {(selectedSmartGoal || selectedTest || selectedEvent) && (
-              <p className="text-xs text-muted-foreground text-center bg-muted/50 p-2 rounded">
-                Click on a date in the calendar to schedule the selected item
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground text-center bg-muted/50 p-2 rounded">
+              {(selectedSmartGoal || selectedTest || selectedEvent)
+                ? 'Click dates in the calendar to schedule the selected item (click it again to deselect)'
+                : 'Click a day in the calendar to add a test or an event'}
+            </p>
           </div>
           
           {/* Right Column: Calendar */}
@@ -1921,7 +1932,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                         } else if (selectedEvent) {
                           scheduleEvent(selectedEvent, date);
                         } else {
-                          toast({ title: 'Select an item', description: 'Choose a goal, sub-goal, or event from the list, then click a date.' });
+                          // Nothing selected in the list: choose what happens on this day
+                          setDayDialogDate(dateStr);
                         }
                       };
                       
@@ -2099,11 +2111,60 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         </div>
 
         {/* Add/Edit Sub-Goal Dialog */}
+        {dayDialogDate && (
+          <DayScheduleDialog
+            open={!!dayDialogDate}
+            onOpenChange={(o) => { if (!o) setDayDialogDate(null); }}
+            date={dayDialogDate}
+            planEndDate={planDuration?.endDate ? format(planDuration.endDate, 'yyyy-MM-dd') : undefined}
+            smartGoals={smartGoals}
+            subGoals={subGoals}
+            derivedSubGoals={derivedSubGoals}
+            events={events}
+            existingOnDay={[
+              ...athleteExistingTestsAndEvents.tests.filter(t => t.testDates?.some(d => d.startsWith(dayDialogDate))).map(t => `test ${t.testMethod}`),
+              ...athleteExistingTestsAndEvents.events.filter(e => e.eventDates?.some(d => d.startsWith(dayDialogDate))).map(e => e.name),
+            ]}
+            onToggleGoalTest={(goalId) => setSmartGoals(prev => prev.map(g => {
+              if (g.id !== goalId) return g;
+              const dates = g.testDates || [];
+              return { ...g, testDates: dates.includes(dayDialogDate) ? dates.filter(d => d !== dayDialogDate) : [...dates, dayDialogDate] };
+            }))}
+            onToggleSubGoalTest={(subGoalId) => {
+              if (subGoals.some(sg => sg.id === subGoalId)) {
+                setSubGoals(prev => prev.map(sg => {
+                  if (sg.id !== subGoalId) return sg;
+                  const dates = sg.testDates || [];
+                  return { ...sg, testDates: dates.includes(dayDialogDate) ? dates.filter(d => d !== dayDialogDate) : [...dates, dayDialogDate] };
+                }));
+                return;
+              }
+              // A suggested sub-goal becomes the athlete's own, with this day
+              const derived = derivedSubGoals.find(sg => sg.id === subGoalId);
+              if (derived) setSubGoals(prev => [...prev, { ...derived, testDates: [dayDialogDate], isDerived: false }]);
+            }}
+            onNewSubGoal={() => {
+              pendingSubGoalDateRef.current = dayDialogDate;
+              setDayDialogDate(null);
+              setAddEventMode(false);
+              setIsAddSubGoalDialogOpen(true);
+            }}
+            onCreateEvent={({ name, comments, dates }) => handleAddEvent({ name, description: '', eventDates: dates, comments })}
+            onAddEventDays={(eventId, dates) => setEvents(prev => prev.map(e => (e.id === eventId
+              ? { ...e, eventDates: [...new Set([...(e.eventDates || []), ...dates])].sort() }
+              : e)))}
+            onRemoveEventDays={(eventId, dates) => setEvents(prev => prev.map(e => (e.id === eventId
+              ? { ...e, eventDates: (e.eventDates || []).filter(d => !dates.includes(d)) }
+              : e)))}
+          />
+        )}
+
         <AddSubGoalDialog
           open={isAddSubGoalDialogOpen}
           onOpenChange={(open) => {
             setIsAddSubGoalDialogOpen(open);
             if (!open) {
+              pendingSubGoalDateRef.current = null;
               setAddSubGoalForParent(undefined);
               setEditingSubGoal(null);
               setEditingEvent(null);
