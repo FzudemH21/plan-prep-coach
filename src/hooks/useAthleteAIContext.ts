@@ -117,14 +117,15 @@ export function useAthleteAIContext({
       const tag = e.type === 'test' ? 'TEST' : 'EVENT';
       const target = e.targetValue ? ` (target: ${e.targetValue})` : '';
       const notes = e.notes ? ` — ${e.notes}` : '';
-      return `  ${e.date}: [${tag}] ${e.title}${target}${notes}`;
+      const days = e.endDate && e.endDate > e.date ? ` to ${e.endDate}` : '';
+      return `  ${e.date}${days}: [${tag}] ${e.title}${target}${notes}`;
     };
     const upcoming = calendarEvents
-      .filter(e => e.date >= today)
+      .filter(e => (e.endDate && e.endDate > e.date ? e.endDate : e.date) >= today)
       .sort((a, b) => a.date.localeCompare(b.date))
       .slice(0, 20);
     const pastRecent = calendarEvents
-      .filter(e => e.date < today)
+      .filter(e => (e.endDate && e.endDate > e.date ? e.endDate : e.date) < today)
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 5);
 

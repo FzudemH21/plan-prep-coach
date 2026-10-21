@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/popover";
 import { Check, ChevronsUpDown, Target, CalendarIcon, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { eventDateList, groupConsecutiveDates } from "@/hooks/useCalendarEvents";
 import { SubGoal, Event, SmartGoal } from "@/types/training";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ParameterV2 } from "@/types/parametersV2";
@@ -55,6 +56,9 @@ interface AddSubGoalDialogProps {
   defaultCategory?: ItemCategory;
   defaultParameterId?: string | null;
   onCreateNewParameter?: (parentGoalId: string | undefined) => void;
+  /** Plan dates ('yyyy-MM-dd') — the event's days must lie within them */
+  planStartDate?: string;
+  planEndDate?: string;
 }
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -75,6 +79,8 @@ export function AddSubGoalDialog({
   defaultCategory,
   defaultParameterId,
   onCreateNewParameter,
+  planStartDate,
+  planEndDate,
 }: AddSubGoalDialogProps) {
   // Category state
   const [category, setCategory] = useState<ItemCategory>(defaultCategory || "subgoal");
@@ -93,6 +99,9 @@ export function AddSubGoalDialog({
   
   // Event specific state
   const [eventName, setEventName] = useState("");
+  // Days of the event: first and last day (last empty = one day). Empty = pick days in the calendar
+  const [firstDay, setFirstDay] = useState("");
+  const [lastDay, setLastDay] = useState("");
   
   // Update category when defaultCategory changes
   useEffect(() => {
@@ -144,6 +153,10 @@ export function AddSubGoalDialog({
       setEventName(editEvent.name);
       setComments(editEvent.comments || "");
       setCategory("event");
+      // One run of consecutive days → shown as first / last day
+      const runs = groupConsecutiveDates(editEvent.eventDates || []);
+      setFirstDay(runs.length === 1 ? runs[0][0] : "");
+      setLastDay(runs.length === 1 && runs[0][1] !== runs[0][0] ? runs[0][1] : "");
     }
   }, [editEvent]);
 
@@ -159,6 +172,8 @@ export function AddSubGoalDialog({
       setGoalValue("");
       setUnit("");
       setEventName("");
+      setFirstDay("");
+      setLastDay("");
       setParentGoalId(defaultParentGoalId);
     }
   }, [open, defaultParentGoalId, defaultCategory]);
@@ -251,8 +266,20 @@ export function AddSubGoalDialog({
     setGoalValue("");
     setUnit("");
     setEventName("");
+    setFirstDay("");
+    setLastDay("");
     setParentGoalId(defaultParentGoalId);
   };
+
+  // The days the first / last day stand for (null = not set: keep the days picked in the calendar)
+  const rangeDays = firstDay
+    ? eventDateList({ date: firstDay, endDate: lastDay && lastDay > firstDay ? lastDay : undefined })
+    : null;
+  const rangeError = !!firstDay && !!lastDay && lastDay < firstDay
+    ? "The last day must be on or after the first day."
+    : rangeDays && ((planStartDate && rangeDays[0] < planStartDate) || (planEndDate && rangeDays[rangeDays.length - 1] > planEndDate))
+      ? "The days must lie within the plan."
+      : null;
 
   const handleSave = () => {
     if (category === "subgoal") {
@@ -286,19 +313,20 @@ export function AddSubGoalDialog({
         });
       }
     } else {
-      if (!eventName.trim()) return;
+      if (!eventName.trim() || rangeError) return;
 
       if (editEvent && onEditEvent) {
         onEditEvent({
           ...editEvent,
           name: eventName.trim(),
           comments,
+          ...(rangeDays ? { eventDates: rangeDays } : {}),
         });
       } else {
         onAddEvent({
           name: eventName.trim(),
           description: "",
-          eventDates: [],
+          eventDates: rangeDays ?? [],
           comments,
         });
       }
@@ -315,7 +343,7 @@ export function AddSubGoalDialog({
 
   const isValid = category === "subgoal" 
     ? description || editSubGoal
-    : eventName.trim();
+    : !!eventName.trim() && !rangeError;
 
   // Determine if we should hide category selector (when opened with defaultParentGoalId, it's always a sub-goal, or editing)
   const hideCategorySelector = !!defaultParentGoalId || !!editSubGoal || !!editEvent;
@@ -504,6 +532,30 @@ export function AddSubGoalDialog({
                 onChange={(e) => setEventName(e.target.value)}
                 placeholder="e.g., Competition, Vacation, Match"
               />
+              {/* Days: one day, or several (holiday, training camp) — or pick them in the calendar later */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="space-y-1">
+                  <Label htmlFor="eventFirstDay" className="text-xs text-muted-foreground">First day</Label>
+                  <Input id="eventFirstDay" type="date" value={firstDay} min={planStartDate} max={planEndDate}
+                    onChange={(e) => setFirstDay(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="eventLastDay" className="text-xs text-muted-foreground">Last day <span className="font-normal">(several days)</span></Label>
+                  <Input id="eventLastDay" type="date" value={lastDay} min={firstDay || planStartDate} max={planEndDate}
+                    disabled={!firstDay} onChange={(e) => setLastDay(e.target.value)} />
+                </div>
+              </div>
+              {rangeError ? (
+                <p className="text-xs text-destructive">{rangeError}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {rangeDays
+                    ? `${rangeDays.length} day${rangeDays.length === 1 ? '' : 's'}${editEvent && (editEvent.eventDates?.length ?? 0) > 0 ? ' — replaces the days picked before' : ''}.`
+                    : editEvent && (editEvent.eventDates?.length ?? 0) > 0
+                      ? `${editEvent.eventDates.length} day${editEvent.eventDates.length === 1 ? '' : 's'} picked in the calendar — set a first day to replace them.`
+                      : 'Optional — you can also pick the days in the calendar afterwards.'}
+                </p>
+              )}
             </div>
           )}
 

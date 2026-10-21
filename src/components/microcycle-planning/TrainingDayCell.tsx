@@ -672,8 +672,8 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
         onOpenChange={setCalendarEventDialogOpen}
         date={day.dateString}
         events={[...calendarTests, ...calendarEventItems]}
-        onAdd={(type, title, notes, parameterId, targetValue) => {
-          addEvent(eventsAthleteKey, { date: day.dateString, type, title, notes, parameterId, targetValue });
+        onAdd={(type, title, notes, parameterId, targetValue, endDate) => {
+          addEvent(eventsAthleteKey, { date: day.dateString, type, title, notes, parameterId, targetValue, ...(endDate ? { endDate } : {}) });
         }}
         onDelete={(eventId) => {
           const planTestPrefix = `plan-test-${day.dateString}-`;

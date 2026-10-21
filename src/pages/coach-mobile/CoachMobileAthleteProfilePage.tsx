@@ -10,7 +10,9 @@ import { useAthletes } from '@/hooks/useAthletes';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { supabase } from '@/lib/supabase';
 import type { AthleteScheduleEntry, SessionSummary, ExerciseSummary, AthleteCalendarEvent } from '@/hooks/useAthleteApp';
-import { useCalendarEvents } from '@/hooks/useCalendarEvents';
+import { useCalendarEvents, eventCoversDate, eventDateList } from '@/hooks/useCalendarEvents';
+import { patchScheduleEvents, scheduleEntryOf } from '@/utils/athleteScheduleSync';
+import { eventRangeLabel } from '@/utils/eventRange';
 import type { CalendarEvent } from '@/hooks/useCalendarEvents';
 import { CalendarEventDialog } from '@/components/shared/CalendarEventDialog';
 import { format, parseISO } from 'date-fns';
@@ -527,46 +529,31 @@ export default function CoachMobileAthleteProfilePage() {
 
   // ── Event handlers (tests & events) ───────────────────────────────────────────
 
-  const handleAddEvent = useCallback(async (date: string, payload: Omit<CalendarEvent, 'id'>) => {
+  /** The shown schedule after an event was added (entry) or removed (null) on these days */
+  const applyLocalEvent = useCallback((dates: string[], eventId: string, entry: AthleteCalendarEvent | null) => {
+    setSchedule(prev => {
+      const days = new Set(dates);
+      const next = prev.map(e => (days.has(e.date)
+        ? { ...e, events: [...e.events.filter(ce => ce.id !== eventId), ...(entry ? [entry] : [])] }
+        : e));
+      if (entry) {
+        for (const date of dates) {
+          if (prev.some(e => e.date === date)) continue;
+          next.push({ id: `tmp-${date}`, date, intensity: null, sessions: [], events: [entry], programName: null, mesocycleName: null, microcycleName: null });
+        }
+      }
+      return next.sort((a, b) => a.date.localeCompare(b.date));
+    });
+  }, [setSchedule]);
+
+  const handleAddEvent = useCallback(async (payload: Omit<CalendarEvent, 'id'>) => {
     if (!connection || !athleteId) return;
     const newEvent = await addCalendarEvent(athleteId, payload);
-    const newEntry = {
-      id: newEvent.id,
-      type: newEvent.type,
-      title: newEvent.title,
-      notes: newEvent.notes ?? undefined,
-      targetValue: newEvent.targetValue ?? undefined,
-      parameterId: newEvent.parameterId ?? undefined,
-    };
-    const { data: row } = await supabase
-      .from('athlete_schedule')
-      .select('id, events')
-      .eq('athlete_connection_id', connection.id)
-      .eq('date', date)
-      .maybeSingle();
-    if (row) {
-      const existing = (row.events as unknown[]) ?? [];
-      await supabase.from('athlete_schedule').update({ events: [...existing, newEntry] }).eq('id', row.id);
-      setSchedule(prev => prev.map(e => e.date === date ? { ...e, events: [...e.events, newEntry as AthleteCalendarEvent] } : e));
-    } else {
-      const { data: inserted } = await supabase.from('athlete_schedule').insert({
-        athlete_connection_id: connection.id,
-        date,
-        sessions: [],
-        events: [newEntry],
-      }).select('id').single();
-      setSchedule(prev => [...prev, {
-        id: inserted?.id ?? `tmp-${date}`,
-        date,
-        intensity: null,
-        sessions: [],
-        events: [newEntry as AthleteCalendarEvent],
-        programName: null,
-        mesocycleName: null,
-        microcycleName: null,
-      }]);
-    }
-  }, [addCalendarEvent, athleteId, connection, setSchedule]);
+    // Every day of the event (rest days get a row of their own)
+    await patchScheduleEvents(connection.id, { upsert: [newEvent] })
+      .catch(e => console.error('[coach-mobile] event → app schedule failed', e));
+    applyLocalEvent(eventDateList(newEvent), newEvent.id, scheduleEntryOf(newEvent) as AthleteCalendarEvent);
+  }, [addCalendarEvent, athleteId, connection, applyLocalEvent]);
 
   const handleDeleteEvent = useCallback(async (eventId: string) => {
     if (!connection || !athleteId) return;
@@ -574,18 +561,10 @@ export default function CoachMobileAthleteProfilePage() {
     const ev = allEvents.find(e => e.id === eventId);
     await deleteCalendarEvent(athleteId, eventId);
     if (!ev) return;
-    const { data: row } = await supabase
-      .from('athlete_schedule')
-      .select('id, events')
-      .eq('athlete_connection_id', connection.id)
-      .eq('date', ev.date)
-      .maybeSingle();
-    if (row) {
-      const updated = ((row.events as Array<{ id: string }>) ?? []).filter(e => e.id !== eventId);
-      await supabase.from('athlete_schedule').update({ events: updated }).eq('id', row.id);
-      setSchedule(prev => prev.map(e => e.date === ev.date ? { ...e, events: e.events.filter(ce => ce.id !== eventId) } : e));
-    }
-  }, [deleteCalendarEvent, athleteId, getEventsForAthlete, connection, setSchedule]);
+    await patchScheduleEvents(connection.id, { remove: [ev] })
+      .catch(e => console.error('[coach-mobile] event removal → app schedule failed', e));
+    applyLocalEvent(eventDateList(ev), eventId, null);
+  }, [deleteCalendarEvent, athleteId, getEventsForAthlete, connection, applyLocalEvent]);
 
   const handleSubmitTestResult = useCallback(async () => {
     if (!testResultTarget || !testResultValue.trim() || !connection) return;
@@ -1501,6 +1480,7 @@ export default function CoachMobileAthleteProfilePage() {
                                       <p className={cn('text-xs font-medium truncate', ev.type === 'test' ? 'text-amber-800' : 'text-blue-800')}>
                                         {ev.title}
                                       </p>
+                                      {eventRangeLabel(ev) && <p className="text-xs text-blue-700 mt-0.5">{eventRangeLabel(ev)}</p>}
                                       {ev.type === 'test' && ev.targetValue && (
                                         <p className="text-xs text-amber-700 mt-0.5">{t('coachMobile.athleteProfile.goal', { value: ev.targetValue })}</p>
                                       )}
@@ -1582,6 +1562,7 @@ export default function CoachMobileAthleteProfilePage() {
                                       <p className={cn('text-xs font-medium truncate', ev.type === 'test' ? 'text-amber-800' : 'text-blue-800')}>
                                         {ev.title}
                                       </p>
+                                      {eventRangeLabel(ev) && <p className="text-xs text-blue-700 mt-0.5">{eventRangeLabel(ev)}</p>}
                                       {ev.type === 'test' && ev.targetValue && (
                                         <p className="text-xs text-amber-700 mt-0.5">{t('coachMobile.athleteProfile.goal', { value: ev.targetValue })}</p>
                                       )}
@@ -1986,10 +1967,10 @@ export default function CoachMobileAthleteProfilePage() {
           open={eventDialogDate !== null}
           onOpenChange={open => { if (!open) setEventDialogDate(null); }}
           date={eventDialogDate ?? today}
-          events={eventDialogDate ? getEventsForAthlete(athleteId).filter(e => e.date === eventDialogDate) : []}
-          onAdd={(type, title, notes, parameterId, targetValue) => {
+          events={eventDialogDate ? getEventsForAthlete(athleteId).filter(e => eventCoversDate(e, eventDialogDate)) : []}
+          onAdd={(type, title, notes, parameterId, targetValue, endDate) => {
             if (eventDialogDate) {
-              handleAddEvent(eventDialogDate, { date: eventDialogDate, type, title, notes, parameterId, targetValue });
+              handleAddEvent({ date: eventDialogDate, type, title, notes, parameterId, targetValue, ...(endDate ? { endDate } : {}) });
             }
           }}
           onDelete={handleDeleteEvent}

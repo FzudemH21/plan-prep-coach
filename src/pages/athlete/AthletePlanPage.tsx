@@ -10,6 +10,7 @@ import { useAthleteApp, AthleteScheduleEntry, AthleteCalendarEvent, SessionLog, 
 import { supabase } from '@/lib/supabase';
 import { IntensityBadge } from '@/components/athlete-app/IntensityBadge';
 import { cn } from '@/lib/utils';
+import { eventRangeLabel } from '@/utils/eventRange';
 
 /** Session date to return to (the plan shows that week again after the session view) */
 const RETURN_WEEK_KEY = 'athletePlan.returnToDate';
@@ -226,6 +227,7 @@ function DaySection({
           <p className={cn('font-medium', ev.type === 'test' ? 'text-amber-800' : 'text-blue-800')}>
             {ev.title}
           </p>
+          {eventRangeLabel(ev) && <p className="text-blue-700 mt-0.5">{eventRangeLabel(ev)}</p>}
           {ev.type === 'test' && ev.targetValue && (
             <p className="text-amber-700 mt-0.5">
               <span className="font-medium">Goal:</span> {ev.targetValue}{ev.unit ? ` ${ev.unit}` : ''}

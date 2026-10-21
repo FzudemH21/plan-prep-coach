@@ -52,7 +52,7 @@ import { SaveProgramButton } from "@/components/programs/SaveProgramButton";
 import { AutoSaveIndicator } from "@/components/programs/AutoSaveIndicator";
 import { useWizardAutoSave } from "@/hooks/useWizardAutoSave";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
-import { useCalendarEvents } from "@/hooks/useCalendarEvents";
+import { useCalendarEvents, eventCoversDate, eventDateList } from "@/hooks/useCalendarEvents";
 import { format, addWeeks, differenceInWeeks, addDays, differenceInDays } from "date-fns";
 import { parseDateStr } from "@/utils/dateUtils";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
@@ -735,10 +735,10 @@ export default function MesocyclePage() {
     // Source 1: calendarEvents (athlete-bound)
     athleteCalendarEvents
       .filter(e => e.type === 'event')
-      .forEach(e => {
-        const d = parseDateStr(e.date);
+      .forEach(e => eventDateList(e).forEach(ds => {
+        const d = parseDateStr(ds);
         if (d >= start && d <= end) addEvent(e.title, d);
-      });
+      }));
     // Source 2: plan-state (wizard-assigned events)
     macrocycleData?.events?.forEach((e: any) => {
       const name = e.name || 'Event';
@@ -1496,13 +1496,13 @@ export default function MesocyclePage() {
       const ex = eventMap.get(name); if (ex) ex.push(d); else eventMap.set(name, [d]);
     };
     // Source 1: calendarEvents (athlete-bound)
-    athleteCalendarEvents.forEach(e => {
-      const d = parseDateStr(e.date);
+    athleteCalendarEvents.forEach(e => eventDateList(e).forEach(ds => {
+      const d = parseDateStr(ds);
       if (d >= mesoStart && d <= mesoEnd) {
         if (e.type === 'test') addTest(e.title, d);
         else addEvent(e.title, d);
       }
-    });
+    }));
     // Source 2: plan-state smart goal tests (scheduled directly on a SmartGoal)
     macrocycleData?.smartGoals?.forEach((sg: any) => {
       const name = sg.description || 'Test';
@@ -5131,7 +5131,7 @@ export default function MesocyclePage() {
                               tooltipContent={getTooltipContent(day)}
                               isLastDayOfMicrocycle={isLastDayOfMicro}
                               isLastDayOfMesocycle={isLastDayOfMeso}
-                              calendarEventsForDay={athleteCalendarEvents.filter(e => e.date === day.date)}
+                              calendarEventsForDay={athleteCalendarEvents.filter(e => eventCoversDate(e, day.date))}
                             />
                           );
                         })}

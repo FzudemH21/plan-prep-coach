@@ -31,7 +31,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
-  Plus, Trash2, ChevronUp, ChevronDown, Edit, Loader2, ClipboardList, X, GitBranch, Eye, EyeOff,
+  Plus, Trash2, ChevronUp, ChevronDown, Edit, Loader2, ClipboardList, X, GitBranch, Eye, EyeOff, CalendarDays,
 } from 'lucide-react';
 import { AnamnesisFieldInput } from '@/components/anamnesis/AnamnesisInputs';
 import { ANAMNESIS_PRESETS } from '@/data/anamnesisPresets';
@@ -74,7 +74,7 @@ const FIELD_TYPE_LABELS: Record<AnamnesisFieldType, string> = {
   list: 'List of entries (e.g. injuries)',
   bodyMap: 'Body map',
   weekGrid: 'Weekly schedule',
-  dateRanges: 'Calendar (mark periods)',
+  dateRanges: 'Calendar (periods → athlete calendar)',
   info: 'Info text (no answer)',
 };
 
@@ -340,6 +340,10 @@ function FieldRow({
       {type === 'dateRanges' && (
         <>
           <p className="text-xs text-muted-foreground">The athlete marks a period in a month calendar (tap the first and then the last day, double-tap for a single day) and types what it is — e.g. holidays, competitions, travel, training camps.</p>
+          <p className="text-xs text-blue-700 flex items-start gap-1.5">
+            <CalendarDays className="h-3.5 w-3.5 shrink-0 mt-px" />
+            Every period lands in the athlete&apos;s calendar as an event (over several days where it has them) once the anamnesis is submitted — and from there in the athlete app. The form tells the athlete.
+          </p>
           <Input className="h-7 text-xs" placeholder='Prompt for the name (default: "What is it? e.g. holiday in Spain, competition, training camp")'
             value={field.placeholder ?? ''} onChange={(e) => onChange({ ...field, placeholder: e.target.value || undefined })} />
         </>

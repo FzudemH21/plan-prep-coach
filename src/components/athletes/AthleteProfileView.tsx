@@ -67,6 +67,7 @@ import { parseISO, isToday, isYesterday } from 'date-fns';
 import { useRef, useLayoutEffect } from 'react';
 import { SportTagInput } from './SportTagInput';
 import { ChatQuote } from '@/components/chat/ChatQuote';
+import { useAnamnesisCalendarSync } from '@/hooks/useAnamnesisCalendarSync';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -146,6 +147,8 @@ export function AthleteProfileView({
   const athleteConnectionName = [athlete.firstName, athlete.lastName].filter(Boolean).join(' ');
   const athleteConnection = connections.find((c) => c.athleteLocalId === athlete.id)
     ?? (athleteConnectionName ? connections.find((c) => c.athleteName === athleteConnectionName) : undefined);
+  // Periods from the anamnesis → calendar events (+ upcoming events into the athlete app once connected)
+  useAnamnesisCalendarSync(athlete.id, athlete.sex, athleteConnection?.id ?? null);
   const { messages: chatMessages, loading: chatLoading, sendMessage: chatSend, markRead: chatMarkRead, unreadCount: chatUnread } = useChat({
     connectionId: athleteConnection?.id ?? null,
     callerRole: 'coach',

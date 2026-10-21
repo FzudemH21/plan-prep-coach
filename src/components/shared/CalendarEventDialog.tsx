@@ -14,7 +14,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Trophy, Calendar, X, Plus, ChevronsUpDown, Check } from 'lucide-react';
-import { CalendarEvent } from '@/hooks/useCalendarEvents';
+import { CalendarEvent, eventEndDate, isMultiDayEvent } from '@/hooks/useCalendarEvents';
+import { Checkbox } from '@/components/ui/checkbox';
 import { format } from 'date-fns';
 import { parseDateStr } from '@/utils/dateUtils';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
@@ -40,7 +41,8 @@ interface CalendarEventDialogProps {
   onOpenChange: (open: boolean) => void;
   date: string; // ISO date
   events: CalendarEvent[]; // events already on this day
-  onAdd: (type: 'test' | 'event', title: string, notes?: string, parameterId?: string, targetValue?: string) => void;
+  /** endDate: last day of an event over several days (inclusive), only for events */
+  onAdd: (type: 'test' | 'event', title: string, notes?: string, parameterId?: string, targetValue?: string, endDate?: string) => void;
   onDelete: (eventId: string) => void;
   athletePerformanceParameters?: AthletePerformanceParameter[];
   /** The athlete (for values they reported themselves in the athlete app) */
@@ -70,6 +72,9 @@ export function CalendarEventDialog({
 
   const [type, setType] = useState<'test' | 'event'>('test');
   const [eventTitle, setEventTitle] = useState(''); // For event type only
+  // Event over several days: the clicked day is the first day, this the last (inclusive)
+  const [multiDay, setMultiDay] = useState(false);
+  const [lastDay, setLastDay] = useState('');
   const [notes, setNotes] = useState('');
   const [selectedParameterId, setSelectedParameterId] = useState<string | null>(null);
   const [parameterComboOpen, setParameterComboOpen] = useState(false);
@@ -121,6 +126,8 @@ export function CalendarEventDialog({
     : parameters.find(p => p.id === selectedParameterId);
 
   const resetForm = () => {
+    setMultiDay(false);
+    setLastDay('');
     setEventTitle('');
     setNotes('');
     setSelectedParameterId(null);
@@ -137,8 +144,11 @@ export function CalendarEventDialog({
       onAdd(type, testTitle, notes.trim() || undefined, selectedParameterId, targetValue.trim() || undefined);
     } else {
       if (!eventTitle.trim()) return;
-      onAdd(type, eventTitle.trim(), notes.trim() || undefined);
+      const endDate = multiDay && lastDay > date ? lastDay : undefined;
+      onAdd(type, eventTitle.trim(), notes.trim() || undefined, undefined, undefined, endDate);
     }
+    setMultiDay(false);
+    setLastDay('');
     setEventTitle('');
     setNotes('');
     setSelectedParameterId(null);
@@ -187,7 +197,10 @@ export function CalendarEventDialog({
     return ev.title;
   };
 
-  const isAddDisabled = type === 'test' ? !selectedParameterId : !eventTitle.trim();
+  const isAddDisabled = type === 'test' ? !selectedParameterId : (!eventTitle.trim() || (multiDay && !(lastDay > date)));
+  /** "1 Aug – 14 Aug 2026" for an event over several days */
+  const rangeLabel = (ev: CalendarEvent) =>
+    `${format(parseDateStr(ev.date), 'd MMM')} – ${format(parseDateStr(eventEndDate(ev)), 'd MMM yyyy')}`;
 
   return (
     <>
@@ -256,6 +269,11 @@ export function CalendarEventDialog({
                           <Calendar className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
                           <div className="min-w-0">
                             <p className="text-sm font-medium truncate">{ev.title}</p>
+                            {(isMultiDayEvent(ev) || ev.source) && (
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {[isMultiDayEvent(ev) ? rangeLabel(ev) : null, ev.source ? 'from the anamnesis' : null].filter(Boolean).join(' · ')}
+                              </p>
+                            )}
                             {ev.notes && (
                               <p className="text-xs text-muted-foreground mt-0.5">{ev.notes}</p>
                             )}
@@ -455,9 +473,29 @@ export function CalendarEventDialog({
                       value={eventTitle}
                       onChange={e => setEventTitle(e.target.value)}
                       onKeyDown={e => {
-                        if (e.key === 'Enter' && eventTitle.trim()) handleAdd();
+                        if (e.key === 'Enter' && !isAddDisabled) handleAdd();
                       }}
                     />
+                    {/* Several days, e.g. a holiday or a training camp */}
+                    <label className="flex items-center gap-2 pt-1 text-sm cursor-pointer select-none">
+                      <Checkbox checked={multiDay} onCheckedChange={v => setMultiDay(v === true)} />
+                      Several days
+                    </label>
+                    {multiDay && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">First day</Label>
+                          <Input value={format(parseDateStr(date), 'd MMM yyyy')} readOnly tabIndex={-1} className="bg-muted text-muted-foreground cursor-default" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="cal-event-last-day" className="text-xs text-muted-foreground">Last day</Label>
+                          <Input id="cal-event-last-day" type="date" min={date} value={lastDay} onChange={e => setLastDay(e.target.value)} />
+                        </div>
+                        {lastDay !== '' && !(lastDay > date) && (
+                          <p className="col-span-2 text-xs text-destructive">The last day must be after the first day.</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 

@@ -5,7 +5,7 @@
  * Values are the stored text of the answer (JSON for the structured types, see anamnesisAnswers).
  */
 import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Eraser, Plus, Trash2, X } from 'lucide-react';
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Eraser, Plus, Trash2, X } from 'lucide-react';
 import * as SliderPrimitive from '@radix-ui/react-slider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -809,6 +809,7 @@ const C_T = {
   de: {
     hint: 'Tippe auf den ersten und dann auf den letzten Tag. Ein einzelner Tag: doppelt tippen.',
     pickEnd: 'Jetzt auf den letzten Tag tippen – oder denselben Tag noch einmal für nur diesen Tag.',
+    toCalendar: 'Diese Termine tragen wir in deinen Trainingskalender ein.',
     name: 'Was ist es? z. B. Urlaub Mallorca, Wettkampf, Trainingslager', from: 'Von', to: 'Bis',
     add: 'Übernehmen', save: 'Speichern', remove: 'Entfernen', cancel: 'Abbrechen',
     prev: 'Vorheriger Monat', next: 'Nächster Monat', locale: 'de-DE',
@@ -816,6 +817,7 @@ const C_T = {
   en: {
     hint: 'Tap the first day, then the last day. A single day: tap it twice.',
     pickEnd: 'Now tap the last day — or the same day again for just that day.',
+    toCalendar: 'We will add these dates to your training calendar.',
     name: 'What is it? e.g. holiday in Spain, competition, training camp', from: 'From', to: 'To',
     add: 'Add', save: 'Save', remove: 'Remove', cancel: 'Cancel',
     prev: 'Previous month', next: 'Next month', locale: 'en-GB',
@@ -947,6 +949,12 @@ export function DateRangesInput({ field, value, onChange, lang, size = 'sm', rea
       <p className={cn(anchor ? 'text-primary font-medium' : 'text-muted-foreground', size === 'lg' ? 'text-sm' : 'text-xs')}>
         {anchor ? t.pickEnd : t.hint}
       </p>
+      {/* The form link: the periods go into the athlete's calendar (useAnamnesisCalendarSync) */}
+      {size === 'lg' && (
+        <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <CalendarDays className="h-4 w-4 shrink-0" />{t.toCalendar}
+        </p>
+      )}
 
       {draft && (
         <div className={cn('rounded-lg border-2 border-primary/40 bg-primary/5 space-y-2.5', size === 'lg' ? 'p-3' : 'p-2.5')}>

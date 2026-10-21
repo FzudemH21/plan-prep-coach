@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { notifyAnamnesisChanged } from '@/hooks/useAnamnesisCalendarSync';
 import type {
   AthleteAnamnesis, AnamnesisField, AnamnesisTemplateSnapshot, AnamnesisAttachment, AnamnesisConsent, AnamnesisProfileAnswers,
   AnamnesisNote,
@@ -115,6 +116,11 @@ export function useAthleteAnamneses(athleteLocalId: string) {
   useEffect(() => {
     fetchAnamneses();
   }, [fetchAnamneses]);
+
+  // Periods from the anamnesis calendar questions go into the athlete's calendar (useAnamnesisCalendarSync)
+  useEffect(() => {
+    if (athleteLocalId && !loading) notifyAnamnesisChanged(athleteLocalId);
+  }, [anamneses, athleteLocalId, loading]);
 
   const createAnamnesis = useCallback(
     async (payload: Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'createdAt' | 'updatedAt'>): Promise<AthleteAnamnesis | null> => {

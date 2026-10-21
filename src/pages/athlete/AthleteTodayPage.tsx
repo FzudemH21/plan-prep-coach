@@ -6,6 +6,7 @@ import { useAthleteTestResults, type TestResultRow } from '@/hooks/useAthleteTes
 import { TestResultDialog, type TestResultTarget } from '@/components/athlete-app/TestResultDialog';
 import { TestDetailsDialog } from '@/components/athlete-app/TestDetailsDialog';
 import { cn } from '@/lib/utils';
+import { eventRangeLabel } from '@/utils/eventRange';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { IntensityBadge, getDotColor } from '@/components/athlete-app/IntensityBadge';
 import type { DailyCheckin } from '@/hooks/useDailyCheckin';
@@ -240,6 +241,7 @@ function EventCard({ ev }: { ev: AthleteCalendarEvent }) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-medium text-sm text-blue-900">{ev.title}</p>
+          {eventRangeLabel(ev) && <p className="text-xs text-blue-700 mt-0.5">{eventRangeLabel(ev)}</p>}
           {ev.notes && (
             <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{ev.notes}</p>
           )}

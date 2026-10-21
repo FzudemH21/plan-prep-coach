@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { getExerciseVisibility, sessionMetaKey, type SessionVisibilityData } from '@/utils/parameterVisibility';
 import { AthleteCalendarAssignment } from '@/types/athlete';
 import type { ToolboxEntry } from '@/types/toolbox';
-import type { CalendarEvent } from '@/hooks/useCalendarEvents';
+import { eventDateList, eventEndDate, isMultiDayEvent, type CalendarEvent } from '@/hooks/useCalendarEvents';
 import { evaluateFormula, parseNumeric } from '@/utils/formulaEvaluator';
 
 /** Percentage units — values like 80 represent 0.80 and must be ÷100 before formula evaluation */
@@ -212,6 +212,97 @@ async function buildExerciseDetailMap(userId: string): Promise<ExerciseDetailMap
 /** CalendarEvent enriched with the parameter unit, resolved at call time. */
 export type SyncCalendarEvent = CalendarEvent & { unit?: string; instructions?: string; videoUrl?: string };
 
+/** One test / event as the athlete app reads it from an athlete_schedule row */
+export interface ScheduleEventEntry {
+  id: string;
+  type: string;
+  title: string;
+  notes?: string;
+  targetValue?: string;
+  unit?: string;
+  parameterId?: string;
+  instructions?: string;
+  videoUrl?: string;
+  /** Multi-day events: first and last day, so the app can show "1–14 Aug" (the entry is on every day) */
+  startDate?: string;
+  endDate?: string;
+}
+
+export function scheduleEntryOf(ev: SyncCalendarEvent): ScheduleEventEntry {
+  return {
+    id: ev.id,
+    type: ev.type,
+    title: ev.title,
+    notes: ev.notes ?? undefined,
+    targetValue: ev.targetValue ?? undefined,
+    unit: ev.unit ?? undefined,
+    parameterId: ev.parameterId ?? undefined,
+    // Test details from the parameter database (athlete app "Test details")
+    instructions: ev.instructions ?? undefined,
+    videoUrl: ev.videoUrl ?? undefined,
+    ...(isMultiDayEvent(ev) ? { startDate: ev.date, endDate: eventEndDate(ev) } : {}),
+  };
+}
+
+/**
+ * Puts tests / events into (and takes them out of) the athlete app's schedule rows, day by day —
+ * without a full plan sync. `remove`: every day of these events loses the entry (by id); `upsert`:
+ * every day of these events gets the entry (replacing one with the same id). Rows are created for
+ * days that have none yet; sessions on a row are never touched. `onlyMissing`: an entry already on
+ * a day stays as it is (e.g. a test with details from the full plan sync).
+ */
+export async function patchScheduleEvents(
+  connectionId: string,
+  changes: { upsert?: SyncCalendarEvent[]; remove?: Array<Pick<CalendarEvent, 'id' | 'date' | 'endDate'>> },
+  opts: { onlyMissing?: boolean } = {},
+): Promise<void> {
+  const byDate = new Map<string, { add: ScheduleEventEntry[]; drop: Set<string> }>();
+  const at = (date: string) => {
+    let d = byDate.get(date);
+    if (!d) { d = { add: [], drop: new Set() }; byDate.set(date, d); }
+    return d;
+  };
+  for (const ev of changes.remove ?? []) for (const date of eventDateList(ev)) at(date).drop.add(ev.id);
+  for (const ev of changes.upsert ?? []) {
+    if (ev.dismissed) continue;
+    const entry = scheduleEntryOf(ev);
+    for (const date of eventDateList(ev)) { const d = at(date); if (!opts.onlyMissing) d.drop.add(ev.id); d.add.push(entry); }
+  }
+  const dates = [...byDate.keys()];
+  if (!connectionId || dates.length === 0) return;
+
+  const existing = new Map<string, { id: string; events: ScheduleEventEntry[] }>();
+  for (let i = 0; i < dates.length; i += 200) {
+    const { data, error } = await supabase
+      .from('athlete_schedule')
+      .select('id, date, events')
+      .eq('athlete_connection_id', connectionId)
+      .in('date', dates.slice(i, i + 200));
+    if (error) throw error;
+    for (const row of data ?? []) existing.set(row.date as string, { id: row.id as string, events: (row.events as ScheduleEventEntry[]) ?? [] });
+  }
+
+  const inserts: Array<Record<string, unknown>> = [];
+  for (const [date, { add, drop }] of byDate) {
+    const row = existing.get(date);
+    const before = row?.events ?? [];
+    const kept = before.filter(e => !drop.has(e.id));
+    const next = [...kept, ...add.filter(a => !kept.some(e => e.id === a.id))];
+    if (row) {
+      if (JSON.stringify(next) === JSON.stringify(before)) continue;
+      const { error } = await supabase.from('athlete_schedule').update({ events: next })
+        .eq('id', row.id).eq('athlete_connection_id', connectionId);
+      if (error) throw error;
+    } else if (next.length > 0) {
+      inserts.push({ athlete_connection_id: connectionId, date, sessions: [], events: next });
+    }
+  }
+  if (inserts.length > 0) {
+    const { error } = await supabase.from('athlete_schedule').insert(inserts);
+    if (error) throw error;
+  }
+}
+
 export async function syncAthleteSchedule(
   connectionId: string,
   assignment: AthleteCalendarAssignment,
@@ -247,7 +338,7 @@ export async function syncAthleteSchedule(
   // in parallel with the exercise detail map — saves one sequential Supabase round-trip.
   const prelimDates = [
     ...trainingDays.map(td => td.date),
-    ...(calendarEvents ?? []).map(e => e.date),
+    ...(calendarEvents ?? []).flatMap(e => [e.date, eventEndDate(e)]),
   ];
   const pMin = prelimDates.length > 0 ? prelimDates.reduce((a, b) => (a < b ? a : b)) : null;
   const pMax = prelimDates.length > 0 ? prelimDates.reduce((a, b) => (a > b ? a : b)) : null;
@@ -750,21 +841,15 @@ export async function syncAthleteSchedule(
   }
 
   // Build events-by-date lookup
-  const eventsByDate = new Map<string, Array<{ id: string; type: string; title: string; notes?: string; targetValue?: string; unit?: string; parameterId?: string; instructions?: string; videoUrl?: string }>>();
+  // (an event over several days is on every one of its days)
+  const eventsByDate = new Map<string, ScheduleEventEntry[]>();
   for (const ev of calendarEvents ?? []) {
-    if (!eventsByDate.has(ev.date)) eventsByDate.set(ev.date, []);
-    eventsByDate.get(ev.date)!.push({
-      id: ev.id,
-      type: ev.type,
-      title: ev.title,
-      notes: ev.notes,
-      targetValue: ev.targetValue,
-      unit: ev.unit,
-      parameterId: ev.parameterId,
-      // Test details from the parameter database (athlete app "Test details")
-      instructions: ev.instructions,
-      videoUrl: ev.videoUrl,
-    });
+    if (ev.dismissed) continue;
+    const entry = scheduleEntryOf(ev);
+    for (const date of eventDateList(ev)) {
+      if (!eventsByDate.has(date)) eventsByDate.set(date, []);
+      eventsByDate.get(date)!.push(entry);
+    }
   }
 
   // Build rows — one per training day that has sessions

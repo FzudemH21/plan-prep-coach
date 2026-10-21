@@ -747,9 +747,9 @@ export function AthleteCalendarDayCell({
         onOpenChange={setTestEventDialogOpen}
         date={day.dateString}
         events={calendarEvents}
-        onAdd={(type, title, notes, parameterId, targetValue) => {
+        onAdd={(type, title, notes, parameterId, targetValue, endDate) => {
           if (athleteId) {
-            const payload = { date: day.dateString, type, title, notes, parameterId, targetValue };
+            const payload = { date: day.dateString, type, title, notes, parameterId, targetValue, ...(endDate ? { endDate } : {}) };
             if (onAddCalendarEvent) onAddCalendarEvent(athleteId, payload);
             else addEvent(athleteId, payload);
           }

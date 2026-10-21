@@ -16,7 +16,7 @@ import { useTrainingPrograms, TrainingProgram } from '@/hooks/useTrainingProgram
 import { useAthletes } from '@/hooks/useAthletes';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useAthleteCalendarEditing } from '@/hooks/useAthleteCalendarEditing';
-import { useCalendarEvents, CalendarEvent } from '@/hooks/useCalendarEvents';
+import { useCalendarEvents, CalendarEvent, eventEndDate, groupConsecutiveDates } from '@/hooks/useCalendarEvents';
 import { namespaceProgramForMerge } from '@/utils/assignmentMerge';
 import { buildPackedDateMap, remapProgramDates } from '@/utils/assignmentPacking';
 import { getExerciseVisibility, SESSION_META_CHANGED_EVENT, type SessionVisibilityData } from '@/utils/parameterVisibility';
@@ -29,7 +29,7 @@ import {
   shiftDaySplitStatesDates,
 } from '@/utils/dateShifting';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
-import { syncAthleteSchedule, AthleteFormulaData } from '@/utils/athleteScheduleSync';
+import { syncAthleteSchedule, patchScheduleEvents, AthleteFormulaData } from '@/utils/athleteScheduleSync';
 import { epley1RM } from '@/hooks/useExerciseMetrics';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -905,43 +905,10 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     const newEvent = await addCalendarEvent(athleteId, eventPayload);
     const connection = getConnectionForAthlete(athlete.id);
     if (!connection) return;
-
-    const { data: row } = await supabase
-      .from('athlete_schedule')
-      .select('id, events')
-      .eq('athlete_connection_id', connection.id)
-      .eq('date', eventPayload.date)
-      .maybeSingle();
-
-    const newEntry = {
-      id: newEvent.id,
-      type: newEvent.type,
-      title: newEvent.title,
-      notes: newEvent.notes ?? undefined,
-      targetValue: newEvent.targetValue ?? undefined,
-      unit: newEvent.unit ?? undefined,
-      parameterId: newEvent.parameterId ?? undefined,
-    };
-
-    if (row) {
-      const existing = (row.events as unknown[]) ?? [];
-      await supabase
-        .from('athlete_schedule')
-        .update({ events: [...existing, newEntry] })
-        .eq('id', row.id)
-        .eq('athlete_connection_id', connection.id);
-    } else {
-      // Rest day with no existing row — create one
-      await supabase
-        .from('athlete_schedule')
-        .insert({
-          athlete_connection_id: connection.id,
-          date: eventPayload.date,
-          sessions: [],
-          events: [newEntry],
-        });
-    }
-  }, [addCalendarEvent, getConnectionForAthlete, athlete.id]);
+    // Every day of the event (rest days get a row of their own)
+    await patchScheduleEvents(connection.id, { upsert: enrichEvents([newEvent]) })
+      .catch(e => console.error('[calendar] event → app schedule failed', e));
+  }, [addCalendarEvent, getConnectionForAthlete, athlete.id, enrichEvents]);
 
   const handleDeleteCalendarEvent = useCallback(async (athleteId: string, eventId: string) => {
     // Find the event to get its date before deleting
@@ -952,22 +919,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     if (!ev) return;
     const connection = getConnectionForAthlete(athlete.id);
     if (!connection) return;
-
-    const { data: row } = await supabase
-      .from('athlete_schedule')
-      .select('id, events')
-      .eq('athlete_connection_id', connection.id)
-      .eq('date', ev.date)
-      .maybeSingle();
-
-    if (row) {
-      const updated = ((row.events as Array<{ id: string }>) ?? []).filter(e => e.id !== eventId);
-      await supabase
-        .from('athlete_schedule')
-        .update({ events: updated })
-        .eq('id', row.id)
-        .eq('athlete_connection_id', connection.id);
-    }
+    await patchScheduleEvents(connection.id, { remove: [ev] })
+      .catch(e => console.error('[calendar] event removal → app schedule failed', e));
   }, [deleteCalendarEvent, getConnectionForAthlete, getEventsForAthlete, athlete.id]);
 
   // Athlete-specific AI context
@@ -1345,7 +1298,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     setClearRequest({ kind: 'week', start: weekStartDate, dates });
   }, []);
   const clearRequestEvents = useMemo(
-    () => (clearRequest ? getEventsForAthlete(athlete.id).filter(e => clearRequest.dates.includes(e.date)) : []),
+    // An event over several days goes only when all its days are cleared
+    () => (clearRequest ? getEventsForAthlete(athlete.id).filter(e => clearRequest.dates.includes(e.date) && clearRequest.dates.includes(eventEndDate(e))) : []),
     [clearRequest, getEventsForAthlete, athlete.id],
   );
   const confirmClear = useCallback(async () => {
@@ -2484,14 +2438,15 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                   });
                 });
               });
+              // Consecutive days of an event become one event over several days
               (assignment.reviewedEvents || []).forEach(evt => {
-                evt.scheduledDates.forEach(d => {
-                  const date = d.substring(0, 10);
+                groupConsecutiveDates(evt.scheduledDates).forEach(([date, last]) => {
                   if (existingSet.has(existingKey('event', evt.name, date))) return;
                   toAdd.push({
                     type: 'event',
                     title: evt.name,
                     date,
+                    ...(last !== date ? { endDate: last } : {}),
                     assignmentId: eventsAssignmentId,
                     notes: evt.comments || undefined,
                   });

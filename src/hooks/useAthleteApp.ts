@@ -116,6 +116,9 @@ export interface AthleteCalendarEvent {
   /** Test details from the coach's parameter database */
   instructions?: string;
   videoUrl?: string;
+  /** An event over several days: its first and last day (the entry is on every one of its days) */
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface AthleteScheduleEntry {

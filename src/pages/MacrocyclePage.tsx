@@ -49,7 +49,7 @@ import { useAthleteParamsWithSelfReported } from "@/hooks/useSelfReportedValues"
 import { latestNumericValue } from "@/utils/latestParameterValue";
 import { useCoachMemory } from "@/hooks/useCoachMemory";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
-import { useCalendarEvents } from "@/hooks/useCalendarEvents";
+import { useCalendarEvents, groupConsecutiveDates } from "@/hooks/useCalendarEvents";
 import { TEST_COLOR, EVENT_COLOR, testEventGradient } from "@/lib/eventColors";
 import { useWizardData } from "@/contexts/WizardDataContext";
 
@@ -1712,7 +1712,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                               </div>
                               {event.eventDates && event.eventDates.length > 0 && (
                                 <div className="text-xs text-muted-foreground mt-1">
-                                  📅 {event.eventDates.map(d => format(parseDateStr(d), 'd MMM yyyy')).join(', ')}
+                                  📅 {groupConsecutiveDates(event.eventDates).map(([a, b]) => (a === b
+                                    ? format(parseDateStr(a), 'd MMM yyyy')
+                                    : `${format(parseDateStr(a), 'd MMM')} – ${format(parseDateStr(b), 'd MMM yyyy')}`)).join(', ')}
                                 </div>
                               )}
                             </div>
@@ -2120,6 +2122,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           defaultParentGoalId={addSubGoalForParent}
           defaultCategory={addEventMode ? "event" : undefined}
           onCreateNewParameter={handleOpenCreateParameterForSubGoal}
+          planStartDate={planDuration?.startDate ? format(planDuration.startDate, 'yyyy-MM-dd') : undefined}
+          planEndDate={planDuration?.endDate ? format(planDuration.endDate, 'yyyy-MM-dd') : undefined}
         />
 
         {/* Create Parameter Dialog for Sub-Goals */}
