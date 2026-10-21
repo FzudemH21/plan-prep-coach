@@ -110,6 +110,13 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const [addEventMode, setAddEventMode] = useState(false);
   // Step 2: the day clicked in the calendar (day dialog: test or event on that day)
   const [dayDialogDate, setDayDialogDate] = useState<string | null>(null);
+  // Step 2 calendar day: ONE stable component that draws with the latest render's code. The day was
+  // an inline component — a new component type on every render of this page, so every re-render
+  // remounted all days and closed a day's hover popup while the mouse was still on it.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const stepTwoDayRender = useRef<(props: any) => React.ReactElement | null>(() => null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const StepTwoDay = useMemo(() => function StepTwoDay(props: any) { return stepTwoDayRender.current(props); }, []);
   // Step 2 calendar: as many months side by side as fit (up to 5; a month is ~270 px wide)
   const [calendarMonths, setCalendarMonths] = useState(1);
   const calendarObserver = useRef<ResizeObserver | null>(null);
@@ -1831,7 +1838,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                     }
                   }}
                   components={{
-                    Day: ({ date, ...dayProps }: any) => {
+                    // (assigns this render's drawing code, hands the calendar the stable component)
+                    Day: (stepTwoDayRender.current = ({ date, ...dayProps }: any) => {
                       // Months side by side: a neighbouring month's days stay empty (they showed twice)
                       if (dayProps.displayMonth && date.getMonth() !== dayProps.displayMonth.getMonth()) {
                         return <div className="h-9 w-9" />;
@@ -2023,7 +2031,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                       }
 
                       return dayContent;
-                    }
+                    }, StepTwoDay),
                   }}
                 />
                 
