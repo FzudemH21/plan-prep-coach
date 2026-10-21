@@ -1420,8 +1420,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Two-column layout: Items on left, Calendar on right */}
-        {/* Goals | events side by side, the calendar below over the full width */}
+        {/* Left half: goals | events side by side (stacked on narrower screens); right half: the calendar */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 items-start min-w-0">
           {/* The goals — main goals and the sub-goals chosen for them (with their values) */}
           <div className="space-y-4">
             <div className="flex items-center justify-between min-h-9">
@@ -1766,7 +1767,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
               
             </div>
           </div>
-        </div>
+          </div>
 
           {/* The calendar — click a day → the tests and events of that day (day dialog);
               as many months side by side as fit (up to 5) */}
@@ -1788,6 +1789,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                   mode="single"
                   selected={undefined}
                   numberOfMonths={calendarMonths}
+                  showOutsideDays={false}
                   defaultMonth={planDuration.startDate > new Date() ? planDuration.startDate : new Date()}
                   className="rounded-md"
                   disabled={(date) => {
@@ -1830,6 +1832,10 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                   }}
                   components={{
                     Day: ({ date, ...dayProps }: any) => {
+                      // Months side by side: a neighbouring month's days stay empty (they showed twice)
+                      if (dayProps.displayMonth && date.getMonth() !== dayProps.displayMonth.getMonth()) {
+                        return <div className="h-9 w-9" />;
+                      }
                       const dateStr = format(date, 'yyyy-MM-dd');
                       
                       // Check sub-goals for scheduled tests
@@ -2039,6 +2045,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
               </div>
             )}
           </div>
+        </div>
 
         {/* Add/Edit Sub-Goal Dialog */}
         {dayDialogDate && (
