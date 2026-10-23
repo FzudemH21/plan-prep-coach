@@ -206,17 +206,22 @@ type SelectResult = { data: unknown; error: { message?: string } | null };
  * fails, only the column named in the error is dropped and the query retried (dropping all optional
  * columns at once lost e.g. the exercise comments whenever just paused_at was missing).
  */
+// Columns found missing once (migration not run) are left out of later queries right away — before,
+// every load paid for a failing query first
+const knownMissingColumns = new Set<string>();
+
 export async function selectWithOptionalColumns(
   run: (columns: string) => PromiseLike<SelectResult>,
   baseColumns: string,
   optionalColumns: string[],
 ): Promise<SelectResult> {
-  let optional = [...optionalColumns];
+  let optional = optionalColumns.filter(c => !knownMissingColumns.has(c));
   for (;;) {
     const res = await run([baseColumns, ...optional].join(', '));
     if (!res.error || optional.length === 0) return res;
     const message = res.error.message ?? '';
     const missing = optional.find(c => message.includes(c));
+    if (missing) knownMissingColumns.add(missing);
     // Unknown cause: try without any optional column, then give up
     optional = missing ? optional.filter(c => c !== missing) : [];
   }

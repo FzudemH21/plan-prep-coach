@@ -1,6 +1,6 @@
 import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isSameMonth, isWithinInterval } from 'date-fns';
+import { addDays, format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isSameMonth, isWithinInterval } from 'date-fns';
 import { parseDateStr } from '@/utils/dateUtils';
 import { useCalendarGrid, groupDaysIntoWeeks } from '@/hooks/useCalendarGrid';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
@@ -1453,15 +1453,31 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     });
   }, [viewMode, editing.allAssignmentDays, editing.trainingDays, liveScheduleMap, selectedAssignmentId, editing.isMobileCreated, editing.daySplitStates]);
 
-  // Query athlete_session_logs for the visible date range whenever the connection or
-  // visible window changes. Keyed by session_id = "${date}-${sessionIndex}".
+  // Session logs of a window around the visible weeks (8 weeks before and after) — scrolling a few
+  // weeks needs no new load, and what was loaded stays: before, every scroll replaced the logs with
+  // those of the new weeks only, so finished sessions showed as not done until the load came back.
+  // A realtime change (sessionLogsVersion) reloads the current window. Keyed by session_id.
+  const sessionLogWindowRef = useRef<{ athleteId: string; from: string; to: string; version: number } | null>(null);
+  useEffect(() => {
+    // Another athlete: nothing of the previous one's logs stays
+    setSessionLogs(new Map());
+    sessionLogWindowRef.current = null;
+  }, [athlete.id]);
   useEffect(() => {
     const connection = getConnectionForAthlete(athlete.id);
     if (!connection || calendarDateRange.length === 0) return;
     let cancelled = false;
 
-    const from = format(calendarDateRange[0], 'yyyy-MM-dd');
-    const to   = format(calendarDateRange[calendarDateRange.length - 1], 'yyyy-MM-dd');
+    const visibleFrom = format(calendarDateRange[0], 'yyyy-MM-dd');
+    const visibleTo   = format(calendarDateRange[calendarDateRange.length - 1], 'yyyy-MM-dd');
+    const loaded = sessionLogWindowRef.current;
+    if (loaded && loaded.athleteId === athlete.id && loaded.version === sessionLogsVersion
+      && loaded.from <= visibleFrom && loaded.to >= visibleTo) {
+      setSessionLogsLoaded(true);
+      return;
+    }
+    const from = format(addDays(calendarDateRange[0], -56), 'yyyy-MM-dd');
+    const to   = format(addDays(calendarDateRange[calendarDateRange.length - 1], 56), 'yyyy-MM-dd');
 
     const baseColumns = 'id, date, session_id, session_name, started_at, borg_rating, duration_seconds, completed_at, comment, sets_logged';
     const query = (columns: string) => supabase
@@ -1505,7 +1521,14 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           });
           if (unique.length > 0) map.set(sessionId, { ...log, exercise_comments: unique });
         });
-        setSessionLogs(map);
+        // Merge: this window's logs replace what was loaded for its dates, the rest stays
+        setSessionLogs(prev => {
+          const next = new Map<string, CoachSessionLog>();
+          prev.forEach((log, id) => { if (!(log.date >= from && log.date <= to)) next.set(id, log); });
+          map.forEach((log, id) => next.set(id, log));
+          return next;
+        });
+        sessionLogWindowRef.current = { athleteId: athlete.id, from, to, version: sessionLogsVersion };
         setSessionLogsLoaded(true);
       });
 
