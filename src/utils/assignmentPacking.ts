@@ -92,20 +92,6 @@ export function remapProgramDates<P extends {
   };
 }
 
-/** First day of the assigned part of a program ('yyyy-MM-dd'): the first day of the first selected
- *  microcycle, else the program's start date; null when unknown */
-export function programFirstAssignedDay(
-  trainingDays: DayWithMicrocycle[],
-  selectedMicrocycleIds: string[],
-  programStartDate?: string | null,
-): string | null {
-  const map = buildPackedDateMap(trainingDays, selectedMicrocycleIds);
-  if (map && map.size > 0) return [...map.keys()].sort()[0];
-  const days = trainingDays.map(d => d.date).filter((d): d is string => !!d).sort();
-  if (days.length > 0) return days[0].slice(0, 10);
-  return programStartDate ? programStartDate.slice(0, 10) : null;
-}
-
 /**
  * The program keeps its weekdays: the chosen start date moves forward to the next day with the
  * weekday of the program's first day (a program planned from a Tuesday, assigned "from Monday",
@@ -118,4 +104,59 @@ export function alignToProgramWeekday(chosen: Date, programFirstDay: string | nu
   if (isNaN(first.getTime())) return chosen;
   const diff = (first.getDay() - chosen.getDay() + 7) % 7;
   return diff === 0 ? chosen : addDays(chosen, diff);
+}
+
+type AnchorProgram = {
+  trainingDays?: Array<{ date?: string; mesocycleId?: string; microcycleId?: string }> | null;
+  exerciseDistribution?: Array<{ dayDate?: string }> | null;
+  dailyIntensityData?: Array<{ date?: string; mesocycleId?: string }> | null;
+  duration?: { startDate?: string } | null;
+};
+
+const dayStr = (d: string | undefined): string | null => (d && /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : null);
+const earliest = (days: Array<string | null>): string | null =>
+  days.filter((d): d is string => !!d).sort()[0] ?? null;
+
+/**
+ * "Day 1" of an assigned (already packed) program — the date the assignment puts on its start
+ * date. ONE rule for the assign dialog (weekday alignment) and the calendar (the shift itself):
+ * before, they disagreed — e.g. a program without stored training days was shifted from its first
+ * SESSION (a Tuesday) while the dialog aligned to the plan start (a Monday), so the Tuesday
+ * session still landed on the Monday. Order: training days of the selected mesocycles > first
+ * exercise day > daily intensities of the selected mesocycles > plan start.
+ */
+export function anchorOfPackedProgram(program: AnchorProgram, selectedMesocycleIds: string[]): string | null {
+  const metas = new Set(selectedMesocycleIds);
+  const inSelection = <T extends { mesocycleId?: string }>(list: T[]): T[] => {
+    const rel = metas.size > 0 ? list.filter(d => !d.mesocycleId || metas.has(d.mesocycleId)) : list;
+    return rel.length > 0 ? rel : list;
+  };
+  const td = program.trainingDays ?? [];
+  if (td.length > 0) {
+    const a = earliest(inSelection(td).map(d => dayStr(d.date)));
+    if (a) return a;
+  }
+  const ex = program.exerciseDistribution ?? [];
+  if (ex.length > 0) {
+    const a = earliest(ex.map(e => dayStr(e.dayDate)));
+    if (a) return a;
+  }
+  const di = program.dailyIntensityData ?? [];
+  if (di.length > 0) {
+    const a = earliest(inSelection(di).map(d => dayStr(d.date)));
+    if (a) return a;
+  }
+  return dayStr(program.duration?.startDate ?? undefined);
+}
+
+/** Same as anchorOfPackedProgram, for the program as stored (packs the selected microcycles first) */
+export function assignmentAnchorDay(
+  program: AnchorProgram,
+  selectedMesocycleIds: string[],
+  selectedMicrocycleIds: string[],
+): string | null {
+  const td = (program.trainingDays ?? []) as Array<{ date?: string; microcycleId?: string }>;
+  const map = buildPackedDateMap(td, selectedMicrocycleIds);
+  const packed = map ? remapProgramDates(program as Parameters<typeof remapProgramDates>[0], map) as AnchorProgram : program;
+  return anchorOfPackedProgram(packed, selectedMesocycleIds);
 }

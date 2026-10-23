@@ -1301,6 +1301,19 @@ export async function syncAthleteSchedule(
     }
   }
 
+  // No ghost sessions in the athlete app: empty sessions at the end of a day are dropped (only at
+  // the end — positions stay, so session logs keep matching their session); a day left without
+  // sessions and without events gets no row (rest day)
+  for (const row of rows) {
+    const sessions = (row.sessions ?? []) as Array<{ exercises?: unknown[] }>;
+    while (sessions.length > 0 && (sessions[sessions.length - 1].exercises ?? []).length === 0) sessions.pop();
+    row.sessions = sessions as typeof row.sessions;
+  }
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i];
+    if ((r.sessions ?? []).length === 0 && ((r.events as unknown[] | undefined) ?? []).length === 0) rows.splice(i, 1);
+  }
+
   console.log(`[syncAthleteSchedule] plan: DELETE ${allDates.length} dates → UPSERT ${rows.length} training-day rows`);
   const DEL_BATCH = 200;
   for (let i = 0; i < allDates.length; i += DEL_BATCH) {

@@ -18,7 +18,7 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import { useAthleteCalendarEditing } from '@/hooks/useAthleteCalendarEditing';
 import { useCalendarEvents, CalendarEvent, eventEndDate, groupConsecutiveDates } from '@/hooks/useCalendarEvents';
 import { namespaceProgramForMerge } from '@/utils/assignmentMerge';
-import { buildPackedDateMap, remapProgramDates } from '@/utils/assignmentPacking';
+import { anchorOfPackedProgram, buildPackedDateMap, remapProgramDates } from '@/utils/assignmentPacking';
 import { persistAssignmentPlan, removeAssignmentPlan, useAssignmentPlansReady } from '@/utils/assignmentPlanStore';
 import { isRestIntensity } from '@/utils/intensityScale';
 import { getExerciseVisibility, SESSION_META_CHANGED_EVENT, type SessionVisibilityData } from '@/utils/parameterVisibility';
@@ -2104,61 +2104,11 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           program = remapProgramDates(program, packedDateMap);
         }
 
-        // Compute a robust originalStartDate from the earliest valid date in SELECTED mesocycles' data.
-        // Filter by selectedMesocycleIds so that assigning only meso 2 anchors the shift to meso 2's
-        // own start, not the whole program's start. Without this, sessions land at
-        // D2 + meso2_offset_within_program instead of D2.
-        // Order of precedence: trainingDays > exerciseDistribution > dailyIntensityData > duration.startDate
-        let originalStartDate: Date | null = null;
+        // "Day 1" of the assigned part — the same rule the assign dialog aligns the weekday with
+        // (anchorOfPackedProgram), so the shift is always whole weeks
+        const anchorDay = anchorOfPackedProgram(program, assignment.selectedMesocycleIds || []);
+        let originalStartDate: Date | null = anchorDay ? new Date(anchorDay + 'T12:00:00') : null;
 
-        const selectedMesoIdsForOrigin = new Set(assignment.selectedMesocycleIds || []);
-
-        // Try trainingDays first (filtered to selected mesocycles when IDs are available)
-        if (program.trainingDays && Array.isArray(program.trainingDays) && program.trainingDays.length > 0) {
-          const relevantDays = selectedMesoIdsForOrigin.size > 0
-            ? program.trainingDays.filter((d: any) => !d.mesocycleId || selectedMesoIdsForOrigin.has(d.mesocycleId))
-            : program.trainingDays;
-          const source = relevantDays.length > 0 ? relevantDays : program.trainingDays;
-          const validDates = source
-            .map((d: any) => new Date(d.date + 'T12:00:00'))
-            .filter((d: Date) => !isNaN(d.getTime()));
-          if (validDates.length > 0) {
-            originalStartDate = new Date(Math.min(...validDates.map(d => d.getTime())));
-          }
-        }
-
-        // Try exerciseDistribution (no mesocycleId on exercises; validDates filter below handles selection)
-        if (!originalStartDate && program.exerciseDistribution && program.exerciseDistribution.length > 0) {
-          const validDates = program.exerciseDistribution
-            .map((ex: any) => new Date(ex.dayDate + 'T12:00:00'))
-            .filter((d: Date) => !isNaN(d.getTime()));
-          if (validDates.length > 0) {
-            originalStartDate = new Date(Math.min(...validDates.map(d => d.getTime())));
-          }
-        }
-
-        // Try dailyIntensityData (filtered to selected mesocycles when IDs are available)
-        if (!originalStartDate && program.dailyIntensityData && program.dailyIntensityData.length > 0) {
-          const relevantIntensity = selectedMesoIdsForOrigin.size > 0
-            ? program.dailyIntensityData.filter((di: any) => !di.mesocycleId || selectedMesoIdsForOrigin.has(di.mesocycleId))
-            : program.dailyIntensityData;
-          const source = relevantIntensity.length > 0 ? relevantIntensity : program.dailyIntensityData;
-          const validDates = source
-            .map((di: any) => new Date(di.date + 'T12:00:00'))
-            .filter((d: Date) => !isNaN(d.getTime()));
-          if (validDates.length > 0) {
-            originalStartDate = new Date(Math.min(...validDates.map(d => d.getTime())));
-          }
-        }
-        
-        // Fallback to duration.startDate
-        if (!originalStartDate && program.duration?.startDate) {
-          const parsed = new Date(program.duration.startDate);
-          if (!isNaN(parsed.getTime())) {
-            originalStartDate = parsed;
-          }
-        }
-        
         // If still no valid date, show error and cleanup
         if (!originalStartDate) {
           console.error('[handleAssignProgram] Could not determine original start date');
@@ -2438,6 +2388,34 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
             }
             return td;
           });
+
+          // No empty sessions: a day gets as many sessions as it has sessions WITH exercises (the
+          // program's days carry a default "Session 1" even without any exercise — it showed up as
+          // an empty session in the calendar and in the athlete app)
+          {
+            const sessionsWithExercises = new Map<string, number>();
+            for (const ex of filteredExercises as Array<{ dayDate: string; sessionIndex?: number }>) {
+              const n = (ex.sessionIndex ?? 0) + 1;
+              sessionsWithExercises.set(ex.dayDate, Math.max(sessionsWithExercises.get(ex.dayDate) ?? 0, n));
+            }
+            const dates = new Set<string>([
+              ...Object.keys(finalDaySplitStates),
+              ...finalTrainingDays.map((td: { date: string }) => td.date),
+            ]);
+            const nextSplit: Record<string, number> = {};
+            dates.forEach(d => { nextSplit[d] = sessionsWithExercises.get(d) ?? 0; });
+            finalDaySplitStates = nextSplit;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            finalTrainingDays = finalTrainingDays.map((td: any) => {
+              const n = sessionsWithExercises.get(td.date) ?? 0;
+              return {
+                ...td,
+                sessions: n,
+                sessionNames: Array.from({ length: n }, (_, i) => td.sessionNames?.[i] ?? `Session ${i + 1}`),
+                isTrainingDay: n > 0,
+              };
+            });
+          }
 
           // Transfer tests & events to calendarEvents (one entry per scheduled date).
           // Returns the athlete's full event list INCLUDING the ones just added — the sync must

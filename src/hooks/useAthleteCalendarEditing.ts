@@ -855,10 +855,14 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       if (sourceIdx >= 0) {
         const newNames = [...(updated[sourceIdx].sessionNames || [])];
         newNames.splice(sourceSessionIndex, 1);
+        // From the real session count (daySplitStates) — the day's own count could carry the
+        // program's default "1" without a session, which left an empty session behind
+        const srcRemaining = Math.max(0, (daySplitStates[sourceDayDate] || 0) - 1);
         updated[sourceIdx] = {
           ...updated[sourceIdx],
-          sessionNames: newNames,
-          sessions: Math.max(0, (updated[sourceIdx].sessions || 1) - 1),
+          sessionNames: newNames.slice(0, srcRemaining),
+          sessions: srcRemaining,
+          isTrainingDay: srcRemaining > 0,
           ...(newSrcDayIntensity ? { intensity: newSrcDayIntensity } : {}),
         };
       }
@@ -866,12 +870,13 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       // Update destination day - add the session name
       const destIdx = updated.findIndex(d => d.date === destDayDate);
       if (destIdx >= 0) {
-        const newNames = [...(updated[destIdx].sessionNames || [])];
+        const destCount = (daySplitStates[destDayDate] || 0) + 1;
+        const newNames = [...(updated[destIdx].sessionNames || [])].slice(0, destCount - 1);
         newNames.push(movedSessionName);
-        updated[destIdx] = { 
-          ...updated[destIdx], 
-          sessionNames: newNames, 
-          sessions: (updated[destIdx].sessions || 0) + 1,
+        updated[destIdx] = {
+          ...updated[destIdx],
+          sessionNames: newNames,
+          sessions: destCount,
           isTrainingDay: true,
           ...(newDstDayIntensity ? { intensity: newDstDayIntensity } : {}),
         };

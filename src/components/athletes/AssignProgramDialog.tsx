@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/collapsible';
 import { AlertTriangle, CalendarIcon, ChevronDown, ChevronRight, Plus, Trash2, Trophy, X } from 'lucide-react';
 import { latestValueOf, useSelfReportedResults, withSelfReported } from '@/hooks/useSelfReportedResults';
-import { buildPackedDateMap, programFirstAssignedDay, alignToProgramWeekday } from '@/utils/assignmentPacking';
+import { buildPackedDateMap, assignmentAnchorDay, alignToProgramWeekday } from '@/utils/assignmentPacking';
 import { TrainingProgram } from '@/hooks/useTrainingPrograms';
 import { AthleteCalendarAssignment, AssignedMesocycle, AssignedMicrocycle, AthletePerformanceParameter, ReviewedSubGoal, ReviewedEvent } from '@/types/athlete';
 import { SubGoal, Event as TrainingEvent } from '@/types/training';
@@ -173,15 +173,18 @@ export function AssignProgramDialog({
     const firstSelectedDay = packedDateMap && packedDateMap.size > 0
       ? [...packedDateMap.keys()].sort()[0]
       : null;
-    const originalStartDate = firstSelectedDay
-      ? new Date(firstSelectedDay + 'T12:00:00')
+    // Day 1 of the assigned part — the same rule as the plan's own shift (assignmentAnchorDay)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anchorDay = assignmentAnchorDay(selectedProgram as any, selectedMesocycleIds, selectedMicrocycleIds) ?? firstSelectedDay;
+    const originalStartDate = anchorDay
+      ? new Date(anchorDay + 'T12:00:00')
       : selectedProgram.duration?.startDate
         ? new Date(selectedProgram.duration.startDate)
         : null;
 
     // Tests / events move with the plan: from its first day to the (weekday-kept) start
     const dayOffset = originalStartDate
-      ? differenceInDays(alignToProgramWeekday(startDate, firstSelectedDay ?? selectedProgram.duration?.startDate?.slice(0, 10) ?? null), originalStartDate)
+      ? differenceInDays(effectiveStart, originalStartDate)
       : 0;
 
     /** The athlete's latest value for a parameter — coach-recorded or self-reported in the app */
@@ -302,13 +305,14 @@ export function AssignProgramDialog({
     setReviewedSubGoals(dedupedTests.filter(t => t.scheduledDates.length > 0 && !removedTestKeys.has(testKey(t))));
     setReviewedEvents(dedupedEvents.filter(e => e.scheduledDates.length > 0 && !removedEventKeys.has(e.name)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProgram, startDate, stableAthleteParams, selectedMicrocycleIds, selfReportedResults]);
+  }, [selectedProgram, startDate, stableAthleteParams, selectedMesocycleIds, selectedMicrocycleIds, selfReportedResults]);
 
   // The program keeps its weekdays: it starts on the first day on or after the chosen date with
   // the weekday of its first (assigned) day
   const programFirstDay = useMemo(
-    () => programFirstAssignedDay(selectedProgram?.trainingDays ?? [], selectedMicrocycleIds, selectedProgram?.duration?.startDate),
-    [selectedProgram, selectedMicrocycleIds],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    () => (selectedProgram ? assignmentAnchorDay(selectedProgram as any, selectedMesocycleIds, selectedMicrocycleIds) : null),
+    [selectedProgram, selectedMesocycleIds, selectedMicrocycleIds],
   );
   const effectiveStart = useMemo(() => alignToProgramWeekday(startDate, programFirstDay), [startDate, programFirstDay]);
 

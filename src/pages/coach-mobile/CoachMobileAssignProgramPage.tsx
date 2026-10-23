@@ -7,7 +7,7 @@ import {
   CheckCircle2, AlertTriangle, Loader2, CalendarIcon,
 } from 'lucide-react';
 import { format, differenceInDays, addDays, eachDayOfInterval } from 'date-fns';
-import { alignToProgramWeekday, programFirstAssignedDay } from '@/utils/assignmentPacking';
+import { alignToProgramWeekday } from '@/utils/assignmentPacking';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -345,10 +345,11 @@ export default function CoachMobileAssignProgramPage() {
   const chosenStart = useMemo(() => new Date(startDateStr + 'T12:00:00'), [startDateStr]);
   // The program keeps its weekdays: it starts on the first day on or after the chosen date with
   // the weekday of its first (assigned) day
-  const startDate = useMemo(() => alignToProgramWeekday(
-    chosenStart,
-    selectedProgram ? programFirstAssignedDay(selectedProgram.trainingDays ?? [], selectedMicroIds, selectedProgram.duration?.startDate) : null,
-  ), [chosenStart, selectedProgram, selectedMicroIds]);
+  // (day 1 = the date this page shifts from: findOriginalStartDate)
+  const startDate = useMemo(() => {
+    const first = selectedProgram ? findOriginalStartDate(selectedProgram) : null;
+    return alignToProgramWeekday(chosenStart, first ? format(first, 'yyyy-MM-dd') : null);
+  }, [chosenStart, selectedProgram]);
 
   // When a program is selected, default-select all mesos/micros and build tests/events
   const programMesocycles = useMemo(
