@@ -1,4 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { persistAssignmentPlan } from '@/utils/assignmentPlanStore';
+import { isRestIntensity } from '@/utils/intensityScale';
 import { format, addDays, parseISO, eachDayOfInterval, differenceInDays } from 'date-fns';
 import { AthleteCalendarAssignment, AssignedMesocycle } from '@/types/athlete';
 import { ExerciseDistribution, SessionSection, SupersetMapping } from '@/types/microcycle-planning';
@@ -165,10 +167,10 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
             microcycleId: micro.id,
             isTestDay: false,
             isEventDay: false,
-            isTrainingDay: intensity !== 'off',
+            isTrainingDay: !isRestIntensity(intensity),
             intensity,
-            sessions: intensity === 'off' ? 0 : 1,
-            sessionNames: intensity === 'off' ? [] : ['Session 1'],
+            sessions: isRestIntensity(intensity) ? 0 : 1,
+            sessionNames: isRestIntensity(intensity) ? [] : ['Session 1'],
           });
         }
         microOffset += micro.duration;
@@ -468,7 +470,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         lastModified: new Date().toISOString(),
       };
 
-      localStorage.setItem(storageKey, JSON.stringify(dataToSave));
+      persistAssignmentPlan(storageKey, JSON.stringify(dataToSave));
       console.log('[autoSave] saved to localStorage:', storageKey, 'trainingDays.length:', savePayload.trainingDays.length);
       lastSavedStateRef.current = stateFingerprint;
       pendingSaveRef.current = null; // Clear pending after successful save
@@ -504,7 +506,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       const pending = pendingSaveRef.current;
       if (pending) {
         const storageKey = `athlete-assignment-${pending.assignmentId}`;
-        localStorage.setItem(storageKey, JSON.stringify({
+        persistAssignmentPlan(storageKey, JSON.stringify({
           ...pending.payload,
           lastModified: new Date().toISOString(),
         }));
@@ -554,7 +556,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     // correctly renders the newly-added session for formerly-off days.
     setDailyIntensityData(prev =>
       prev.map(di =>
-        di.date === dayDate && di.intensity === 'off'
+        di.date === dayDate && isRestIntensity(di.intensity)
           ? { ...di, intensity: 'moderate' as IntensityLevel }
           : di
       )
@@ -660,7 +662,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         testEventDays,
         lastModified: new Date().toISOString(),
       };
-      localStorage.setItem(storageKey, JSON.stringify(savePayload));
+      persistAssignmentPlan(storageKey, JSON.stringify(savePayload));
       lastSavedStateRef.current = JSON.stringify({
         exerciseDistribution: newExercises,
         sessionSections: newSections,
@@ -1212,7 +1214,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         testEventDays,
         lastModified: new Date().toISOString(),
       };
-      localStorage.setItem(storageKey, JSON.stringify(savePayload));
+      persistAssignmentPlan(storageKey, JSON.stringify(savePayload));
       lastSavedStateRef.current = JSON.stringify({
         exerciseDistribution: newExercises,
         sessionSections: newSections,
@@ -1276,7 +1278,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         testEventDays,
         lastModified: new Date().toISOString(),
       };
-      localStorage.setItem(storageKey, JSON.stringify(savePayload));
+      persistAssignmentPlan(storageKey, JSON.stringify(savePayload));
       lastSavedStateRef.current = JSON.stringify({
         exerciseDistribution: newExercises,
         sessionSections: newSections,
@@ -1510,7 +1512,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         testEventDays,
         lastModified: new Date().toISOString(),
       };
-      localStorage.setItem(storageKey, JSON.stringify(savePayload));
+      persistAssignmentPlan(storageKey, JSON.stringify(savePayload));
       lastSavedStateRef.current = JSON.stringify({
         exerciseDistribution: newExercises,
         sessionSections: newSections,

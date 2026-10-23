@@ -57,7 +57,7 @@ import { format, addWeeks, differenceInWeeks, addDays, differenceInDays } from "
 import { parseDateStr } from "@/utils/dateUtils";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
-import { BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabelFull, getBorgStyleLight, migrateLegacyIntensity } from "@/utils/intensityScale";
+import { BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabelFull, getBorgStyleLight, migrateLegacyIntensity, isRestIntensity } from "@/utils/intensityScale";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
@@ -4277,7 +4277,7 @@ export default function MesocyclePage() {
           const isEventDay = !!eventName;
           
           const existingIntensity = dailyIntensityData.find(di => di.date === dateStr)?.intensity;
-          const isOff = existingIntensity === 'off';
+          const isOff = isRestIntensity(existingIntensity);
 
           days.push({
             date: dateStr,

@@ -130,3 +130,8 @@ export function getBorgStyleLight(level: BorgLevel, opacity = 0.25): React.CSSPr
 
 // React import for CSSProperties (type-only, no runtime cost)
 import type React from "react";
+
+/** A rest day: Borg "0" — and the old "off" from before the Borg scale (both appear in stored plans) */
+export function isRestIntensity(value: unknown): boolean {
+  return value === '0' || value === 'off' || value === 0;
+}

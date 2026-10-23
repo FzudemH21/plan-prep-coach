@@ -12,6 +12,7 @@ import { AthleteCalendarAssignment } from '@/types/athlete';
 import type { ToolboxEntry } from '@/types/toolbox';
 import { eventDateList, eventEndDate, isMultiDayEvent, type CalendarEvent } from '@/hooks/useCalendarEvents';
 import { evaluateFormula, parseNumeric } from '@/utils/formulaEvaluator';
+import { isRestIntensity } from '@/utils/intensityScale';
 
 /** Percentage units — values like 80 represent 0.80 and must be ÷100 before formula evaluation */
 const PCT_UNITS = new Set(['%', '%1RM', '%BW', '%maxV', '%maxHR']);
@@ -854,8 +855,12 @@ export async function syncAthleteSchedule(
 
   // Build rows — one per training day that has sessions
   const trainingDayDates = new Set(trainingDays.map(td => td.date));
+  // A rest day (Borg "0" / old "off") without exercises gets no row: its default "Session 1"
+  // reached the athlete app as an empty session on every rest day
+  const daysWithExercises = new Set(exercises.map(ex => ex.dayDate));
   const rows = trainingDays
     .filter(td => td.isTrainingDay && td.sessions > 0)
+    .filter(td => !(isRestIntensity(td.intensity) && !daysWithExercises.has(td.date)))
     .map(td => {
       const sessionCount = td.sessions;
       const sessions: SessionSummary[] = Array.from({ length: sessionCount }, (_, i) => {

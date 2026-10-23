@@ -19,6 +19,8 @@ import { useAthleteCalendarEditing } from '@/hooks/useAthleteCalendarEditing';
 import { useCalendarEvents, CalendarEvent, eventEndDate, groupConsecutiveDates } from '@/hooks/useCalendarEvents';
 import { namespaceProgramForMerge } from '@/utils/assignmentMerge';
 import { buildPackedDateMap, remapProgramDates } from '@/utils/assignmentPacking';
+import { persistAssignmentPlan, removeAssignmentPlan, useAssignmentPlansReady } from '@/utils/assignmentPlanStore';
+import { isRestIntensity } from '@/utils/intensityScale';
 import { getExerciseVisibility, SESSION_META_CHANGED_EVENT, type SessionVisibilityData } from '@/utils/parameterVisibility';
 import {
   shiftExerciseDates,
@@ -159,6 +161,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     sessions: LiveScheduleSession[];
   }
   const [liveScheduleMap, setLiveScheduleMap] = useState<Map<string, LiveScheduleEntry>>(new Map());
+  // Assigned plans: in step with Supabase before anything is opened (assignmentPlanStore)
+  const plansReady = useAssignmentPlansReady();
   // First load of athlete_schedule done — the loading overlay waits for it
   const [liveScheduleLoaded, setLiveScheduleLoaded] = useState(false);
   // Bumped to reload athlete_schedule (calendar tab shown again)
@@ -522,7 +526,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
   // Editing hook — must be declared before any useEffect that references editing in
   // its dependency array, AND before useAthleteAIContext which references editing.exerciseDistribution.
-  const editing = useAthleteCalendarEditing(selectedAssignmentId, assignments);
+  // The plans are loaded from Supabase first (assignmentPlanStore) — until then no assignment is
+  // opened, so the calendar never starts from (or syncs) a stale or missing local copy
+  const editing = useAthleteCalendarEditing(plansReady ? selectedAssignmentId : null, assignments);
 
   // When the master planner is active, load the FULL assignment date range into
   // liveScheduleMap so mobile-created plans (whose editing state has no exercises)
@@ -668,6 +674,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   // show as logged / in progress as soon as the overlay is gone (before, they switched a few seconds later)
   const hasAppConnection = !!getConnectionForAthlete(athlete.id);
   const isCalendarLoading =
+    !plansReady ||
     athleteData.isLoading ||
     editing.isInitializing ||
     (assignments.length > 0 && selectedAssignmentId === null) ||
@@ -1026,6 +1033,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     const cache: Record<string, any> = {};
     let hasNewData = false;
 
+    if (!plansReady) return;
     assignments.forEach(assignment => {
       // Check if already cached
       if (assignmentDataCache[assignment.id]) {
@@ -1051,7 +1059,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     if (hasNewData || Object.keys(cache).length !== Object.keys(assignmentDataCache).length) {
       setAssignmentDataCache(cache);
     }
-  }, [assignments]); // intentionally exclude assignmentDataCache to prevent infinite loop
+  }, [assignments, plansReady]); // intentionally exclude assignmentDataCache to prevent infinite loop
 
   // Reset selected assignment whenever the viewed athlete changes so stale plan
   // data from the previous athlete never bleeds through.
@@ -1633,7 +1641,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           // Suppress ghost sessions: if dailyIntensityData says 'off' and there are no
           // actual exercises, the day is a rest day – regardless of what daySplitStates
           // says (can be corrupted to 1 by the fallback merge path).
-          const effectiveNumSessions = dayIntensity === 'off' && !hasLiveExercises ? 0 : numSessions;
+          const effectiveNumSessions = isRestIntensity(dayIntensity) && !hasLiveExercises ? 0 : numSessions;
           if (effectiveNumSessions > 0 || hasLiveExercises) {
             const sessionCount = effectiveNumSessions > 0 ? effectiveNumSessions : 1;
             for (let sessionIdx = 0; sessionIdx < sessionCount; sessionIdx++) {
@@ -2542,7 +2550,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
               if (existingSnapshot) {
                 try {
                   const parsed = JSON.parse(existingSnapshot);
-                  localStorage.setItem(mergeStorageKey, JSON.stringify({
+                  persistAssignmentPlan(mergeStorageKey, JSON.stringify({
                     ...parsed,
                     parameterValues: { ...(parsed.parameterValues ?? {}), ...merged.parameterValues },
                   }));
@@ -2572,7 +2580,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
               copiedAt: new Date().toISOString(),
             };
 
-            localStorage.setItem(storageKey, JSON.stringify(dataToSave));
+            persistAssignmentPlan(storageKey, JSON.stringify(dataToSave));
 
             // Sync to athlete_schedule so the athlete app can read sessions.
             // Use React state first; fall back to a direct Supabase query if connections
@@ -2668,7 +2676,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     athleteData.deleteCalendarAssignment(assignmentToDelete.id);
 
     // Clean up localStorage entry for this assignment
-    localStorage.removeItem(`athlete-assignment-${assignmentToDelete.id}`);
+    removeAssignmentPlan(assignmentToDelete.id);
 
     // If this was the selected assignment, deselect it
     if (selectedAssignmentId === assignmentToDelete.id) {
