@@ -92,20 +92,6 @@ export function remapProgramDates<P extends {
   };
 }
 
-/**
- * The program keeps its weekdays: the chosen start date moves forward to the next day with the
- * weekday of the program's first day (a program planned from a Tuesday, assigned "from Monday",
- * starts on that Tuesday — its Tuesday / Thursday sessions stay on Tuesday / Thursday). Without a
- * known first day the chosen date stays.
- */
-export function alignToProgramWeekday(chosen: Date, programFirstDay: string | null): Date {
-  if (!programFirstDay) return chosen;
-  const first = parseISO(programFirstDay);
-  if (isNaN(first.getTime())) return chosen;
-  const diff = (first.getDay() - chosen.getDay() + 7) % 7;
-  return diff === 0 ? chosen : addDays(chosen, diff);
-}
-
 type AnchorProgram = {
   trainingDays?: Array<{ date?: string; mesocycleId?: string; microcycleId?: string }> | null;
   exerciseDistribution?: Array<{ dayDate?: string }> | null;
@@ -159,4 +145,85 @@ export function assignmentAnchorDay(
   const map = buildPackedDateMap(td, selectedMicrocycleIds);
   const packed = map ? remapProgramDates(program as Parameters<typeof remapProgramDates>[0], map) as AnchorProgram : program;
   return anchorOfPackedProgram(packed, selectedMesocycleIds);
+}
+
+/** One microcycle of a program on the program's own timeline */
+export interface MicrocycleRange {
+  mesocycleId: string;
+  microcycleId: string;
+  /** First day, 'yyyy-MM-dd' */
+  start: string;
+  days: number;
+}
+
+/** 'yyyy-MM-dd' from a stored date — ISO timestamps are read in local time (a plan start saved as
+ *  "2026-08-30T22:00:00.000Z" is 31 Aug here, not 30 Aug) */
+function localDay(value: unknown): string | null {
+  if (typeof value !== 'string' || !value) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : format(d, 'yyyy-MM-dd');
+}
+
+/**
+ * The program's microcycles in order, each with its first day — the way the wizard lays them out:
+ * back to back from the plan start (microcycle durations), so empty days at the start of a
+ * microcycle count like any other day. Ids as the assign dialog reads them (fallback
+ * "meso-<i>" / "micro-<i>-<j>"). Empty when the program has no mesocycle structure or start.
+ */
+export function programMicrocycleRanges(program: {
+  mesocycleData?: unknown;
+  duration?: { startDate?: string } | null;
+  macrocycleData?: unknown;
+}): MicrocycleRange[] {
+  const md = program.mesocycleData as unknown;
+  const mesos = (Array.isArray(md) ? md : (md as { mesocycles?: unknown[] } | null)?.mesocycles) as
+    Array<{ id?: string; startDate?: string; microcycles?: Array<{ id?: string; duration?: number }> }> | undefined;
+  if (!Array.isArray(mesos) || mesos.length === 0) return [];
+  const macro = program.macrocycleData as { planDuration?: { startDate?: string } } | null | undefined;
+  const planStart = localDay(program.duration?.startDate) ?? localDay(macro?.planDuration?.startDate) ?? localDay(mesos[0]?.startDate);
+  if (!planStart) return [];
+  const ranges: MicrocycleRange[] = [];
+  let cursor = parseISO(planStart);
+  mesos.forEach((meso, i) => {
+    (meso.microcycles ?? []).forEach((micro, j) => {
+      const days = Math.max(1, Math.round(micro.duration || 7));
+      ranges.push({
+        mesocycleId: meso.id || `meso-${i}`,
+        microcycleId: micro.id || `micro-${i}-${j}`,
+        start: format(cursor, 'yyyy-MM-dd'),
+        days,
+      });
+      cursor = addDays(cursor, days);
+    });
+  });
+  return ranges;
+}
+
+/** Day 1 of the assignment: the first day of the first selected microcycle (null: none selected) */
+export function firstSelectedMicrocycleDay(ranges: MicrocycleRange[], selectedMicrocycleIds: string[]): string | null {
+  const selected = new Set(selectedMicrocycleIds);
+  return ranges.find(r => selected.size === 0 || selected.has(r.microcycleId))?.start ?? null;
+}
+
+/**
+ * Original date → date on the packed timeline: the selected microcycles back to back from the
+ * first selected one (all their days, empty ones too). Days of unselected microcycles aren't in the
+ * map. null when nothing can be mapped.
+ */
+export function packedDateMapFromRanges(ranges: MicrocycleRange[], selectedMicrocycleIds: string[]): Map<string, string> | null {
+  const selected = new Set(selectedMicrocycleIds);
+  const chosen = ranges.filter(r => selected.size === 0 || selected.has(r.microcycleId));
+  if (chosen.length === 0) return null;
+  const anchor = parseISO(chosen[0].start);
+  const map = new Map<string, string>();
+  let i = 0;
+  for (const r of chosen) {
+    const start = parseISO(r.start);
+    for (let d = 0; d < r.days; d++) {
+      map.set(format(addDays(start, d), 'yyyy-MM-dd'), format(addDays(anchor, i), 'yyyy-MM-dd'));
+      i++;
+    }
+  }
+  return map;
 }

@@ -559,7 +559,6 @@
       "assigningTo": "Assigning to",
       "startDate": "Start Date",
       "pastDateWarning": "Start date is in the past.",
-      "weekdayKept": "The program's first day is a {{weekday}} — it starts on {{date}} so every session keeps its weekday.",
       "noProgramsTitle": "No programs available",
       "noProgramsDesc": "Create a training program in the desktop wizard first.",
       "weeks_one": "{{count}} week",

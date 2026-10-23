@@ -297,6 +297,9 @@ export interface AthleteCalendarAssignment {
   // Original program dates (for reference/warning)
   originalStartDate: string;
   originalEndDate: string;
+  /** The program date that lands on startDate: day 1 of the first selected microcycle
+   *  ('yyyy-MM-dd'). Older assignments don't have it. */
+  programDay1?: string;
 
   // Selection filters (what portions were assigned)
   selectedMesocycleIds: string[];      // Empty = all mesocycles

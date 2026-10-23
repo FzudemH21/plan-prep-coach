@@ -7,7 +7,7 @@ import {
   CheckCircle2, AlertTriangle, Loader2, CalendarIcon,
 } from 'lucide-react';
 import { format, differenceInDays, addDays, eachDayOfInterval } from 'date-fns';
-import { alignToProgramWeekday } from '@/utils/assignmentPacking';
+import { firstSelectedMicrocycleDay, packedDateMapFromRanges, programMicrocycleRanges, remapProgramDates } from '@/utils/assignmentPacking';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -345,11 +345,8 @@ export default function CoachMobileAssignProgramPage() {
   const chosenStart = useMemo(() => new Date(startDateStr + 'T12:00:00'), [startDateStr]);
   // The program keeps its weekdays: it starts on the first day on or after the chosen date with
   // the weekday of its first (assigned) day
-  // (day 1 = the date this page shifts from: findOriginalStartDate)
-  const startDate = useMemo(() => {
-    const first = selectedProgram ? findOriginalStartDate(selectedProgram) : null;
-    return alignToProgramWeekday(chosenStart, first ? format(first, 'yyyy-MM-dd') : null);
-  }, [chosenStart, selectedProgram]);
+  // Day 1 of the first selected microcycle lands on the chosen date (empty days included)
+  const startDate = chosenStart;
 
   // When a program is selected, default-select all mesos/micros and build tests/events
   const programMesocycles = useMemo(
@@ -488,8 +485,18 @@ export default function CoachMobileAssignProgramPage() {
         } catch { /* ignore */ }
       }
 
+      // Selected microcycles back to back, shifted from day 1 of the first one (before, the whole
+      // program was shifted from its very first day — assigning later weeks put them weeks late)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const microRanges = programMicrocycleRanges(program as any);
+      const structureMap = microRanges.length > 0 ? packedDateMapFromRanges(microRanges, selectedMicroIds) : null;
+      if (structureMap) program = remapProgramDates(program, structureMap);
+      const day1 = structureMap ? firstSelectedMicrocycleDay(microRanges, selectedMicroIds) : null;
       const normNew = new Date(Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()));
-      const normOrig = originalStartDate ?? normNew;
+      const day1Date = day1 ? parseDateStr(day1) : null;
+      const normOrig = day1Date
+        ? new Date(Date.UTC(day1Date.getFullYear(), day1Date.getMonth(), day1Date.getDate()))
+        : (originalStartDate ?? normNew);
 
       const shiftedExercises = program.exerciseDistribution
         ? shiftExerciseDates(program.exerciseDistribution, normOrig, normNew) : [];
@@ -879,13 +886,8 @@ export default function CoachMobileAssignProgramPage() {
       {step === 'meso' && selectedProgram && (
         <div className="flex flex-col flex-1 min-h-0">
           {/* Date shift warning */}
-          {(isPastDate || dateMismatch || startDate.getTime() !== chosenStart.getTime()) && (
+          {(isPastDate || dateMismatch) && (
             <div className="shrink-0 px-4 pt-3 space-y-2">
-              {startDate.getTime() !== chosenStart.getTime() && (
-                <p className="text-xs text-muted-foreground">
-                  {t('coachMobile.assignProgram.weekdayKept', { weekday: format(startDate, 'EEEE'), date: format(startDate, 'EEE, d MMM yyyy') })}
-                </p>
-              )}
               {isPastDate && (
                 <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-amber-800 dark:text-amber-300">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />

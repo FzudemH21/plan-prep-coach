@@ -18,7 +18,7 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import { useAthleteCalendarEditing } from '@/hooks/useAthleteCalendarEditing';
 import { useCalendarEvents, CalendarEvent, eventEndDate, groupConsecutiveDates } from '@/hooks/useCalendarEvents';
 import { namespaceProgramForMerge } from '@/utils/assignmentMerge';
-import { anchorOfPackedProgram, buildPackedDateMap, remapProgramDates } from '@/utils/assignmentPacking';
+import { anchorOfPackedProgram, buildPackedDateMap, firstSelectedMicrocycleDay, packedDateMapFromRanges, programMicrocycleRanges, remapProgramDates } from '@/utils/assignmentPacking';
 import { persistAssignmentPlan, removeAssignmentPlan, useAssignmentPlansReady } from '@/utils/assignmentPlanStore';
 import { isRestIntensity } from '@/utils/intensityScale';
 import { getExerciseVisibility, SESSION_META_CHANGED_EVENT, type SessionVisibilityData } from '@/utils/parameterVisibility';
@@ -2099,14 +2099,24 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         // Always applied when microcycles are known: it also drops the unselected ones, so the plan
         // is anchored at the first SELECTED day (assigning only week 3 must start week 3 on the
         // assignment date, not two weeks later)
-        const packedDateMap = buildPackedDateMap(program.trainingDays ?? [], assignment.selectedMicrocycleIds || []);
+        // From the program's microcycle structure (all days, empty ones too); the training days
+        // only when the program has no structure
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const microRanges = programMicrocycleRanges(program as any);
+        const structureMap = microRanges.length > 0
+          ? packedDateMapFromRanges(microRanges, assignment.selectedMicrocycleIds || [])
+          : null;
+        const packedDateMap = structureMap ?? buildPackedDateMap(program.trainingDays ?? [], assignment.selectedMicrocycleIds || []);
         if (packedDateMap) {
           program = remapProgramDates(program, packedDateMap);
         }
 
         // "Day 1" of the assigned part — the same rule the assign dialog aligns the weekday with
         // (anchorOfPackedProgram), so the shift is always whole weeks
-        const anchorDay = anchorOfPackedProgram(program, assignment.selectedMesocycleIds || []);
+        // Day 1 = first day of the first selected microcycle (as the dialog showed it)
+        const anchorDay = assignment.programDay1
+          ?? (structureMap ? firstSelectedMicrocycleDay(microRanges, assignment.selectedMicrocycleIds || []) : null)
+          ?? anchorOfPackedProgram(program, assignment.selectedMesocycleIds || []);
         let originalStartDate: Date | null = anchorDay ? new Date(anchorDay + 'T12:00:00') : null;
 
         // If still no valid date, show error and cleanup

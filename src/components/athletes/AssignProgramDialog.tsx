@@ -1,6 +1,6 @@
 import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { useState, useMemo, useEffect } from 'react';
-import { format, differenceInDays, addDays } from 'date-fns';
+import { format, differenceInDays, addDays, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/collapsible';
 import { AlertTriangle, CalendarIcon, ChevronDown, ChevronRight, Plus, Trash2, Trophy, X } from 'lucide-react';
 import { latestValueOf, useSelfReportedResults, withSelfReported } from '@/hooks/useSelfReportedResults';
-import { buildPackedDateMap, assignmentAnchorDay, alignToProgramWeekday } from '@/utils/assignmentPacking';
+import { buildPackedDateMap, assignmentAnchorDay, firstSelectedMicrocycleDay, packedDateMapFromRanges, programMicrocycleRanges } from '@/utils/assignmentPacking';
 import { TrainingProgram } from '@/hooks/useTrainingPrograms';
 import { AthleteCalendarAssignment, AssignedMesocycle, AssignedMicrocycle, AthletePerformanceParameter, ReviewedSubGoal, ReviewedEvent } from '@/types/athlete';
 import { SubGoal, Event as TrainingEvent } from '@/types/training';
@@ -169,13 +169,17 @@ export function AssignProgramDialog({
 
     // Same placement as the plan itself: selected microcycles back to back from the start date.
     // A test on a day of a microcycle that isn't assigned is left out (dates can be added below).
-    const packedDateMap = buildPackedDateMap(selectedProgram.trainingDays ?? [], selectedMicrocycleIds);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ranges = programMicrocycleRanges(selectedProgram as any);
+    const packedDateMap = (ranges.length > 0 ? packedDateMapFromRanges(ranges, selectedMicrocycleIds) : null)
+      ?? buildPackedDateMap(selectedProgram.trainingDays ?? [], selectedMicrocycleIds);
     const firstSelectedDay = packedDateMap && packedDateMap.size > 0
       ? [...packedDateMap.keys()].sort()[0]
       : null;
-    // Day 1 of the assigned part — the same rule as the plan's own shift (assignmentAnchorDay)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const anchorDay = assignmentAnchorDay(selectedProgram as any, selectedMesocycleIds, selectedMicrocycleIds) ?? firstSelectedDay;
+    // Day 1 of the assigned part — the same rule as the plan's own shift
+    const anchorDay = firstSelectedMicrocycleDay(ranges, selectedMicrocycleIds)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ?? assignmentAnchorDay(selectedProgram as any, selectedMesocycleIds, selectedMicrocycleIds) ?? firstSelectedDay;
     const originalStartDate = anchorDay
       ? new Date(anchorDay + 'T12:00:00')
       : selectedProgram.duration?.startDate
@@ -307,14 +311,17 @@ export function AssignProgramDialog({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProgram, startDate, stableAthleteParams, selectedMesocycleIds, selectedMicrocycleIds, selfReportedResults]);
 
-  // The program keeps its weekdays: it starts on the first day on or after the chosen date with
-  // the weekday of its first (assigned) day
-  const programFirstDay = useMemo(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    () => (selectedProgram ? assignmentAnchorDay(selectedProgram as any, selectedMesocycleIds, selectedMicrocycleIds) : null),
-    [selectedProgram, selectedMesocycleIds, selectedMicrocycleIds],
+  // Day 1 of the first selected microcycle lands on the chosen date — empty days included (a
+  // microcycle starting with a rest day starts with a rest day); the rest keeps its position
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const microRanges = useMemo(() => (selectedProgram ? programMicrocycleRanges(selectedProgram as any) : []), [selectedProgram]);
+  const programDay1 = useMemo(
+    () => firstSelectedMicrocycleDay(microRanges, selectedMicrocycleIds)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ?? (selectedProgram ? assignmentAnchorDay(selectedProgram as any, selectedMesocycleIds, selectedMicrocycleIds) : null),
+    [microRanges, selectedProgram, selectedMesocycleIds, selectedMicrocycleIds],
   );
-  const effectiveStart = useMemo(() => alignToProgramWeekday(startDate, programFirstDay), [startDate, programFirstDay]);
+  const effectiveStart = startDate;
 
   // Warn when the chosen start date is in the past
   const pastDateWarning = useMemo(() => {
@@ -435,6 +442,7 @@ export function AssignProgramDialog({
       startDate: effectiveStart.toISOString(),
       endDate: endDate.toISOString(),
       originalStartDate: selectedProgram.duration?.startDate || effectiveStart.toISOString(),
+      ...(programDay1 ? { programDay1 } : {}),
       originalEndDate: selectedProgram.duration?.endDate || endDate.toISOString(),
       selectedMesocycleIds,
       selectedMicrocycleIds,
@@ -570,11 +578,10 @@ export function AssignProgramDialog({
               </Popover>
             </div>
 
-            {selectedProgram && effectiveStart.getTime() !== startDate.getTime() && (
+            {selectedProgram && programDay1 && (
               <p className="text-xs text-muted-foreground">
-                The program's first day is a {format(effectiveStart, 'EEEE')} — it starts on{' '}
-                <span className="font-medium text-foreground">{format(effectiveStart, 'EEE, d MMM yyyy')}</span>{' '}
-                so every session keeps its weekday.
+                Day 1 of the first selected microcycle ({format(parseISO(programDay1), 'EEE, d MMM')} in the plan) lands on{' '}
+                <span className="font-medium text-foreground">{format(startDate, 'EEE, d MMM yyyy')}</span>; every other day keeps its place.
               </p>
             )}
 
