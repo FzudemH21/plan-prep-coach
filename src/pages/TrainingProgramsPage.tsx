@@ -47,7 +47,7 @@ import { useTrainingPrograms, TrainingProgram } from "@/hooks/useTrainingProgram
 import { getAthleteDisplayName } from "@/types/athlete";
 import { useAthletes } from "@/hooks/useAthletes";
 import { useToast } from "@/hooks/use-toast";
-import { format, formatDistanceToNow, differenceInDays } from "date-fns";
+import { format, formatDistanceToNow, differenceInCalendarDays } from "date-fns";
 import { useWizardData } from "@/contexts/WizardDataContext";
 import { useAIChatContext } from "@/contexts/AIChatContext";
 
@@ -162,7 +162,7 @@ const formatDuration = (program: TrainingProgram) => {
       try {
         const start = new Date(program.duration.startDate);
         const end = new Date(program.duration.endDate);
-        totalDays = differenceInDays(end, start) + 1;
+        totalDays = differenceInCalendarDays(end, start) + 1;
       } catch {
         totalDays = weeks * 7;
       }

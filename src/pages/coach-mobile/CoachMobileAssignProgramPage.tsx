@@ -6,7 +6,7 @@ import {
   ChevronDown, ChevronRight as ChevronRightIcon,
   CheckCircle2, AlertTriangle, Loader2, CalendarIcon,
 } from 'lucide-react';
-import { format, differenceInDays, addDays, eachDayOfInterval } from 'date-fns';
+import { format, differenceInCalendarDays, addDays, eachDayOfInterval } from 'date-fns';
 import { firstSelectedMicrocycleDay, packedDateMapFromRanges, programMicrocycleRanges, remapProgramDates } from '@/utils/assignmentPacking';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -125,7 +125,7 @@ function buildTestsAndEvents(
 
   const macro = program.macrocycleData;
   const originalStart = program.duration?.startDate ? parseDateStr(program.duration.startDate) : null;
-  const dayOffset = originalStart ? differenceInDays(startDate, originalStart) : 0;
+  const dayOffset = originalStart ? differenceInCalendarDays(startDate, originalStart) : 0;
 
   const shiftDate = (d: string) => addDays(new Date(d + (d.length === 10 ? 'T12:00:00' : '')), dayOffset).toISOString();
 

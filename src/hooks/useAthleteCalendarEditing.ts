@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { persistAssignmentPlan } from '@/utils/assignmentPlanStore';
 import { isRestIntensity } from '@/utils/intensityScale';
-import { format, addDays, parseISO, eachDayOfInterval, differenceInDays } from 'date-fns';
+import { format, addDays, parseISO, eachDayOfInterval, differenceInCalendarDays } from 'date-fns';
 import { AthleteCalendarAssignment, AssignedMesocycle } from '@/types/athlete';
 import { ExerciseDistribution, SessionSection, SupersetMapping } from '@/types/microcycle-planning';
 import { IntensityLevel } from '@/types/training';
@@ -1540,7 +1540,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
 
     const sourceStart = new Date(copiedWeek.weekStartDate);
     const targetStart = new Date(targetWeekStartDate);
-    const dayOffset = differenceInDays(targetStart, sourceStart);
+    const dayOffset = differenceInCalendarDays(targetStart, sourceStart);
 
     // Calculate new section IDs
     const sectionIdMapping = new Map<string, string>();

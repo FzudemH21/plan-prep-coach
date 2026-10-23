@@ -7,7 +7,7 @@ import MicrocycleIntensityColumn from './MicrocycleIntensityColumn';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Copy } from 'lucide-react';
-import { addDays, differenceInDays, format } from 'date-fns';
+import { addDays, differenceInCalendarDays, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
@@ -200,7 +200,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
                       {/* Date Range with Duration */}
                       {meso.startDate && meso.endDate && (
                         <div className="text-xs font-normal text-muted-foreground">
-                          {format(new Date(meso.startDate), 'MMM d')} - {format(new Date(meso.endDate), 'MMM d')} ({differenceInDays(new Date(meso.endDate), new Date(meso.startDate)) + 1}d)
+                          {format(new Date(meso.startDate), 'MMM d')} - {format(new Date(meso.endDate), 'MMM d')} ({differenceInCalendarDays(new Date(meso.endDate), new Date(meso.startDate)) + 1}d)
                         </div>
                       )}
                       

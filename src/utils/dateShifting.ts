@@ -1,4 +1,4 @@
-import { differenceInDays, addDays, format, parseISO } from 'date-fns';
+import { addDays, format, parseISO } from 'date-fns';
 import { AssignedMesocycle } from '@/types/athlete';
 import { ExerciseDistribution, SessionSection, SupersetMapping } from '@/types/microcycle-planning';
 import { DailyIntensity } from '@/types/daily-intensity';
@@ -19,7 +19,10 @@ function normalizeToUTCMidnight(date: Date): Date {
 export function calculateDayOffset(originalStartDate: Date, newStartDate: Date): number {
   const normalizedOriginal = normalizeToUTCMidnight(originalStartDate);
   const normalizedNew = normalizeToUTCMidnight(newStartDate);
-  return differenceInDays(normalizedNew, normalizedOriginal);
+  // Whole UTC days between the two: both are UTC midnights, so the difference is an exact multiple
+  // of 24 h. differenceInDays counted FULL local days — across the end of summer time (25 Oct) the
+  // span 28 Sep → 26 Oct is 27 days 23 h locally, so every plan crossing it landed one day early
+  return Math.round((normalizedNew.getTime() - normalizedOriginal.getTime()) / 86400000);
 }
 
 /**

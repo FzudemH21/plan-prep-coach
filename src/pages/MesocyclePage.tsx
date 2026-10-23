@@ -53,7 +53,7 @@ import { AutoSaveIndicator } from "@/components/programs/AutoSaveIndicator";
 import { useWizardAutoSave } from "@/hooks/useWizardAutoSave";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCalendarEvents, eventCoversDate, eventDateList } from "@/hooks/useCalendarEvents";
-import { format, addWeeks, differenceInWeeks, addDays, differenceInDays } from "date-fns";
+import { format, addWeeks, differenceInWeeks, addDays, differenceInCalendarDays } from "date-fns";
 import { parseDateStr } from "@/utils/dateUtils";
 import { trainingData, getMethodsForQuality } from "@/data/trainingData";
 import { IntensityLevel } from "@/types/training";
@@ -300,7 +300,7 @@ export default function MesocyclePage() {
       const endDate = rawEndDate ? new Date(rawEndDate) : addWeeks(startDate, 12);
       const weeks = rawTotalWeeks ||
         (rawStartDate && rawEndDate
-          ? Math.ceil((differenceInDays(endDate, startDate) + 1) / 7)
+          ? Math.ceil((differenceInCalendarDays(endDate, startDate) + 1) / 7)
           : 12);
       setTotalWeeks(weeks);
 
@@ -606,7 +606,7 @@ export default function MesocyclePage() {
     // Use planDuration.totalDays if available, otherwise calculate
     const totalDays = macrocycleData?.planDuration?.totalDays ||
       (planStartDate && planEndDate
-        ? differenceInDays(planEndDate, planStartDate) + 1
+        ? differenceInCalendarDays(planEndDate, planStartDate) + 1
         : undefined);
     
     return (
@@ -758,7 +758,7 @@ export default function MesocyclePage() {
     sum + meso.microcycles.reduce((mesoSum, micro) => mesoSum + micro.duration, 0), 0
   );
   const expectedTotalDays = planStartDate && planEndDate && planEndDate > planStartDate
-    ? differenceInDays(planEndDate, planStartDate) + 1
+    ? differenceInCalendarDays(planEndDate, planStartDate) + 1
     : totalWeeks * 7;
   const daysMismatch = expectedTotalDays > 0 && totalMesocycleDays !== expectedTotalDays;
 
@@ -4988,7 +4988,7 @@ export default function MesocyclePage() {
                             {/* Date Range with Duration */}
                             {currentMeso.startDate && currentMeso.endDate && (
                               <div className="text-xs font-normal text-muted-foreground">
-                                {format(new Date(currentMeso.startDate), 'MMM d')} - {format(new Date(currentMeso.endDate), 'MMM d')} ({differenceInDays(new Date(currentMeso.endDate), new Date(currentMeso.startDate)) + 1}d)
+                                {format(new Date(currentMeso.startDate), 'MMM d')} - {format(new Date(currentMeso.endDate), 'MMM d')} ({differenceInCalendarDays(new Date(currentMeso.endDate), new Date(currentMeso.startDate)) + 1}d)
                               </div>
                             )}
                           </div>

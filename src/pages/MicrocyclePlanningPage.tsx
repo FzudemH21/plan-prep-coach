@@ -23,7 +23,7 @@ import { CellData, ExerciseSelection, SessionSection, SupersetMapping, ExerciseD
 import { IntensityLevel } from '@/types/training';
 import { migrateLegacyIntensity } from '@/utils/intensityScale';
 import { useToolboxData } from '@/hooks/useToolboxData';
-import { format, addDays, differenceInDays, parseISO } from 'date-fns';
+import { format, addDays, differenceInCalendarDays, parseISO } from 'date-fns';
 import { parseDateStr } from '@/utils/dateUtils';
 import { cn } from '@/lib/utils';
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
@@ -2304,7 +2304,7 @@ export default function MicrocyclePlanningPage() {
 
     const sourceWeekStart = parseISO(copiedWeek.weekStartDate);
     const targetWeekStart = parseISO(targetWeekStartDate);
-    const dayOffset = differenceInDays(targetWeekStart, sourceWeekStart);
+    const dayOffset = differenceInCalendarDays(targetWeekStart, sourceWeekStart);
 
     // Reject if any target date falls outside the plan's date range
     const planDates = new Set(trainingDays.map(d => d.date));

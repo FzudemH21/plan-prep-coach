@@ -27,7 +27,7 @@ import {
 import { useDisplayMode } from "@/contexts/DisplayModeContext";
 import { useParametersDataV2 } from "@/hooks/useParametersDataV2";
 import { PlanningNavigationMenu } from "@/components/ui/planning-navigation-menu";
-import { format, addDays, differenceInDays } from "date-fns";
+import { format, addDays, differenceInCalendarDays } from "date-fns";
 import { parseDateStr } from "@/utils/dateUtils";
 import { useAthletes } from "@/hooks/useAthletes";
 import { getAthleteDisplayName, Athlete } from "@/types/athlete";
@@ -403,7 +403,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         if (macro) {
           const originalStart = assignment.originalStartDate ? new Date(assignment.originalStartDate) : null;
           const assignedStart = new Date(assignment.startDate);
-          const dayOffset = originalStart ? differenceInDays(assignedStart, originalStart) : 0;
+          const dayOffset = originalStart ? differenceInCalendarDays(assignedStart, originalStart) : 0;
 
           (macro.subGoals || []).forEach(sg => {
             const shiftedDates = (sg.testDates || []).map(d => addDays(new Date(d), dayOffset).toISOString());
@@ -1048,7 +1048,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         // differenceInDays (not raw ms / 86400000) — a DST transition inside the
         // range adds/removes an hour, which Math.ceil on raw ms rounds up into an
         // extra day (e.g. was showing 85 days for a 31.08–22.11 range that's really 84).
-        const totalDays = differenceInDays(selectedDate, planDuration.startDate) + 1;
+        const totalDays = differenceInCalendarDays(selectedDate, planDuration.startDate) + 1;
         const totalWeeks = Math.ceil(totalDays / 7);
         
         setPlanDuration({
@@ -3051,7 +3051,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         const end = action.endDate
           ? new Date(action.endDate + 'T12:00:00')
           : (() => { const d = new Date(start); d.setDate(d.getDate() + (action.weeks ?? 0) * 7); return d; })();
-        const totalDays = differenceInDays(end, start) + 1;
+        const totalDays = differenceInCalendarDays(end, start) + 1;
         const totalWeeks = Math.round(totalDays / 7);
         setPlanDuration({ startDate: start, endDate: end, totalDays, totalWeeks });
         break;

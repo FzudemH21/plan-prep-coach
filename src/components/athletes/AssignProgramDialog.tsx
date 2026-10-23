@@ -1,6 +1,6 @@
 import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { useState, useMemo, useEffect } from 'react';
-import { format, differenceInDays, addDays, parseISO } from 'date-fns';
+import { format, differenceInCalendarDays, addDays, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -188,7 +188,7 @@ export function AssignProgramDialog({
 
     // Tests / events move with the plan: from its first day to the (weekday-kept) start
     const dayOffset = originalStartDate
-      ? differenceInDays(effectiveStart, originalStartDate)
+      ? differenceInCalendarDays(effectiveStart, originalStartDate)
       : 0;
 
     /** The athlete's latest value for a parameter — coach-recorded or self-reported in the app */
@@ -335,7 +335,7 @@ export function AssignProgramDialog({
     if (!selectedProgram?.duration?.startDate) return null;
 
     const originalStart = new Date(selectedProgram.duration.startDate + (selectedProgram.duration.startDate.length === 10 ? 'T12:00:00' : ''));
-    const daysDiff = differenceInDays(effectiveStart, originalStart);
+    const daysDiff = differenceInCalendarDays(effectiveStart, originalStart);
 
     if (daysDiff !== 0) {
       return {
