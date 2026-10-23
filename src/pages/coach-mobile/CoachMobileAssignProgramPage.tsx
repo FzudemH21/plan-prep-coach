@@ -7,6 +7,7 @@ import {
   CheckCircle2, AlertTriangle, Loader2, CalendarIcon,
 } from 'lucide-react';
 import { format, differenceInDays, addDays, eachDayOfInterval } from 'date-fns';
+import { alignToProgramWeekday, programFirstAssignedDay } from '@/utils/assignmentPacking';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -341,7 +342,13 @@ export default function CoachMobileAssignProgramPage() {
 
   const availablePrograms = useMemo(() => programs.filter(isAssignable), [programs]);
 
-  const startDate = useMemo(() => new Date(startDateStr + 'T12:00:00'), [startDateStr]);
+  const chosenStart = useMemo(() => new Date(startDateStr + 'T12:00:00'), [startDateStr]);
+  // The program keeps its weekdays: it starts on the first day on or after the chosen date with
+  // the weekday of its first (assigned) day
+  const startDate = useMemo(() => alignToProgramWeekday(
+    chosenStart,
+    selectedProgram ? programFirstAssignedDay(selectedProgram.trainingDays ?? [], selectedMicroIds, selectedProgram.duration?.startDate) : null,
+  ), [chosenStart, selectedProgram, selectedMicroIds]);
 
   // When a program is selected, default-select all mesos/micros and build tests/events
   const programMesocycles = useMemo(
@@ -366,7 +373,7 @@ export default function CoachMobileAssignProgramPage() {
     setReviewedTests(tests);
     setReviewedEvents(events);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProgram, startDateStr]);
+  }, [selectedProgram, startDate]);
 
   // Filtered + recalculated mesocycles
   const finalMesocycles = useMemo((): AssignedMesocycle[] => {
@@ -871,8 +878,13 @@ export default function CoachMobileAssignProgramPage() {
       {step === 'meso' && selectedProgram && (
         <div className="flex flex-col flex-1 min-h-0">
           {/* Date shift warning */}
-          {(isPastDate || dateMismatch) && (
+          {(isPastDate || dateMismatch || startDate.getTime() !== chosenStart.getTime()) && (
             <div className="shrink-0 px-4 pt-3 space-y-2">
+              {startDate.getTime() !== chosenStart.getTime() && (
+                <p className="text-xs text-muted-foreground">
+                  {t('coachMobile.assignProgram.weekdayKept', { weekday: format(startDate, 'EEEE'), date: format(startDate, 'EEE, d MMM yyyy') })}
+                </p>
+              )}
               {isPastDate && (
                 <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-amber-800 dark:text-amber-300">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />

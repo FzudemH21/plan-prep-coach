@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/collapsible';
 import { AlertTriangle, CalendarIcon, ChevronDown, ChevronRight, Plus, Trash2, Trophy, X } from 'lucide-react';
 import { latestValueOf, useSelfReportedResults, withSelfReported } from '@/hooks/useSelfReportedResults';
-import { buildPackedDateMap } from '@/utils/assignmentPacking';
+import { buildPackedDateMap, programFirstAssignedDay, alignToProgramWeekday } from '@/utils/assignmentPacking';
 import { TrainingProgram } from '@/hooks/useTrainingPrograms';
 import { AthleteCalendarAssignment, AssignedMesocycle, AssignedMicrocycle, AthletePerformanceParameter, ReviewedSubGoal, ReviewedEvent } from '@/types/athlete';
 import { SubGoal, Event as TrainingEvent } from '@/types/training';
@@ -179,8 +179,9 @@ export function AssignProgramDialog({
         ? new Date(selectedProgram.duration.startDate)
         : null;
 
+    // Tests / events move with the plan: from its first day to the (weekday-kept) start
     const dayOffset = originalStartDate
-      ? differenceInDays(startDate, originalStartDate)
+      ? differenceInDays(alignToProgramWeekday(startDate, firstSelectedDay ?? selectedProgram.duration?.startDate?.slice(0, 10) ?? null), originalStartDate)
       : 0;
 
     /** The athlete's latest value for a parameter — coach-recorded or self-reported in the app */
@@ -303,6 +304,14 @@ export function AssignProgramDialog({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProgram, startDate, stableAthleteParams, selectedMicrocycleIds, selfReportedResults]);
 
+  // The program keeps its weekdays: it starts on the first day on or after the chosen date with
+  // the weekday of its first (assigned) day
+  const programFirstDay = useMemo(
+    () => programFirstAssignedDay(selectedProgram?.trainingDays ?? [], selectedMicrocycleIds, selectedProgram?.duration?.startDate),
+    [selectedProgram, selectedMicrocycleIds],
+  );
+  const effectiveStart = useMemo(() => alignToProgramWeekday(startDate, programFirstDay), [startDate, programFirstDay]);
+
   // Warn when the chosen start date is in the past
   const pastDateWarning = useMemo(() => {
     const today = new Date();
@@ -315,7 +324,7 @@ export function AssignProgramDialog({
     if (!selectedProgram?.duration?.startDate) return null;
 
     const originalStart = new Date(selectedProgram.duration.startDate + (selectedProgram.duration.startDate.length === 10 ? 'T12:00:00' : ''));
-    const daysDiff = differenceInDays(startDate, originalStart);
+    const daysDiff = differenceInDays(effectiveStart, originalStart);
 
     if (daysDiff !== 0) {
       return {
@@ -327,7 +336,7 @@ export function AssignProgramDialog({
       };
     }
     return null;
-  }, [selectedProgram, startDate]);
+  }, [selectedProgram, effectiveStart]);
 
   // Calculate final mesocycles with shifted dates
   const finalMesocycles = useMemo((): AssignedMesocycle[] => {
@@ -343,14 +352,14 @@ export function AssignProgramDialog({
     })).filter(meso => meso.microcycles.length > 0);
     
     // Recalculate dates based on new start date
-    return recalculateMesocycleDates(filtered, startDate);
-  }, [programMesocycles, selectedMesocycleIds, selectedMicrocycleIds, startDate]);
+    return recalculateMesocycleDates(filtered, effectiveStart);
+  }, [programMesocycles, selectedMesocycleIds, selectedMicrocycleIds, effectiveStart]);
 
   // Calculate end date
   const endDate = useMemo(() => {
-    if (finalMesocycles.length === 0) return startDate;
+    if (finalMesocycles.length === 0) return effectiveStart;
     return new Date(finalMesocycles[finalMesocycles.length - 1].endDate);
-  }, [finalMesocycles, startDate]);
+  }, [finalMesocycles, effectiveStart]);
 
   // Toggle mesocycle selection
   const toggleMesocycle = (mesoId: string) => {
@@ -419,9 +428,9 @@ export function AssignProgramDialog({
       athleteId,
       programId: selectedProgram.id,
       programName: selectedProgram.name,
-      startDate: startDate.toISOString(),
+      startDate: effectiveStart.toISOString(),
       endDate: endDate.toISOString(),
-      originalStartDate: selectedProgram.duration?.startDate || startDate.toISOString(),
+      originalStartDate: selectedProgram.duration?.startDate || effectiveStart.toISOString(),
       originalEndDate: selectedProgram.duration?.endDate || endDate.toISOString(),
       selectedMesocycleIds,
       selectedMicrocycleIds,
@@ -556,6 +565,14 @@ export function AssignProgramDialog({
                 </PopoverContent>
               </Popover>
             </div>
+
+            {selectedProgram && effectiveStart.getTime() !== startDate.getTime() && (
+              <p className="text-xs text-muted-foreground">
+                The program's first day is a {format(effectiveStart, 'EEEE')} — it starts on{' '}
+                <span className="font-medium text-foreground">{format(effectiveStart, 'EEE, d MMM yyyy')}</span>{' '}
+                so every session keeps its weekday.
+              </p>
+            )}
 
             {pastDateWarning && (
               <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">

@@ -91,3 +91,31 @@ export function remapProgramDates<P extends {
     daySplitStates: moveKeys(program.daySplitStates),
   };
 }
+
+/** First day of the assigned part of a program ('yyyy-MM-dd'): the first day of the first selected
+ *  microcycle, else the program's start date; null when unknown */
+export function programFirstAssignedDay(
+  trainingDays: DayWithMicrocycle[],
+  selectedMicrocycleIds: string[],
+  programStartDate?: string | null,
+): string | null {
+  const map = buildPackedDateMap(trainingDays, selectedMicrocycleIds);
+  if (map && map.size > 0) return [...map.keys()].sort()[0];
+  const days = trainingDays.map(d => d.date).filter((d): d is string => !!d).sort();
+  if (days.length > 0) return days[0].slice(0, 10);
+  return programStartDate ? programStartDate.slice(0, 10) : null;
+}
+
+/**
+ * The program keeps its weekdays: the chosen start date moves forward to the next day with the
+ * weekday of the program's first day (a program planned from a Tuesday, assigned "from Monday",
+ * starts on that Tuesday — its Tuesday / Thursday sessions stay on Tuesday / Thursday). Without a
+ * known first day the chosen date stays.
+ */
+export function alignToProgramWeekday(chosen: Date, programFirstDay: string | null): Date {
+  if (!programFirstDay) return chosen;
+  const first = parseISO(programFirstDay);
+  if (isNaN(first.getTime())) return chosen;
+  const diff = (first.getDay() - chosen.getDay() + 7) % 7;
+  return diff === 0 ? chosen : addDays(chosen, diff);
+}

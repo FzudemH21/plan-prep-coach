@@ -1057,6 +1057,11 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   // data from the previous athlete never bleeds through.
   useEffect(() => {
     setSelectedAssignmentId(null);
+    // The previous athlete's app days must go too: the schedule fetch MERGES into this map, so
+    // their sessions stayed on every day the new athlete has no row of her own (e.g. another
+    // athlete's Monday session shown — and then saved — in this athlete's plan)
+    setLiveScheduleMap(new Map());
+    clearedDatesRef.current = new Set();
   }, [athlete.id]);
 
   // Initialize selected assignment when assignments change
