@@ -1,5 +1,5 @@
 import { parseMeasuredNumber } from '@/utils/latestParameterValue';
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { addDays, format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isSameMonth, isWithinInterval } from 'date-fns';
 import { parseDateStr } from '@/utils/dateUtils';
 import { useCalendarGrid, groupDaysIntoWeeks } from '@/hooks/useCalendarGrid';
@@ -709,24 +709,27 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     return () => { supabase.removeChannel(channel); };
   }, [athlete.id, getConnectionForAthlete]);
 
-  // Right after a desktop edit: app days whose session count differs from the edited plan are
-  // dropped from the app copy, so the plan shows — a moved / deleted session no longer stays as a
-  // ghost (the app copy wins on its days) until the sync and the reload after it are through
-  useEffect(() => {
-    if (!editing.lastSavedAt || editing.isMobileCreated) return;
-    // A plan day without an entry has 0 sessions (moving / deleting the last one removes the entry)
-    const planDays = new Set(editing.trainingDays.map(td => td.date));
-    setLiveScheduleMap(prev => {
-      let changed = false;
-      const next = new Map(prev);
-      prev.forEach((entry, date) => {
-        const planned = editing.daySplitStates[date] ?? (planDays.has(date) ? 0 : undefined);
-        if (planned !== undefined && planned !== entry.sessions.length) { next.delete(date); changed = true; }
-      });
-      return changed ? next : prev;
+  // A desktop edit (move / delete / add a session): the days it changed show the plan, not the app
+  // copy — the copy wins on its days, so a moved session stayed visible on its old day until the
+  // sync and the reload after it were through. Runs before the browser paints (no flash) and only
+  // for the days whose session count changed, so mobile edits on other days stay visible.
+  const prevSplitRef = useRef<{ id: string | null; states: Record<string, number> } | null>(null);
+  useLayoutEffect(() => {
+    const cur = editing.daySplitStates;
+    const prev = prevSplitRef.current;
+    prevSplitRef.current = { id: selectedAssignmentId, states: cur };
+    if (!prev || prev.id !== selectedAssignmentId || editing.isInitializing || editing.isMobileCreated) return;
+    const changed = [...new Set([...Object.keys(prev.states), ...Object.keys(cur)])]
+      .filter(d => (prev.states[d] ?? 0) !== (cur[d] ?? 0));
+    if (changed.length === 0) return;
+    setLiveScheduleMap(p => {
+      let hit = false;
+      const next = new Map(p);
+      changed.forEach(d => { if (next.delete(d)) hit = true; });
+      return hit ? next : p;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing.lastSavedAt]);
+  }, [editing.daySplitStates, selectedAssignmentId]);
 
   // Auto-sync to athlete_schedule whenever the editing hook persists a change to localStorage.
   // This ensures manually-added sessions and exercises appear in the athlete app without
