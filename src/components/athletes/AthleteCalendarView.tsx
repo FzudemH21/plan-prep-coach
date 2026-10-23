@@ -709,6 +709,25 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     return () => { supabase.removeChannel(channel); };
   }, [athlete.id, getConnectionForAthlete]);
 
+  // Right after a desktop edit: app days whose session count differs from the edited plan are
+  // dropped from the app copy, so the plan shows — a moved / deleted session no longer stays as a
+  // ghost (the app copy wins on its days) until the sync and the reload after it are through
+  useEffect(() => {
+    if (!editing.lastSavedAt || editing.isMobileCreated) return;
+    // A plan day without an entry has 0 sessions (moving / deleting the last one removes the entry)
+    const planDays = new Set(editing.trainingDays.map(td => td.date));
+    setLiveScheduleMap(prev => {
+      let changed = false;
+      const next = new Map(prev);
+      prev.forEach((entry, date) => {
+        const planned = editing.daySplitStates[date] ?? (planDays.has(date) ? 0 : undefined);
+        if (planned !== undefined && planned !== entry.sessions.length) { next.delete(date); changed = true; }
+      });
+      return changed ? next : prev;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing.lastSavedAt]);
+
   // Auto-sync to athlete_schedule whenever the editing hook persists a change to localStorage.
   // This ensures manually-added sessions and exercises appear in the athlete app without
   // requiring a full plan re-assignment.
@@ -749,6 +768,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       return;
     }
     syncInProgressRef.current = true;
+    // The plan's days — reloaded from the athlete app after the sync (days it no longer has go)
+    const syncedDates = editing.trainingDays.map(td => td.date);
     syncAthleteSchedule(
       connection.id,
       assignment,
@@ -764,7 +785,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       // Pass cached formula data so formula-computed params (e.g. Weight = Intensity * e1RM)
       // are re-evaluated on every auto-save rather than only at assign time.
       athleteFormulaDataRef.current ?? undefined,
-    ).catch(e => {
+    ).then(() => refreshLiveScheduleRange(connection.id, syncedDates)).catch(e => {
       console.error('[autoSync] ✗ sync failed:', e);
       // Show a toast once per mount so the coach knows something is wrong
       if (!syncErrorShownRef.current) {
