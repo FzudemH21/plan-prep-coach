@@ -35,7 +35,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import type { AnamnesisField, AnamnesisProfileAnswers, AnamnesisSection } from '@/types/anamnesis';
-import { contextFor, fieldState, isAnswered as answerGiven, isQuestion } from '@/utils/anamnesisAnswers';
+import { contextFor, fieldState, filesKey, isAnswered as answerGiven, isQuestion } from '@/utils/anamnesisAnswers';
+import { FormFileUpload } from '@/components/anamnesis/AnamnesisFiles';
 import { localizeField, localizeSection } from '@/utils/anamnesisI18n';
 import {
   BodyMapInput, DateRangesInput, ListInput, MultiChoiceInput, ScaleInput, WeekGridInput, YesNoListInput,
@@ -48,6 +49,8 @@ const ANSWER_MAX_CHARS = 5000;
 
 interface FormData {
   status: 'open' | 'submitted' | 'expired';
+  /** The anamnesis id — folder of the files uploaded in the form (migration 20261025) */
+  recordId?: string;
   expiresAt?: string;
   templateName?: string;
   sections?: AnamnesisSection[];
@@ -751,6 +754,11 @@ export default function AnamnesisFormPage() {
         )}
       </div>
       {body}
+      {/* Files below the answer (e.g. a report) — needs the folder id from the form link */}
+      {step.kind === 'question' && step.field.allowFiles && form?.recordId && (
+        <FormFileUpload recordId={form.recordId} token={token} lang={lang}
+          value={values[filesKey(step.field.id)] ?? ''} onChange={v => setValue(filesKey(step.field.id), v)} />
+      )}
       {step.kind === 'question' && tooLongId === step.field.id && (
         <p className="text-sm text-destructive">{t.tooLong}</p>
       )}

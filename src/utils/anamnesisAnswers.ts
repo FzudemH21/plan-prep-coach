@@ -11,7 +11,7 @@
  * Unreadable JSON (e.g. a question whose type was changed) falls back to the plain text.
  */
 import type {
-  AnamnesisCondition, AnamnesisField, AnamnesisSection,
+  AnamnesisCondition, AnamnesisField, AnamnesisFile, AnamnesisSection,
 } from '@/types/anamnesis';
 import { PROFILE_SEX_SOURCE } from '@/types/anamnesis';
 import { BODY_REGIONS, getRegionKeyLabel } from '@/lib/bodyMapData';
@@ -74,6 +74,15 @@ export interface DatePeriod {
   /** One of the question's types (options), e.g. "Urlaub" */
   kind?: string;
 }
+/** Uploaded files of a question are stored as an answer of their own: "<question id>__files" */
+export const FILES_SUFFIX = '__files';
+export const filesKey = (fieldId: string): string => `${fieldId}${FILES_SUFFIX}`;
+
+export function parseAnswerFiles(value: string | undefined): AnamnesisFile[] {
+  return parseJson<AnamnesisFile[]>(value, v => Array.isArray(v))
+    ?.filter(f => f && typeof f.path === 'string' && typeof f.name === 'string') ?? [];
+}
+
 export function parseDateRanges(value: string | undefined): DatePeriod[] {
   const iso = /^\d{4}-\d{2}-\d{2}$/;
   return parseJson<DatePeriod[]>(value, v => Array.isArray(v))

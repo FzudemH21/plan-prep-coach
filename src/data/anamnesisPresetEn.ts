@@ -96,7 +96,7 @@ const complaints: AnamnesisSection = {
       options: ['Yes, normally', 'Yes, but with limits', 'No, I\'m taking a break'], condition: markedComplaints }),
     q({ id: 'c-diag', label: 'Has anything been examined or treated yet?', fieldType: 'multiselect', allowOther: true,
       options: DIAGNOSTICS, condition: markedComplaints }),
-    q({ id: 'c-diag-result', label: 'What was the result?', fieldType: 'textarea',
+    q({ id: 'c-diag-result', label: 'What was the result?', fieldType: 'textarea', allowFiles: true,
       helpText: 'e.g. the diagnosis, if you know it',
       condition: when('c-diag', ...DIAGNOSTICS.filter((d) => d !== 'No, nothing yet')) }),
   ],

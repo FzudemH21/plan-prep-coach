@@ -111,7 +111,7 @@ const complaints: AnamnesisSection = {
       options: ['Ja, ganz normal', 'Ja, aber eingeschränkt', 'Nein, ich mache gerade Pause'], condition: markedComplaints }),
     q({ id: 'c-diag', label: 'Wurde schon etwas untersucht oder behandelt?', fieldType: 'multiselect', allowOther: true,
       options: DIAGNOSTICS, condition: markedComplaints }),
-    q({ id: 'c-diag-result', label: 'Was ist dabei herausgekommen?', fieldType: 'textarea',
+    q({ id: 'c-diag-result', label: 'Was ist dabei herausgekommen?', fieldType: 'textarea', allowFiles: true,
       helpText: 'z. B. die Diagnose, falls du sie kennst',
       condition: when('c-diag', ...DIAGNOSTICS.filter((d) => d !== 'Nein, noch nichts')) }),
   ],

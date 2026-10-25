@@ -50,6 +50,12 @@ export async function removeConnectionFiles(connectionId: string): Promise<numbe
     + (await removeFolder(DOCUMENTS_BUCKET, `chat/${connectionId}`));
 }
 
+/** Files the athlete uploaded in an anamnesis form (anamnesis-form/<id>/…). Call before the
+ *  anamnesis row is deleted (the delete policy checks it). Returns how many could not be deleted. */
+export async function removeAnamnesisFormFiles(anamnesisId: string): Promise<number> {
+  return removeFolder(DOCUMENTS_BUCKET, `anamnesis-form/${anamnesisId}`);
+}
+
 export interface AthleteDeletionResult {
   /** Files that could not be deleted (e.g. migration not run yet) */
   filesFailed: number;
@@ -61,8 +67,16 @@ export async function deleteAthleteCloudData(coachUserId: string, athleteLocalId
   const errors: string[] = [];
   let filesFailed = 0;
 
-  // 1. Anamnesis records and their attachments
+  // 1. Anamnesis records and their attachments (the coach's and those uploaded in the form)
   filesFailed += await removeFolder(DOCUMENTS_BUCKET, `anamnesis/${coachUserId}/${athleteLocalId}`);
+  const { data: records } = await supabase
+    .from('athlete_anamneses')
+    .select('id')
+    .eq('coach_user_id', coachUserId)
+    .eq('athlete_local_id', athleteLocalId);
+  for (const { id } of (records ?? []) as Array<{ id: string }>) {
+    filesFailed += await removeAnamnesisFormFiles(id);
+  }
   const anamneses = await supabase
     .from('athlete_anamneses')
     .delete()

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { notifyAnamnesisChanged } from '@/hooks/useAnamnesisCalendarSync';
+import { removeAnamnesisFormFiles } from '@/utils/athleteDataDeletion';
 import type {
   AthleteAnamnesis, AnamnesisField, AnamnesisTemplateSnapshot, AnamnesisAttachment, AnamnesisConsent, AnamnesisProfileAnswers,
   AnamnesisNote,
@@ -259,6 +260,8 @@ export function useAthleteAnamneses(athleteLocalId: string) {
 
   const deleteAnamnesis = useCallback(async (id: string): Promise<boolean> => {
     try {
+      // Files uploaded in its form first — the delete policy checks the anamnesis row
+      await removeAnamnesisFormFiles(id).catch(() => 0);
       const { error } = await supabase.from('athlete_anamneses').delete().eq('id', id);
       if (error) throw error;
       setAnamneses((prev) => prev.filter((a) => a.id !== id));

@@ -298,6 +298,13 @@ function FieldRow({
           Add "Sonstiges" with free text
         </label>
       )}
+      {type !== 'info' && (
+        <label className="flex items-center gap-2 text-xs cursor-pointer w-fit">
+          <Checkbox className="h-3.5 w-3.5" checked={!!field.allowFiles}
+            onCheckedChange={(v) => onChange({ ...field, allowFiles: v === true || undefined })} />
+          Allow file upload <span className="text-muted-foreground">(e.g. a report — PDF or photo, below the answer; the AI doesn't read the files)</span>
+        </label>
+      )}
       {type === 'yesnoList' && (
         <LinesInput key={`${field.id}-${type}`} label="Items, each answered with yes / no (one per line)" placeholder={'Unintended weight loss\nFever or night sweats'}
           value={field.options ?? []} onCommit={(options) => onChange({ ...field, options })} />

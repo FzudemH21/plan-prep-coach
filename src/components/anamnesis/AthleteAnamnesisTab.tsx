@@ -64,9 +64,10 @@ import {
 } from '@/types/anamnesis';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { contextFor, fieldState, formatAnswer } from '@/utils/anamnesisAnswers';
+import { contextFor, fieldState, filesKey, formatAnswer, parseAnswerFiles } from '@/utils/anamnesisAnswers';
 import { localizeField, localizeSection } from '@/utils/anamnesisI18n';
 import { AnamnesisFieldInput } from '@/components/anamnesis/AnamnesisInputs';
+import { AnswerFiles } from '@/components/anamnesis/AnamnesisFiles';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -119,7 +120,11 @@ function buildSummaryPrompt(
     for (const field of section.fields) {
       // Answers of questions hidden by their condition (e.g. the earlier answer was changed) don't count
       if (fieldState(section, field, ctx) === 'notMet') continue;
-      const val = formatAnswer(field, record.fieldValues[field.id]);
+      // Uploaded files: only how many — never their content or names
+      const fileCount = parseAnswerFiles(record.fieldValues[filesKey(field.id)]).length;
+      const filesNote = fileCount > 0 ? `(${fileCount} file${fileCount === 1 ? '' : 's'} uploaded — not readable here)` : '';
+      const answer = formatAnswer(field, record.fieldValues[field.id]);
+      const val = [answer, filesNote].filter(Boolean).join(' ');
       if (val) rows.push(val.includes('\n') ? `  ${field.label}:\n${val.split('\n').map((l) => `    ${l}`).join('\n')}` : `  ${field.label}: ${val}`);
     }
     if (rows.length > 0) {
@@ -747,6 +752,8 @@ Leave out a heading completely when nothing is stated for it.`,
                       onChange={(v) => setFieldValue(field.id, v)}
                       readOnly={readOnly}
                     />
+                    {/* Files the athlete uploaded below this answer */}
+                    <AnswerFiles value={fieldValues[filesKey(field.id)]} />
                   </div>
                   );
                 })}

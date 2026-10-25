@@ -14,10 +14,10 @@
  */
 import React from 'react';
 import { Document, Font, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
-import type { AnamnesisAttachment, AnamnesisField, AnamnesisNote, AnamnesisSection, AnamnesisConsent } from '@/types/anamnesis';
+import type { AnamnesisAttachment, AnamnesisField, AnamnesisFile, AnamnesisNote, AnamnesisSection, AnamnesisConsent } from '@/types/anamnesis';
 import {
   DAY_LABELS, YESNO_OTHER, YESNO_OTHER_TEXT, WEEK_GRID_COLORS, WEEK_GRID_HOURS, WEEK_GRID_LABELS, contextFor, conditionState, describeCondition, formatAnswer,
-  isAnswered, isNegativeChoice, onlyYesItems, parseBodyMap, parseDateRanges, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
+  FILES_SUFFIX, filesKey, isAnswered, isNegativeChoice, onlyYesItems, parseAnswerFiles, parseBodyMap, parseDateRanges, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
   type BodyMapSpot, type WeekGridCell,
 } from '@/utils/anamnesisAnswers';
 import { localizeField, localizeSection } from '@/utils/anamnesisI18n';
@@ -300,8 +300,20 @@ function YesNoListBlock({ field, value, lang }: { field: AnamnesisField; value: 
   );
 }
 
-function FieldBlock({ field: original, value, lang, onlyIf }: {
+/** "Dateien: a.pdf, b.jpg" below an answer — the files the athlete uploaded (attached separately) */
+function FilesLine({ files, lang }: { files: AnamnesisFile[]; lang: AnamnesisPdfLang }) {
+  if (files.length === 0) return null;
+  return (
+    <Text style={{ fontSize: 8.5, color: C.fg2, marginTop: 2 }}>
+      {lang === 'de' ? 'Hochgeladene Dateien' : 'Uploaded files'}: {files.map((f) => f.name).join(', ')}
+    </Text>
+  );
+}
+
+function FieldBlock({ field: original, value, lang, onlyIf, files = [] }: {
   field: AnamnesisField; value: string; lang: AnamnesisPdfLang;
+  /** Files uploaded below the answer */
+  files?: AnamnesisFile[];
   /** Shown when it depends on an earlier answer that isn't known yet */
   onlyIf?: string;
 }) {
@@ -372,6 +384,7 @@ function FieldBlock({ field: original, value, lang, onlyIf }: {
         ) : (
           <Lines count={2} />
         )}
+      <FilesLine files={files} lang={lang} />
     </View>
   );
 }
@@ -471,6 +484,7 @@ export function AnamnesisPDF(props: AnamnesisPdfProps) {
                   key={field.id}
                   field={field}
                   value={props.fieldValues[field.id] ?? ''}
+                  files={parseAnswerFiles(props.fieldValues[filesKey(field.id)])}
                   lang={lang}
                   onlyIf={field.condition && conditionState(field.condition, ctx) === 'unknown'
                     ? describeCondition(field.condition, allFields, lang) : undefined}
@@ -552,7 +566,7 @@ export interface AnamnesisReportProps extends AnamnesisPdfProps {
 }
 
 /** One answered question: label + answer (structured answers as their block) */
-function ReportAnswer({ field: original, value, lang }: { field: AnamnesisField; value: string; lang: AnamnesisPdfLang }) {
+function ReportAnswer({ field: original, value, lang, files = [] }: { field: AnamnesisField; value: string; lang: AnamnesisPdfLang; files?: AnamnesisFile[] }) {
   const field = localizeField(original, lang);
   const type = field.fieldType;
   const block = type === 'bodyMap' ? <BodyMapBlock spots={parseBodyMap(value)} lang={lang} />
@@ -564,6 +578,7 @@ function ReportAnswer({ field: original, value, lang }: { field: AnamnesisField;
     <View wrap={false} style={{ marginBottom: 7 }}>
       <Text style={{ fontSize: 9, fontWeight: 600, color: C.fg2, marginBottom: 2 }}>{field.label}</Text>
       {block ?? <Text style={{ fontSize: 10, lineHeight: 1.4, color: C.fg1 }}>{formatAnswer(field, value, lang)}</Text>}
+      <FilesLine files={files} lang={lang} />
     </View>
   );
 }
@@ -593,6 +608,10 @@ export function AnamnesisReportPDF(props: AnamnesisReportProps) {
   const age = ageFrom(athlete.birthday);
   const ctx = contextFor(props.sections, props.fieldValues, athlete.sex);
   const today = formatDate(new Date().toISOString(), t.locale);
+  // Files the athlete uploaded in the form (all questions) — listed with the attachments
+  const formFiles = Object.entries(props.fieldValues)
+    .filter(([key]) => key.endsWith(FILES_SUFFIX))
+    .flatMap(([, value]) => parseAnswerFiles(value));
 
   const sections = props.sections
     .filter((sec) => include.sectionIds.includes(sec.id) && conditionState(sec.condition, ctx) !== 'notMet')
@@ -665,7 +684,7 @@ export function AnamnesisReportPDF(props: AnamnesisReportProps) {
           <View key={sec.id}>
             <SectionTitle title={localizeSection(sec, lang).title} accent={accent} />
             {fields.map((f) => (
-              <ReportAnswer key={f.id} field={f} lang={lang}
+              <ReportAnswer key={f.id} field={f} lang={lang} files={parseAnswerFiles(props.fieldValues[filesKey(f.id)])}
                 value={include.hideNegatives && f.fieldType === 'yesnoList' ? onlyYesItems(props.fieldValues[f.id]) : (props.fieldValues[f.id] ?? '')} />
             ))}
           </View>
@@ -692,10 +711,12 @@ export function AnamnesisReportPDF(props: AnamnesisReportProps) {
           </View>
         )}
 
-        {include.attachments && props.attachments.length > 0 && (
+        {include.attachments && (props.attachments.length > 0 || formFiles.length > 0) && (
           <View>
             <SectionTitle title={r.attachments} accent={accent} />
             {props.attachments.map((a) => <Text key={a.path} style={{ fontSize: 9.5, marginBottom: 2 }}>• {a.name}</Text>)}
+            {/* Uploaded by the athlete in the form */}
+            {formFiles.map((f) => <Text key={f.path} style={{ fontSize: 9.5, marginBottom: 2 }}>• {f.name}</Text>)}
           </View>
         )}
 

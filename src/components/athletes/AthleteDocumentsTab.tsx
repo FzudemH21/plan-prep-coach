@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { InlineDocumentViewer } from "@/components/coach/InlineDocumentViewer";
+import { AnamnesisFormFilesSection } from "@/components/anamnesis/AnamnesisFiles";
 import { useAthleteDocuments, type AthleteDoc, type DocFolder } from "@/hooks/useAthleteDocuments";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -370,6 +371,9 @@ export function AthleteDocumentsTab({ athleteId }: { athleteId: string }) {
           ))}
         </div>
       )}
+
+      {/* Files the athlete uploaded in the anamnesis form (read-only, stored with the anamnesis) */}
+      <AnamnesisFormFilesSection athleteId={athleteId} />
 
       {/* Drop zone — always visible */}
       <DropZone onFiles={handleFiles} disabled={uploading} />

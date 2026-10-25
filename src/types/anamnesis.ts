@@ -73,6 +73,14 @@ export interface AnamnesisAttachment {
   size: number;
 }
 
+/** A file the athlete uploaded in the form link (documents bucket, anamnesis-form/<record>/<token>/…) */
+export interface AnamnesisFile {
+  path: string;
+  name: string;
+  size: number;
+  mimeType: string;
+}
+
 export interface AnamnesisField {
   id: string;
   label: string;
@@ -93,6 +101,9 @@ export interface AnamnesisField {
   bodyMapIntensity?: boolean;
   /** multiselect: an extra "Sonstiges" choice with free text (stored in the answer as the text itself) */
   allowOther?: boolean;
+  /** The athlete may upload files below the answer (e.g. a report) — stored as the answer
+   *  "<id>__files" (AnamnesisFile[] as JSON); the AI only learns how many there are */
+  allowFiles?: boolean;
   /** The question in the template's other language */
   translations?: Partial<Record<AnamnesisLang, AnamnesisFieldTranslation>>;
   /** Display only (never stored): the options as shown in the current language — set by localizeField */
