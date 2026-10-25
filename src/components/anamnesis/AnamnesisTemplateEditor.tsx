@@ -38,7 +38,7 @@ import { ANAMNESIS_PRESETS } from '@/data/anamnesisPresets';
 import { AnamnesisTranslationEditor } from '@/components/anamnesis/AnamnesisTranslationEditor';
 import { translationProgress } from '@/utils/anamnesisI18n';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
-import { ANAMNESIS_LANG_LABELS, DEFAULT_ANAMNESIS_TEMPLATE, PROFILE_SEX_SOURCE, isAthleteSection, otherLang, type AnamnesisLang } from '@/types/anamnesis';
+import { ANAMNESIS_LANG_LABELS, ANAMNESIS_PROFILE_STEPS, DEFAULT_ANAMNESIS_TEMPLATE, PROFILE_SEX_SOURCE, isAthleteSection, otherLang, profileStepOn, type AnamnesisLang, type AnamnesisProfileSteps } from '@/types/anamnesis';
 import type {
   AnamnesisTemplate, AnamnesisTemplateDraft, AnamnesisSection, AnamnesisField, AnamnesisFieldType, AnamnesisCondition, AnamnesisListColumn,
 } from '@/types/anamnesis';
@@ -554,7 +554,7 @@ export function TemplateEditorDialog({
   isDeleting,
   showPresets,
 }: {
-  initial: { name: string; sections: AnamnesisSection[]; introText?: string } & Pick<AnamnesisTemplateDraft, 'language' | 'translations'>;
+  initial: { name: string; sections: AnamnesisSection[]; introText?: string } & Pick<AnamnesisTemplateDraft, 'language' | 'translations' | 'profileSteps'>;
   /** New template: offer the built-in templates to start from (ANAMNESIS_PRESETS) */
   showPresets?: boolean;
   open: boolean;
@@ -573,11 +573,14 @@ export function TemplateEditorDialog({
   // questions' translations live in the sections
   const [language, setLanguage] = useState<AnamnesisLang>(initial.language ?? 'de');
   const [translations, setTranslations] = useState(initial.translations);
+  // The fixed "About you" steps at the start of the form: which ones are asked
+  const [profileSteps, setProfileSteps] = useState<AnamnesisProfileSteps | undefined>(initial.profileSteps);
   const [mode, setMode] = useState<'questions' | 'translation'>('questions');
   const translationLang = otherLang(language);
-  const draft = (): AnamnesisTemplateDraft => ({ name, sections, introText, language, translations });
+  const draft = (): AnamnesisTemplateDraft => ({ name, sections, introText, language, translations, profileSteps });
   const applyDraft = (d: AnamnesisTemplateDraft) => {
     setName(d.name); setSections(d.sections); setIntroText(d.introText); setLanguage(d.language ?? 'de'); setTranslations(d.translations);
+    setProfileSteps(d.profileSteps);
   };
   const [doneTr, totalTr] = translationProgress(draft(), translationLang);
   const [presetId, setPresetId] = useState('');
@@ -686,6 +689,34 @@ export function TemplateEditorDialog({
 
         <div className="flex-1 min-h-0 overflow-y-auto px-6">
           <div className="space-y-2 pb-4">
+            {/* The fixed start of every form link — filled from / into the athlete profile */}
+            <div className="rounded-lg border border-dashed bg-muted/20 p-3 space-y-2">
+              <div>
+                <p className="text-sm font-semibold">About the athlete <span className="font-normal text-muted-foreground">(always first in the form link)</span></p>
+                <p className="text-xs text-muted-foreground">Pre-filled from the athlete profile; the athlete's answers can be applied to the profile afterwards. Switch off what you don't need.</p>
+              </div>
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                {ANAMNESIS_PROFILE_STEPS.map(stepDef => {
+                  const on = profileStepOn(profileSteps, stepDef.key);
+                  const fixed = stepDef.key === 'name';
+                  return (
+                    <label key={stepDef.key} className={cn('flex items-start gap-2 rounded-md border bg-background px-2.5 py-2 text-sm', !fixed && 'cursor-pointer', !on && 'opacity-60')}>
+                      <Checkbox className="h-3.5 w-3.5 mt-0.5" checked={on} disabled={fixed}
+                        onCheckedChange={(v) => setProfileSteps(prev => {
+                          const next = { ...(prev ?? {}) };
+                          if (v === true) delete next[stepDef.key]; else next[stepDef.key] = false;
+                          return Object.keys(next).length ? next : undefined;
+                        })} />
+                      <span className="min-w-0">
+                        <span className="block font-medium">{stepDef.label}</span>
+                        <span className="block text-xs text-muted-foreground">{language === 'en' ? stepDef.en : stepDef.de}</span>
+                        {stepDef.note && <span className="block text-[11px] text-muted-foreground italic">{stepDef.note}</span>}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
             {sections.map((section, idx) => (
               <SectionEditor
                 key={section.id}
@@ -793,9 +824,9 @@ export function AnamnesisTemplateEditor() {
     setIsCreating(true);
   };
 
-  const handleSaveNew = async ({ name, sections, introText, language, translations }: AnamnesisTemplateDraft) => {
+  const handleSaveNew = async ({ name, sections, introText, language, translations, profileSteps }: AnamnesisTemplateDraft) => {
     setIsSaving(true);
-    const created = await createTemplate(name, sections, introText, { language, translations });
+    const created = await createTemplate(name, sections, introText, { language, translations, profileSteps });
     setIsSaving(false);
     if (created) {
       toast({ title: 'Template created', description: `"${name}" is ready to use.` });
@@ -805,10 +836,10 @@ export function AnamnesisTemplateEditor() {
     }
   };
 
-  const handleSaveEdit = async ({ name, sections, introText, language, translations }: AnamnesisTemplateDraft) => {
+  const handleSaveEdit = async ({ name, sections, introText, language, translations, profileSteps }: AnamnesisTemplateDraft) => {
     if (!editingTemplate) return;
     setIsSaving(true);
-    const ok = await updateTemplate(editingTemplate.id, { name, sections, introText, language, translations });
+    const ok = await updateTemplate(editingTemplate.id, { name, sections, introText, language, translations, profileSteps });
     setIsSaving(false);
     if (ok) {
       toast({ title: 'Template saved' });
@@ -818,9 +849,9 @@ export function AnamnesisTemplateEditor() {
     }
   };
 
-  const handleSaveEditAsNew = async ({ name, sections, introText, language, translations }: AnamnesisTemplateDraft) => {
+  const handleSaveEditAsNew = async ({ name, sections, introText, language, translations, profileSteps }: AnamnesisTemplateDraft) => {
     setIsSavingAsNew(true);
-    const created = await createTemplate(name, sections, introText, { language, translations });
+    const created = await createTemplate(name, sections, introText, { language, translations, profileSteps });
     setIsSavingAsNew(false);
     if (created) {
       toast({ title: 'Template created', description: `"${name}" saved as a new template.` });
@@ -962,7 +993,7 @@ export function AnamnesisTemplateEditor() {
       {editingTemplate && (
         <TemplateEditorDialog
           key={editingTemplate.id}
-          initial={{ name: editingTemplate.name, sections: editingTemplate.sections, introText: editingTemplate.introText, language: editingTemplate.language, translations: editingTemplate.translations }}
+          initial={{ name: editingTemplate.name, sections: editingTemplate.sections, introText: editingTemplate.introText, language: editingTemplate.language, translations: editingTemplate.translations, profileSteps: editingTemplate.profileSteps }}
           open
           onClose={() => setEditingTemplate(null)}
           onSave={handleSaveEdit}

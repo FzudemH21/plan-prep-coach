@@ -348,9 +348,9 @@ function RecordForm({
     setAiSummary(null);
   };
 
-  const handleSaveNewTemplate = async ({ name, sections, introText, language, translations }: AnamnesisTemplateDraft) => {
+  const handleSaveNewTemplate = async ({ name, sections, introText, language, translations, profileSteps }: AnamnesisTemplateDraft) => {
     setSavingNewTemplate(true);
-    const created = await createTemplate(name, sections, introText, { language, translations });
+    const created = await createTemplate(name, sections, introText, { language, translations, profileSteps });
     setSavingNewTemplate(false);
     if (created) {
       setShowNewTemplate(false);
@@ -358,20 +358,20 @@ function RecordForm({
     }
   };
 
-  const handleSaveEditTemplate = async ({ name, sections, introText, language, translations }: AnamnesisTemplateDraft) => {
+  const handleSaveEditTemplate = async ({ name, sections, introText, language, translations, profileSteps }: AnamnesisTemplateDraft) => {
     if (!templateId) return;
     setSavingEditTemplate(true);
-    const ok = await updateTemplate(templateId, { name, sections, introText, language, translations });
+    const ok = await updateTemplate(templateId, { name, sections, introText, language, translations, profileSteps });
     setSavingEditTemplate(false);
     if (ok) {
       setShowEditTemplate(false);
-      setTemplateSnapshot(snapshotOf({ name, sections, introText, language, translations }));
+      setTemplateSnapshot(snapshotOf({ name, sections, introText, language, translations, profileSteps }));
     }
   };
 
-  const handleSaveEditAsNewTemplate = async ({ name, sections, introText, language, translations }: AnamnesisTemplateDraft) => {
+  const handleSaveEditAsNewTemplate = async ({ name, sections, introText, language, translations, profileSteps }: AnamnesisTemplateDraft) => {
     setSavingEditAsNew(true);
-    const created = await createTemplate(name, sections, introText, { language, translations });
+    const created = await createTemplate(name, sections, introText, { language, translations, profileSteps });
     setSavingEditAsNew(false);
     if (created) {
       setShowEditTemplate(false);
@@ -676,7 +676,7 @@ Leave out a heading completely when nothing is stated for it.`,
             return t ? (
               <TemplateEditorDialog
                 key={`edit-${templateId}`}
-                initial={{ name: t.name, sections: t.sections, introText: t.introText, language: t.language, translations: t.translations }}
+                initial={{ name: t.name, sections: t.sections, introText: t.introText, language: t.language, translations: t.translations, profileSteps: t.profileSteps }}
                 open
                 onClose={() => setShowEditTemplate(false)}
                 onSave={handleSaveEditTemplate}

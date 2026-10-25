@@ -34,7 +34,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import type { AnamnesisField, AnamnesisProfileAnswers, AnamnesisSection } from '@/types/anamnesis';
+import type { AnamnesisField, AnamnesisProfileAnswers, AnamnesisProfileSteps, AnamnesisSection } from '@/types/anamnesis';
+import { profileStepOn } from '@/types/anamnesis';
 import { contextFor, fieldState, filesKey, isAnswered as answerGiven, isQuestion } from '@/utils/anamnesisAnswers';
 import { FormFileUpload } from '@/components/anamnesis/AnamnesisFiles';
 import { localizeField, localizeSection } from '@/utils/anamnesisI18n';
@@ -51,6 +52,8 @@ interface FormData {
   status: 'open' | 'submitted' | 'expired';
   /** The anamnesis id — folder of the files uploaded in the form (migration 20261025) */
   recordId?: string;
+  /** "About you" steps left out by the template (false = off; migration 20261025_anamnesis_profile_steps) */
+  profileSteps?: AnamnesisProfileSteps | null;
   expiresAt?: string;
   templateName?: string;
   sections?: AnamnesisSection[];
@@ -350,13 +353,13 @@ export default function AnamnesisFormPage() {
     const ctx = contextFor(sections, values, profile.sex);
     return [
       { kind: 'welcome' },
-      ...PROFILE_STEPS.map(key => ({ kind: 'profile' as const, key })),
+      ...PROFILE_STEPS.filter(key => profileStepOn(form?.profileSteps, key)).map(key => ({ kind: 'profile' as const, key })),
       ...sections.flatMap(section => section.fields
         .filter(field => fieldState(section, field, ctx) === 'met')
         .map(field => ({ kind: 'question' as const, section, field }))),
       { kind: 'consent' },
     ];
-  }, [form?.sections, values, profile.sex]);
+  }, [form?.sections, form?.profileSteps, values, profile.sex]);
   const step = steps[Math.min(stepIdx, steps.length - 1)];
   const questionCount = steps.filter(s => s.kind === 'profile' || (s.kind === 'question' && isQuestion(s.field))).length;
 

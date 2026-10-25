@@ -126,6 +126,26 @@ export interface AnamnesisSection {
 /** Whether the athlete sees this section in the form link (default: yes) */
 export const isAthleteSection = (section: AnamnesisSection): boolean => section.athleteFills !== false;
 
+/** The fixed "About you" steps at the start of the form link (filled from / into the athlete profile) */
+export type AnamnesisProfileStep = 'name' | 'birthday' | 'sex' | 'sports' | 'occupation' | 'activity' | 'address';
+/** Per template: false = the step is left out (name is always asked) */
+export type AnamnesisProfileSteps = Partial<Record<AnamnesisProfileStep, boolean>>;
+
+export const ANAMNESIS_PROFILE_STEPS: Array<{ key: AnamnesisProfileStep; label: string; de: string; en: string; note?: string }> = [
+  { key: 'name', label: 'Name', de: 'Wie heißt du?', en: 'What is your name?', note: 'always asked' },
+  { key: 'birthday', label: 'Date of birth', de: 'Wann bist du geboren?', en: 'When were you born?' },
+  { key: 'sex', label: 'Sex', de: 'Geschlecht', en: 'Sex',
+    note: 'questions that depend on it (e.g. cycle) are asked to everyone when it is off' },
+  { key: 'sports', label: 'Sport(s)', de: 'Welche Sportart(en) machst du?', en: 'Which sport(s) do you do?' },
+  { key: 'occupation', label: 'Occupation', de: 'Was machst du beruflich?', en: 'What do you do for work?' },
+  { key: 'activity', label: 'Everyday activity', de: 'Wie aktiv bist du im Alltag?', en: 'How active are you in everyday life?' },
+  { key: 'address', label: 'Billing address', de: 'Rechnungsadresse', en: 'Billing address' },
+];
+
+export function profileStepOn(steps: AnamnesisProfileSteps | undefined | null, key: AnamnesisProfileStep): boolean {
+  return key === 'name' || steps?.[key] !== false;
+}
+
 export interface AnamnesisTemplate {
   id: string;
   coachUserId: string;
@@ -136,6 +156,8 @@ export interface AnamnesisTemplate {
   /** Main language (default: German) and the translation of name / intro (migration 20261019) */
   language?: AnamnesisLang;
   translations?: Partial<Record<AnamnesisLang, AnamnesisTemplateTranslation>>;
+  /** Which "About you" steps the form asks (migration 20261025_anamnesis_profile_steps) */
+  profileSteps?: AnamnesisProfileSteps;
   createdAt: string;
   updatedAt: string;
 }
@@ -146,6 +168,7 @@ export interface AnamnesisTemplateSnapshot {
   introText?: string;
   language?: AnamnesisLang;
   translations?: Partial<Record<AnamnesisLang, AnamnesisTemplateTranslation>>;
+  profileSteps?: AnamnesisProfileSteps;
 }
 
 /** What the template editor saves */
@@ -155,17 +178,20 @@ export interface AnamnesisTemplateDraft {
   introText: string;
   language?: AnamnesisLang;
   translations?: Partial<Record<AnamnesisLang, AnamnesisTemplateTranslation>>;
+  profileSteps?: AnamnesisProfileSteps;
 }
 
 /** The copy of a template an anamnesis keeps (its questions as they were when it was created) */
 export function snapshotOf(t: { name: string; sections: AnamnesisSection[]; introText?: string; language?: AnamnesisLang;
-  translations?: Partial<Record<AnamnesisLang, AnamnesisTemplateTranslation>> }): AnamnesisTemplateSnapshot {
+  translations?: Partial<Record<AnamnesisLang, AnamnesisTemplateTranslation>>; profileSteps?: AnamnesisProfileSteps }): AnamnesisTemplateSnapshot {
+  const off = Object.entries(t.profileSteps ?? {}).filter(([, on]) => on === false);
   return {
     name: t.name,
     sections: t.sections,
     ...(t.introText?.trim() ? { introText: t.introText.trim() } : {}),
     ...(t.language ? { language: t.language } : {}),
     ...(t.translations && Object.keys(t.translations).length ? { translations: t.translations } : {}),
+    ...(off.length > 0 ? { profileSteps: Object.fromEntries(off) as AnamnesisProfileSteps } : {}),
   };
 }
 

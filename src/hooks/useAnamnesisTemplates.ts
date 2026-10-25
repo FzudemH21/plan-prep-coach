@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
-import type { AnamnesisTemplate, AnamnesisSection, AnamnesisLang, AnamnesisTemplateTranslation } from '@/types/anamnesis';
+import type { AnamnesisTemplate, AnamnesisSection, AnamnesisLang, AnamnesisTemplateTranslation, AnamnesisProfileSteps } from '@/types/anamnesis';
 
-/** Main language + translation of name / intro (columns of migration 20261019) */
+/** Main language + translation of name / intro (columns of migration 20261019) and the "About
+ *  you" steps (column of 20261025_anamnesis_profile_steps) */
 export interface TemplateLanguageInfo {
   language?: AnamnesisLang;
   translations?: Partial<Record<AnamnesisLang, AnamnesisTemplateTranslation>>;
+  profileSteps?: AnamnesisProfileSteps;
 }
 
 /** The language columns, or nothing when unset — so saving works before the migration is run */
@@ -15,10 +17,11 @@ function languageColumns(info?: TemplateLanguageInfo): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (info.language) out.language = info.language;
   if (info.translations && Object.keys(info.translations).length) out.translations = info.translations;
+  if (info.profileSteps !== undefined) out.profile_steps = info.profileSteps;
   return out;
 }
 
-const missingLanguageColumn = (message?: string) => !!message && /(language|translations)/.test(message);
+const missingLanguageColumn = (message?: string) => !!message && /(language|translations|profile_steps)/.test(message);
 import { DEFAULT_ANAMNESIS_TEMPLATE } from '@/types/anamnesis';
 
 // ── DB row → TS type ──────────────────────────────────────────────────────────
@@ -31,6 +34,7 @@ interface DbTemplate {
   intro_text?: string | null;
   language?: string | null;
   translations?: Partial<Record<AnamnesisLang, AnamnesisTemplateTranslation>> | null;
+  profile_steps?: AnamnesisProfileSteps | null;
   created_at: string;
   updated_at: string;
 }
@@ -44,6 +48,7 @@ function fromDb(row: DbTemplate): AnamnesisTemplate {
     introText: row.intro_text ?? undefined,
     language: row.language === 'en' ? 'en' : row.language === 'de' ? 'de' : undefined,
     translations: row.translations ?? undefined,
+    profileSteps: row.profile_steps ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -147,7 +152,7 @@ export function useAnamnesisTemplates() {
   const updateTemplate = useCallback(
     async (id: string, updates: { name?: string; sections?: AnamnesisSection[]; introText?: string } & TemplateLanguageInfo): Promise<boolean> => {
       try {
-        const { introText, language, translations, ...rest } = updates;
+        const { introText, language, translations, profileSteps, ...rest } = updates;
         const current = shared.find((t) => t.id === id);
         // intro_text only when it is set or changes (the column comes with migration 20261007)
         const introChange = introText !== undefined && (introText.trim() || current?.introText)
@@ -160,7 +165,7 @@ export function useAnamnesisTemplates() {
           .select()
           .single();
         const base = { ...rest, ...introChange, updated_at: new Date().toISOString() };
-        let { data, error } = await update({ ...base, ...languageColumns({ language, translations }) });
+        let { data, error } = await update({ ...base, ...languageColumns({ language, translations, profileSteps }) });
         if (error && missingLanguageColumn(error.message)) {
           console.warn('[useAnamnesisTemplates] language columns missing — saved without them');
           ({ data, error } = await update(base));
