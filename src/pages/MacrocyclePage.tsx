@@ -52,6 +52,7 @@ import { useCoachMemory } from "@/hooks/useCoachMemory";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCalendarEvents, groupConsecutiveDates } from "@/hooks/useCalendarEvents";
 import { TEST_COLOR, EVENT_COLOR, testEventGradient } from "@/lib/eventColors";
+import { PlanNotesField } from "@/components/shared/PlanNotesField";
 import { useWizardData } from "@/contexts/WizardDataContext";
 
 // Type for manually added methods with rationale
@@ -1188,12 +1189,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Textarea
-            value={planNotes}
-            onChange={(e) => setPlanNotes(e.target.value)}
-            placeholder="Notizen, Überlegungen, Ideen zum Plan..."
-            className="min-h-[180px] resize-y"
-          />
+          <PlanNotesField value={planNotes} onChange={setPlanNotes} />
         </CardContent>
       </Card>
 
@@ -3323,12 +3319,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Textarea
-              value={planNotes}
-              onChange={(e) => setPlanNotes(e.target.value)}
-              placeholder="Notizen, Überlegungen, Ideen zum Plan..."
-              className="min-h-[180px] resize-y"
-            />
+            <PlanNotesField value={planNotes} onChange={setPlanNotes} />
           </CardContent>
         </Card>
       )}

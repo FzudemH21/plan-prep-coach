@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PlanNotesField, PlanNotesView } from '@/components/shared/PlanNotesField';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
@@ -215,15 +216,9 @@ export function TrainingPlanOverview({
                   <FileText className="h-3 w-3" /> Notes
                 </Label>
                 {onNotesChange ? (
-                  <Textarea
-                    value={notes || ''}
-                    onChange={(e) => onNotesChange(e.target.value)}
-                    placeholder="Notizen, Überlegungen, Ideen zum Plan..."
-                    className="mt-1 min-h-[140px] resize-y text-sm"
-                    onClick={(e) => e.stopPropagation()}
-                  />
+                  <PlanNotesField value={notes || ''} onChange={onNotesChange} minHeight={140} className="mt-1" />
                 ) : notes ? (
-                  <p className="text-sm mt-1 whitespace-pre-wrap">{notes}</p>
+                  <PlanNotesView text={notes} className="mt-1" />
                 ) : null}
               </div>
             )}
