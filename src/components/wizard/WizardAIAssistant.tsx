@@ -109,17 +109,17 @@ export type ApplySuggestion =
   /** Parameter Database — add multiple parameters at once */
   | { type: "add_parameters_bulk"; parameters: Array<{ name: string; category?: string; unit?: string; applicableSports?: string[]; mainMeasureName?: string; mainBetterWhen?: "higher" | "lower"; measures?: AIMeasureSpec[]; perSide?: boolean }> }
   /** Parameter Database — add an interaction between two existing parameters (by name) */
-  | { type: "add_interaction"; sourceParameterName: string; targetParameterName: string; direction: "contributes_to" | "improved_by"; strength?: "strong" | "moderate" | "weak" }
+  | { type: "add_interaction"; sourceParameterName: string; targetParameterName: string; direction: "contributes_to" | "improved_by"; strength?: "strong" | "moderate" | "weak"; targetMeasureNames?: string[] }
   /** Parameter Database — add multiple interactions at once */
-  | { type: "add_interactions_bulk"; interactions: Array<{ sourceParameterName: string; targetParameterName: string; direction: "contributes_to" | "improved_by"; strength?: "strong" | "moderate" | "weak" }> }
+  | { type: "add_interactions_bulk"; interactions: Array<{ sourceParameterName: string; targetParameterName: string; direction: "contributes_to" | "improved_by"; strength?: "strong" | "moderate" | "weak"; targetMeasureNames?: string[] }> }
   /** Parameter Database — link a training method to a parameter */
-  | { type: "add_parameter_method"; parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string }
+  | { type: "add_parameter_method"; parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string; measureNames?: string[] }
   /** Parameter Database — link multiple training methods to parameters at once */
-  | { type: "add_parameter_methods_bulk"; links: Array<{ parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string }> }
+  | { type: "add_parameter_methods_bulk"; links: Array<{ parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string; measureNames?: string[] }> }
   /** Parameter Database — update rationale/evidence on an existing method link */
-  | { type: "update_parameter_method"; parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string }
+  | { type: "update_parameter_method"; parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string; measureNames?: string[] }
   /** Parameter Database — update multiple method links at once */
-  | { type: "update_parameter_methods_bulk"; updates: Array<{ parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string }> }
+  | { type: "update_parameter_methods_bulk"; updates: Array<{ parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string; measureNames?: string[] }> }
   /** Parameter Database — remove a training method link from a parameter */
   | { type: "remove_parameter_method"; parameterName: string; methodId: string }
   /** Parameter Database — remove an interaction between two parameters */
@@ -399,6 +399,7 @@ Available types and their fields:
 - add_parameter: {"type":"add_parameter","name":"<parameter name>","category":"<one of: strength|speed|power|endurance|mobility|technique|body_composition|other>","unit":"<unit e.g. kg, s, cm — omit if not applicable>","applicableSports":["<sport>","<sport>"]}
   applicableSports is optional — include when the parameter is sport-specific (e.g. ["Soccer","Rugby"]). Omit for universal parameters.
 - MEASURES: a parameter is the test / quality (e.g. "30 m Sprint"); its MEASURES are what is recorded for it: the main measure (a number in the parameter's unit) plus optional more — kind "number" (unit, betterWhen "higher"/"lower"), "scale" (scaleMin–scaleMax with end labels, e.g. pain NRS 0–10: {"name":"Pain","kind":"scale","scaleMin":0,"scaleMax":10,"scaleMinLabel":"no pain","scaleMaxLabel":"worst imaginable pain","betterWhen":"lower"}), "levels" (own ordered levels, worst → best, e.g. {"name":"Quality","kind":"levels","levels":["Not possible","With compensation","Clean"]}) or "passFail". perSide: true = recorded for left and right (number measures then get the limb symmetry index). Do NOT create separate parameters for the pain / quality of the same test ("30 m acceleration pain") — add a measure to the existing parameter instead. add_parameter / add_parameters_bulk accept optional "mainMeasureName" (e.g. "Time"), "mainBetterWhen", "measures" (the additional ones) and "perSide".
+- MEASURE SCOPE of method links and interactions: when a parameter has several measures, a method link can target only some of them — add "measureNames":["Pain"] (or ["Time","Pain"]) to add_parameter_method(s) / update_parameter_method(s); an interaction can target only some measures of the TARGET parameter with "targetMeasureNames". Leave it out when the method / interaction applies to the parameter as a whole (all measures). Example: isometrics → 30 m Sprint, measureNames ["Pain"]; max-velocity sprints → 30 m Sprint, measureNames ["Time"]. The existing links show their scope as "for: …".
 - add_parameter_measures: {"type":"add_parameter_measures","parameterName":"<exact parameter name>","measures":[{"name":"Pain","kind":"scale","scaleMin":0,"scaleMax":10,"scaleMinLabel":"no pain","scaleMaxLabel":"worst imaginable pain","betterWhen":"lower"}],"perSide":true}
   Adds measures to an existing parameter (measures with the same name are skipped) and / or switches on per-side recording.
 - add_parameters_bulk: {"type":"add_parameters_bulk","parameters":[{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>","applicableSports":["<sport>"]},{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>"}]}

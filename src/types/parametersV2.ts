@@ -68,6 +68,8 @@ export interface ParameterInteraction {
   targetParameterId: string;       // The parameter being improved
   direction: InteractionDirection; // 'contributes_to' or 'improved_by'
   strength?: InteractionStrength;  // Optional intensity: 'strong', 'moderate', 'weak'
+  /** Which measures of the TARGET parameter this applies to (e.g. only its pain) — unset = all */
+  measureIds?: string[];
   // Legacy fields for migration (optional, will be removed after migration)
   parameterId?: string;
   interactingParameterId?: string;
@@ -80,6 +82,8 @@ export interface ParameterMethodV2 {
   rationale?: string;              // The "why" - optional explanation
   evidence?: string;               // Research citations / supporting evidence
   evidenceQuality?: string;        // GRADE-inspired: "strong" | "moderate" | "preliminary" | "expert_opinion"
+  /** Which of the parameter's measures the method targets (e.g. only pain, or time + pain) — unset = all */
+  measureIds?: string[];
 }
 
 export interface ParametersDatabaseV2 {

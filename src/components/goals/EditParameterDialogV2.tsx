@@ -16,6 +16,7 @@ import { Plus, X, ChevronDown } from 'lucide-react';
 import { ParameterV2, ParameterInteraction, ParameterMethodV2, PARAMETER_CATEGORIES, INTERACTION_STRENGTHS, InteractionDirection, InteractionStrength } from '@/types/parametersV2';
 import { ToolboxEntry } from '@/types/toolbox';
 import { ParameterMeasuresEditor } from '@/components/goals/ParameterMeasuresEditor';
+import { MeasureScopePicker } from '@/components/goals/MeasureScopePicker';
 import { measuresToStore, parameterMeasures } from '@/utils/parameterMeasures';
 import type { ParameterMeasure } from '@/types/parametersV2';
 import {
@@ -691,6 +692,9 @@ export function EditParameterDialogV2({
                             ))}
                           </SelectContent>
                         </Select>
+                        {/* Which measures of the improved parameter (e.g. only its pain) */}
+                        <MeasureScopePicker target={targetParameter} measureIds={interaction.measureIds}
+                          onChange={(measureIds) => onUpdateInteraction(interaction.id, { measureIds })} />
                         <button
                           onClick={() => onRemoveInteraction(interaction.id)}
                           className="ml-1 hover:text-destructive"
@@ -800,6 +804,9 @@ export function EditParameterDialogV2({
                             ))}
                           </SelectContent>
                         </Select>
+                        {/* Which measures of THIS parameter it improves */}
+                        <MeasureScopePicker target={parameter} measureIds={interaction.measureIds}
+                          onChange={(measureIds) => onUpdateInteraction(interaction.id, { measureIds })} />
                         <button
                           onClick={() => onRemoveInteraction(interaction.id)}
                           className="ml-1 hover:text-destructive"
@@ -892,6 +899,9 @@ export function EditParameterDialogV2({
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-medium truncate flex-1 min-w-0">
                           {method.methodId}
+                          {/* Which measures the method targets (e.g. time + pain) */}
+                          <MeasureScopePicker target={parameter} measureIds={method.measureIds} className="ml-1.5 align-middle"
+                            onChange={(measureIds) => onUpdateMethod(method.id, { measureIds })} />
                         </p>
                         <Button
                           variant="ghost"

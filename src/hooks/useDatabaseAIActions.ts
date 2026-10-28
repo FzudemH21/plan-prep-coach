@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { ApplySuggestion, ToolboxParameterSpec } from '@/components/wizard/WizardAIAssistant';
 import { MAIN_MEASURE_ID, type ParameterMeasure, type ParametersDatabaseV2, type ParameterV2 } from '@/types/parametersV2';
 import type { AIMeasureSpec } from '@/components/wizard/WizardAIAssistant';
-import { measureSummary, measuresToStore, newMeasureId, parameterMeasures } from '@/utils/parameterMeasures';
+import { measureSummary, measuresToStore, newMeasureId, parameterMeasures, scopeLabel } from '@/utils/parameterMeasures';
 import type { ToolboxDatabase, ToolboxEntry } from '@/types/toolbox';
 
 export const PARAMETER_ACTION_TYPES: ReadonlySet<string> = new Set([
@@ -73,6 +73,7 @@ export function buildParameterDatabaseContext(data: ParametersDatabaseV2 | undef
         const param = data.parameters.find((p) => p.id === link.parameterId);
         if (!param) return null;
         return `- parameterName: "${param.name}" | methodId: "${link.methodId}"`
+          + (link.measureIds?.length ? ` | for: ${scopeLabel(link, param)}` : '')
           + (link.rationale ? ` | rationale: "${link.rationale}"` : '')
           + (link.evidence ? ` | evidence: "${link.evidence}"` : '')
           + (link.evidenceQuality ? ` | evidenceQuality: "${link.evidenceQuality}"` : '');
@@ -88,7 +89,7 @@ export function buildParameterDatabaseContext(data: ParametersDatabaseV2 | undef
       const tgt = data.parameters.find((p) => p.id === i.targetParameterId);
       if (!src || !tgt) continue;
       if (!bySource.has(src.name)) bySource.set(src.name, []);
-      bySource.get(src.name)!.push(`"${tgt.name}"${i.strength ? ` (${i.strength})` : ''}`);
+      bySource.get(src.name)!.push(`"${tgt.name}"${i.strength ? ` (${i.strength})` : ''}${i.measureIds?.length ? ` [for: ${scopeLabel(i, tgt)}]` : ''}`);
     }
     interactions = Array.from(bySource.entries()).map(([src, t]) => `"${src}" → ${t.join(', ')}`).join('\n');
   }
@@ -149,12 +150,25 @@ export function applyParameterActions(base: ParametersDatabaseV2, actions: Apply
     parameters.push(param);
     pAdded++;
   };
-  const addInteraction = (i: { sourceParameterName: string; targetParameterName: string; direction: 'contributes_to' | 'improved_by'; strength?: 'strong' | 'moderate' | 'weak' }) => {
+  /** Measure names → ids of the parameter's measures (unknown names are reported); none = no scope */
+  const scopeIds = (param: ParameterV2, names: string[] | undefined): string[] | undefined => {
+    if (!names?.length) return undefined;
+    const measures = parameterMeasures(param);
+    const ids: string[] = [];
+    for (const n of names) {
+      const m = measures.find((x) => x.name.trim().toLowerCase() === n.trim().toLowerCase());
+      if (m) ids.push(m.id); else failed.push(`${param.name}: measure "${n}" not found`);
+    }
+    return ids.length ? ids : undefined;
+  };
+  const addInteraction = (i: { sourceParameterName: string; targetParameterName: string; direction: 'contributes_to' | 'improved_by'; strength?: 'strong' | 'moderate' | 'weak'; targetMeasureNames?: string[] }) => {
     const src = find(i.sourceParameterName);
     const tgt = find(i.targetParameterName);
     if (!src || !tgt) { failed.push(`${i.sourceParameterName} → ${i.targetParameterName}: parameter not found`); return; }
     if (interactions.some((x) => x.sourceParameterId === src.id && x.targetParameterId === tgt.id)) return;
-    interactions.push({ id: newId('i'), sourceParameterId: src.id, targetParameterId: tgt.id, direction: i.direction, strength: i.strength ?? 'moderate' });
+    const measureIds = scopeIds(tgt, i.targetMeasureNames);
+    if (i.targetMeasureNames?.length && !measureIds) return;
+    interactions.push({ id: newId('i'), sourceParameterId: src.id, targetParameterId: tgt.id, direction: i.direction, strength: i.strength ?? 'moderate', ...(measureIds ? { measureIds } : {}) });
     iAdded++;
   };
   const removeInteraction = (i: { sourceParameterName: string; targetParameterName: string }) => {
@@ -165,16 +179,20 @@ export function applyParameterActions(base: ParametersDatabaseV2, actions: Apply
     if (interactions.length === before) failed.push(`${i.sourceParameterName} → ${i.targetParameterName}: interaction not found`);
     else iRemoved += before - interactions.length;
   };
-  const addLink = (l: { parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string }) => {
+  const addLink = (l: { parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string; measureNames?: string[] }) => {
     const param = find(l.parameterName);
     if (!param) { failed.push(`${l.methodId} → ${l.parameterName}: parameter not found`); return; }
     if (parameterMethods.some((m) => m.parameterId === param.id && m.methodId === l.methodId)) return;
-    parameterMethods.push({ id: newId('m'), parameterId: param.id, methodId: l.methodId, rationale: l.rationale, evidence: l.evidence, evidenceQuality: normalizeEvidenceQuality(l.evidenceQuality) });
+    const measureIds = scopeIds(param, l.measureNames);
+    // Measures named but none of them found: not added without a scope (it would count for all measures)
+    if (l.measureNames?.length && !measureIds) return;
+    parameterMethods.push({ id: newId('m'), parameterId: param.id, methodId: l.methodId, rationale: l.rationale, evidence: l.evidence, evidenceQuality: normalizeEvidenceQuality(l.evidenceQuality), ...(measureIds ? { measureIds } : {}) });
     mAdded++;
   };
-  const updateLink = (u: { parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string }) => {
+  const updateLink = (u: { parameterName: string; methodId: string; rationale?: string; evidence?: string; evidenceQuality?: string; measureNames?: string[] }) => {
     const param = find(u.parameterName);
     const eq = normalizeEvidenceQuality(u.evidenceQuality);
+    const measureIds = param && u.measureNames ? scopeIds(param, u.measureNames) : undefined;
     let matched = false;
     if (param) {
       parameterMethods = parameterMethods.map((m) => {
@@ -185,6 +203,7 @@ export function applyParameterActions(base: ParametersDatabaseV2, actions: Apply
           ...(u.rationale !== undefined && { rationale: u.rationale }),
           ...(u.evidence !== undefined && { evidence: u.evidence }),
           ...(eq !== undefined && { evidenceQuality: eq }),
+          ...(u.measureNames !== undefined && { measureIds }),
         };
       });
     }

@@ -93,6 +93,25 @@ export function measuresToStore(measures: ParameterMeasure[]): ParameterMeasure[
   return measures.map((m) => (m.id === MAIN_MEASURE_ID ? { ...m, unit: undefined } : m));
 }
 
+/**
+ * Whether a method link / interaction applies to a measure: without a scope it applies to all measures
+ * of the parameter; with a scope only to the measures listed. No measure given = the main measure.
+ * Scoped ids of measures that were removed are ignored (an empty scope then means all again).
+ */
+export function appliesToMeasure(
+  link: { measureIds?: string[] }, measureId: string | undefined, target?: Pick<ParameterV2, 'unit' | 'measures'>,
+): boolean {
+  const ids = (link.measureIds ?? []).filter((id) => !target || parameterMeasures(target).some((m) => m.id === id));
+  if (ids.length === 0) return true;
+  return ids.includes(measureId ?? MAIN_MEASURE_ID);
+}
+
+/** "Time, Pain" — the measures a link is scoped to (empty = all measures) */
+export function scopeLabel(link: { measureIds?: string[] }, target: Pick<ParameterV2, 'unit' | 'measures'>): string {
+  const names = parameterMeasures(target).filter((m) => link.measureIds?.includes(m.id)).map((m) => m.name);
+  return names.length ? names.join(', ') : 'all measures';
+}
+
 export function newMeasureId(): string {
   return `m_${Math.random().toString(36).slice(2, 9)}`;
 }
