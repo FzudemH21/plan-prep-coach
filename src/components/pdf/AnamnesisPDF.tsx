@@ -17,10 +17,11 @@ import { Document, Font, Image, Page, StyleSheet, Text, View } from '@react-pdf/
 import type { AnamnesisAttachment, AnamnesisField, AnamnesisFile, AnamnesisNote, AnamnesisSection, AnamnesisConsent } from '@/types/anamnesis';
 import {
   DAY_LABELS, YESNO_OTHER, YESNO_OTHER_TEXT, WEEK_GRID_COLORS, WEEK_GRID_HOURS, WEEK_GRID_LABELS, contextFor, conditionState, describeCondition, formatAnswer,
-  FILES_SUFFIX, filesKey, isAnswered, isNegativeChoice, onlyYesItems, parseAnswerFiles, parseBodyMap, parseDateRanges, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
+  answerFileGroups, filesKey, isAnswered, isBodyMapNone, spotDetailLines, spotHeading, spotPain, isNegativeChoice, onlyYesItems, parseAnswerFiles, parseBodyMap, parseDateRanges, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
   type BodyMapSpot, type WeekGridCell,
 } from '@/utils/anamnesisAnswers';
 import { localizeField, localizeSection } from '@/utils/anamnesisI18n';
+import { nrsSeverityStroke } from '@/lib/bodyMapData';
 
 Font.register({
   family: 'Geist',
@@ -147,8 +148,13 @@ function Options({ labels, values, picked }: { labels: string[]; values?: string
 const BODY_VIEWBOX = { front: { w: 193, h: 306 }, back: { w: 211, h: 317 } } as const;
 const BODY_PDF_H = 190;
 
-function BodyMapBlock({ spots, lang }: { spots: BodyMapSpot[]; lang: AnamnesisPdfLang }) {
+function BodyMapBlock({ field, value, lang, skipNegative = false }: {
+  field: AnamnesisField; value: string; lang: AnamnesisPdfLang; skipNegative?: boolean;
+}) {
   const sideLabel = lang === 'de' ? { front: 'Vorne', back: 'Hinten' } : { front: 'Front', back: 'Back' };
+  if (isBodyMapNone(value)) return <Text style={{ fontSize: 10, color: C.fg1 }}>{lang === 'de' ? 'Keine' : 'None'}</Text>;
+  const spots = parseBodyMap(value);
+  const perSpot = !!field.spotFields?.length;
   return (
     <View>
       <View style={{ flexDirection: 'row', marginBottom: 4 }}>
@@ -164,7 +170,8 @@ function BodyMapBlock({ spots, lang }: { spots: BodyMapSpot[]; lang: AnamnesisPd
                 {spots.map((spot, i) => (spot.view !== view ? null : (
                   <View key={spot.id} style={{
                     position: 'absolute', left: spot.x * scale - 6, top: spot.y * scale - 6, width: 12, height: 12,
-                    borderRadius: 6, backgroundColor: '#1e40af', alignItems: 'center', justifyContent: 'center',
+                    borderRadius: 6, backgroundColor: (spotPain(field, spot, spots) ?? 0) > 0 ? nrsSeverityStroke(spotPain(field, spot, spots) ?? 0) : '#1e40af',
+                    alignItems: 'center', justifyContent: 'center',
                   }}>
                     <Text style={{ fontSize: 6.5, fontWeight: 700, color: '#ffffff' }}>{i + 1}</Text>
                   </View>
@@ -174,13 +181,21 @@ function BodyMapBlock({ spots, lang }: { spots: BodyMapSpot[]; lang: AnamnesisPd
           );
         })}
       </View>
-      {spots.map((spot, i) => (
+      {spots.map((spot, i) => (perSpot ? (
+        // With questions per spot: the spot, then its answers indented
+        <View key={spot.id} wrap={false} style={{ marginBottom: 4 }}>
+          <Text style={{ fontSize: 9.5, fontWeight: 600, color: C.fg1 }}>{spotHeading(spot, i, lang)}</Text>
+          {spotDetailLines(field, spot, spots, lang, skipNegative).map((line, li) => (
+            <Text key={li} style={{ fontSize: 9, color: C.fg2, marginLeft: 10, lineHeight: 1.35 }}>{line}</Text>
+          ))}
+        </View>
+      ) : (
         <Text key={spot.id} style={{ fontSize: 9.5, color: C.fg1, marginBottom: 2 }}>
           {i + 1}. {regionLabel(spot.region, lang)} ({sideLabel[spot.view].toLowerCase()})
           {spot.nrs !== undefined ? ` – ${lang === 'de' ? 'Schmerz' : 'pain'} ${spot.nrs}/10` : ''}
           {spot.note.trim() ? `: ${spot.note.trim()}` : ''}
         </Text>
-      ))}
+      )))}
     </View>
   );
 }
@@ -333,7 +348,7 @@ function FieldBlock({ field: original, value, lang, onlyIf, files = [] }: {
           : { fontSize: 8.5, color: C.fg3, marginTop: -2, marginBottom: 4 }}>{field.helpText}</Text>
       )}
       {type === 'info' ? null
-        : type === 'bodyMap' ? <BodyMapBlock spots={parseBodyMap(value)} lang={lang} />
+        : type === 'bodyMap' ? <BodyMapBlock field={field} value={value} lang={lang} />
         : type === 'weekGrid' ? <WeekGridBlock value={value} lang={lang} />
         : type === 'dateRanges' ? <PeriodsBlock value={value} lang={lang} />
         : type === 'list' ? <ListBlock field={field} value={value} lang={lang} />
@@ -566,10 +581,12 @@ export interface AnamnesisReportProps extends AnamnesisPdfProps {
 }
 
 /** One answered question: label + answer (structured answers as their block) */
-function ReportAnswer({ field: original, value, lang, files = [] }: { field: AnamnesisField; value: string; lang: AnamnesisPdfLang; files?: AnamnesisFile[] }) {
+function ReportAnswer({ field: original, value, lang, files = [], skipNegative = false }: {
+  field: AnamnesisField; value: string; lang: AnamnesisPdfLang; files?: AnamnesisFile[]; skipNegative?: boolean;
+}) {
   const field = localizeField(original, lang);
   const type = field.fieldType;
-  const block = type === 'bodyMap' ? <BodyMapBlock spots={parseBodyMap(value)} lang={lang} />
+  const block = type === 'bodyMap' ? <BodyMapBlock field={field} value={value} lang={lang} skipNegative={skipNegative} />
     : type === 'weekGrid' ? <WeekGridBlock value={value} lang={lang} />
     : type === 'list' ? <ListBlock field={field} value={value} lang={lang} />
     : type === 'dateRanges' ? <PeriodsBlock value={value} lang={lang} />
@@ -609,9 +626,7 @@ export function AnamnesisReportPDF(props: AnamnesisReportProps) {
   const ctx = contextFor(props.sections, props.fieldValues, athlete.sex);
   const today = formatDate(new Date().toISOString(), t.locale);
   // Files the athlete uploaded in the form (all questions) — listed with the attachments
-  const formFiles = Object.entries(props.fieldValues)
-    .filter(([key]) => key.endsWith(FILES_SUFFIX))
-    .flatMap(([, value]) => parseAnswerFiles(value));
+  const formFiles = answerFileGroups(props.sections.flatMap((sec) => sec.fields), props.fieldValues, lang).flatMap((g) => g.files);
 
   const sections = props.sections
     .filter((sec) => include.sectionIds.includes(sec.id) && conditionState(sec.condition, ctx) !== 'notMet')
@@ -684,7 +699,7 @@ export function AnamnesisReportPDF(props: AnamnesisReportProps) {
           <View key={sec.id}>
             <SectionTitle title={localizeSection(sec, lang).title} accent={accent} />
             {fields.map((f) => (
-              <ReportAnswer key={f.id} field={f} lang={lang} files={parseAnswerFiles(props.fieldValues[filesKey(f.id)])}
+              <ReportAnswer key={f.id} field={f} lang={lang} files={parseAnswerFiles(props.fieldValues[filesKey(f.id)])} skipNegative={include.hideNegatives}
                 value={include.hideNegatives && f.fieldType === 'yesnoList' ? onlyYesItems(props.fieldValues[f.id]) : (props.fieldValues[f.id] ?? '')} />
             ))}
           </View>

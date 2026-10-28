@@ -5,6 +5,8 @@
  * template `translations`). Answers keep the main language's values; these helpers only change what
  * is shown: `localizeField` gives a display copy of a question in a language (texts translated, the
  * choices' labels in `optionLabels`, values unchanged), `localizeSection` the same for a section.
+ * A body map's questions per spot (spotFields) carry translations of their own — every helper here
+ * goes into them too.
  */
 import type {
   AnamnesisField, AnamnesisFieldTranslation, AnamnesisLang, AnamnesisSection, AnamnesisTemplateDraft,
@@ -57,23 +59,25 @@ export function translationProgress(draft: Pick<AnamnesisTemplateDraft, 'name' |
   };
   count(draft.name, draft.translations?.[lang]?.name);
   count(draft.introText, draft.translations?.[lang]?.introText);
+  const countField = (f: AnamnesisField) => {
+    const t = f.translations?.[lang];
+    count(f.label, t?.label);
+    count(f.helpText, t?.helpText);
+    count(f.placeholder, t?.placeholder);
+    count(f.scaleMinLabel, t?.scaleMinLabel);
+    count(f.scaleMaxLabel, t?.scaleMaxLabel);
+    (f.options ?? []).forEach((o, i) => count(o, t?.options?.[i]));
+    (f.listColumns ?? []).forEach((c, i) => {
+      count(c.label, t?.listColumns?.[i]?.label);
+      (c.options ?? []).forEach((o, j) => count(o, t?.listColumns?.[i]?.options?.[j]));
+    });
+    (f.spotFields ?? []).forEach(countField);
+  };
   for (const s of draft.sections) {
     const st = s.translations?.[lang];
     count(s.title, st?.title);
     count(s.helpText, st?.helpText);
-    for (const f of s.fields) {
-      const t = f.translations?.[lang];
-      count(f.label, t?.label);
-      count(f.helpText, t?.helpText);
-      count(f.placeholder, t?.placeholder);
-      count(f.scaleMinLabel, t?.scaleMinLabel);
-      count(f.scaleMaxLabel, t?.scaleMaxLabel);
-      (f.options ?? []).forEach((o, i) => count(o, t?.options?.[i]));
-      (f.listColumns ?? []).forEach((c, i) => {
-        count(c.label, t?.listColumns?.[i]?.label);
-        (c.options ?? []).forEach((o, j) => count(o, t?.listColumns?.[i]?.options?.[j]));
-      });
-    }
+    s.fields.forEach(countField);
   }
   return [done, total];
 }
@@ -85,6 +89,23 @@ export function translationProgress(draft: Pick<AnamnesisTemplateDraft, 'name' |
  * preset) as the `lang` translation of `main`.
  */
 export function withTranslation(main: AnamnesisTemplateDraft, other: AnamnesisTemplateDraft, lang: AnamnesisLang): AnamnesisTemplateDraft {
+  const fieldWith = (f: AnamnesisField, of: AnamnesisField | undefined): AnamnesisField => {
+    if (!of || of.id !== f.id) return f;
+    const t: AnamnesisFieldTranslation = {
+      label: of.label,
+      helpText: of.helpText,
+      placeholder: of.placeholder,
+      options: of.options,
+      scaleMinLabel: of.scaleMinLabel,
+      scaleMaxLabel: of.scaleMaxLabel,
+      listColumns: of.listColumns?.map(c => ({ label: c.label, options: c.options })),
+    };
+    return {
+      ...f,
+      translations: { ...f.translations, [lang]: t },
+      ...(f.spotFields ? { spotFields: f.spotFields.map((sf, i) => fieldWith(sf, of.spotFields?.[i])) } : {}),
+    };
+  };
   return {
     ...main,
     translations: { ...main.translations, [lang]: { name: other.name, introText: other.introText } },
@@ -94,20 +115,7 @@ export function withTranslation(main: AnamnesisTemplateDraft, other: AnamnesisTe
       return {
         ...s,
         translations: { ...s.translations, [lang]: { title: os.title, helpText: os.helpText } },
-        fields: s.fields.map((f, fi) => {
-          const of = os.fields[fi];
-          if (!of || of.id !== f.id) return f;
-          const t: AnamnesisFieldTranslation = {
-            label: of.label,
-            helpText: of.helpText,
-            placeholder: of.placeholder,
-            options: of.options,
-            scaleMinLabel: of.scaleMinLabel,
-            scaleMaxLabel: of.scaleMaxLabel,
-            listColumns: of.listColumns?.map(c => ({ label: c.label, options: c.options })),
-          };
-          return { ...f, translations: { ...f.translations, [lang]: t } };
-        }),
+        fields: s.fields.map((f, fi) => fieldWith(f, os.fields[fi])),
       };
     }),
   };
@@ -126,24 +134,26 @@ export function missingTexts(draft: AnamnesisTemplateDraft, lang: AnamnesisLang)
   };
   add('name', draft.name, draft.translations?.[lang]?.name);
   add('intro', draft.introText, draft.translations?.[lang]?.introText);
+  // A question per spot: key of its body map + ".p<index>"
+  const addField = (k: string, f: AnamnesisField) => {
+    const t = f.translations?.[lang];
+    add(`${k}.label`, f.label, t?.label);
+    add(`${k}.help`, f.helpText, t?.helpText);
+    add(`${k}.placeholder`, f.placeholder, t?.placeholder);
+    add(`${k}.min`, f.scaleMinLabel, t?.scaleMinLabel);
+    add(`${k}.max`, f.scaleMaxLabel, t?.scaleMaxLabel);
+    (f.options ?? []).forEach((o, oi) => add(`${k}.o${oi}`, o, t?.options?.[oi]));
+    (f.listColumns ?? []).forEach((c, ci) => {
+      add(`${k}.c${ci}.label`, c.label, t?.listColumns?.[ci]?.label);
+      (c.options ?? []).forEach((o, oi) => add(`${k}.c${ci}.o${oi}`, o, t?.listColumns?.[ci]?.options?.[oi]));
+    });
+    (f.spotFields ?? []).forEach((sf, pi) => addField(`${k}.p${pi}`, sf));
+  };
   draft.sections.forEach((s, si) => {
     const st = s.translations?.[lang];
     add(`s${si}.title`, s.title, st?.title);
     add(`s${si}.help`, s.helpText, st?.helpText);
-    s.fields.forEach((f, fi) => {
-      const t = f.translations?.[lang];
-      const k = `s${si}.f${fi}`;
-      add(`${k}.label`, f.label, t?.label);
-      add(`${k}.help`, f.helpText, t?.helpText);
-      add(`${k}.placeholder`, f.placeholder, t?.placeholder);
-      add(`${k}.min`, f.scaleMinLabel, t?.scaleMinLabel);
-      add(`${k}.max`, f.scaleMaxLabel, t?.scaleMaxLabel);
-      (f.options ?? []).forEach((o, oi) => add(`${k}.o${oi}`, o, t?.options?.[oi]));
-      (f.listColumns ?? []).forEach((c, ci) => {
-        add(`${k}.c${ci}.label`, c.label, t?.listColumns?.[ci]?.label);
-        (c.options ?? []).forEach((o, oi) => add(`${k}.c${ci}.o${oi}`, o, t?.listColumns?.[ci]?.options?.[oi]));
-      });
-    });
+    s.fields.forEach((f, fi) => addField(`s${si}.f${fi}`, f));
   });
   return out;
 }
@@ -153,6 +163,26 @@ export function applyTexts(draft: AnamnesisTemplateDraft, lang: AnamnesisLang, t
   const get = (k: string) => (typeof texts[k] === 'string' && texts[k].trim() ? texts[k].trim() : undefined);
   const keep = <T,>(v: T | undefined, current: T | undefined) => (v !== undefined ? v : current);
   const tpl = draft.translations?.[lang] ?? {};
+  const applyField = (k: string, f: AnamnesisField): AnamnesisField => {
+    const t = f.translations?.[lang] ?? {};
+    const next: AnamnesisFieldTranslation = {
+      label: keep(get(`${k}.label`), t.label),
+      helpText: keep(get(`${k}.help`), t.helpText),
+      placeholder: keep(get(`${k}.placeholder`), t.placeholder),
+      scaleMinLabel: keep(get(`${k}.min`), t.scaleMinLabel),
+      scaleMaxLabel: keep(get(`${k}.max`), t.scaleMaxLabel),
+      options: f.options?.map((_, oi) => keep(get(`${k}.o${oi}`), t.options?.[oi]) ?? ''),
+      listColumns: f.listColumns?.map((c, ci) => ({
+        label: keep(get(`${k}.c${ci}.label`), t.listColumns?.[ci]?.label),
+        options: c.options?.map((_, oi) => keep(get(`${k}.c${ci}.o${oi}`), t.listColumns?.[ci]?.options?.[oi]) ?? ''),
+      })),
+    };
+    return {
+      ...f,
+      translations: { ...f.translations, [lang]: next },
+      ...(f.spotFields ? { spotFields: f.spotFields.map((sf, pi) => applyField(`${k}.p${pi}`, sf)) } : {}),
+    };
+  };
   return {
     ...draft,
     translations: { ...draft.translations, [lang]: { name: keep(get('name'), tpl.name), introText: keep(get('intro'), tpl.introText) } },
@@ -161,23 +191,7 @@ export function applyTexts(draft: AnamnesisTemplateDraft, lang: AnamnesisLang, t
       return {
         ...s,
         translations: { ...s.translations, [lang]: { title: keep(get(`s${si}.title`), st.title), helpText: keep(get(`s${si}.help`), st.helpText) } },
-        fields: s.fields.map((f, fi) => {
-          const k = `s${si}.f${fi}`;
-          const t = f.translations?.[lang] ?? {};
-          const next: AnamnesisFieldTranslation = {
-            label: keep(get(`${k}.label`), t.label),
-            helpText: keep(get(`${k}.help`), t.helpText),
-            placeholder: keep(get(`${k}.placeholder`), t.placeholder),
-            scaleMinLabel: keep(get(`${k}.min`), t.scaleMinLabel),
-            scaleMaxLabel: keep(get(`${k}.max`), t.scaleMaxLabel),
-            options: f.options?.map((_, oi) => keep(get(`${k}.o${oi}`), t.options?.[oi]) ?? ''),
-            listColumns: f.listColumns?.map((c, ci) => ({
-              label: keep(get(`${k}.c${ci}.label`), t.listColumns?.[ci]?.label),
-              options: c.options?.map((_, oi) => keep(get(`${k}.c${ci}.o${oi}`), t.listColumns?.[ci]?.options?.[oi]) ?? ''),
-            })),
-          };
-          return { ...f, translations: { ...f.translations, [lang]: next } };
-        }),
+        fields: s.fields.map((f, fi) => applyField(`s${si}.f${fi}`, f)),
       };
     }),
   };

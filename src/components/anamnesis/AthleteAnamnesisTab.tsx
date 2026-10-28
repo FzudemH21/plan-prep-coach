@@ -64,7 +64,7 @@ import {
 } from '@/types/anamnesis';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { contextFor, fieldState, filesKey, formatAnswer, parseAnswerFiles } from '@/utils/anamnesisAnswers';
+import { answerFileCount, contextFor, fieldState, filesKey, formatAnswer } from '@/utils/anamnesisAnswers';
 import { localizeField, localizeSection } from '@/utils/anamnesisI18n';
 import { AnamnesisFieldInput } from '@/components/anamnesis/AnamnesisInputs';
 import { AnswerFiles } from '@/components/anamnesis/AnamnesisFiles';
@@ -120,8 +120,8 @@ function buildSummaryPrompt(
     for (const field of section.fields) {
       // Answers of questions hidden by their condition (e.g. the earlier answer was changed) don't count
       if (fieldState(section, field, ctx) === 'notMet') continue;
-      // Uploaded files: only how many — never their content or names
-      const fileCount = parseAnswerFiles(record.fieldValues[filesKey(field.id)]).length;
+      // Uploaded files: only how many — never their content or names (with a body map: all its spots)
+      const fileCount = answerFileCount(field, record.fieldValues);
       const filesNote = fileCount > 0 ? `(${fileCount} file${fileCount === 1 ? '' : 's'} uploaded — not readable here)` : '';
       const answer = formatAnswer(field, record.fieldValues[field.id]);
       const val = [answer, filesNote].filter(Boolean).join(' ');

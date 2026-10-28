@@ -18,9 +18,10 @@ import {
 import type { AnamnesisField, AnamnesisListColumn } from '@/types/anamnesis';
 import {
   DAY_LABELS, WEEK_GRID_COLORS, WEEK_GRID_HOURS, WEEK_GRID_LABELS,
-  YESNO_OTHER, YESNO_OTHER_TEXT, formatAnswer, parseBodyMap, parseDateRanges, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
+  BODY_MAP_NONE, YESNO_OTHER, YESNO_OTHER_TEXT, filesKey, formatAnswer, isBodyMapNone, parseBodyMap, spotDetailLines, spotFieldsFor, spotPain, withoutSpot, parseDateRanges, parseList, parseMulti, parseWeekGrid, parseYesNoList, regionLabel,
   type AnswerLang, type BodyMapSpot, type DatePeriod, type ListRow, type WeekGridCell,
 } from '@/utils/anamnesisAnswers';
+import { AnswerFiles } from '@/components/anamnesis/AnamnesisFiles';
 
 type Size = 'sm' | 'lg';
 
@@ -35,6 +36,8 @@ const T = {
     tapMore: 'Noch eine Stelle betroffen? Tippe einfach noch einmal auf den Körper.',
     whatHappened: 'Was ist passiert / wie fühlt es sich an?', pain: 'Schmerz (0 = kein, 10 = stärkster vorstellbarer)',
     add: 'Übernehmen', save: 'Speichern', remove: 'Entfernen', cancel: 'Abbrechen',
+    none: 'Nichts davon', spotNote: 'Noch etwas zu dieser Stelle? (optional)',
+    linkQuestion: 'Gehört diese Stelle zu einer, die schon markiert ist?', linkNone: 'Nein, das ist etwas Eigenes',
     gridHint: 'Feld antippen zum Eintragen – gedrückt halten und ziehen, um mehrere Felder zu füllen.',
     erase: 'Löschen',
   },
@@ -44,6 +47,8 @@ const T = {
     tapMore: 'Another spot affected? Just tap the body again.',
     whatHappened: 'What happened / how does it feel?', pain: 'Pain (0 = none, 10 = worst imaginable)',
     add: 'Add', save: 'Save', remove: 'Remove', cancel: 'Cancel',
+    none: 'None of these', spotNote: 'Anything else about this spot? (optional)',
+    linkQuestion: 'Does this spot belong to one that is already marked?', linkNone: 'No, this is something separate',
     gridHint: 'Tap a slot to fill it in — press, hold and drag to fill several.',
     erase: 'Erase',
   },
@@ -406,14 +411,16 @@ export function ListInput({ columns, value, onChange, lang, size = 'sm', readOnl
 const BODY_IMG = { front: '/bodymap-front.png', back: '/bodymap-back.png' } as const;
 const BODY_VIEWBOX = { front: { w: 193, h: 306 }, back: { w: 211, h: 317 } } as const;
 
-function spotFill(spot: BodyMapSpot): { fill: string; stroke: string } {
-  if (spot.nrs !== undefined && spot.nrs > 0) return { fill: nrsSeverityColor(spot.nrs), stroke: nrsSeverityStroke(spot.nrs) };
+function spotFill(pain: number | undefined): { fill: string; stroke: string } {
+  if (pain !== undefined && pain > 0) return { fill: nrsSeverityColor(pain), stroke: nrsSeverityStroke(pain) };
   return { fill: 'rgba(37,99,235,0.8)', stroke: 'rgba(30,64,175,0.95)' };
 }
 
-function BodyFigure({ view, spots, pending, onPick, onSpotClick, maxWidth }: {
+function BodyFigure({ view, spots, field, pending, onPick, onSpotClick, maxWidth }: {
   view: 'front' | 'back';
   spots: BodyMapSpot[];
+  /** The body map question (dot colour from a pain scale asked per spot) */
+  field?: AnamnesisField;
   pending?: BodyMapSpot | null;
   onPick?: (spot: Omit<BodyMapSpot, 'id' | 'note'>) => void;
   onSpotClick?: (spot: BodyMapSpot) => void;
@@ -446,11 +453,12 @@ function BodyFigure({ view, spots, pending, onPick, onSpotClick, maxWidth }: {
         onClick={handleClick}
       >
         {numbered.map(({ s, n }) => {
-          const c = spotFill(s);
+          const c = spotFill(spotPain(field, s, spots));
           return (
             <g key={s.id} style={{ cursor: onSpotClick ? 'pointer' : undefined }}
               onClick={onSpotClick ? (e) => { e.stopPropagation(); onSpotClick(s); } : undefined}>
-              <circle cx={s.x} cy={s.y} r={6.5} fill={c.fill} stroke={c.stroke} strokeWidth={1.2} />
+              <circle cx={s.x} cy={s.y} r={6.5} fill={c.fill} stroke={c.stroke} strokeWidth={1.2}
+                strokeDasharray={s.linkedTo ? '2.5 1.5' : undefined} />
               <text x={s.x} y={s.y + 2.6} textAnchor="middle" fontSize="7" fontWeight="bold" fill="white" style={{ pointerEvents: 'none' }}>{n}</text>
             </g>
           );
@@ -466,45 +474,95 @@ function BodyFigure({ view, spots, pending, onPick, onSpotClick, maxWidth }: {
   );
 }
 
-export function BodyMapInput({ field, value, onChange, lang, size = 'sm', readOnly }: {
+/** The "None" answer of a body map (nothing to mark) */
+function BodyMapNoneButton({ on, onToggle, lang, size }: { on: boolean; onToggle: () => void; lang: AnswerLang; size: Size }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={cn(
+        'w-full flex items-center gap-3 border text-left transition-colors',
+        size === 'lg' ? 'min-h-[52px] rounded-lg border-2 px-3 py-2.5 text-base' : 'rounded-md px-2.5 py-1.5 text-sm',
+        on ? 'border-primary bg-primary/10' : `border-input bg-background ${HOVER_BG} active:bg-accent`,
+      )}
+    >
+      <span className={cn('shrink-0 rounded border flex items-center justify-center', size === 'lg' ? 'w-6 h-6' : 'w-4 h-4',
+        on ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40')}>
+        {on && <Check className={size === 'lg' ? 'h-4 w-4' : 'h-3 w-3'} />}
+      </span>
+      <span className="flex-1 min-w-0">{T[lang].none}</span>
+    </button>
+  );
+}
+
+/**
+ * Body map: spots on the body, each with a note (and pain 0–10 when asked). With questions per spot
+ * (field.spotFields) every spot gets its own answers; the form link asks them one per screen
+ * (`onOpenSpot` — the page runs that flow), the coach's record shows them on the spot's card.
+ */
+export function BodyMapInput({ field, value, onChange, lang, size = 'sm', readOnly, onOpenSpot }: {
   field: AnamnesisField; value: string; onChange: (v: string) => void; lang: AnswerLang; size?: Size; readOnly?: boolean;
+  /** Form link with questions per spot: a tapped (new or existing) spot opens the page's spot flow */
+  onOpenSpot?: (spot: BodyMapSpot, isNew: boolean) => void;
 }) {
   const t = T[lang];
   const spots = parseBodyMap(value);
-  const [view, setView] = useState<'front' | 'back'>('front');
+  const none = isBodyMapNone(value);
+  const perSpot = !!field.spotFields?.length;
+  // Opens on the side of the last marked spot (the form link shows the map again after a spot's questions)
+  const [view, setView] = useState<'front' | 'back'>(() => spots[spots.length - 1]?.view ?? 'front');
   const [editing, setEditing] = useState<{ spot: BodyMapSpot; isNew: boolean } | null>(null);
   const write = (next: BodyMapSpot[]) => onChange(next.length ? JSON.stringify(next) : '');
   const sideLabel = (v: 'front' | 'back') => (v === 'front' ? t.front : t.back);
+  const open = (spot: BodyMapSpot, isNew: boolean) => {
+    if (onOpenSpot && perSpot) { onOpenSpot(spot, isNew); return; }
+    setView(spot.view);
+    setEditing({ spot, isNew });
+  };
 
   const spotList = spots.length > 0 && (
     <ol className="space-y-1">
-      {spots.map((s, i) => (
-        <li key={s.id}>
-          <button
-            type="button"
-            disabled={readOnly}
-            onClick={() => { setView(s.view); setEditing({ spot: s, isNew: false }); }}
-            className={cn(
-              'w-full text-left rounded-md flex gap-2',
-              size === 'lg' ? 'px-2 py-2 text-base' : 'px-1.5 py-1 text-sm',
-              !readOnly && `${HOVER_BG} active:bg-accent`,
-              editing?.spot.id === s.id && 'bg-accent',
-            )}
-          >
-            <span className="shrink-0 w-5 h-5 mt-0.5 rounded-full text-[11px] font-bold text-white flex items-center justify-center"
-              style={{ backgroundColor: spotFill(s).stroke }}>{i + 1}</span>
-            <span className="flex-1 min-w-0">
-              <span className="font-medium">{regionLabel(s.region, lang)}</span>
-              <span className="text-muted-foreground"> ({sideLabel(s.view)}){s.nrs !== undefined ? ` · ${s.nrs}/10` : ''}</span>
-              {s.note.trim() && <span className="block text-muted-foreground whitespace-pre-wrap">{s.note}</span>}
-            </span>
-          </button>
-        </li>
-      ))}
+      {spots.map((s, i) => {
+        const details = perSpot ? spotDetailLines(field, s, spots, lang) : [];
+        return (
+          <li key={s.id}>
+            <button
+              type="button"
+              disabled={readOnly}
+              onClick={() => open(s, false)}
+              className={cn(
+                'w-full text-left rounded-md flex gap-2',
+                size === 'lg' ? 'px-2 py-2 text-base' : 'px-1.5 py-1 text-sm',
+                !readOnly && `${HOVER_BG} active:bg-accent`,
+                editing?.spot.id === s.id && 'bg-accent',
+              )}
+            >
+              <span className="shrink-0 w-5 h-5 mt-0.5 rounded-full text-[11px] font-bold text-white flex items-center justify-center"
+                style={{ backgroundColor: spotFill(spotPain(field, s, spots)).stroke }}>{i + 1}</span>
+              <span className="flex-1 min-w-0">
+                <span className="font-medium">{regionLabel(s.region, lang)}</span>
+                <span className="text-muted-foreground"> ({sideLabel(s.view)}){s.nrs !== undefined ? ` · ${s.nrs}/10` : ''}</span>
+                {perSpot ? (
+                  details.length > 0 && (
+                    <span className={cn('block text-muted-foreground whitespace-pre-wrap', size === 'lg' ? 'text-sm' : 'text-xs')}>{details.join('\n')}</span>
+                  )
+                ) : s.note.trim() && <span className="block text-muted-foreground whitespace-pre-wrap">{s.note}</span>}
+              </span>
+            </button>
+            {/* The coach's record: files uploaded under the spot's questions */}
+            {readOnly && perSpot && !s.linkedTo && (field.spotFields ?? []).map(sub => (
+              s.answers?.[filesKey(sub.id)] ? (
+                <div key={sub.id} className="pl-8 pt-0.5"><AnswerFiles value={s.answers[filesKey(sub.id)]} /></div>
+              ) : null
+            ))}
+          </li>
+        );
+      })}
     </ol>
   );
 
   if (readOnly) {
+    if (none) return <p className="text-sm">{t.none}</p>;
     if (spots.length === 0) return <p className="text-sm text-muted-foreground italic">—</p>;
     return (
       <div className="space-y-2">
@@ -512,7 +570,7 @@ export function BodyMapInput({ field, value, onChange, lang, size = 'sm', readOn
           {(['front', 'back'] as const).map(v => (
             <div key={v} className="space-y-1">
               <p className="text-xs text-muted-foreground text-center">{sideLabel(v)}</p>
-              <BodyFigure view={v} spots={spots} maxWidth={170} />
+              <BodyFigure view={v} spots={spots} field={field} maxWidth={170} />
             </div>
           ))}
         </div>
@@ -527,6 +585,11 @@ export function BodyMapInput({ field, value, onChange, lang, size = 'sm', readOn
     write(isNew ? [...spots, spot] : spots.map(s => (s.id === spot.id ? spot : s)));
     setEditing(null);
   };
+  const patchEditing = (patch: Partial<BodyMapSpot>) => setEditing(e => e && ({ spot: { ...e.spot, ...patch }, isNew: e.isNew }));
+  // Spots a new / edited spot can belong to: spots of their own (no chains — a spot others belong to
+  // can't be linked itself)
+  const linkTargets = editing && !spots.some(x => x.linkedTo === editing.spot.id)
+    ? spots.filter(s => s.id !== editing.spot.id && !s.linkedTo) : [];
 
   return (
     <div className="space-y-3">
@@ -545,10 +608,11 @@ export function BodyMapInput({ field, value, onChange, lang, size = 'sm', readOn
       <BodyFigure
         view={view}
         spots={spots}
+        field={field}
         pending={editing?.isNew ? editing.spot : null}
         maxWidth={size === 'lg' ? 280 : 220}
-        onPick={p => setEditing({ spot: { ...p, id: uid(), note: '' }, isNew: true })}
-        onSpotClick={s => setEditing({ spot: s, isNew: false })}
+        onPick={p => open({ ...p, id: uid(), note: '' }, true)}
+        onSpotClick={s => open(s, false)}
       />
 
       {editing && (
@@ -561,6 +625,20 @@ export function BodyMapInput({ field, value, onChange, lang, size = 'sm', readOn
               <X className="h-4 w-4" />
             </button>
           </div>
+          {perSpot && linkTargets.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">{t.linkQuestion}</p>
+              <Select value={editing.spot.linkedTo ?? '__own'} onValueChange={v => patchEditing({ linkedTo: v === '__own' ? undefined : v })}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__own" className="text-sm">{t.linkNone}</SelectItem>
+                  {linkTargets.map(s => (
+                    <SelectItem key={s.id} value={s.id} className="text-sm">{spots.indexOf(s) + 1}. {regionLabel(s.region, lang)} ({sideLabel(s.view)})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {field.bodyMapIntensity && size === 'lg' && (
             // Form link: the same slider as the scale questions
             <div className="space-y-1">
@@ -569,7 +647,7 @@ export function BodyMapInput({ field, value, onChange, lang, size = 'sm', readOn
                 {editing.spot.nrs !== undefined && <span className="font-semibold tabular-nums"> · {editing.spot.nrs}/10</span>}
               </p>
               <ScaleSlider min={0} max={10} current={editing.spot.nrs ?? null} label={t.pain}
-                onPick={n => setEditing(e => e && ({ spot: { ...e.spot, nrs: n }, isNew: e.isNew }))} />
+                onPick={n => patchEditing({ nrs: n })} />
             </div>
           )}
           {field.bodyMapIntensity && size !== 'lg' && (
@@ -578,7 +656,7 @@ export function BodyMapInput({ field, value, onChange, lang, size = 'sm', readOn
               <div className="flex flex-wrap gap-1">
                 {Array.from({ length: 11 }, (_, n) => (
                   <button key={n} type="button"
-                    onClick={() => setEditing(e => e && ({ spot: { ...e.spot, nrs: e.spot.nrs === n ? undefined : n }, isNew: e.isNew }))}
+                    onClick={() => patchEditing({ nrs: editing.spot.nrs === n ? undefined : n })}
                     className={cn('border font-medium tabular-nums h-7 w-7 rounded-md text-xs',
                       editing.spot.nrs === n ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-input')}>
                     {n}
@@ -587,17 +665,26 @@ export function BodyMapInput({ field, value, onChange, lang, size = 'sm', readOn
               </div>
             </div>
           )}
+          {/* Questions per spot — compact, all on the card (the coach's record) */}
+          {perSpot && spotFieldsFor(field, editing.spot).map(sub => (
+            <div key={sub.id} className="space-y-1">
+              {sub.label && <p className={cn(sub.fieldType === 'info' ? 'text-sm font-semibold' : 'text-xs font-medium')}>{sub.label}</p>}
+              <AnamnesisFieldInput field={sub} lang={lang} value={editing.spot.answers?.[sub.id] ?? ''}
+                onChange={v => patchEditing({ answers: { ...editing.spot.answers, [sub.id]: v } })} />
+              {editing.spot.answers?.[filesKey(sub.id)] && <AnswerFiles value={editing.spot.answers[filesKey(sub.id)]} />}
+            </div>
+          ))}
           <Textarea
-            autoFocus={editing.isNew}
+            autoFocus={editing.isNew && !perSpot}
             className={size === 'lg' ? 'text-base min-h-[96px]' : 'text-sm min-h-[64px]'}
-            placeholder={field.placeholder || t.whatHappened}
+            placeholder={field.placeholder || (perSpot ? t.spotNote : t.whatHappened)}
             value={editing.spot.note}
-            onChange={e => { const note = e.target.value; setEditing(ed => ed && ({ spot: { ...ed.spot, note }, isNew: ed.isNew })); }}
+            onChange={e => patchEditing({ note: e.target.value })}
           />
           <div className="flex gap-2">
             {!editing.isNew && (
               <Button type="button" variant="outline" className={cn('text-destructive hover:text-destructive', size === 'lg' && 'h-11')}
-                onClick={() => { write(spots.filter(s => s.id !== editing.spot.id)); setEditing(null); }}>
+                onClick={() => { write(withoutSpot(spots, editing.spot.id)); setEditing(null); }}>
                 {t.remove}
               </Button>
             )}
@@ -609,6 +696,9 @@ export function BodyMapInput({ field, value, onChange, lang, size = 'sm', readOn
       )}
 
       {spotList}
+      {field.bodyMapNone && spots.length === 0 && !editing && (
+        <BodyMapNoneButton on={none} onToggle={() => onChange(none ? '' : BODY_MAP_NONE)} lang={lang} size={size} />
+      )}
     </div>
   );
 }

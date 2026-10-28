@@ -6,13 +6,17 @@
 import type { AnamnesisCondition, AnamnesisField, AnamnesisSection, AnamnesisTemplateDraft } from '@/types/anamnesis';
 import { PROFILE_SEX_SOURCE } from '@/types/anamnesis';
 
-const NO_COMPLAINTS = 'No';
-const MILD = 'Yes, mild – I can train and move normally';
-const MARKED = 'Yes, significant – they limit me in daily life or in training';
+const KIND_NOW = 'Current pain or complaints';
+const KIND_INJURY = 'Earlier injury';
+const KIND_SURGERY = 'Surgery';
+const MILD = 'Mild – I can train and move normally';
+const MARKED = 'Significant – they limit me in daily life or in training';
 
 const when = (sourceId: string, ...values: string[]): AnamnesisCondition => ({ sourceId, values });
-const anyComplaints = when('c-check', MILD, MARKED);
-const markedComplaints = when('c-check', MARKED);
+const now = when('s-kind', KIND_NOW);
+const marked = when('s-limit', MARKED);
+const past = when('s-kind', KIND_INJURY, KIND_SURGERY);
+const markedComplaints: AnamnesisCondition = { sourceId: 'b-map', spotFieldId: 's-limit', values: [MARKED] };
 const female = when(PROFILE_SEX_SOURCE, 'female');
 
 const SUDDEN = 'Suddenly (e.g. rolling an ankle or landing)';
@@ -39,80 +43,82 @@ const sport: AnamnesisSection = {
   ],
 };
 
-const complaints: AnamnesisSection = {
-  id: 'sec-complaints',
-  title: 'Current complaints',
+const body: AnamnesisSection = {
+  id: 'sec-body',
+  title: 'Pain, injuries & surgery',
   athleteFills: true,
   fields: [
-    q({ id: 'c-check', label: 'Do you currently have any pain or complaints?', fieldType: 'select',
-      options: [NO_COMPLAINTS, MILD, MARKED],
-      helpText: 'Small ones too, e.g. a pulling feeling in the knee after running.' }),
-    q({ id: 'c-where', label: 'Where do you have complaints?', fieldType: 'bodyMap', bodyMapIntensity: true,
-      placeholder: 'What do you feel there?',
-      helpText: 'Mark every spot that belongs to your current complaints and say how strong they are. '
-        + 'Do you have two complaints that have nothing to do with each other? Then answer the next questions for the more important one and write something about the other in its note.',
-      condition: anyComplaints }),
-    q({ id: 'c-since', label: 'How long have you had the complaints?', fieldType: 'select',
-      options: ['Less than 6 weeks', '6 to 12 weeks', 'More than 3 months'], condition: anyComplaints }),
-    q({ id: 'c-onset', label: 'How did the complaints start?', fieldType: 'select',
-      options: [SUDDEN, 'Gradually, without a specific trigger'], condition: markedComplaints }),
-    q({ id: 'c-what', label: 'What exactly happened?', fieldType: 'textarea',
-      helpText: 'e.g. sprinting, landing, a collision', condition: when('c-onset', SUDDEN) }),
-    q({ id: 'c-before', label: 'Have you had complaints or an injury in this spot before?', fieldType: 'boolean',
-      condition: markedComplaints }),
-    q({ id: 'c-course', label: 'How have the complaints developed since then?', fieldType: 'select',
-      options: ['Got worse', 'Got better', 'Stayed the same', 'Sometimes better, sometimes worse'], condition: markedComplaints }),
-    q({ id: 'c-change', label: 'Did you change anything shortly before the complaints started?', fieldType: 'multiselect', allowOther: true,
-      options: ['Trained more or harder', 'New exercises or a new sport', 'New shoes',
-        'Different surface (e.g. artificial turf, indoor)', 'Competition phase', 'Nothing changed'],
-      condition: markedComplaints }),
-    q({ id: 'c-warmup', label: 'How do the complaints behave during training?', fieldType: 'select',
-      options: ['Get better after warming up', 'Stay the same', 'Get worse during training', 'Only come afterwards or the next day'],
-      condition: markedComplaints }),
-    q({ id: 'c-belief', label: 'What do you think is causing the complaints?', fieldType: 'text', condition: markedComplaints }),
-    q({ id: 'c-rest', label: 'Do you also have pain …', fieldType: 'yesnoList',
-      options: ['at rest (e.g. sitting or lying down)', 'at night (does it wake you up?)'], condition: markedComplaints }),
-    q({ id: 'c-character', label: 'What does the pain feel like?', fieldType: 'multiselect', helpText: 'You can pick several',
-      options: ['Burning', 'Stabbing', 'Pulling', 'Dull or pressing', 'Like an electric shock', 'Numb or tingling',
-        'Spreads to other parts of the body'],
-      condition: markedComplaints }),
-    q({ id: 'c-signs', label: 'Do you also notice …', fieldType: 'yesnoList',
-      options: ['Swelling', 'Instability or giving way', 'Locking or catching'], condition: markedComplaints }),
-    q({ id: 'c-flags-back', label: 'Do you notice any of these?', fieldType: 'yesnoList',
-      options: ['Numbness around the buttocks, genitals or inner thighs', 'New problems passing urine or with bowel movements'],
-      helpText: 'If you have just noticed this: please see a doctor straight away.',
-      condition: when('c-where', '12', '13') }),
-    q({ id: 'c-flags-neck', label: 'Do you notice any of these?', fieldType: 'yesnoList',
-      options: ['Dizziness', 'Double vision', 'Trouble speaking', 'Trouble swallowing', 'Sudden falls without losing consciousness',
-        'Nausea', 'Numbness in the face'],
-      condition: when('c-where', '1', '2') }),
-    q({ id: 'c-time', label: 'When are the complaints strongest?', fieldType: 'select',
-      options: ['In the morning', 'In the evening or after exercise', 'Always the same', 'It varies'], condition: markedComplaints }),
-    q({ id: 'c-worse', label: 'What makes it worse?', fieldType: 'text', condition: anyComplaints }),
-    q({ id: 'c-better', label: 'What helps?', fieldType: 'text', condition: markedComplaints }),
-    q({ id: 'c-limits', label: 'What can you not do, or only with limits, because of the complaints?', fieldType: 'textarea',
-      helpText: 'e.g. climbing stairs, sitting, sleeping, sprinting, jumping, throwing', condition: markedComplaints }),
+    q({ id: 'b-map', label: 'Where do you have pain or complaints right now – or where have you had an injury or surgery?',
+      fieldType: 'bodyMap', bodyMapNone: true,
+      placeholder: 'e.g. anything else you think matters',
+      helpText: 'Tap every spot that applies – each spot gets a few short questions. '
+        + 'Small complaints too (e.g. a pulling feeling in the knee after running), surgery unrelated to sport (e.g. appendix) and stress fractures. '
+        + 'Most important: anything from the last 12 months. Never had anything? Then tap "None of these".',
+      spotFields: [
+        q({ id: 's-kind', label: 'What applies to this spot?', fieldType: 'multiselect',
+          options: [KIND_NOW, KIND_INJURY, KIND_SURGERY],
+          helpText: 'You can pick several – e.g. an earlier injury that still causes complaints today.' }),
+        // Current complaints
+        q({ id: 's-nrs', label: 'How strong are the complaints right now?', fieldType: 'scale', scaleMin: 0, scaleMax: 10,
+          scaleMinLabel: 'none', scaleMaxLabel: 'worst imaginable', condition: now }),
+        q({ id: 's-limit', label: 'How much do the complaints limit you?', fieldType: 'select',
+          options: [MILD, MARKED], condition: now }),
+        q({ id: 's-since', label: 'How long have you had the complaints?', fieldType: 'select',
+          options: ['Less than 6 weeks', '6 to 12 weeks', 'More than 3 months'], condition: now }),
+        q({ id: 's-onset', label: 'How did the complaints start?', fieldType: 'select',
+          options: [SUDDEN, 'Gradually, without a specific trigger'], condition: marked }),
+        q({ id: 's-what', label: 'What exactly happened?', fieldType: 'textarea',
+          helpText: 'e.g. sprinting, landing, a collision', condition: when('s-onset', SUDDEN) }),
+        q({ id: 's-course', label: 'How have the complaints developed since then?', fieldType: 'select',
+          options: ['Got worse', 'Got better', 'Stayed the same', 'Sometimes better, sometimes worse'], condition: marked }),
+        q({ id: 's-change', label: 'Did you change anything shortly before the complaints started?', fieldType: 'multiselect', allowOther: true,
+          options: ['Trained more or harder', 'New exercises or a new sport', 'New shoes',
+            'Different surface (e.g. artificial turf, indoor)', 'Competition phase', 'Nothing changed'],
+          condition: marked }),
+        q({ id: 's-warmup', label: 'How do the complaints behave during training?', fieldType: 'select',
+          options: ['Get better after warming up', 'Stay the same', 'Get worse during training', 'Only come afterwards or the next day'],
+          condition: marked }),
+        q({ id: 's-belief', label: 'What do you think is causing the complaints?', fieldType: 'text', condition: marked }),
+        q({ id: 's-rest', label: 'Do you also have pain …', fieldType: 'yesnoList',
+          options: ['at rest (e.g. sitting or lying down)', 'at night (does it wake you up?)'], condition: marked }),
+        q({ id: 's-character', label: 'What does the pain feel like?', fieldType: 'multiselect', helpText: 'You can pick several',
+          options: ['Burning', 'Stabbing', 'Pulling', 'Dull or pressing', 'Like an electric shock', 'Numb or tingling',
+            'Spreads to other parts of the body'],
+          condition: marked }),
+        q({ id: 's-signs', label: 'Do you also notice …', fieldType: 'yesnoList',
+          options: ['Swelling', 'Instability or giving way', 'Locking or catching'], condition: marked }),
+        // Warning signs — only for current complaints at the lower back / pelvis or the head / neck
+        q({ id: 's-flags-back', label: 'Do you notice any of these?', fieldType: 'yesnoList',
+          options: ['Numbness around the buttocks, genitals or inner thighs', 'New problems passing urine or with bowel movements'],
+          helpText: 'If you have just noticed this: please see a doctor straight away.',
+          condition: now, spotRegions: ['12', '13'] }),
+        q({ id: 's-flags-neck', label: 'Do you notice any of these?', fieldType: 'yesnoList',
+          options: ['Dizziness', 'Double vision', 'Trouble speaking', 'Trouble swallowing', 'Sudden falls without losing consciousness',
+            'Nausea', 'Numbness in the face'],
+          condition: now, spotRegions: ['1', '2'] }),
+        q({ id: 's-time', label: 'When are the complaints strongest?', fieldType: 'select',
+          options: ['In the morning', 'In the evening or after exercise', 'Always the same', 'It varies'], condition: marked }),
+        q({ id: 's-worse', label: 'What makes it worse?', fieldType: 'text', condition: now }),
+        q({ id: 's-better', label: 'What helps?', fieldType: 'text', condition: marked }),
+        q({ id: 's-limits', label: 'What can you not do, or only with limits, because of the complaints?', fieldType: 'textarea',
+          helpText: 'e.g. climbing stairs, sitting, sleeping, sprinting, jumping, throwing', condition: marked }),
+        q({ id: 's-diag', label: 'Has anything been examined or treated yet?', fieldType: 'multiselect', allowOther: true,
+          options: DIAGNOSTICS, condition: marked }),
+        q({ id: 's-diag-result', label: 'What was the result?', fieldType: 'textarea', allowFiles: true,
+          helpText: 'e.g. the diagnosis, if you know it',
+          condition: when('s-diag', ...DIAGNOSTICS.filter((d) => d !== 'No, nothing yet')) }),
+        // Earlier injury / surgery
+        q({ id: 's-past-when', label: 'When was the injury or surgery?', fieldType: 'text',
+          placeholder: 'e.g. 2021 or March 2024',
+          helpText: 'Several at this spot? Then list them all with the year.', condition: past }),
+        q({ id: 's-past-what', label: 'What was it exactly, and how was it treated?', fieldType: 'textarea',
+          helpText: 'e.g. torn ligament, ACL surgery, cast, physiotherapy', condition: past }),
+        q({ id: 's-past-out', label: 'How long could you not train normally because of it?', fieldType: 'select',
+          options: ['Not at all', 'Up to 1 week', '1–4 weeks', '1–3 months', 'More than 3 months'], condition: past }),
+      ],
+    }),
     q({ id: 'c-train', label: 'Can you train at the moment?', fieldType: 'select',
       options: ['Yes, normally', 'Yes, but with limits', 'No, I\'m taking a break'], condition: markedComplaints }),
-    q({ id: 'c-diag', label: 'Has anything been examined or treated yet?', fieldType: 'multiselect', allowOther: true,
-      options: DIAGNOSTICS, condition: markedComplaints }),
-    q({ id: 'c-diag-result', label: 'What was the result?', fieldType: 'textarea', allowFiles: true,
-      helpText: 'e.g. the diagnosis, if you know it',
-      condition: when('c-diag', ...DIAGNOSTICS.filter((d) => d !== 'No, nothing yet')) }),
-  ],
-};
-
-const injuries: AnamnesisSection = {
-  id: 'sec-injuries',
-  title: 'Previous injuries & surgery',
-  athleteFills: true,
-  fields: [
-    q({ id: 'i-any', label: 'Have you had injuries or surgery in the past?', fieldType: 'boolean' }),
-    q({ id: 'i-map', label: 'Where?', fieldType: 'bodyMap',
-      placeholder: 'What happened, when, how long couldn\'t you train, how was it treated?',
-      helpText: 'Tap every spot where you were injured or had surgery – one spot per injury. '
-        + 'Include surgery unrelated to sport, e.g. appendix, and stress fractures. Most important: anything from the last 12 months.',
-      condition: when('i-any', 'true') }),
     q({ id: 'i-concussion', label: 'Have you ever had a concussion?', fieldType: 'boolean' }),
     q({ id: 'i-concussion-detail', label: 'How often, and when was the last one?', fieldType: 'text', condition: when('i-concussion', 'true') }),
   ],
@@ -278,5 +284,5 @@ export const TRAINING_HEALTH_ANAMNESIS_EN: AnamnesisTemplateDraft = {
   introText: 'This questionnaire helps us plan your training to suit you right from the start. '
     + 'Please answer the questions as accurately as you can – if you\'re unsure about something, just skip it; '
     + 'we\'ll go through any open points in our first session. Your answers are confidential.',
-  sections: [sport, complaints, injuries, health, nutrition, loadCheck, psychosocial, goals, training, closing],
+  sections: [sport, body, health, nutrition, loadCheck, psychosocial, goals, training, closing],
 };

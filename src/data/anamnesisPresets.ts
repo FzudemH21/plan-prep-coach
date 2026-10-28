@@ -3,10 +3,13 @@
  * the editor; saving creates the coach's own, editable template.
  *
  * "Anamnese – Training & Gesundheit": one anamnesis for everyone without an acute injury — athletes
- * and regular people — that gets more detailed with complaints. The check question "Hast du aktuell
- * Schmerzen oder Beschwerden?" (Nein / leichte / deutliche) decides: "leichte" shows a short
- * complaint block, "deutliche" the full one plus the psychosocial questions. Built from the practice's
- * anamnesis document (Anamnesebogen) with the review of 2026-10-18.
+ * and regular people — that gets more detailed with complaints. Everyone answers ONE body map for
+ * current complaints and earlier injuries / surgery ("Nichts davon" when there is nothing); every
+ * tapped spot asks its own questions: what applies (current complaints / earlier injury / surgery),
+ * for current complaints how limiting they are — "leicht" a short block, "deutlich" the full one —
+ * and for earlier ones when / what / time out. "Deutlich" at any spot also shows "Kannst du aktuell
+ * trainieren?", the psychosocial questions and the return-to-play date. Built from the practice's
+ * anamnesis document (Anamnesebogen) with the reviews of 2026-10-18 and 2026-10-28.
  * English version: anamnesisPresetEn.ts (same ids and conditions) — keep both in step.
  */
 import type { AnamnesisCondition, AnamnesisField, AnamnesisSection, AnamnesisTemplateDraft } from '@/types/anamnesis';
@@ -14,15 +17,23 @@ import { DEFAULT_ANAMNESIS_TEMPLATE, PROFILE_SEX_SOURCE } from '@/types/anamnesi
 import { TRAINING_HEALTH_ANAMNESIS_EN } from '@/data/anamnesisPresetEn';
 import { withTranslation } from '@/utils/anamnesisI18n';
 
-// ── Check question and its answers (conditions refer to them) ───────────────
+// ── Answers the conditions refer to ──────────────────────────────────────────
 
-const NO_COMPLAINTS = 'Nein';
-const MILD = 'Ja, leichte – ich kann normal trainieren und mich normal bewegen';
-const MARKED = 'Ja, deutliche – sie schränken mich im Alltag oder im Training ein';
+// Per spot of the body map: what applies, and how limiting current complaints are
+const KIND_NOW = 'Aktuelle Beschwerden oder Schmerzen';
+const KIND_INJURY = 'Frühere Verletzung';
+const KIND_SURGERY = 'Operation';
+const MILD = 'Leicht – ich kann normal trainieren und mich normal bewegen';
+const MARKED = 'Deutlich – sie schränken mich im Alltag oder im Training ein';
+const SUDDEN = 'Plötzlich (z. B. beim Umknicken oder Landen)';
 
 const when = (sourceId: string, ...values: string[]): AnamnesisCondition => ({ sourceId, values });
-const anyComplaints = when('c-check', MILD, MARKED);
-const markedComplaints = when('c-check', MARKED);
+// Conditions of the questions per spot (on answers of the same spot)
+const now = when('s-kind', KIND_NOW);
+const marked = when('s-limit', MARKED);
+const past = when('s-kind', KIND_INJURY, KIND_SURGERY);
+// Elsewhere in the form: at least one spot with significant current complaints
+const markedComplaints: AnamnesisCondition = { sourceId: 'b-map', spotFieldId: 's-limit', values: [MARKED] };
 const female = when(PROFILE_SEX_SOURCE, 'female');
 
 const DURATIONS = ['Bis 30 Minuten', '30–60 Minuten', '60–90 Minuten', '90–120 Minuten', 'Länger als 2 Stunden'];
@@ -50,84 +61,84 @@ const sport: AnamnesisSection = {
   ],
 };
 
-const complaints: AnamnesisSection = {
-  id: 'sec-complaints',
-  title: 'Aktuelle Beschwerden',
+const body: AnamnesisSection = {
+  id: 'sec-body',
+  title: 'Beschwerden, Verletzungen & Operationen',
   athleteFills: true,
   fields: [
-    q({ id: 'c-check', label: 'Hast du aktuell Schmerzen oder Beschwerden?', fieldType: 'select',
-      options: [NO_COMPLAINTS, MILD, MARKED],
-      helpText: 'Auch kleinere, z. B. ein Ziehen im Knie nach dem Laufen.' }),
-    q({ id: 'c-where', label: 'Wo hast du Beschwerden?', fieldType: 'bodyMap', bodyMapIntensity: true,
-      placeholder: 'Was spürst du dort?',
-      helpText: 'Markiere alle Stellen, die zu deinen aktuellen Beschwerden gehören, und gib an, wie stark sie sind. '
-        + 'Hast du zwei Beschwerden, die nichts miteinander zu tun haben? Dann beantworte die nächsten Fragen für die wichtigere und schreib zur anderen etwas in ihre Notiz.',
-      condition: anyComplaints }),
-    q({ id: 'c-since', label: 'Seit wann hast du die Beschwerden?', fieldType: 'select',
-      options: ['Weniger als 6 Wochen', '6 bis 12 Wochen', 'Länger als 3 Monate'], condition: anyComplaints }),
-    q({ id: 'c-onset', label: 'Wie haben die Beschwerden angefangen?', fieldType: 'select',
-      options: ['Plötzlich (z. B. beim Umknicken oder Landen)', 'Langsam, ohne bestimmten Auslöser'], condition: markedComplaints }),
-    q({ id: 'c-what', label: 'Was genau ist passiert?', fieldType: 'textarea',
-      helpText: 'z. B. beim Sprint, beim Landen, bei einem Zusammenstoß',
-      condition: when('c-onset', 'Plötzlich (z. B. beim Umknicken oder Landen)') }),
-    q({ id: 'c-before', label: 'Hattest du an dieser Stelle früher schon einmal Beschwerden oder eine Verletzung?', fieldType: 'boolean',
-      condition: markedComplaints }),
-    q({ id: 'c-course', label: 'Wie haben sich die Beschwerden seitdem entwickelt?', fieldType: 'select',
-      options: ['Schlimmer geworden', 'Besser geworden', 'Gleich geblieben', 'Mal besser, mal schlechter'], condition: markedComplaints }),
-    q({ id: 'c-change', label: 'Hast du kurz bevor die Beschwerden anfingen etwas verändert?', fieldType: 'multiselect', allowOther: true,
-      options: ['Mehr oder intensiver trainiert', 'Neue Übungen oder eine neue Sportart', 'Neue Schuhe',
-        'Anderer Untergrund (z. B. Kunstrasen, Halle)', 'Wettkampfphase', 'Nichts verändert'],
-      condition: markedComplaints }),
-    q({ id: 'c-warmup', label: 'Wie verhalten sich die Beschwerden beim Training?', fieldType: 'select',
-      options: ['Werden nach dem Aufwärmen besser', 'Bleiben gleich', 'Werden während des Trainings schlimmer',
-        'Kommen erst danach oder am nächsten Tag'],
-      condition: markedComplaints }),
-    q({ id: 'c-belief', label: 'Was glaubst du, woher die Beschwerden kommen?', fieldType: 'text', condition: markedComplaints }),
-    q({ id: 'c-rest', label: 'Hast du auch Schmerzen …', fieldType: 'yesnoList',
-      options: ['in Ruhe (z. B. im Sitzen oder Liegen)', 'nachts (wachst du davon auf?)'], condition: markedComplaints }),
-    q({ id: 'c-character', label: 'Wie fühlt sich der Schmerz an?', fieldType: 'multiselect', helpText: 'Mehrfachauswahl möglich',
-      options: ['Brennend', 'Stechend', 'Ziehend', 'Dumpf oder drückend', 'Wie ein Stromschlag', 'Taub oder kribbelnd',
-        'Strahlt in andere Körperteile aus'],
-      condition: markedComplaints }),
-    q({ id: 'c-signs', label: 'Bemerkst du außerdem …', fieldType: 'yesnoList',
-      options: ['Schwellung', 'Unsicherheit oder Wegknicken', 'Blockieren oder Einklemmen'], condition: markedComplaints }),
-    // Warning signs for the lower back / pelvis and for the head / neck — only with a spot there
-    q({ id: 'c-flags-back', label: 'Bemerkst du eines davon?', fieldType: 'yesnoList',
-      options: ['Taubheit im Bereich von Gesäß, Genitalien oder der Innenseite der Oberschenkel',
-        'Neue Probleme beim Wasserlassen oder beim Stuhlgang'],
-      helpText: 'Falls du das gerade neu bemerkst: Bitte lass es sofort ärztlich abklären.',
-      condition: when('c-where', '12', '13') }),
-    q({ id: 'c-flags-neck', label: 'Bemerkst du eines davon?', fieldType: 'yesnoList',
-      options: ['Schwindel', 'Doppeltsehen', 'Probleme beim Sprechen', 'Probleme beim Schlucken',
-        'Plötzliches Hinfallen ohne Bewusstlosigkeit', 'Übelkeit', 'Taubheit im Gesicht'],
-      condition: when('c-where', '1', '2') }),
-    q({ id: 'c-time', label: 'Wann sind die Beschwerden am stärksten?', fieldType: 'select',
-      options: ['Morgens', 'Abends oder nach Belastung', 'Immer gleich', 'Unterschiedlich'], condition: markedComplaints }),
-    q({ id: 'c-worse', label: 'Was macht es schlimmer?', fieldType: 'text', condition: anyComplaints }),
-    q({ id: 'c-better', label: 'Was hilft?', fieldType: 'text', condition: markedComplaints }),
-    q({ id: 'c-limits', label: 'Was kannst du wegen der Beschwerden nicht oder nur eingeschränkt machen?', fieldType: 'textarea',
-      helpText: 'z. B. Treppensteigen, Sitzen, Schlafen, Sprinten, Springen, Werfen', condition: markedComplaints }),
+    q({ id: 'b-map', label: 'Wo hast du aktuell Beschwerden – oder hattest du früher eine Verletzung oder Operation?',
+      fieldType: 'bodyMap', bodyMapNone: true,
+      placeholder: 'z. B. was du sonst noch wichtig findest',
+      helpText: 'Tippe auf jede betroffene Stelle – zu jeder Stelle kommen ein paar kurze Fragen. '
+        + 'Auch kleine Beschwerden (z. B. ein Ziehen im Knie nach dem Laufen), Operationen ohne Bezug zum Sport (z. B. Blinddarm) und Ermüdungsbrüche. '
+        + 'Besonders wichtig: alles aus den letzten 12 Monaten. Hattest du noch nie etwas? Dann tippe auf „Nichts davon“.',
+      spotFields: [
+        q({ id: 's-kind', label: 'Was trifft auf diese Stelle zu?', fieldType: 'multiselect',
+          options: [KIND_NOW, KIND_INJURY, KIND_SURGERY],
+          helpText: 'Mehrfachauswahl möglich – z. B. eine frühere Verletzung, die heute noch Beschwerden macht.' }),
+        // Current complaints
+        q({ id: 's-nrs', label: 'Wie stark sind die Beschwerden gerade?', fieldType: 'scale', scaleMin: 0, scaleMax: 10,
+          scaleMinLabel: 'keine', scaleMaxLabel: 'stärkste vorstellbare', condition: now }),
+        q({ id: 's-limit', label: 'Wie sehr schränken dich die Beschwerden ein?', fieldType: 'select',
+          options: [MILD, MARKED], condition: now }),
+        q({ id: 's-since', label: 'Seit wann hast du die Beschwerden?', fieldType: 'select',
+          options: ['Weniger als 6 Wochen', '6 bis 12 Wochen', 'Länger als 3 Monate'], condition: now }),
+        q({ id: 's-onset', label: 'Wie haben die Beschwerden angefangen?', fieldType: 'select',
+          options: [SUDDEN, 'Langsam, ohne bestimmten Auslöser'], condition: marked }),
+        q({ id: 's-what', label: 'Was genau ist passiert?', fieldType: 'textarea',
+          helpText: 'z. B. beim Sprint, beim Landen, bei einem Zusammenstoß', condition: when('s-onset', SUDDEN) }),
+        q({ id: 's-course', label: 'Wie haben sich die Beschwerden seitdem entwickelt?', fieldType: 'select',
+          options: ['Schlimmer geworden', 'Besser geworden', 'Gleich geblieben', 'Mal besser, mal schlechter'], condition: marked }),
+        q({ id: 's-change', label: 'Hast du kurz bevor die Beschwerden anfingen etwas verändert?', fieldType: 'multiselect', allowOther: true,
+          options: ['Mehr oder intensiver trainiert', 'Neue Übungen oder eine neue Sportart', 'Neue Schuhe',
+            'Anderer Untergrund (z. B. Kunstrasen, Halle)', 'Wettkampfphase', 'Nichts verändert'],
+          condition: marked }),
+        q({ id: 's-warmup', label: 'Wie verhalten sich die Beschwerden beim Training?', fieldType: 'select',
+          options: ['Werden nach dem Aufwärmen besser', 'Bleiben gleich', 'Werden während des Trainings schlimmer',
+            'Kommen erst danach oder am nächsten Tag'],
+          condition: marked }),
+        q({ id: 's-belief', label: 'Was glaubst du, woher die Beschwerden kommen?', fieldType: 'text', condition: marked }),
+        q({ id: 's-rest', label: 'Hast du auch Schmerzen …', fieldType: 'yesnoList',
+          options: ['in Ruhe (z. B. im Sitzen oder Liegen)', 'nachts (wachst du davon auf?)'], condition: marked }),
+        q({ id: 's-character', label: 'Wie fühlt sich der Schmerz an?', fieldType: 'multiselect', helpText: 'Mehrfachauswahl möglich',
+          options: ['Brennend', 'Stechend', 'Ziehend', 'Dumpf oder drückend', 'Wie ein Stromschlag', 'Taub oder kribbelnd',
+            'Strahlt in andere Körperteile aus'],
+          condition: marked }),
+        q({ id: 's-signs', label: 'Bemerkst du außerdem …', fieldType: 'yesnoList',
+          options: ['Schwellung', 'Unsicherheit oder Wegknicken', 'Blockieren oder Einklemmen'], condition: marked }),
+        // Warning signs — only for current complaints at the lower back / pelvis or the head / neck
+        q({ id: 's-flags-back', label: 'Bemerkst du eines davon?', fieldType: 'yesnoList',
+          options: ['Taubheit im Bereich von Gesäß, Genitalien oder der Innenseite der Oberschenkel',
+            'Neue Probleme beim Wasserlassen oder beim Stuhlgang'],
+          helpText: 'Falls du das gerade neu bemerkst: Bitte lass es sofort ärztlich abklären.',
+          condition: now, spotRegions: ['12', '13'] }),
+        q({ id: 's-flags-neck', label: 'Bemerkst du eines davon?', fieldType: 'yesnoList',
+          options: ['Schwindel', 'Doppeltsehen', 'Probleme beim Sprechen', 'Probleme beim Schlucken',
+            'Plötzliches Hinfallen ohne Bewusstlosigkeit', 'Übelkeit', 'Taubheit im Gesicht'],
+          condition: now, spotRegions: ['1', '2'] }),
+        q({ id: 's-time', label: 'Wann sind die Beschwerden am stärksten?', fieldType: 'select',
+          options: ['Morgens', 'Abends oder nach Belastung', 'Immer gleich', 'Unterschiedlich'], condition: marked }),
+        q({ id: 's-worse', label: 'Was macht es schlimmer?', fieldType: 'text', condition: now }),
+        q({ id: 's-better', label: 'Was hilft?', fieldType: 'text', condition: marked }),
+        q({ id: 's-limits', label: 'Was kannst du wegen der Beschwerden nicht oder nur eingeschränkt machen?', fieldType: 'textarea',
+          helpText: 'z. B. Treppensteigen, Sitzen, Schlafen, Sprinten, Springen, Werfen', condition: marked }),
+        q({ id: 's-diag', label: 'Wurde schon etwas untersucht oder behandelt?', fieldType: 'multiselect', allowOther: true,
+          options: DIAGNOSTICS, condition: marked }),
+        q({ id: 's-diag-result', label: 'Was ist dabei herausgekommen?', fieldType: 'textarea', allowFiles: true,
+          helpText: 'z. B. die Diagnose, falls du sie kennst',
+          condition: when('s-diag', ...DIAGNOSTICS.filter((d) => d !== 'Nein, noch nichts')) }),
+        // Earlier injury / surgery
+        q({ id: 's-past-when', label: 'Wann war die Verletzung bzw. Operation?', fieldType: 'text',
+          placeholder: 'z. B. 2021 oder März 2024',
+          helpText: 'Mehrere an dieser Stelle? Dann gerne alle mit Jahr.', condition: past }),
+        q({ id: 's-past-what', label: 'Was war es genau, und wie wurde es behandelt?', fieldType: 'textarea',
+          helpText: 'z. B. Bänderriss, Kreuzband-OP, Gips, Physiotherapie', condition: past }),
+        q({ id: 's-past-out', label: 'Wie lange konntest du deswegen nicht normal trainieren?', fieldType: 'select',
+          options: ['Gar nicht', 'Bis 1 Woche', '1–4 Wochen', '1–3 Monate', 'Länger als 3 Monate'], condition: past }),
+      ],
+    }),
     q({ id: 'c-train', label: 'Kannst du aktuell trainieren?', fieldType: 'select',
       options: ['Ja, ganz normal', 'Ja, aber eingeschränkt', 'Nein, ich mache gerade Pause'], condition: markedComplaints }),
-    q({ id: 'c-diag', label: 'Wurde schon etwas untersucht oder behandelt?', fieldType: 'multiselect', allowOther: true,
-      options: DIAGNOSTICS, condition: markedComplaints }),
-    q({ id: 'c-diag-result', label: 'Was ist dabei herausgekommen?', fieldType: 'textarea', allowFiles: true,
-      helpText: 'z. B. die Diagnose, falls du sie kennst',
-      condition: when('c-diag', ...DIAGNOSTICS.filter((d) => d !== 'Nein, noch nichts')) }),
-  ],
-};
-
-const injuries: AnamnesisSection = {
-  id: 'sec-injuries',
-  title: 'Frühere Verletzungen & Operationen',
-  athleteFills: true,
-  fields: [
-    q({ id: 'i-any', label: 'Hattest du früher schon Verletzungen oder Operationen?', fieldType: 'boolean' }),
-    q({ id: 'i-map', label: 'Wo?', fieldType: 'bodyMap',
-      placeholder: 'Was ist passiert, wann, wie lange konntest du nicht trainieren, wie wurde es behandelt?',
-      helpText: 'Tippe auf jede Stelle, an der du dich verletzt hast oder operiert wurdest – eine Stelle pro Verletzung. '
-        + 'Auch Operationen, die nichts mit Sport zu tun haben, z. B. Blinddarm, und Ermüdungsbrüche. Besonders wichtig: alles aus den letzten 12 Monaten.',
-      condition: when('i-any', 'true') }),
     q({ id: 'i-concussion', label: 'Hattest du schon einmal eine Gehirnerschütterung?', fieldType: 'boolean' }),
     q({ id: 'i-concussion-detail', label: 'Wie oft, und wann zuletzt?', fieldType: 'text', condition: when('i-concussion', 'true') }),
   ],
@@ -294,7 +305,7 @@ export const TRAINING_HEALTH_ANAMNESIS: AnamnesisTemplateDraft = {
   introText: 'Dieser Fragebogen hilft uns, dein Training von Anfang an passend für dich zu planen. '
     + 'Bitte beantworte die Fragen so genau wie möglich – wenn du dir bei etwas unsicher bist, überspring es einfach, '
     + 'wir besprechen offene Punkte im Erstgespräch. Deine Angaben sind vertraulich.',
-  sections: [sport, complaints, injuries, health, nutrition, loadCheck, psychosocial, goals, training, closing],
+  sections: [sport, body, health, nutrition, loadCheck, psychosocial, goals, training, closing],
 };
 
 /** "Start from" choices in the template editor */

@@ -31,7 +31,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
-  Plus, Trash2, ChevronUp, ChevronDown, Edit, Loader2, ClipboardList, X, GitBranch, Eye, EyeOff, CalendarDays,
+  Plus, Trash2, ChevronUp, ChevronDown, Edit, Loader2, ClipboardList, X, GitBranch, Eye, EyeOff, CalendarDays, MapPin,
 } from 'lucide-react';
 import { AnamnesisFieldInput } from '@/components/anamnesis/AnamnesisInputs';
 import { ANAMNESIS_PRESETS } from '@/data/anamnesisPresets';
@@ -42,7 +42,7 @@ import { ANAMNESIS_LANG_LABELS, ANAMNESIS_PROFILE_STEPS, DEFAULT_ANAMNESIS_TEMPL
 import type {
   AnamnesisTemplate, AnamnesisTemplateDraft, AnamnesisSection, AnamnesisField, AnamnesisFieldType, AnamnesisCondition, AnamnesisListColumn,
 } from '@/types/anamnesis';
-import { CONDITION_SOURCE_TYPES, conditionChoices } from '@/utils/anamnesisAnswers';
+import { BODY_AREAS, CONDITION_SOURCE_TYPES, conditionChoices } from '@/utils/anamnesisAnswers';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -97,14 +97,22 @@ interface ConditionSource { id: string; label: string; field: AnamnesisField | '
 
 const SEX_SOURCE: ConditionSource = { id: PROFILE_SEX_SOURCE, label: 'Sex (from the profile)', field: 'sex' };
 
-function conditionSources(fields: AnamnesisField[]): ConditionSource[] {
+function conditionSources(fields: AnamnesisField[], withSex = true): ConditionSource[] {
   return [
     ...fields
       .filter((f) => CONDITION_SOURCE_TYPES.has(f.fieldType) && f.label.trim())
       .map((f) => ({ id: f.id, label: f.label, field: f })),
-    SEX_SOURCE,
+    ...(withSex ? [SEX_SOURCE] : []),
   ];
 }
+
+/** Types a question per spot can have (no body map / schedule / calendar inside a spot) */
+const SPOT_FIELD_TYPES: AnamnesisFieldType[] = (Object.keys(FIELD_TYPE_LABELS) as AnamnesisFieldType[])
+  .filter((t) => t !== 'bodyMap' && t !== 'weekGrid' && t !== 'dateRanges');
+
+/** Questions per spot a condition can look at (choices and yes/no) */
+const spotConditionFields = (bodyMap: AnamnesisField): AnamnesisField[] =>
+  (bodyMap.spotFields ?? []).filter((f) => CONDITION_SOURCE_TYPES.has(f.fieldType) && f.fieldType !== 'bodyMap' && f.label.trim());
 
 /** Text area with one entry per line — written back when leaving the box */
 function LinesInput({ label, value, onCommit, placeholder }: {
@@ -133,8 +141,11 @@ function ConditionEditor({ condition, sources, onChange }: {
   onChange: (c: AnamnesisCondition | undefined) => void;
 }) {
   const source = sources.find((s) => s.id === condition.sourceId);
-  const choices = source ? conditionChoices(source.field) : [];
-  const missing = !!condition.sourceId && !source;
+  // A body map with questions per spot: the body area, or a spot's answer to one of its questions
+  const spotSubs = source && source.field !== 'sex' && source.field.fieldType === 'bodyMap' ? spotConditionFields(source.field) : [];
+  const sub = condition.spotFieldId ? spotSubs.find((f) => f.id === condition.spotFieldId) : undefined;
+  const choices = sub ? conditionChoices(sub) : source && !condition.spotFieldId ? conditionChoices(source.field) : [];
+  const missing = (!!condition.sourceId && !source) || (!!condition.spotFieldId && !sub);
   return (
     <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 p-2 space-y-1.5">
       <div className="flex items-center gap-2">
@@ -156,6 +167,23 @@ function ConditionEditor({ condition, sources, onChange }: {
           <X className="h-3 w-3" />
         </Button>
       </div>
+      {spotSubs.length > 0 && (
+        <div className="flex items-center gap-2 pl-0.5">
+          <span className="text-xs text-muted-foreground shrink-0">looking at</span>
+          <Select
+            value={condition.spotFieldId ?? '__area'}
+            onValueChange={(v) => onChange({ sourceId: condition.sourceId, values: [], spotFieldId: v === '__area' ? undefined : v })}
+          >
+            <SelectTrigger className="h-7 text-xs flex-1 min-w-0"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__area" className="text-xs">The body area of a marked spot</SelectItem>
+              {spotSubs.map((f) => (
+                <SelectItem key={f.id} value={f.id} className="text-xs">A spot&apos;s answer to: {f.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       {missing && (
         <p className="text-xs text-amber-700">The question this depended on was removed or moved below — the condition is ignored until you pick another one.</p>
       )}
@@ -176,8 +204,37 @@ function ConditionEditor({ condition, sources, onChange }: {
             </label>
           ))}
           {condition.values.length === 0 && <span className="text-xs text-amber-700">pick at least one answer</span>}
+          {sub && <span className="w-full text-[11px] text-muted-foreground">— true when at least one marked spot has this answer</span>}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Question per spot: "only for these body areas" ────────────────────────────
+
+function SpotRegionsEditor({ regions, onChange }: { regions: string[]; onChange: (r: string[] | undefined) => void }) {
+  return (
+    <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 p-2 space-y-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium flex-1">Only for spots on</span>
+        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => onChange(undefined)} title="Ask for every spot">
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 pl-0.5">
+        {BODY_AREAS.map((r) => {
+          const id = String(r.id);
+          return (
+            <label key={id} className="flex items-center gap-1 text-xs cursor-pointer">
+              <Checkbox className="h-3.5 w-3.5" checked={regions.includes(id)}
+                onCheckedChange={(v) => onChange(v === true ? [...regions, id] : regions.filter((x) => x !== id))} />
+              {r.label}
+            </label>
+          );
+        })}
+        {regions.length === 0 && <span className="text-xs text-amber-700">pick at least one area</span>}
+      </div>
     </div>
   );
 }
@@ -232,6 +289,7 @@ function FieldRow({
   isLast,
   sources,
   allowCondition = true,
+  perSpot = false,
   onChange,
   onDelete,
   onMoveUp,
@@ -243,6 +301,8 @@ function FieldRow({
   /** Earlier questions this one can depend on */
   sources: ConditionSource[];
   allowCondition?: boolean;
+  /** A question per spot of a body map (fewer types, "only for these body areas") */
+  perSpot?: boolean;
   onChange: (updated: AnamnesisField) => void;
   onDelete: () => void;
   onMoveUp: () => void;
@@ -268,9 +328,11 @@ function FieldRow({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {(Object.entries(FIELD_TYPE_LABELS) as [AnamnesisFieldType, string][]).map(([val, label]) => (
-                <SelectItem key={val} value={val} className="text-xs">{label}</SelectItem>
-              ))}
+              {(Object.entries(FIELD_TYPE_LABELS) as [AnamnesisFieldType, string][])
+                .filter(([val]) => !perSpot || SPOT_FIELD_TYPES.includes(val))
+                .map(([val, label]) => (
+                  <SelectItem key={val} value={val} className="text-xs">{label}</SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>
@@ -340,8 +402,16 @@ function FieldRow({
               onCheckedChange={(v) => onChange({ ...field, bodyMapIntensity: v === true || undefined })} />
             Also ask for the pain intensity (0–10) of each spot
           </label>
-          <Input className="h-7 text-xs" placeholder='Prompt for the note at each spot (default: "What happened / how does it feel?")'
+          <label className="flex items-center gap-2 text-xs cursor-pointer w-fit">
+            <Checkbox className="h-3.5 w-3.5" checked={!!field.bodyMapNone}
+              onCheckedChange={(v) => onChange({ ...field, bodyMapNone: v === true || undefined })} />
+            Offer &quot;None of these&quot; <span className="text-muted-foreground">(nothing to mark — counts as answered, e.g. so everyone answers it)</span>
+          </label>
+          <Input className="h-7 text-xs" placeholder={field.spotFields?.length
+            ? 'Prompt for the optional note at the end of each spot (e.g. "Anything else that matters?")'
+            : 'Prompt for the note at each spot (default: "What happened / how does it feel?")'}
             value={field.placeholder ?? ''} onChange={(e) => onChange({ ...field, placeholder: e.target.value || undefined })} />
+          <SpotFieldsEditor field={field} onChange={onChange} />
         </div>
       )}
       {type === 'dateRanges' && (
@@ -375,6 +445,9 @@ function FieldRow({
       {allowCondition && field.condition && (
         <ConditionEditor condition={field.condition} sources={sources} onChange={(condition) => onChange({ ...field, condition })} />
       )}
+      {perSpot && field.spotRegions && (
+        <SpotRegionsEditor regions={field.spotRegions} onChange={(spotRegions) => onChange({ ...field, spotRegions })} />
+      )}
 
       {showPreview && (
         <div className="rounded-md border bg-muted/30 p-2.5 space-y-1">
@@ -399,6 +472,12 @@ function FieldRow({
               <GitBranch className="h-3 w-3" />Show only if…
             </Button>
           )}
+          {perSpot && !field.spotRegions && (
+            <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs text-muted-foreground gap-1"
+              onClick={() => onChange({ ...field, spotRegions: [] })}>
+              <MapPin className="h-3 w-3" />Only for some body areas…
+            </Button>
+          )}
           {allowCondition && (
             <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs text-muted-foreground gap-1 ml-auto"
               onClick={() => setShowPreview((p) => !p)}>
@@ -407,6 +486,48 @@ function FieldRow({
           )}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// ── Body map: questions per spot ──────────────────────────────────────────────
+
+function SpotFieldsEditor({ field, onChange }: { field: AnamnesisField; onChange: (f: AnamnesisField) => void }) {
+  const subs = field.spotFields ?? [];
+  const write = (spotFields: AnamnesisField[]) => onChange({ ...field, spotFields: spotFields.length ? spotFields : undefined });
+  const move = (idx: number, dir: -1 | 1) => {
+    const next = [...subs];
+    [next[idx], next[idx + dir]] = [next[idx + dir], next[idx]];
+    write(next);
+  };
+  return (
+    <div className="rounded-md border bg-muted/30 p-2 space-y-1.5">
+      <div>
+        <p className="text-xs font-medium">Questions per spot</p>
+        <p className="text-[11px] text-muted-foreground">
+          Asked for every spot the athlete marks — in the form link one per screen right after tapping the spot, then back to the body.
+          They can depend on an earlier answer of the same spot or only be asked for some body areas. A spot can be marked as part of an
+          earlier one (e.g. pain radiating into the leg) — then its questions are not asked again.
+          {subs.length > 0 && ' The note comes last (optional).'}
+        </p>
+      </div>
+      {subs.map((sub, idx) => (
+        <FieldRow
+          key={sub.id}
+          field={sub}
+          isFirst={idx === 0}
+          isLast={idx === subs.length - 1}
+          sources={conditionSources(subs.slice(0, idx), false)}
+          perSpot
+          onChange={(updated) => write(subs.map((x, i) => (i === idx ? updated : x)))}
+          onDelete={() => write(subs.filter((_, i) => i !== idx))}
+          onMoveUp={() => move(idx, -1)}
+          onMoveDown={() => move(idx, 1)}
+        />
+      ))}
+      <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => write([...subs, blankField()])}>
+        <Plus className="h-3 w-3" />Add question per spot
+      </Button>
     </div>
   );
 }

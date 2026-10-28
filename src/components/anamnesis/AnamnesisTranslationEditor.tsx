@@ -33,10 +33,10 @@ function Row({ original, value, onChange, multiline }: {
 }
 
 function FieldTranslation({ field, lang, onChange }: {
-  field: AnamnesisField; lang: AnamnesisLang; onChange: (t: AnamnesisFieldTranslation) => void;
+  field: AnamnesisField; lang: AnamnesisLang; onChange: (f: AnamnesisField) => void;
 }) {
   const t = field.translations?.[lang] ?? {};
-  const set = (patch: Partial<AnamnesisFieldTranslation>) => onChange({ ...t, ...patch });
+  const set = (patch: Partial<AnamnesisFieldTranslation>) => onChange({ ...field, translations: { ...field.translations, [lang]: { ...t, ...patch } } });
   return (
     <div className="rounded-md border bg-background p-2 space-y-1.5">
       <Row original={field.label || '(no text)'} value={t.label ?? ''} onChange={label => set({ label })} />
@@ -67,6 +67,16 @@ function FieldTranslation({ field, lang, onChange }: {
           ))}
         </div>
       ))}
+      {/* A body map's questions per spot */}
+      {(field.spotFields ?? []).length > 0 && (
+        <div className="pl-3 border-l-2 border-primary/30 space-y-1.5">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Questions per spot</p>
+          {(field.spotFields ?? []).map((sf, pi) => (
+            <FieldTranslation key={sf.id} field={sf} lang={lang}
+              onChange={next => onChange({ ...field, spotFields: (field.spotFields ?? []).map((x, i) => (i === pi ? next : x)) })} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -153,11 +163,11 @@ export function AnamnesisTranslationEditor({ draft, lang, onChange }: {
             {s.helpText && <Row original={s.helpText} value={st.helpText ?? ''} onChange={helpText => setSection({ helpText })} multiline />}
             {s.fields.map((f, fi) => (
               <FieldTranslation key={f.id} field={f} lang={lang}
-                onChange={t => onChange({
+                onChange={next => onChange({
                   ...draft,
                   sections: draft.sections.map((x, i) => (i !== si ? x : {
                     ...x,
-                    fields: x.fields.map((y, j) => (j === fi ? { ...y, translations: { ...y.translations, [lang]: t } } : y)),
+                    fields: x.fields.map((y, j) => (j === fi ? next : y)),
                   })),
                 })} />
             ))}

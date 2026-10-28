@@ -21,8 +21,7 @@ import { InlineDocumentViewer } from '@/components/coach/InlineDocumentViewer';
 import type { CoachDocument } from '@/hooks/useCoachDocuments';
 import { useAthleteAnamneses } from '@/hooks/useAthleteAnamneses';
 import type { AnamnesisFile } from '@/types/anamnesis';
-import { FILES_SUFFIX, parseAnswerFiles } from '@/utils/anamnesisAnswers';
-import { localizeField } from '@/utils/anamnesisI18n';
+import { answerFileGroups, parseAnswerFiles } from '@/utils/anamnesisAnswers';
 import { cn } from '@/lib/utils';
 
 const BUCKET = 'documents';
@@ -209,19 +208,14 @@ export function AnamnesisFormFilesSection({ athleteId }: { athleteId: string }) 
   const { anamneses } = useAthleteAnamneses(athleteId);
   const viewer = useFileViewer();
   const groups = useMemo(() => anamneses.flatMap(record => {
+    // Also the files under a body map's questions per spot ("… (1. Left knee)")
     const fields = record.templateSnapshot.sections.flatMap(s => s.fields);
-    return Object.entries(record.fieldValues)
-      .filter(([key]) => key.endsWith(FILES_SUFFIX))
-      .map(([key, value]) => {
-        const field = fields.find(f => f.id === key.slice(0, -FILES_SUFFIX.length));
-        return {
-          key: `${record.id}-${key}`,
-          date: record.formSubmittedAt ?? record.conductedAt,
-          question: field ? localizeField(field, 'en').label : 'Anamnesis',
-          files: parseAnswerFiles(value),
-        };
-      })
-      .filter(g => g.files.length > 0);
+    return answerFileGroups(fields, record.fieldValues, 'en').map(g => ({
+      key: `${record.id}-${g.key}`,
+      date: record.formSubmittedAt ?? record.conductedAt,
+      question: g.label,
+      files: g.files,
+    }));
   }), [anamneses]);
   if (groups.length === 0) return null;
   return (

@@ -18,6 +18,8 @@
  * Question types: text, number, date, choice, multiple choice, yes/no, yes/no list, scale, repeatable
  * list, body map, weekly schedule grid, info text (AnamnesisInputs). Questions / sections with a
  * "show only if" condition appear only when the earlier answer (or the sex from "About you") matches.
+ * A body map with questions per spot: tapping a spot opens its own short flow (does it belong to an
+ * earlier spot? → the spot's questions one per screen → a note) and then returns to the body.
  *
  * Branding from the coach profile: the logo in the header (large on the start screen) and the
  * accent colour for buttons, progress bar and selected answers. The start screen shows the
@@ -36,7 +38,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { cn } from '@/lib/utils';
 import type { AnamnesisField, AnamnesisProfileAnswers, AnamnesisProfileSteps, AnamnesisSection } from '@/types/anamnesis';
 import { profileStepOn } from '@/types/anamnesis';
-import { contextFor, fieldState, filesKey, isAnswered as answerGiven, isQuestion } from '@/utils/anamnesisAnswers';
+import {
+  contextFor, fieldState, filesKey, isAnswered as answerGiven, isQuestion, parseBodyMap, regionLabel, spotFieldsFor, withoutSpot,
+  type BodyMapSpot,
+} from '@/utils/anamnesisAnswers';
 import { FormFileUpload } from '@/components/anamnesis/AnamnesisFiles';
 import { localizeField, localizeSection } from '@/utils/anamnesisI18n';
 import {
@@ -45,8 +50,10 @@ import {
 
 type Lang = 'de' | 'en';
 
-/** Longest answer the form link stores (save_anamnesis_form, migration 20261002) */
+/** Longest answer the form link stores (save_anamnesis_form, migration 20261002) — a body map with
+ *  questions per spot keeps all of its spots' answers in one answer (migration 20261028) */
 const ANSWER_MAX_CHARS = 5000;
+const BODY_MAP_MAX_CHARS = 30000;
 
 interface FormData {
   status: 'open' | 'submitted' | 'expired';
@@ -75,6 +82,8 @@ interface FormData {
 }
 
 type ProfileStep = 'name' | 'birthday' | 'sex' | 'sports' | 'occupation' | 'activity' | 'address';
+/** One screen of a body-map spot's own flow */
+type SpotStep = { kind: 'link' } | { kind: 'pain' } | { kind: 'question'; field: AnamnesisField } | { kind: 'note' };
 type Step =
   | { kind: 'welcome' }
   | { kind: 'profile'; key: ProfileStep }
@@ -132,6 +141,13 @@ const TEXT = {
     loadError: 'Die Anamnese konnte nicht geladen werden. Bitte später erneut versuchen.',
     noticeMissing: 'Die Datenschutzhinweise sind noch nicht hinterlegt. Bitte wende dich an deinen Trainer.',
     close: 'Schließen',
+    front: 'vorne', back_: 'hinten',
+    spotLink: 'Gehört diese Stelle zu einer, die du schon markiert hast?',
+    spotLinkHint: 'z. B. wenn ein Schmerz vom unteren Rücken ins Bein ausstrahlt – dann musst du die Fragen nicht noch einmal beantworten.',
+    spotOwn: 'Nein, das ist etwas Eigenes',
+    spotPain: 'Wie stark sind die Schmerzen an dieser Stelle?', noPain: 'kein Schmerz', worstPain: 'stärkster vorstellbarer',
+    spotNote: 'Möchtest du noch etwas zu dieser Stelle ergänzen?', optional: 'Optional',
+    spotDone: 'Fertig', spotRemove: 'Diese Stelle entfernen',
   },
   en: {
     title: 'Anamnesis',
@@ -181,6 +197,13 @@ const TEXT = {
     loadError: 'The anamnesis could not be loaded. Please try again later.',
     noticeMissing: 'The privacy notice has not been added yet. Please contact your coach.',
     close: 'Close',
+    front: 'front', back_: 'back',
+    spotLink: 'Does this spot belong to one you have already marked?',
+    spotLinkHint: 'e.g. when pain radiates from the lower back into the leg — then you don\'t have to answer the questions again.',
+    spotOwn: 'No, this is something separate',
+    spotPain: 'How strong is the pain at this spot?', noPain: 'no pain', worstPain: 'worst imaginable',
+    spotNote: 'Anything else you want to add about this spot?', optional: 'Optional',
+    spotDone: 'Done', spotRemove: 'Remove this spot',
   },
 } as const;
 
@@ -276,6 +299,8 @@ export default function AnamnesisFormPage() {
   const [submitError, setSubmitError] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [stepIdx, setStepIdx] = useState(0);
+  /** Open flow of one body-map spot (its questions one per screen) */
+  const [spotFlow, setSpotFlow] = useState<{ fieldId: string; spotId: string; idx: number; isNew: boolean } | null>(null);
   const dirty = useRef(false);
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -365,6 +390,7 @@ export default function AnamnesisFormPage() {
 
   const goTo = (i: number) => {
     if (advanceTimer.current) { clearTimeout(advanceTimer.current); advanceTimer.current = null; }
+    setSpotFlow(null);
     setStepIdx(Math.max(0, Math.min(steps.length - 1, i)));
   };
   const next = () => goTo(stepIdx + 1);
@@ -379,8 +405,8 @@ export default function AnamnesisFormPage() {
   // answers (JSON: body map, lists, grid) that would make the whole answer unreadable, so a change
   // beyond the limit is not taken
   const [tooLongId, setTooLongId] = useState<string | null>(null);
-  const setValue = (id: string, v: string) => {
-    if (v.length > ANSWER_MAX_CHARS) { setTooLongId(id); return; }
+  const setValue = (id: string, v: string, max = ANSWER_MAX_CHARS) => {
+    if (v.length > max) { setTooLongId(id); return; }
     setTooLongId(null);
     dirty.current = true;
     setValues(prev => ({ ...prev, [id]: v }));
@@ -572,9 +598,183 @@ export default function AnamnesisFormPage() {
 
   // ── Question / profile / consent step ──────────────────────────────────────
   const progress = stepIdx / (steps.length - 1);
-  const onEnter = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey && !(e.nativeEvent as KeyboardEvent).isComposing) { e.preventDefault(); next(); }
+  const enterTo = (go: () => void) => (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey && !(e.nativeEvent as KeyboardEvent).isComposing) { e.preventDefault(); go(); }
   };
+  const onEnter = enterTo(next);
+
+  /** Opens a tapped spot's flow — a new spot is added to the answer first */
+  const openSpot = (fieldId: string, spot: BodyMapSpot, isNew: boolean) => {
+    if (isNew) setValue(fieldId, JSON.stringify([...parseBodyMap(values[fieldId]), spot]), BODY_MAP_MAX_CHARS);
+    setSpotFlow({ fieldId, spotId: spot.id, idx: 0, isNew });
+  };
+
+  /**
+   * The answer input of a question (also a question per spot): `set` stores the answer, `soon` moves on
+   * after a tap on a choice, `now` on Enter
+   */
+  const renderInput = (field: AnamnesisField, value: string, set: (v: string) => void, soon: () => void, now: () => void): React.ReactNode => {
+    switch (field.fieldType) {
+      case 'textarea':
+        return <Textarea className="text-lg min-h-[160px] rounded-lg" autoFocus placeholder={field.placeholder || t.typeHere}
+          value={value} onChange={e => set(e.target.value)} />;
+      case 'number':
+        return <Input type="number" inputMode="decimal" className={bigInput} autoFocus placeholder={field.placeholder || t.typeHere}
+          value={value} onChange={e => set(e.target.value)} onKeyDown={enterTo(now)} />;
+      case 'select':
+        return <OptionList value={value} options={(field.options ?? []).map((o, i) => ({ value: o, label: field.optionLabels?.[i] ?? o }))}
+          onPick={v => { set(v); if (v) soon(); }} />;
+      case 'boolean':
+        return <OptionList value={value} options={[{ value: 'true', label: t.yes }, { value: 'false', label: t.no }]}
+          onPick={v => { set(v); if (v) soon(); }} />;
+      case 'multiselect':
+        return <MultiChoiceInput size="lg" lang={lang} options={field.options ?? []} labels={field.optionLabels} allowOther={field.allowOther} value={value} onChange={set} />;
+      case 'scale':
+        return <ScaleInput size="lg" lang={lang} field={field} value={value} onChange={set} />;
+      case 'date':
+        return <Input type="date" className={bigInput} value={value} onChange={e => set(e.target.value)} onKeyDown={enterTo(now)} />;
+      case 'yesnoList':
+        return <YesNoListInput size="lg" lang={lang} items={field.options ?? []} itemLabels={field.optionLabels} allowOther={field.allowOther} value={value} onChange={set} />;
+      case 'list':
+        return <ListInput size="lg" lang={lang} columns={field.listColumns ?? []} value={value} onChange={set} />;
+      case 'bodyMap':
+        return <BodyMapInput size="lg" lang={lang} field={field} value={value} onChange={set}
+          onOpenSpot={(spot, isNew) => openSpot(field.id, spot, isNew)} />;
+      case 'weekGrid':
+        return <WeekGridInput size="lg" lang={lang} value={value} onChange={set} />;
+      case 'dateRanges':
+        return <DateRangesInput size="lg" lang={lang} field={field} value={value} onChange={set} />;
+      case 'info':
+        return null;
+      default:
+        return <Input className={bigInput} autoFocus placeholder={field.placeholder || t.typeHere}
+          value={value} onChange={e => set(e.target.value)} onKeyDown={enterTo(now)} />;
+    }
+  };
+
+  // ── A body-map spot's own flow ─────────────────────────────────────────────
+  const flowSpots = spotFlow && step.kind === 'question' && step.field.id === spotFlow.fieldId ? parseBodyMap(values[spotFlow.fieldId]) : [];
+  const flowSpot = spotFlow ? flowSpots.find(sp => sp.id === spotFlow.spotId) : undefined;
+  if (spotFlow && step.kind === 'question' && flowSpot) {
+    const bodyField = step.field;
+    const fieldId = bodyField.id;
+    const spot = flowSpot;
+    const writeSpots = (next: BodyMapSpot[]) => setValue(fieldId, next.length ? JSON.stringify(next) : '', BODY_MAP_MAX_CHARS);
+    const updateSpot = (patch: Partial<BodyMapSpot>) => writeSpots(flowSpots.map(sp => (sp.id === spot.id ? { ...sp, ...patch } : sp)));
+    // A spot can belong to another spot of its own — not when other spots already belong to it (no chains)
+    const linkTargets = flowSpots.some(sp => sp.linkedTo === spot.id) ? [] : flowSpots.filter(sp => sp.id !== spot.id && !sp.linkedTo);
+    const spotSteps: SpotStep[] = [
+      ...(linkTargets.length > 0 ? [{ kind: 'link' } as const] : []),
+      ...(bodyField.bodyMapIntensity ? [{ kind: 'pain' } as const] : []),
+      ...spotFieldsFor(bodyField, spot).map(field => ({ kind: 'question' as const, field })),
+      { kind: 'note' },
+    ];
+    const idx = Math.min(spotFlow.idx, spotSteps.length - 1);
+    const spotStep = spotSteps[idx];
+    const isLast = idx === spotSteps.length - 1;
+    const side = spot.view === 'front' ? t.front : t.back_;
+    const empty = !spot.linkedTo && spot.nrs === undefined && !spot.note.trim() && !Object.values(spot.answers ?? {}).some(v => v?.trim());
+    const closeFlow = (backOut: boolean) => {
+      if (advanceTimer.current) { clearTimeout(advanceTimer.current); advanceTimer.current = null; }
+      // Back out of a new spot without any answer: the tap is taken back
+      if (backOut && spotFlow.isNew && empty) writeSpots(withoutSpot(flowSpots, spot.id));
+      setSpotFlow(null);
+    };
+    const spotNext = () => (isLast ? closeFlow(false) : setSpotFlow(f => f && ({ ...f, idx: idx + 1 })));
+    const spotBack = () => (idx === 0 ? closeFlow(true) : setSpotFlow(f => f && ({ ...f, idx: idx - 1 })));
+    const spotNextSoon = () => {
+      if (advanceTimer.current) clearTimeout(advanceTimer.current);
+      // The steps may change with the answer (follow-up questions) — counted again when shown
+      advanceTimer.current = setTimeout(() => { advanceTimer.current = null; setSpotFlow(f => f && ({ ...f, idx: f.idx + 1 })); }, 250);
+    };
+
+    let spotHeading = '';
+    let spotHelp: string | undefined;
+    let spotBody: React.ReactNode = null;
+    let spotAnswered = false;
+    if (spotStep.kind === 'link') {
+      spotHeading = t.spotLink;
+      spotHelp = t.spotLinkHint;
+      spotAnswered = true;
+      spotBody = (
+        <OptionList
+          value={spot.linkedTo ?? '__own'}
+          options={[
+            { value: '__own', label: t.spotOwn },
+            ...linkTargets.map(sp => ({ value: sp.id, label: `${flowSpots.indexOf(sp) + 1}. ${regionLabel(sp.region, lang)} (${sp.view === 'front' ? t.front : t.back_})` })),
+          ]}
+          onPick={v => { updateSpot({ linkedTo: v && v !== '__own' ? v : undefined }); spotNextSoon(); }}
+        />
+      );
+    } else if (spotStep.kind === 'pain') {
+      spotHeading = t.spotPain;
+      spotAnswered = spot.nrs !== undefined;
+      spotBody = (
+        <ScaleInput size="lg" lang={lang}
+          field={{ id: 'nrs', label: '', fieldType: 'scale', scaleMin: 0, scaleMax: 10, scaleMinLabel: t.noPain, scaleMaxLabel: t.worstPain }}
+          value={spot.nrs === undefined ? '' : String(spot.nrs)}
+          onChange={v => updateSpot({ nrs: v.trim() === '' ? undefined : Number(v) })} />
+      );
+    } else if (spotStep.kind === 'question') {
+      const sub = localizeField(spotStep.field, lang);
+      const subValue = spot.answers?.[sub.id] ?? '';
+      spotHeading = sub.label;
+      spotHelp = sub.helpText;
+      spotAnswered = answerGiven(sub, subValue);
+      spotBody = (
+        <div className="space-y-4">
+          {renderInput(sub, subValue, v => updateSpot({ answers: { ...spot.answers, [sub.id]: v } }), spotNextSoon, spotNext)}
+          {sub.allowFiles && form?.recordId && (
+            <FormFileUpload recordId={form.recordId} token={token} lang={lang}
+              value={spot.answers?.[filesKey(sub.id)] ?? ''}
+              onChange={v => updateSpot({ answers: { ...spot.answers, [filesKey(sub.id)]: v } })} />
+          )}
+        </div>
+      );
+    } else {
+      const localBody = localizeField(bodyField, lang);
+      spotHeading = t.spotNote;
+      spotHelp = t.optional;
+      spotAnswered = !!spot.note.trim();
+      spotBody = (
+        <Textarea className="text-lg min-h-[140px] rounded-lg" autoFocus placeholder={localBody.placeholder || t.typeHere}
+          value={spot.note} onChange={e => updateSpot({ note: e.target.value })} />
+      );
+    }
+
+    return screen(
+      <div key={`${spot.id}-${idx}`} className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-primary">
+            {flowSpots.indexOf(spot) + 1}. {regionLabel(spot.region, lang)} ({side})
+            <span className="text-muted-foreground font-normal"> · {idx + 1}/{spotSteps.length}</span>
+          </p>
+          <h1 className="text-2xl font-semibold leading-snug">{spotHeading}</h1>
+          {spotHelp && <p className="text-base text-muted-foreground whitespace-pre-wrap">{spotHelp}</p>}
+        </div>
+        {spotBody}
+        {tooLongId === fieldId && <p className="text-sm text-destructive">{t.tooLong}</p>}
+        <button type="button" className="text-sm text-destructive underline-offset-2 hover:underline min-h-[44px]"
+          onClick={() => { writeSpots(withoutSpot(flowSpots, spot.id)); setSpotFlow(null); }}>
+          {t.spotRemove}
+        </button>
+      </div>,
+      <div className="space-y-1.5">
+        <div className="flex gap-2">
+          <Button variant="outline" className="h-12 w-12 shrink-0 p-0" onClick={spotBack} aria-label={t.back}>
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <Button className="h-12 flex-1 text-base gap-2" variant={spotAnswered || isLast ? 'default' : 'secondary'} onClick={spotNext}>
+            {isLast ? <><Check className="h-4 w-4" />{t.spotDone}</> : <>{spotAnswered ? t.next : t.skip}<ArrowRight className="h-4 w-4" /></>}
+          </Button>
+        </div>
+        <p className={cn('text-xs text-center min-h-[16px]', saveState === 'failed' ? 'text-destructive' : 'text-muted-foreground')}>
+          {saveState === 'saving' ? t.saving : saveState === 'saved' ? t.saved : saveState === 'failed' ? t.saveFailed : ''}
+        </p>
+      </div>,
+      progress,
+    );
+  }
 
   let kicker = '';
   let heading = '';
@@ -661,55 +861,7 @@ export default function AnamnesisFormPage() {
     const section = localizeSection(step.section, lang);
     kicker = section.title;
     heading = field.label;
-    const value = values[field.id] ?? '';
-    switch (field.fieldType) {
-      case 'textarea':
-        body = <Textarea className="text-lg min-h-[160px] rounded-lg" autoFocus placeholder={field.placeholder || t.typeHere}
-          value={value} onChange={e => setValue(field.id, e.target.value)} />;
-        break;
-      case 'number':
-        body = <Input type="number" inputMode="decimal" className={bigInput} autoFocus placeholder={field.placeholder || t.typeHere}
-          value={value} onChange={e => setValue(field.id, e.target.value)} onKeyDown={onEnter} />;
-        break;
-      case 'select':
-        body = <OptionList value={value} options={(field.options ?? []).map((o, i) => ({ value: o, label: field.optionLabels?.[i] ?? o }))}
-          onPick={v => { setValue(field.id, v); if (v) nextSoon(); }} />;
-        break;
-      case 'boolean':
-        body = <OptionList value={value} options={[{ value: 'true', label: t.yes }, { value: 'false', label: t.no }]}
-          onPick={v => { setValue(field.id, v); if (v) nextSoon(); }} />;
-        break;
-      case 'multiselect':
-        body = <MultiChoiceInput size="lg" lang={lang} options={field.options ?? []} labels={field.optionLabels} allowOther={field.allowOther} value={value} onChange={v => setValue(field.id, v)} />;
-        break;
-      case 'scale':
-        body = <ScaleInput size="lg" lang={lang} field={field} value={value} onChange={v => setValue(field.id, v)} />;
-        break;
-      case 'date':
-        body = <Input type="date" className={bigInput} value={value} onChange={e => setValue(field.id, e.target.value)} onKeyDown={onEnter} />;
-        break;
-      case 'yesnoList':
-        body = <YesNoListInput size="lg" lang={lang} items={field.options ?? []} itemLabels={field.optionLabels} allowOther={field.allowOther} value={value} onChange={v => setValue(field.id, v)} />;
-        break;
-      case 'list':
-        body = <ListInput size="lg" lang={lang} columns={field.listColumns ?? []} value={value} onChange={v => setValue(field.id, v)} />;
-        break;
-      case 'bodyMap':
-        body = <BodyMapInput size="lg" lang={lang} field={field} value={value} onChange={v => setValue(field.id, v)} />;
-        break;
-      case 'weekGrid':
-        body = <WeekGridInput size="lg" lang={lang} value={value} onChange={v => setValue(field.id, v)} />;
-        break;
-      case 'dateRanges':
-        body = <DateRangesInput size="lg" lang={lang} field={field} value={value} onChange={v => setValue(field.id, v)} />;
-        break;
-      case 'info':
-        body = null;
-        break;
-      default:
-        body = <Input className={bigInput} autoFocus placeholder={field.placeholder || t.typeHere}
-          value={value} onChange={e => setValue(field.id, e.target.value)} onKeyDown={onEnter} />;
-    }
+    body = renderInput(field, values[field.id] ?? '', v => setValue(field.id, v, field.fieldType === 'bodyMap' ? BODY_MAP_MAX_CHARS : ANSWER_MAX_CHARS), nextSoon, next);
   } else {
     heading = t.consentTitle;
     body = !notice ? (

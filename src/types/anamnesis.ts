@@ -30,6 +30,9 @@ export interface AnamnesisListColumn {
 export interface AnamnesisCondition {
   sourceId: string;
   values: string[];
+  /** Source is a body map with questions per spot: the condition holds when at least one spot's
+   *  answer to this per-spot question is one of `values` (instead of the body regions) */
+  spotFieldId?: string;
 }
 
 export const PROFILE_SEX_SOURCE = 'profile.sex';
@@ -99,6 +102,13 @@ export interface AnamnesisField {
   listColumns?: AnamnesisListColumn[];
   /** bodyMap: also ask for the pain intensity (0–10) of each spot */
   bodyMapIntensity?: boolean;
+  /** bodyMap: a "None" answer (nothing to mark — stored as "[]", counts as answered) */
+  bodyMapNone?: boolean;
+  /** bodyMap: questions asked for every marked spot (answers stored in the spot). Their conditions
+   *  refer to earlier questions of the same spot */
+  spotFields?: AnamnesisField[];
+  /** A question per spot: only for spots in these body areas (area ids of bodyMapData, e.g. '12') */
+  spotRegions?: string[];
   /** multiselect: an extra "Sonstiges" choice with free text (stored in the answer as the text itself) */
   allowOther?: boolean;
   /** The athlete may upload files below the answer (e.g. a report) — stored as the answer
