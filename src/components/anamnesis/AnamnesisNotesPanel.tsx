@@ -134,51 +134,7 @@ export function AnamnesisNotesPanel({ entries, onChange, coachUserId, athleteLoc
         )}
       </div>
 
-      {entries.length === 0 && !dictating && (
-        <p className="text-xs text-muted-foreground">
-          Notes from the appointment — typed or dictated. They are saved with the time and don't change the answers.
-        </p>
-      )}
-
-      {entries.map(note => (
-        <div key={note.id} className="rounded-md border bg-background p-2.5 space-y-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-              {stamp(note.createdAt)}
-              {note.source === 'dictated' && <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-normal">Dictated</Badge>}
-              {note.updatedAt && <span>· edited {stamp(note.updatedAt)}</span>}
-            </p>
-            {editingId !== note.id && (
-              <div className="flex gap-0.5 shrink-0">
-                <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={busy}
-                  onClick={() => { setEditingId(note.id); setEditText(note.text); }} title="Edit note">
-                  <Pencil className="h-3 w-3" />
-                </Button>
-                <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" disabled={busy}
-                  onClick={() => setDeleteTarget(note)} title="Delete note">
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
-            )}
-          </div>
-          {editingId === note.id ? (
-            <div className="space-y-1.5">
-              <Textarea className="min-h-[80px] text-sm resize-y" value={editText} onChange={e => setEditText(e.target.value)} autoFocus />
-              <div className="flex justify-end gap-1.5">
-                <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditingId(null)} disabled={busy}>Cancel</Button>
-                <Button type="button" size="sm" className="h-7 text-xs gap-1" onClick={() => saveEdit(note)} disabled={busy || !editText.trim()}>
-                  {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                  Save
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm whitespace-pre-wrap">{note.text}</p>
-          )}
-        </div>
-      ))}
-
-      {/* Dictation */}
+      {/* Dictation — right under the Dictate button, above the notes */}
       {dictating && (
         <div className={cn('rounded-md border p-2.5 space-y-2', recording ? 'border-red-300 bg-red-50/50' : 'bg-muted/30')}>
           {recording && (
@@ -227,6 +183,50 @@ export function AnamnesisNotesPanel({ entries, onChange, coachUserId, athleteLoc
       {(recorder.error || dictationError) && (
         <p className="text-xs text-destructive">{recorder.error || dictationError}</p>
       )}
+
+      {entries.length === 0 && !dictating && (
+        <p className="text-xs text-muted-foreground">
+          Notes from the appointment — typed or dictated. They are saved with the time and don't change the answers.
+        </p>
+      )}
+
+      {entries.map(note => (
+        <div key={note.id} className="rounded-md border bg-background p-2.5 space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              {stamp(note.createdAt)}
+              {note.source === 'dictated' && <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-normal">Dictated</Badge>}
+              {note.updatedAt && <span>· edited {stamp(note.updatedAt)}</span>}
+            </p>
+            {editingId !== note.id && (
+              <div className="flex gap-0.5 shrink-0">
+                <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={busy}
+                  onClick={() => { setEditingId(note.id); setEditText(note.text); }} title="Edit note">
+                  <Pencil className="h-3 w-3" />
+                </Button>
+                <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" disabled={busy}
+                  onClick={() => setDeleteTarget(note)} title="Delete note">
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
+          </div>
+          {editingId === note.id ? (
+            <div className="space-y-1.5">
+              <Textarea className="min-h-[80px] text-sm resize-y" value={editText} onChange={e => setEditText(e.target.value)} autoFocus />
+              <div className="flex justify-end gap-1.5">
+                <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditingId(null)} disabled={busy}>Cancel</Button>
+                <Button type="button" size="sm" className="h-7 text-xs gap-1" onClick={() => saveEdit(note)} disabled={busy || !editText.trim()}>
+                  {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                  Save
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm whitespace-pre-wrap">{note.text}</p>
+          )}
+        </div>
+      ))}
 
       {/* Typed note */}
       <div className="space-y-1.5">
