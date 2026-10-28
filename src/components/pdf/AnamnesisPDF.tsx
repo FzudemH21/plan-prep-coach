@@ -625,11 +625,13 @@ const R = {
     title: 'Befundbericht', created: 'Erstellt am', for: 'Für', notes: 'Notizen aus dem Termin', dictated: 'diktiert',
     summary: 'Zusammenfassung', attachments: 'Anhänge (separat)', place: 'Ort, Datum', signature: 'Unterschrift',
     appointment: 'Termin', athlete: 'Athlet/in',
+    reason: 'Anlass / Fragestellung', brief: 'Kurzbefund', appendix: 'Anhang: Angaben aus dem Fragebogen',
   },
   en: {
     title: 'Assessment report', created: 'Created on', for: 'For', notes: 'Notes from the appointment', dictated: 'dictated',
     summary: 'Summary', attachments: 'Attachments (separate)', place: 'Place, date', signature: 'Signature',
     appointment: 'Appointment', athlete: 'Athlete',
+    reason: 'Reason for referral', brief: 'Short report', appendix: 'Appendix: answers from the questionnaire',
   },
 } as const;
 
@@ -652,6 +654,9 @@ export interface AnamnesisReportProps extends AnamnesisPdfProps {
   /** e.g. "Dr. Müller (Orthopädie)" — shown under the title */
   recipient?: string;
   contactEmail?: string;
+  /** For an external recipient: the coach's reason for referral (printed as written) and the AI short
+   *  report (edited by the coach) — both first; the answers then follow as an appendix */
+  brief?: { reason: string; text: string };
 }
 
 /** One answered question: label + answer (structured answers as their block) */
@@ -805,6 +810,17 @@ export function AnamnesisReportPDF(props: AnamnesisReportProps) {
           ))}
         </View>
 
+        {/* For an external recipient: reason for referral (the coach's own words) + short report */}
+        {props.brief?.reason.trim() ? (
+          <View wrap={false}>
+            <SectionTitle title={r.reason} accent={accent} />
+            <Text style={{ fontSize: 10, lineHeight: 1.45, marginBottom: 4 }}>{props.brief.reason.trim()}</Text>
+          </View>
+        ) : null}
+        {props.brief?.text.trim() ? (
+          <SummaryText text={props.brief.text} lead={<SectionTitle title={r.brief} accent={accent} />} />
+        ) : null}
+
         {include.summary && props.aiSummary?.trim() ? (
           <SummaryText text={props.aiSummary} lead={<SectionTitle title={r.summary} accent={accent} />} />
         ) : null}
@@ -814,7 +830,15 @@ export function AnamnesisReportPDF(props: AnamnesisReportProps) {
           <React.Fragment key={sec.id}>
             {fields.map((f, i) => (
               <ReportAnswer key={f.id} field={f} lang={lang} files={parseAnswerFiles(props.fieldValues[filesKey(f.id)])} skipNegative={include.hideNegatives}
-                lead={i === 0 ? <SectionTitle title={localizeSection(sec, lang).title} accent={accent} /> : undefined}
+                lead={i === 0 ? (
+                  <>
+                    {/* After a short report the answers are an appendix */}
+                    {props.brief?.text.trim() && sec.id === sections[0]?.sec.id ? (
+                      <Text style={{ fontSize: 11, fontWeight: 700, color: C.fg2, marginTop: 14, marginBottom: 2 }}>{r.appendix}</Text>
+                    ) : null}
+                    <SectionTitle title={localizeSection(sec, lang).title} accent={accent} />
+                  </>
+                ) : undefined}
                 value={include.hideNegatives && f.fieldType === 'yesnoList' ? onlyYesItems(props.fieldValues[f.id]) : (props.fieldValues[f.id] ?? '')} />
             ))}
           </React.Fragment>

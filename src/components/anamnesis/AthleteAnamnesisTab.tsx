@@ -476,6 +476,44 @@ function RecordForm({
     setCustomQuestions(next);
   };
 
+  /**
+   * Short report (Kurzbefund) for an external physio / physician — written per export from the same
+   * data as the summary, not saved with the record. Condenses and restructures only; the coach's
+   * reason for referral is printed as written (it is only context here).
+   */
+  const generateBrief = async (reason: string, lang: 'de' | 'en'): Promise<string> => {
+    const dataSnapshot: Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'createdAt' | 'updatedAt'> = {
+      athleteLocalId, templateId, templateSnapshot, conductedAt, customQuestions, fieldValues, customFieldValues,
+      notes: '', noteEntries, aiSummary: null, attachments,
+    };
+    const prompt = `${buildSummaryPrompt(dataSnapshot, athleteName, conditionSex)}\n\nReason for referral (written by the coach — context only, do not repeat it):\n${reason.trim() || '(none given)'}`;
+    const german = lang === 'de';
+    return sendMessage(
+      [{ role: 'user', content: prompt }],
+      `You write a short report (Kurzbefund) of an athlete's intake assessment that the coach forwards to an external physiotherapist or physician.
+You receive the intake answers (partly filled in by the athlete online), the coach's notes from the appointment and the coach's reason for referral.
+
+You only CONDENSE and RESTRUCTURE what is written. Strict rules:
+- Use only information explicitly stated in the answers or notes. Nothing of your own: no diagnoses, interpretations, assessments, recommendations, and no causal links between findings unless the source states them.
+- Keep the level of certainty of the source ("Verdacht auf …", "possibly" stays).
+- Positive findings only: leave out everything negative, empty or unremarkable. For screening checklists (warning signs, exercise / heart check) write one short line when all were denied, e.g. "Red Flags: verneint"; list a screening item only when answered yes.
+- Focus on the musculoskeletal and medical picture. Leave out lifestyle details (nutrition, schedule, training availability, personal goals) unless the reason for referral concerns them. Give most detail to the body region / topic of the reason for referral, but do not drop other current complaints.
+- Compact clinical style as in a referral note: short phrases instead of sentences, e.g. "Knie re.: Schmerzen seit 6–12 Wo., NRS 6/10, belastungsabhängig, Treppensteigen ↑". Common abbreviations (re./li., Wo., Mon., NRS, Z. n. = Zustand nach, OP, ca.). No filler, no repetition, no names.
+- Group by body region within each heading ("Knie re.: …", "LWS/Becken: …"), wherever it came up in the answers or the notes.
+- Keep what the athlete states and what was observed in the appointment apart through the headings below.
+- Dictated notes are speech-to-text: fix obvious recognition errors only where the meaning is unambiguous.
+- Length: at most about 250–350 words.
+
+Write in ${german ? 'German' : 'English'}. Structure: these headings in this order, only those with content, each as a Markdown "## " heading with short "- " bullet points:
+${german
+    ? 'Aktuelle Beschwerden (Angaben) / Relevante Vorgeschichte / Befunde aus dem Termin / Bisherige Diagnostik & Therapie / Medikation & relevante Vorerkrankungen'
+    : 'Current complaints (as reported) / Relevant history / Findings from the appointment / Previous diagnostics & treatment / Medication & relevant conditions'}
+Do not add a heading for the reason for referral — it is printed separately above your text.`,
+      AI_MODEL,
+      4096,
+    );
+  };
+
   const handleGenerateSummary = async () => {
     setGeneratingSummary(true);
     try {
@@ -1099,6 +1137,7 @@ Leave out a heading completely when nothing is stated for it.`,
               changedByName={changedByName}
               generatingSummary={generatingSummary}
               onGenerateSummary={handleGenerateSummary}
+              onGenerateBrief={generateBrief}
               source={{
                 templateName: templateSnapshot.name,
                 sections: templateSnapshot.sections,

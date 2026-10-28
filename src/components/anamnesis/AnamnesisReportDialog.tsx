@@ -1,10 +1,13 @@
 /**
  * Report (Befundbericht) after the appointment — separate from the worksheet PDF. Before exporting,
- * the coach picks the content (sections, notes, AI summary, list of attachments — data minimisation,
- * e.g. leave out nutrition for a doctor), the language and who it is for. For a third party (e.g. a
- * doctor) the coach confirms that the athlete agreed to sharing it (release from confidentiality);
- * the export is recorded in the change history. If the AI summary is missing or older than the latest
- * answers / notes (from the change history), the dialog offers to create it first.
+ * the coach picks who it is for, the content (sections, notes, AI summary, list of attachments — data
+ * minimisation, e.g. leave out nutrition for a doctor) and the language. For a third party (e.g. a
+ * doctor) the coach confirms that the athlete agreed to sharing it (release from confidentiality),
+ * writes the reason for referral and can have a short report (Kurzbefund) written by the AI — compact,
+ * only what is stated, editable before export; the questionnaire answers are then an optional
+ * appendix (off by default). The export is recorded in the change history. If the AI summary is
+ * missing or older than the latest answers / notes (from the change history), the dialog offers to
+ * create it first.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
@@ -13,6 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAnamnesisChangeLog, logAnamnesisChange } from '@/utils/anamnesisChangeLog';
@@ -42,7 +46,7 @@ function summaryState(aiSummary: string | null, entries: Array<{ changedAt: stri
   return lastChange && lastChange > lastSummary ? 'outdated' as const : 'current' as const;
 }
 
-export function AnamnesisReportDialog({ open, onClose, recordId, source, defaultLang, changedByName, onGenerateSummary, generatingSummary }: {
+export function AnamnesisReportDialog({ open, onClose, recordId, source, defaultLang, changedByName, onGenerateSummary, generatingSummary, onGenerateBrief }: {
   open: boolean;
   onClose: () => void;
   recordId: string;
@@ -52,6 +56,8 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
   /** Creates (or updates) the AI summary of the record */
   onGenerateSummary: () => Promise<void>;
   generatingSummary: boolean;
+  /** Writes the short report for an external recipient (not saved with the record) */
+  onGenerateBrief?: (reason: string, lang: AnamnesisPdfLang) => Promise<string>;
 }) {
   const { toast } = useToast();
   const { entries } = useAnamnesisChangeLog(open ? recordId : null);
@@ -75,20 +81,49 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
   const [recipient, setRecipient] = useState('');
   const [consented, setConsented] = useState(false);
   const [creating, setCreating] = useState(false);
+  // For someone else: reason for referral (the coach's words) and the AI short report (editable)
+  const [reason, setReason] = useState('');
+  const [brief, setBrief] = useState('');
+  const [briefLang, setBriefLang] = useState<AnamnesisPdfLang | null>(null);
+  const [generatingBrief, setGeneratingBrief] = useState(false);
+
+  /** Content defaults: everything internally; for someone else the short report, the answers only as an optional appendix */
+  const applyAudience = (a: 'internal' | 'third') => {
+    setAudience(a);
+    const internal = a === 'internal';
+    setSectionIds(internal ? answeredSections.map((s) => s.id) : []);
+    setCustom(internal); setNotes(internal); setSummary(internal); setAttachments(true);
+  };
 
   useEffect(() => {
     if (!open) return;
     setLang(defaultLang);
-    setSectionIds(answeredSections.map((s) => s.id));
-    setCustom(true); setNotes(true); setSummary(true); setAttachments(true); setHideNegatives(true);
-    setAudience('internal'); setRecipient(''); setConsented(false);
+    applyAudience('internal');
+    setHideNegatives(true);
+    setRecipient(''); setConsented(false);
+    setReason(''); setBrief(''); setBriefLang(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const sumState = summaryState(source.aiSummary, entries, source.formSubmittedAt);
   const third = audience === 'third';
-  const canCreate = !creating && (!third || (recipient.trim().length > 1 && consented))
-    && (sectionIds.length > 0 || (notes && source.notes.length > 0) || (summary && !!source.aiSummary));
+  const hasBrief = third && !!brief.trim();
+  const canCreate = !creating && !generatingBrief && (!third || (recipient.trim().length > 1 && consented))
+    && (hasBrief || (third && !!reason.trim()) || sectionIds.length > 0 || (notes && source.notes.length > 0) || (summary && !!source.aiSummary));
+
+  const createBrief = async () => {
+    if (!onGenerateBrief) return;
+    setGeneratingBrief(true);
+    try {
+      setBrief((await onGenerateBrief(reason, lang)).trim());
+      setBriefLang(lang);
+    } catch (err) {
+      console.error('[AnamnesisReportDialog] short report error', err);
+      toast({ title: 'Short report failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' });
+    } finally {
+      setGeneratingBrief(false);
+    }
+  };
 
   const create = async () => {
     setCreating(true);
@@ -99,7 +134,8 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
       ]);
       const include = { sectionIds, customQuestions: custom, notes, summary, attachments, hideNegatives };
       const blob = await pdf(
-        <AnamnesisReportPDF {...source} lang={lang} include={include} recipient={third ? recipient.trim() : undefined} />,
+        <AnamnesisReportPDF {...source} lang={lang} include={include} recipient={third ? recipient.trim() : undefined}
+          brief={third && (reason.trim() || brief.trim()) ? { reason, text: brief } : undefined} />,
       ).toBlob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -113,7 +149,9 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
       // Who got which content — in the change history (for a third party with the confirmed consent)
       const sectionNames = source.sections.filter((s) => sectionIds.includes(s.id)).map((s) => s.title);
       const contentText = [
-        ...sectionNames,
+        ...(third && reason.trim() ? ['Reason for referral'] : []),
+        ...(hasBrief ? ['Short report'] : []),
+        ...sectionNames.map((n) => (hasBrief ? `Appendix: ${n}` : n)),
         ...(custom && hasCustom ? ['Custom questions'] : []),
         ...(notes && source.notes.length ? ['Notes'] : []),
         ...(summary && source.aiSummary ? ['AI summary'] : []),
@@ -125,6 +163,9 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
           { what: 'Recipient', from: '—', to: third ? `${recipient.trim()} (consent to sharing confirmed)` : 'Internal / the athlete' },
           { what: 'Content', from: '—', to: contentText || '—' },
           { what: 'Language', from: '—', to: lang === 'de' ? 'German' : 'English' },
+          // What exactly was sent (the short report is not kept anywhere else)
+          ...(third && reason.trim() ? [{ what: 'Reason for referral', from: '—', to: reason.trim() }] : []),
+          ...(hasBrief ? [{ what: 'Short report', from: '—', to: brief.trim() }] : []),
         ]);
       toast({ title: 'Report created' });
       onClose();
@@ -156,7 +197,7 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><FileText className="h-4 w-4" />Report (Befundbericht)</DialogTitle>
           <DialogDescription>
-            A compact report after the appointment: only answered questions, your notes and the summary. Pick what goes in.
+            A compact report after the appointment. For someone else (e.g. a physio or doctor): your reason for referral and a one-page short report; the answers only as an optional appendix.
           </DialogDescription>
         </DialogHeader>
 
@@ -178,46 +219,14 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
 
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Content</Label>
-            <div className="rounded-md border p-2.5 space-y-1.5">
-              {answeredSections.length === 0 && <p className="text-xs text-muted-foreground">No answered questions.</p>}
-              {answeredSections.map((sec) => (
-                <Check key={sec.id} checked={sectionIds.includes(sec.id)} onChange={(v) => toggle(sec.id, v)}>{sec.title}</Check>
-              ))}
-              {hasCustom && <Check checked={custom} onChange={setCustom}>Custom questions</Check>}
-              <div className="border-t my-1.5" />
-              <Check checked={notes} onChange={setNotes} disabled={source.notes.length === 0}>Notes from the appointment ({source.notes.length})</Check>
-              <Check checked={summary} onChange={setSummary} disabled={!source.aiSummary}>AI summary</Check>
-              <Check checked={attachments} onChange={setAttachments} disabled={attachmentCount === 0}>List of attachments ({attachmentCount})</Check>
-              <div className="border-t my-1.5" />
-              <Check checked={hideNegatives} onChange={setHideNegatives}>
-                Leave out "no / none" answers
-                <span className="block text-xs text-muted-foreground">Only selected answers (e.g. "Nein", "Keine", checklist items answered "Nein") — text answers always stay.</span>
-              </Check>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Language of the report</Label>
-            <div className="flex rounded-md border overflow-hidden w-fit text-sm">
-              {(['de', 'en'] as const).map((l) => (
-                <button key={l} type="button" onClick={() => setLang(l)}
-                  className={cn('px-3 py-1.5', lang === l ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-accent')}>
-                  {l === 'de' ? 'Deutsch' : 'English'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">Who is it for?</Label>
             <div className="space-y-1.5">
               <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="radio" checked={!third} onChange={() => setAudience('internal')} className="accent-primary" />
+                <input type="radio" checked={!third} onChange={() => applyAudience('internal')} className="accent-primary" />
                 Internal / for the athlete
               </label>
               <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="radio" checked={third} onChange={() => setAudience('third')} className="accent-primary" />
+                <input type="radio" checked={third} onChange={() => applyAudience('third')} className="accent-primary" />
                 Someone else (e.g. a doctor)
               </label>
             </div>
@@ -234,6 +243,68 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
               </div>
             )}
           </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Language of the report</Label>
+            <div className="flex rounded-md border overflow-hidden w-fit text-sm">
+              {(['de', 'en'] as const).map((l) => (
+                <button key={l} type="button" onClick={() => setLang(l)}
+                  className={cn('px-3 py-1.5', lang === l ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-accent')}>
+                  {l === 'de' ? 'Deutsch' : 'English'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Someone else: reason for referral + short report */}
+          {third && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Reason for referral / question (your words — printed as written)</Label>
+              <Textarea className="min-h-[64px] text-sm" value={reason} onChange={(e) => setReason(e.target.value)}
+                placeholder={lang === 'de'
+                  ? 'z. B. Bitte um ärztliche Abklärung der Schmerzen im unteren Rücken vor dem Wiedereinstieg ins Sprinttraining.'
+                  : 'e.g. Please assess the lower back pain before the athlete returns to sprint training.'} />
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <Label className="text-xs text-muted-foreground">Short report (Kurzbefund)</Label>
+                {onGenerateBrief && (
+                  <Button size="sm" variant="outline" className="h-7 gap-1.5" disabled={generatingBrief} onClick={() => { void createBrief(); }}>
+                    {generatingBrief ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                    {brief ? 'Write again' : 'Write with AI'}
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                One page in referral style: current complaints, history, findings from the appointment, diagnostics &amp; treatment,
+                medication. Only what is stated — no conclusions of its own. Check and edit before exporting.
+              </p>
+              {(brief || generatingBrief) && (
+                <Textarea className="min-h-[220px] text-sm font-mono" value={brief} onChange={(e) => setBrief(e.target.value)} disabled={generatingBrief} />
+              )}
+              {brief && briefLang && briefLang !== lang && (
+                <p className="text-xs text-amber-700">Written in {briefLang === 'de' ? 'German' : 'English'} — write again for {lang === 'de' ? 'German' : 'English'}.</p>
+              )}
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">{third ? 'Also include (the answers come as an appendix)' : 'Content'}</Label>
+            <div className="rounded-md border p-2.5 space-y-1.5">
+              {answeredSections.length === 0 && <p className="text-xs text-muted-foreground">No answered questions.</p>}
+              {answeredSections.map((sec) => (
+                <Check key={sec.id} checked={sectionIds.includes(sec.id)} onChange={(v) => toggle(sec.id, v)}>{sec.title}</Check>
+              ))}
+              {hasCustom && <Check checked={custom} onChange={setCustom}>Custom questions</Check>}
+              <div className="border-t my-1.5" />
+              <Check checked={notes} onChange={setNotes} disabled={source.notes.length === 0}>Notes from the appointment ({source.notes.length})</Check>
+              <Check checked={summary} onChange={setSummary} disabled={!source.aiSummary}>AI summary{third ? ' (internal one)' : ''}</Check>
+              <Check checked={attachments} onChange={setAttachments} disabled={attachmentCount === 0}>List of attachments ({attachmentCount})</Check>
+              <div className="border-t my-1.5" />
+              <Check checked={hideNegatives} onChange={setHideNegatives}>
+                Leave out "no / none" answers
+                <span className="block text-xs text-muted-foreground">Only selected answers (e.g. "Nein", "Keine", checklist items answered "Nein") — text answers always stay.</span>
+              </Check>
+            </div>
+          </div>
+
           {entries.length > 0 && entries[0] && (
             <p className="text-[11px] text-muted-foreground">Last change: {format(parseISO(entries[0].changedAt), 'd MMM yyyy, HH:mm')} — {entries[0].summary}</p>
           )}
