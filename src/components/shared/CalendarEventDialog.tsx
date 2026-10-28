@@ -1,3 +1,4 @@
+import type { ParameterMeasure } from '@/types/parametersV2';
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -161,6 +162,8 @@ export function CalendarEventDialog({
     name: string;
     unit?: string;
     category?: string;
+    measures?: ParameterMeasure[];
+    perSide?: boolean;
     interactions: unknown[];
     methods: unknown[];
   }) => {
@@ -168,6 +171,8 @@ export function CalendarEventDialog({
       name: paramData.name,
       unit: paramData.unit,
       category: paramData.category,
+      measures: paramData.measures,
+      perSide: paramData.perSide,
     });
     setCreateParamDialogOpen(false);
     // Auto-select the newly created parameter

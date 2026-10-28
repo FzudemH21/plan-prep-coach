@@ -14,11 +14,13 @@ import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useToast } from '@/hooks/use-toast';
 import type { ApplySuggestion, ToolboxParameterSpec } from '@/components/wizard/WizardAIAssistant';
-import type { ParametersDatabaseV2 } from '@/types/parametersV2';
+import { MAIN_MEASURE_ID, type ParameterMeasure, type ParametersDatabaseV2, type ParameterV2 } from '@/types/parametersV2';
+import type { AIMeasureSpec } from '@/components/wizard/WizardAIAssistant';
+import { measureSummary, measuresToStore, newMeasureId, parameterMeasures } from '@/utils/parameterMeasures';
 import type { ToolboxDatabase, ToolboxEntry } from '@/types/toolbox';
 
 export const PARAMETER_ACTION_TYPES: ReadonlySet<string> = new Set([
-  'add_parameter', 'add_parameters_bulk', 'remove_parameter',
+  'add_parameter', 'add_parameters_bulk', 'remove_parameter', 'add_parameter_measures',
   'add_interaction', 'add_interactions_bulk', 'remove_interaction', 'remove_interactions_bulk',
   'add_parameter_method', 'add_parameter_methods_bulk', 'update_parameter_method', 'update_parameter_methods_bulk',
   'remove_parameter_method',
@@ -52,7 +54,9 @@ export function buildParameterDatabaseContext(data: ParametersDatabaseV2 | undef
         `- name: "${p.name}"`
         + (p.category ? ` | category: ${p.category}` : '')
         + (p.unit ? ` | unit: ${p.unit}` : '')
-        + (p.applicableSports?.length ? ` | sports: ${p.applicableSports.join(', ')}` : '')).join('\n')
+        + (p.applicableSports?.length ? ` | sports: ${p.applicableSports.join(', ')}` : '')
+        + (p.measures?.length ? ` | measures: ${parameterMeasures(p).map((m) => `${m.name} (${m.id === MAIN_MEASURE_ID ? 'main, ' : ''}${m.kind}${measureSummary(m) ? `: ${measureSummary(m)}` : ''})`).join('; ')}` : '')
+        + (p.perSide ? ' | recorded per side (L / R)' : '')).join('\n')
     : 'No parameters defined yet.';
 
   const seen = new Set<string>();
@@ -103,12 +107,23 @@ interface Outcome<T> { db: T; done: string[]; failed: string[] }
 
 const plural = (n: number, word: string) => `${n} ${word}${n !== 1 ? 's' : ''}`;
 
+/** A measure from the AI's description (new id, only the fields of its kind) */
+function toMeasure(m: AIMeasureSpec): ParameterMeasure {
+  const base: ParameterMeasure = { id: newMeasureId(), name: m.name.trim(), kind: m.kind };
+  switch (m.kind) {
+    case 'number': return { ...base, unit: m.unit, betterWhen: m.betterWhen };
+    case 'scale': return { ...base, scaleMin: m.scaleMin ?? 0, scaleMax: m.scaleMax ?? 10, scaleMinLabel: m.scaleMinLabel, scaleMaxLabel: m.scaleMaxLabel, betterWhen: m.betterWhen };
+    case 'levels': return { ...base, levels: (m.levels ?? []).filter(Boolean) };
+    default: return base;
+  }
+}
+
 export function applyParameterActions(base: ParametersDatabaseV2, actions: ApplySuggestion[]): Outcome<ParametersDatabaseV2> {
   let parameters = [...base.parameters];
   let interactions = [...base.interactions];
   let parameterMethods = [...base.parameterMethods];
   const failed: string[] = [];
-  let pAdded = 0, pRemoved = 0, iAdded = 0, iRemoved = 0, mAdded = 0, mUpdated = 0, mRemoved = 0, n = 0;
+  let pAdded = 0, pRemoved = 0, iAdded = 0, iRemoved = 0, mAdded = 0, mUpdated = 0, mRemoved = 0, mMeasures = 0, mPerSide = 0, n = 0;
   const newId = (k: string) => `${Date.now()}_${k}${n++}`;
 
   // Looks in the WORKING list, so a parameter added a step before is found right away; tolerant of
@@ -121,9 +136,17 @@ export function applyParameterActions(base: ParametersDatabaseV2, actions: Apply
       ?? parameters.find((p) => p.name.trim().toLowerCase() === lower)
       ?? parameters.find((p) => bare(p.name) === bare(t) && bare(t).length > 0);
   };
-  const addParam = (p: { name: string; category?: string; unit?: string; applicableSports?: string[] }) => {
+  const addParam = (p: { name: string; category?: string; unit?: string; applicableSports?: string[]; mainMeasureName?: string; mainBetterWhen?: 'higher' | 'lower'; measures?: AIMeasureSpec[]; perSide?: boolean }) => {
     if (find(p.name)) { failed.push(`"${p.name}" already exists`); return; }
-    parameters.push({ id: newId('p'), name: p.name, category: p.category, unit: p.unit, applicableSports: p.applicableSports, createdAt: new Date().toISOString() });
+    const measures: ParameterMeasure[] = [
+      { id: MAIN_MEASURE_ID, name: p.mainMeasureName?.trim() || 'Value', kind: 'number', betterWhen: p.mainBetterWhen },
+      ...(p.measures ?? []).map(toMeasure),
+    ];
+    const param: ParameterV2 = { id: newId('p'), name: p.name, category: p.category, unit: p.unit, applicableSports: p.applicableSports, createdAt: new Date().toISOString() };
+    const stored = measuresToStore(measures);
+    if (stored) param.measures = stored;
+    if (p.perSide) param.perSide = true;
+    parameters.push(param);
     pAdded++;
   };
   const addInteraction = (i: { sourceParameterName: string; targetParameterName: string; direction: 'contributes_to' | 'improved_by'; strength?: 'strong' | 'moderate' | 'weak' }) => {
@@ -172,6 +195,18 @@ export function applyParameterActions(base: ParametersDatabaseV2, actions: Apply
   for (const a of actions) {
     switch (a.type) {
       case 'add_parameter': addParam(a); break;
+      case 'add_parameter_measures': {
+        const param = find(a.parameterName);
+        if (!param) { failed.push(`"${a.parameterName}" not found`); break; }
+        const current = parameterMeasures(param);
+        const added = (a.measures ?? []).filter((m) => m.name?.trim() && !current.some((c) => c.name.trim().toLowerCase() === m.name.trim().toLowerCase()));
+        if ((a.measures ?? []).length > added.length) failed.push(`${param.name}: ${(a.measures ?? []).length - added.length} measure(s) already exist`);
+        const next = [...current, ...added.map(toMeasure)];
+        parameters = parameters.map((p) => (p.id !== param.id ? p : { ...p, measures: measuresToStore(next), ...(a.perSide ? { perSide: true } : {}) }));
+        mMeasures += added.length;
+        if (a.perSide && !param.perSide) mPerSide++;
+        break;
+      }
       case 'add_parameters_bulk': a.parameters.forEach(addParam); break;
       case 'remove_parameter': {
         const param = find(a.parameterName);
@@ -207,6 +242,8 @@ export function applyParameterActions(base: ParametersDatabaseV2, actions: Apply
     iAdded && `${plural(iAdded, 'interaction')} added`, iRemoved && `${plural(iRemoved, 'interaction')} removed`,
     mAdded && `${plural(mAdded, 'method link')} added`, mUpdated && `${plural(mUpdated, 'method link')} updated`,
     mRemoved && `${plural(mRemoved, 'method link')} removed`,
+    mMeasures && `${plural(mMeasures, 'measure')} added`,
+    mPerSide && `${plural(mPerSide, 'parameter')} now recorded per side`,
   ].filter((x): x is string => !!x);
   return { db: { ...base, parameters, interactions, parameterMethods }, done, failed };
 }

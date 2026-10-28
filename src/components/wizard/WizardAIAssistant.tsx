@@ -100,12 +100,14 @@ export type ApplySuggestion =
   | { type: "clear_week"; microcycleName: string }
   /** All wizard pages, all steps — edit the plan's Notes & Brainstorming field */
   | { type: "set_plan_notes"; notes: string; mode?: "append" | "replace" }
-  /** Parameter Database — add a new parameter */
-  | { type: "add_parameter"; name: string; category?: string; unit?: string; applicableSports?: string[] }
+  /** Parameter Database — add a new parameter (optionally with more measures / per side) */
+  | { type: "add_parameter"; name: string; category?: string; unit?: string; applicableSports?: string[]; mainMeasureName?: string; mainBetterWhen?: "higher" | "lower"; measures?: AIMeasureSpec[]; perSide?: boolean }
+  /** Parameter Database — add measures to an existing parameter / switch per-side recording on */
+  | { type: "add_parameter_measures"; parameterName: string; measures?: AIMeasureSpec[]; perSide?: boolean }
   /** Parameter Database — remove a parameter and all its linked interactions and method links */
   | { type: "remove_parameter"; parameterName: string }
   /** Parameter Database — add multiple parameters at once */
-  | { type: "add_parameters_bulk"; parameters: Array<{ name: string; category?: string; unit?: string; applicableSports?: string[] }> }
+  | { type: "add_parameters_bulk"; parameters: Array<{ name: string; category?: string; unit?: string; applicableSports?: string[]; mainMeasureName?: string; mainBetterWhen?: "higher" | "lower"; measures?: AIMeasureSpec[]; perSide?: boolean }> }
   /** Parameter Database — add an interaction between two existing parameters (by name) */
   | { type: "add_interaction"; sourceParameterName: string; targetParameterName: string; direction: "contributes_to" | "improved_by"; strength?: "strong" | "moderate" | "weak" }
   /** Parameter Database — add multiple interactions at once */
@@ -144,6 +146,20 @@ export type ApplySuggestion =
   | { type: "toolbox_update_method_parameter"; methodKey: string; parameterName: string; parameterType?: "quantitative" | "qualitative"; options?: string[]; showInGrid?: boolean }
   /** Training Toolbox — remove a parameter from a method (never the method's last one) */
   | { type: "toolbox_remove_method_parameter"; methodKey: string; parameterName: string };
+
+/** A measure the AI adds to a parameter (besides its main measure in `unit`) */
+export interface AIMeasureSpec {
+  name: string;
+  kind: "number" | "scale" | "levels" | "passFail";
+  unit?: string;
+  betterWhen?: "higher" | "lower";
+  scaleMin?: number;
+  scaleMax?: number;
+  scaleMinLabel?: string;
+  scaleMaxLabel?: string;
+  /** levels: worst → best */
+  levels?: string[];
+}
 
 /** A method parameter the AI adds to the Training Toolbox */
 export interface ToolboxParameterSpec {
@@ -382,6 +398,9 @@ Available types and their fields:
   mode "append" (default) adds your text as a new line after whatever is already there — use this for adding an idea without erasing existing notes. mode "replace" overwrites the entire document (the previous version is kept and can be restored) — use it when the coach asks to write up, rewrite, clean up or clear the strategy (clearing means notes:"" with mode "replace"). When appending, do not repeat content that is already in the current Notes & Brainstorming context.
 - add_parameter: {"type":"add_parameter","name":"<parameter name>","category":"<one of: strength|speed|power|endurance|mobility|technique|body_composition|other>","unit":"<unit e.g. kg, s, cm — omit if not applicable>","applicableSports":["<sport>","<sport>"]}
   applicableSports is optional — include when the parameter is sport-specific (e.g. ["Soccer","Rugby"]). Omit for universal parameters.
+- MEASURES: a parameter is the test / quality (e.g. "30 m Sprint"); its MEASURES are what is recorded for it: the main measure (a number in the parameter's unit) plus optional more — kind "number" (unit, betterWhen "higher"/"lower"), "scale" (scaleMin–scaleMax with end labels, e.g. pain NRS 0–10: {"name":"Pain","kind":"scale","scaleMin":0,"scaleMax":10,"scaleMinLabel":"no pain","scaleMaxLabel":"worst imaginable pain","betterWhen":"lower"}), "levels" (own ordered levels, worst → best, e.g. {"name":"Quality","kind":"levels","levels":["Not possible","With compensation","Clean"]}) or "passFail". perSide: true = recorded for left and right (number measures then get the limb symmetry index). Do NOT create separate parameters for the pain / quality of the same test ("30 m acceleration pain") — add a measure to the existing parameter instead. add_parameter / add_parameters_bulk accept optional "mainMeasureName" (e.g. "Time"), "mainBetterWhen", "measures" (the additional ones) and "perSide".
+- add_parameter_measures: {"type":"add_parameter_measures","parameterName":"<exact parameter name>","measures":[{"name":"Pain","kind":"scale","scaleMin":0,"scaleMax":10,"scaleMinLabel":"no pain","scaleMaxLabel":"worst imaginable pain","betterWhen":"lower"}],"perSide":true}
+  Adds measures to an existing parameter (measures with the same name are skipped) and / or switches on per-side recording.
 - add_parameters_bulk: {"type":"add_parameters_bulk","parameters":[{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>","applicableSports":["<sport>"]},{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>"}]}
   Use this when adding multiple parameters at once (e.g. filling a whole database section). Preferred over add_parameter when adding 2 or more parameters.
   applicableSports per entry is optional — omit for universal parameters, include for sport-specific ones.
@@ -750,6 +769,8 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return `Add parameter: ${action.name}${action.category ? ` (${action.category})` : ""}${action.unit ? ` [${action.unit}]` : ""}`;
     case "remove_parameter":
       return `Remove parameter: ${action.parameterName} (and all its interactions & method links)`;
+    case "add_parameter_measures":
+      return `${action.parameterName}: ${[...(action.measures ?? []).map((m) => `+ ${m.name}`), action.perSide ? "per side (L / R)" : ""].filter(Boolean).join(", ")}`;
     case "add_parameters_bulk":
       return `Add ${action.parameters.length} parameter${action.parameters.length !== 1 ? "s" : ""}: ${action.parameters.map((p) => p.name).join(", ")}`;
     case "add_interaction":

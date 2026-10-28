@@ -201,6 +201,10 @@ export interface ParameterValue {
   note?: string;
   /** Storage paths of photos / videos the athlete attached (bucket "athlete-uploads") */
   attachments?: string[];
+  /** Which of the parameter's measures this value is for — unset = the main measure (older values) */
+  measureId?: string;
+  /** Side of a parameter recorded per side (left / right) */
+  side?: 'L' | 'R';
 }
 
 export interface AthleteBiometric {

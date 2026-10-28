@@ -18,6 +18,9 @@ import { Separator } from '@/components/ui/separator';
 import { Plus, X, ArrowUp, ArrowRight, ChevronDown } from 'lucide-react';
 import { ParameterV2, PARAMETER_CATEGORIES, INTERACTION_STRENGTHS, InteractionDirection, InteractionStrength } from '@/types/parametersV2';
 import { ToolboxEntry } from '@/types/toolbox';
+import { ParameterMeasuresEditor } from '@/components/goals/ParameterMeasuresEditor';
+import { measuresToStore, parameterMeasures } from '@/utils/parameterMeasures';
+import type { ParameterMeasure } from '@/types/parametersV2';
 import {
   Command,
   CommandEmpty,
@@ -62,6 +65,10 @@ interface AddParameterDialogV2Props {
     applicableSports?: string[];
     /** Body measurement rather than a performance metric */
     isBiometric?: boolean;
+    /** What is recorded (unset = one number measure in `unit`) */
+    measures?: ParameterMeasure[];
+    /** Recorded per side (left / right) */
+    perSide?: boolean;
     interactions: PendingInteraction[];
     methods: PendingMethod[];
   }) => void;
@@ -165,6 +172,8 @@ export function AddParameterDialogV2({
   const [category, setCategory] = useState('');
   const [applicableSports, setApplicableSports] = useState<string[]>([]);
   const [isBiometric, setIsBiometric] = useState(false);
+  const [measures, setMeasures] = useState<ParameterMeasure[]>(() => parameterMeasures({}));
+  const [perSide, setPerSide] = useState(false);
   
   // Separate pending interactions for each section
   const [pendingContributesTo, setPendingContributesTo] = useState<PendingInteraction[]>([]);
@@ -307,6 +316,8 @@ export function AddParameterDialogV2({
       category: category || undefined,
       applicableSports: applicableSports.length > 0 ? applicableSports : undefined,
       isBiometric: isBiometric || undefined,
+      measures: measuresToStore(measures),
+      perSide: perSide || undefined,
       interactions: allInteractions,
       methods: pendingMethods,
     });
@@ -320,6 +331,8 @@ export function AddParameterDialogV2({
     setUnit('');
     setCategory('');
     setApplicableSports([]);
+    setMeasures(parameterMeasures({}));
+    setPerSide(false);
     setPendingContributesTo([]);
     setPendingImprovedBy([]);
     setPendingMethods([]);
@@ -494,6 +507,10 @@ export function AddParameterDialogV2({
                 </Popover>
               </div>
             </div>
+
+            {/* What is recorded: main measure + more measures, per side */}
+            <ParameterMeasuresEditor measures={measures} perSide={perSide} parameterUnit={unit || undefined}
+              onChange={(m, ps) => { setMeasures(m); setPerSide(ps); }} />
 
             {/* Biometric (body measurement) or performance metric */}
             <div className="space-y-2">

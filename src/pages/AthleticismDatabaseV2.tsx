@@ -35,8 +35,9 @@ import { Plus, Search, Edit2, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Filter, X
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { isDatabaseAction, useDatabaseAIActions } from '@/hooks/useDatabaseAIActions';
+import { hasCustomMeasures, measureSummary, parameterMeasures } from '@/utils/parameterMeasures';
 import { useToast } from '@/hooks/use-toast';
-import { ParameterV2, ParameterInteraction, ParameterMethodV2, PARAMETER_CATEGORIES, InteractionDirection, InteractionStrength } from '@/types/parametersV2';
+import { ParameterV2, ParameterInteraction, ParameterMethodV2, PARAMETER_CATEGORIES, InteractionDirection, InteractionStrength, type ParameterMeasure } from '@/types/parametersV2';
 import { AddParameterDialogV2 } from '@/components/goals/AddParameterDialogV2';
 import { EditParameterDialogV2 } from '@/components/goals/EditParameterDialogV2';
 
@@ -184,6 +185,8 @@ export default function AthleticismDatabaseV2() {
     category?: string;
     applicableSports?: string[];
     isBiometric?: boolean;
+    measures?: ParameterMeasure[];
+    perSide?: boolean;
     interactions: { targetParameterId: string; direction: InteractionDirection; strength: InteractionStrength }[];
     methods: { methodId: string; rationale?: string }[];
   }) => {
@@ -195,6 +198,8 @@ export default function AthleticismDatabaseV2() {
       category: parameterData.category,
       applicableSports: parameterData.applicableSports,
       isBiometric: parameterData.isBiometric,
+      measures: parameterData.measures,
+      perSide: parameterData.perSide,
       createdAt: new Date().toISOString(),
     };
 
@@ -440,7 +445,22 @@ export default function AthleticismDatabaseV2() {
                                 Biometric
                               </Badge>
                             )}
+                            {parameter.perSide && (
+                              <Badge variant="outline" className="ml-2 text-xs font-normal" title="Recorded per side (left / right) — LSI for number measures">
+                                L / R
+                              </Badge>
+                            )}
                           </div>
+                          {/* Measures: shown once there is more than the main measure */}
+                          {hasCustomMeasures(parameter) && (
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {parameterMeasures(parameter).map((m) => (
+                                <span key={m.id} className="rounded-full border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground" title={measureSummary(m)}>
+                                  {m.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
                           {parameter.applicableSports?.length ? (

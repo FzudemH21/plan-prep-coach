@@ -1,6 +1,44 @@
 export type ParameterCategory = 'strength' | 'speed' | 'power' | 'endurance' | 'mobility' | 'technique' | 'body_composition' | 'other';
 
 export type InteractionDirection = 'contributes_to' | 'improved_by';
+
+// ── Measures (2026-10-28) ─────────────────────────────────────────────────────
+// A parameter is the test / quality ("30 m Sprint"); its measures are what is recorded for it (time,
+// pain, quality …). A parameter without `measures` has one main measure built from its `unit`, and
+// every value / goal / monitoring block without a measure id belongs to that main measure — older
+// data needs no conversion. See src/utils/parameterMeasures.ts.
+
+/** number: a value with a unit · scale: min–max with end labels (pain NRS, Borg CR10) · levels: own
+ *  ordered levels (worst → best) · passFail: criterion met or not */
+export type MeasureKind = 'number' | 'scale' | 'levels' | 'passFail';
+
+/** The id of a parameter's main measure — values without a measure id belong to it */
+export const MAIN_MEASURE_ID = 'main';
+
+export interface ParameterMeasure {
+  id: string;
+  /** "Time", "Pain", "Quality" */
+  name: string;
+  kind: MeasureKind;
+  /** number: the unit — for the main measure always the parameter's own `unit` */
+  unit?: string;
+  /** number / scale: which direction is progress (time: lower, distance: higher) */
+  betterWhen?: 'higher' | 'lower';
+  /** scale */
+  scaleMin?: number;
+  scaleMax?: number;
+  scaleMinLabel?: string;
+  scaleMaxLabel?: string;
+  /** levels: in order from worst to best */
+  levels?: string[];
+}
+
+/** A saved set of levels, reusable for other parameters (e.g. "Movement quality, 3 levels") */
+export interface LevelPreset {
+  id: string;
+  name: string;
+  levels: string[];
+}
 export type InteractionStrength = 'strong' | 'moderate' | 'weak';
 
 export interface ParameterV2 {
@@ -16,6 +54,11 @@ export interface ParameterV2 {
   /** Body measurement (waist circumference, body fat …) rather than a performance metric — listed under
    *  Body Metrics in the athlete profile and in the goal / test pickers */
   isBiometric?: boolean;
+  /** What is recorded for this parameter — the first one is the main measure (id MAIN_MEASURE_ID).
+   *  Unset = one number measure in `unit` */
+  measures?: ParameterMeasure[];
+  /** Recorded per side (left / right) — number measures then also get the limb symmetry index (LSI) */
+  perSide?: boolean;
   createdAt: string;
 }
 
@@ -47,6 +90,8 @@ export interface ParametersDatabaseV2 {
   importedBiometricIds?: string[];
   interactions: ParameterInteraction[];
   parameterMethods: ParameterMethodV2[];
+  /** Saved level sets for "levels" measures */
+  levelPresets?: LevelPreset[];
   lastUpdated: string;
 }
 

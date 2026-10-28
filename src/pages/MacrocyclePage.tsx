@@ -53,6 +53,7 @@ import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCalendarEvents, groupConsecutiveDates } from "@/hooks/useCalendarEvents";
 import { TEST_COLOR, EVENT_COLOR, testEventGradient } from "@/lib/eventColors";
 import { PlanNotesField } from "@/components/shared/PlanNotesField";
+import type { ParameterMeasure } from "@/types/parametersV2";
 import { isDatabaseAction, useDatabaseAIActions } from "@/hooks/useDatabaseAIActions";
 import { applyNotesAction, readNotesHistory, restoreNotesVersion, strategyContext, WRITE_UP_PROMPT, type PlanNotesVersion } from "@/utils/planStrategy";
 import { useWizardData } from "@/contexts/WizardDataContext";
@@ -853,6 +854,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     unit?: string;
     category?: string;
     isBiometric?: boolean;
+    measures?: ParameterMeasure[];
+    perSide?: boolean;
     interactions: any[];
     methods: any[];
   }) => {
@@ -862,6 +865,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       unit: paramData.unit,
       category: paramData.category,
       isBiometric: paramData.isBiometric,
+      measures: paramData.measures,
+      perSide: paramData.perSide,
     });
     const newParamId = newParam?.id;
     
@@ -1011,6 +1016,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     name: string;
     unit?: string;
     category?: string;
+    measures?: ParameterMeasure[];
+    perSide?: boolean;
     contributesTo?: Array<{ parameterId: string; strength?: 'strong' | 'moderate' | 'weak' }>;
     improvedBy?: Array<{ parameterId: string; strength?: 'strong' | 'moderate' | 'weak' }>;
     methods?: Array<{ methodId: string; rationale?: string }>;
@@ -1020,6 +1027,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       name: paramData.name,
       unit: paramData.unit,
       category: paramData.category,
+      measures: paramData.measures,
+      perSide: paramData.perSide,
     });
     
     // If there's a parent goal and it's linked to a parameter, create an interaction

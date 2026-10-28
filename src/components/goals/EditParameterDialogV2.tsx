@@ -15,6 +15,9 @@ import { Separator } from '@/components/ui/separator';
 import { Plus, X, ChevronDown } from 'lucide-react';
 import { ParameterV2, ParameterInteraction, ParameterMethodV2, PARAMETER_CATEGORIES, INTERACTION_STRENGTHS, InteractionDirection, InteractionStrength } from '@/types/parametersV2';
 import { ToolboxEntry } from '@/types/toolbox';
+import { ParameterMeasuresEditor } from '@/components/goals/ParameterMeasuresEditor';
+import { measuresToStore, parameterMeasures } from '@/utils/parameterMeasures';
+import type { ParameterMeasure } from '@/types/parametersV2';
 import {
   Command,
   CommandEmpty,
@@ -171,6 +174,8 @@ export function EditParameterDialogV2({
   const [testInstructions, setTestInstructions] = useState(parameter.testInstructions ?? '');
   const [testVideoUrl, setTestVideoUrl] = useState(parameter.testVideoUrl ?? '');
   const [isBiometric, setIsBiometric] = useState(!!parameter.isBiometric);
+  const [measures, setMeasures] = useState<ParameterMeasure[]>(() => parameterMeasures(parameter));
+  const [perSide, setPerSide] = useState(!!parameter.perSide);
   
   // Popover states
   const [contributesToSearchOpen, setContributesToSearchOpen] = useState(false);
@@ -228,6 +233,8 @@ export function EditParameterDialogV2({
     setTestInstructions(parameter.testInstructions ?? '');
     setTestVideoUrl(parameter.testVideoUrl ?? '');
     setIsBiometric(!!parameter.isBiometric);
+    setMeasures(parameterMeasures(parameter));
+    setPerSide(!!parameter.perSide);
   }, [parameter]);
 
   // Get available parameters for "Contributes To" (exclude self and already linked as target)
@@ -507,6 +514,14 @@ export function EditParameterDialogV2({
                     </Popover>
                   </div>
                 </div>
+
+                {/* What is recorded: main measure + more measures, per side — saved right away */}
+                <ParameterMeasuresEditor measures={measures} perSide={perSide} parameterUnit={unit || undefined}
+                  onChange={(m, ps) => {
+                    setMeasures(m);
+                    setPerSide(ps);
+                    onUpdateParameter({ measures: measuresToStore(m), perSide: ps || undefined });
+                  }} />
 
                 {/* Biometric (body measurement) or performance metric */}
                 <div className="space-y-2">
