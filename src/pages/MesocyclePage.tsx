@@ -2,6 +2,7 @@ import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { MicrocyclePlanningTable, type MicrocyclePlanningTableHandle } from '@/components/microcycle-planning';
 import { WizardAIAssistant } from '@/components/wizard/WizardAIAssistant';
 import { WIZARD_CHAT_ID } from '@/contexts/AIChatContext';
+import { applyNotesAction, readNotesHistory, restoreNotesVersion, strategyContext, WRITE_UP_PROMPT } from '@/utils/planStrategy';
 import { MesocycleVisibilityToggles } from '@/components/mesocycle/MesocycleVisibilityToggles';
 import { cn } from '@/lib/utils';
 import { evaluateFormula } from '@/utils/formulaEvaluator';
@@ -116,6 +117,8 @@ export default function MesocyclePage() {
   
   // Daily intensity planning state — lifted to shared WizardDataContext
   const { macrocycleData, setMacrocycleData, trainingDays, setTrainingDays, dailyIntensityData, setDailyIntensityData } = useWizardData();
+  /** Strategy document → "Write up from conversation" → a message for the AI chat */
+  const [strategyPrompt, setStrategyPrompt] = useState<{ id: number; text: string } | undefined>();
   const { markDirty, status: autoSaveStatus } = useWizardAutoSave();
   const [isIntensityDataLoaded, setIsIntensityDataLoaded] = useState(false);
   
@@ -627,6 +630,12 @@ export default function MesocyclePage() {
         onNotesChange={(notes) => {
           setMacrocycleData({ ...macrocycleData, planNotes: notes });
         }}
+        notesHistory={readNotesHistory(macrocycleData?.planNotesHistory)}
+        onNotesRestore={(version) => {
+          const next = restoreNotesVersion(macrocycleData?.planNotes ?? '', macrocycleData?.planNotesHistory, version);
+          setMacrocycleData({ ...macrocycleData, planNotes: next.notes, planNotesHistory: next.history });
+        }}
+        onNotesWriteUp={() => setStrategyPrompt({ id: Date.now(), text: WRITE_UP_PROMPT })}
       />
     );
   };
@@ -5169,9 +5178,7 @@ export default function MesocyclePage() {
     const durationStr = planStartDate && planEndDate && planEndDate > planStartDate
       ? `Plan duration: ${format(planStartDate, 'yyyy-MM-dd')} → ${format(planEndDate, 'yyyy-MM-dd')} (${totalWeeks} weeks / ${expectedTotalDays} days total)\nMesocycle days planned: ${totalMesocycleDays}${daysMismatch ? ` ⚠️ MISMATCH — mesocycles cover ${totalMesocycleDays} days but plan is ${expectedTotalDays} days` : " ✓ matches plan"}`
       : totalWeeks > 0 ? `Plan duration: ${totalWeeks} weeks` : "";
-    const notesStr = macrocycleData?.planNotes?.trim()
-      ? `Coach's Notes & Brainstorming (freeform — read for context on intent, constraints, and ideas the coach has jotted down):\n${macrocycleData.planNotes.trim()}`
-      : "";
+    const notesStr = strategyContext(macrocycleData?.planNotes);
     const mesoCount = mesocycles.length;
     const mesoStr = mesoCount > 0
       ? `Mesocycles (${mesoCount}):\n${mesocycles.map((m) => {
@@ -5372,9 +5379,9 @@ export default function MesocyclePage() {
   const handleMesoAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
     switch (action.type) {
       case "set_plan_notes": {
-        const prevNotes = macrocycleData?.planNotes ?? "";
-        const nextNotes = action.mode === "replace" ? action.notes : [prevNotes, action.notes].filter(Boolean).join("\n");
-        setMacrocycleData({ ...macrocycleData, planNotes: nextNotes });
+        // A rewrite keeps the text before as a version
+        const next = applyNotesAction(macrocycleData?.planNotes ?? "", macrocycleData?.planNotesHistory, action);
+        setMacrocycleData({ ...macrocycleData, planNotes: next.notes, planNotesHistory: next.history });
         break;
       }
       case "set_mesocycle_config": {
@@ -5762,7 +5769,7 @@ export default function MesocyclePage() {
         />
 
       {/* AI Assistant */}
-      <WizardAIAssistant stepLabel={mesoStepLabel} chatId={WIZARD_CHAT_ID} wizardContext={mesoWizardContext} onApplySuggestion={handleMesoAIApply} ragContext={ragContext} globalContext={globalAIContext} coachMemoryContext={coachMemoryContext} anamnesisContext={anamnesisAIContext || undefined} />
+      <WizardAIAssistant stepLabel={mesoStepLabel} chatId={WIZARD_CHAT_ID} wizardContext={mesoWizardContext} onApplySuggestion={handleMesoAIApply} promptRequest={strategyPrompt} ragContext={ragContext} globalContext={globalAIContext} coachMemoryContext={coachMemoryContext} anamnesisContext={anamnesisAIContext || undefined} />
     </div>
   );
 };

@@ -53,6 +53,7 @@ import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCalendarEvents, groupConsecutiveDates } from "@/hooks/useCalendarEvents";
 import { TEST_COLOR, EVENT_COLOR, testEventGradient } from "@/lib/eventColors";
 import { PlanNotesField } from "@/components/shared/PlanNotesField";
+import { applyNotesAction, readNotesHistory, restoreNotesVersion, strategyContext, WRITE_UP_PROMPT, type PlanNotesVersion } from "@/utils/planStrategy";
 import { useWizardData } from "@/contexts/WizardDataContext";
 
 // Type for manually added methods with rationale
@@ -83,6 +84,26 @@ export default function MacrocyclePage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [planName, setPlanName] = useState<string>("");
   const [planNotes, setPlanNotes] = useState<string>("");
+  /** Earlier versions of the strategy document (kept when the AI rewrites it) */
+  const [planNotesHistory, setPlanNotesHistory] = useState<PlanNotesVersion[]>([]);
+  // The AI handler is memoised without the notes — it reads them here
+  const planNotesRef = useRef(planNotes);
+  planNotesRef.current = planNotes;
+  const planNotesHistoryRef = useRef(planNotesHistory);
+  planNotesHistoryRef.current = planNotesHistory;
+  /** "Write up from conversation" → a message for the AI chat */
+  const [strategyPrompt, setStrategyPrompt] = useState<{ id: number; text: string } | undefined>();
+  const strategyFieldProps = {
+    value: planNotes,
+    onChange: setPlanNotes,
+    history: planNotesHistory,
+    onRestore: (version: PlanNotesVersion) => {
+      const next = restoreNotesVersion(planNotes, planNotesHistory, version);
+      setPlanNotes(next.notes);
+      setPlanNotesHistory(next.history);
+    },
+    onWriteUp: () => setStrategyPrompt({ id: Date.now(), text: WRITE_UP_PROMPT }),
+  };
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
   
   // New state for plan duration and multiple SMART goals
@@ -283,6 +304,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         const data = JSON.parse(savedData);
         setPlanName(data.planName || "");
         setPlanNotes(data.planNotes || "");
+        setPlanNotesHistory(readNotesHistory(data.planNotesHistory));
         setSelectedAthleteId(data.selectedAthleteId || null);
         
         // Load new planDuration if exists
@@ -456,6 +478,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     const macrocycleData = {
       planName,
       planNotes,
+      planNotesHistory,
       selectedAthleteId,
       planDuration,
       smartGoals,
@@ -476,7 +499,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     localStorage.setItem('macrocycleData', JSON.stringify(macrocycleData));
     setContextMacrocycleData(macrocycleData);
     markDirty();
-  }, [planName, planNotes, selectedAthleteId, planDuration, smartGoals, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent, selectedMethods, manuallyAddedMethods, athleteExistingTestsAndEvents]);
+  }, [planName, planNotes, planNotesHistory, selectedAthleteId, planDuration, smartGoals, smartGoal, subGoals, events, qualities, qualitiesBySubGoal, methodsByQuality, selectedTest, selectedEvent, selectedMethods, manuallyAddedMethods, athleteExistingTestsAndEvents]);
 
   // Save step whenever it changes (step persistence)
   useEffect(() => {
@@ -807,6 +830,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const progress = (currentStep / totalSteps) * 100;
 
   const selectedAthlete = selectedAthleteId ? athletes.find(a => a.id === selectedAthleteId) : null;
+  /** Plan and athlete on the strategy document's PDF */
+  const strategyPdf = { planName: planName || 'Training plan', athleteName: selectedAthlete ? `${selectedAthlete.firstName} ${selectedAthlete.lastName}`.trim() : undefined };
 
   // Get athlete performance parameters for the Add Goal dialog
   const athletePerformanceParams = athleteParamsForGoals;
@@ -1185,11 +1210,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         <CardHeader className="pb-4">
           <CardTitle className="flex items-center space-x-2">
             <FileText className="h-5 w-5" />
-            <span>Notes & Brainstorming</span>
+            <span>Plan strategy</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <PlanNotesField value={planNotes} onChange={setPlanNotes} />
+          <PlanNotesField {...strategyFieldProps} pdf={strategyPdf} />
         </CardContent>
       </Card>
 
@@ -2892,6 +2917,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       const macrocycleData = {
         planName,
         planNotes,
+        planNotesHistory,
         selectedAthleteId,
         planDuration,
         smartGoals,
@@ -3013,9 +3039,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     const methodsStr = selectedMethodList.length
       ? `Selected methods:\n${selectedMethodList.map((m) => `- ${m}`).join("\n")}`
       : "";
-    const notesStr = planNotes?.trim()
-      ? `Coach's Notes & Brainstorming (freeform — read for context on intent, constraints, and ideas the coach has jotted down):\n${planNotes.trim()}`
-      : "";
+    const notesStr = strategyContext(planNotes);
     let actionHints = "";
     if (currentStep === 1) {
       actionHints = "Available AI actions: set_plan_name, set_plan_duration, add_goal, remove_goal, schedule_tests, create_event, remove_event";
@@ -3068,11 +3092,15 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       case "set_plan_name":
         setPlanName(action.name);
         break;
-      case "set_plan_notes":
-        setPlanNotes((prev) =>
-          action.mode === "replace" ? action.notes : [prev, action.notes].filter(Boolean).join("\n")
-        );
+      case "set_plan_notes": {
+        // A rewrite keeps the text before as a version
+        const next = applyNotesAction(planNotesRef.current, planNotesHistoryRef.current, action);
+        planNotesRef.current = next.notes;
+        planNotesHistoryRef.current = next.history;
+        setPlanNotes(next.notes);
+        setPlanNotesHistory(next.history);
         break;
+      }
       case "set_plan_duration": {
         const start = action.startDate
           ? new Date(action.startDate + 'T12:00:00')
@@ -3228,6 +3256,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
               const macrocycleData = {
                 planName,
                 planNotes,
+                planNotesHistory,
                 selectedAthleteId,
                 planDuration,
                 smartGoals,
@@ -3315,11 +3344,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           <CardHeader className="pb-4">
             <CardTitle className="flex items-center space-x-2">
               <FileText className="h-5 w-5" />
-              <span>Notes & Brainstorming</span>
+              <span>Plan strategy</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <PlanNotesField value={planNotes} onChange={setPlanNotes} />
+            <PlanNotesField {...strategyFieldProps} pdf={strategyPdf} />
           </CardContent>
         </Card>
       )}
@@ -3353,6 +3382,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         chatId={WIZARD_CHAT_ID}
         wizardContext={wizardContext}
         onApplySuggestion={handleAIApply}
+        promptRequest={strategyPrompt}
         ragContext={ragContext}
         globalContext={globalAIContext}
         coachMemoryContext={coachMemoryContext}

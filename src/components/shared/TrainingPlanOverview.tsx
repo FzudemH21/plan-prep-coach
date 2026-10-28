@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { PlanNotesField, PlanNotesView } from '@/components/shared/PlanNotesField';
+import type { PlanNotesVersion } from '@/utils/planStrategy';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
@@ -23,6 +24,10 @@ interface TrainingPlanOverviewProps {
   defaultCollapsed?: boolean;
   notes?: string;
   onNotesChange?: (notes: string) => void;
+  /** Strategy document: earlier versions, restore, "Write up from conversation" */
+  notesHistory?: PlanNotesVersion[];
+  onNotesRestore?: (version: PlanNotesVersion) => void;
+  onNotesWriteUp?: () => void;
 }
 
 export function TrainingPlanOverview({
@@ -39,6 +44,9 @@ export function TrainingPlanOverview({
   defaultCollapsed = false,
   notes,
   onNotesChange,
+  notesHistory,
+  onNotesRestore,
+  onNotesWriteUp,
 }: TrainingPlanOverviewProps) {
   // Merge legacy single-goal prop with the goals array, deduplicate
   const allPrimaryGoals = React.useMemo(() => {
@@ -213,10 +221,12 @@ export function TrainingPlanOverview({
             {(notes !== undefined || onNotesChange) && (
               <div>
                 <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                  <FileText className="h-3 w-3" /> Notes
+                  <FileText className="h-3 w-3" /> Plan strategy
                 </Label>
                 {onNotesChange ? (
-                  <PlanNotesField value={notes || ''} onChange={onNotesChange} minHeight={140} className="mt-1" />
+                  <PlanNotesField value={notes || ''} onChange={onNotesChange} minHeight={140} className="mt-1"
+                    history={notesHistory} onRestore={onNotesRestore} onWriteUp={onNotesWriteUp}
+                    pdf={{ planName: planName || 'Training plan', athleteName }} />
                 ) : notes ? (
                   <PlanNotesView text={notes} className="mt-1" />
                 ) : null}

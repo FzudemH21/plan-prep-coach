@@ -36,7 +36,8 @@ import { useTrainingPrograms, TrainingProgram } from '@/hooks/useTrainingProgram
 import { ExportPDFButton } from '@/components/pdf/ExportPDFButton';
 import { useWizardData } from '@/contexts/WizardDataContext';
 import { WizardAIAssistant, FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
-import { WIZARD_CHAT_ID } from '@/contexts/AIChatContext';
+import { WIZARD_CHAT_ID } from '@/contexts/AIChatContext';
+import { applyNotesAction, readNotesHistory, restoreNotesVersion, strategyContext, WRITE_UP_PROMPT } from '@/utils/planStrategy';
 import { onExerciseRenamed, renameExerciseInValue } from '@/utils/exerciseRename';
 import { notifySessionMetaChanged, SESSION_META_CHANGED_EVENT } from '@/utils/parameterVisibility';
 import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
@@ -77,6 +78,8 @@ export default function MicrocyclePlanningPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { macrocycleData, setMacrocycleData, trainingDays, setTrainingDays } = useWizardData();
+  /** Strategy document → "Write up from conversation" → a message for the AI chat */
+  const [strategyPrompt, setStrategyPrompt] = useState<{ id: number; text: string } | undefined>();
   const [currentStep, setCurrentStep] = useState(1);
   const [currentMesocycleIndex, setCurrentMesocycleIndex] = useState(0);
   const [currentMicrocycleIndex, setCurrentMicrocycleIndex] = useState(0);
@@ -3681,6 +3684,12 @@ export default function MicrocyclePlanningPage() {
         onNotesChange={(notes) => {
           setMacrocycleData({ ...macrocycleData, planNotes: notes });
         }}
+        notesHistory={readNotesHistory(macrocycleData?.planNotesHistory)}
+        onNotesRestore={(version) => {
+          const next = restoreNotesVersion(macrocycleData?.planNotes ?? '', macrocycleData?.planNotesHistory, version);
+          setMacrocycleData({ ...macrocycleData, planNotes: next.notes, planNotesHistory: next.history });
+        }}
+        onNotesWriteUp={() => setStrategyPrompt({ id: Date.now(), text: WRITE_UP_PROMPT })}
       />
     );
   };
@@ -3893,9 +3902,7 @@ export default function MicrocyclePlanningPage() {
     const goalStr = macrocycleData?.smartGoals?.[0]?.description
       ? `Primary goal: ${macrocycleData.smartGoals[0].description}`
       : "";
-    const notesStr = macrocycleData?.planNotes?.trim()
-      ? `Coach's Notes & Brainstorming (freeform — read for context on intent, constraints, and ideas the coach has jotted down):\n${macrocycleData.planNotes.trim()}`
-      : "";
+    const notesStr = strategyContext(macrocycleData?.planNotes);
     const mesoCount = mesocycles.length;
     const mesoStr = mesoCount > 0
       ? `Mesocycles: ${mesoCount} (${mesocycles.map((m: { name: string }) => m.name).join(", ")})`
@@ -4175,9 +4182,9 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
 
   const handleMicroAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
     if (action.type === "set_plan_notes") {
-      const prevNotes = macrocycleData?.planNotes ?? "";
-      const nextNotes = action.mode === "replace" ? action.notes : [prevNotes, action.notes].filter(Boolean).join("\n");
-      setMacrocycleData({ ...macrocycleData, planNotes: nextNotes });
+      // A rewrite keeps the text before as a version
+      const next = applyNotesAction(macrocycleData?.planNotes ?? "", macrocycleData?.planNotesHistory, action);
+      setMacrocycleData({ ...macrocycleData, planNotes: next.notes, planNotesHistory: next.history });
       return;
     }
     if (action.type === "assign_methods_to_days") {
@@ -5396,6 +5403,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
         chatId={WIZARD_CHAT_ID}
         wizardContext={microWizardContext}
         onApplySuggestion={handleMicroAIApply}
+        promptRequest={strategyPrompt}
         ragContext={ragContext}
         globalContext={globalAIContext}
         coachMemoryContext={coachMemoryContext}

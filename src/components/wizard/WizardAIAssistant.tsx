@@ -193,6 +193,11 @@ export interface WizardAIAssistantProps {
    */
   forceOpen?: number;
   /**
+   * A message to send as if the coach typed it (e.g. "write up the strategy" from the strategy
+   * document). Each new `id` opens the panel and sends `text` once.
+   */
+  promptRequest?: { id: number; text: string };
+  /**
    * When the AI panel is opened from within a specific session (via the Bot button
    * in WorkoutSessionSheet), this carries the session's context so the AI knows
    * exactly which day/session the coach is currently viewing.
@@ -352,9 +357,9 @@ Available types and their fields:
 - clear_week: {"type":"clear_week","microcycleName":"<exact microcycle name>"}
   Removes ALL exercises, sections, and sessions from a microcycle. Always confirm with the coach first — irreversible. Use exact microcycle name from context.
 - set_plan_notes: {"type":"set_plan_notes","notes":"<text to add or the full replacement text>","mode":"append"}
-  Available on EVERY wizard step (Macrocycle, Mesocycle, Microcycle Planning) — the Notes & Brainstorming field is shared across the whole plan regardless of which step you're on. Use this whenever the coach asks you to jot something down, add an idea, or write/update a note — do not just say it in chat, actually apply it here too.
+  Available on EVERY wizard step (Macrocycle, Mesocycle, Microcycle Planning) — the plan strategy document is shared across the whole plan regardless of which step you're on. It is the RESULT of your conversation with the coach (the chat is the brainstorming): goals, reasoning, priorities, phases, progression criteria, open points — free-form, no fixed template; structure it the way the content needs. Use this whenever the coach asks you to note something, add an idea, or write up / update the strategy — do not just say it in chat, actually apply it here too. Only write what was discussed, decided or is in the plan — nothing new of your own.
   FORMAT the notes as readable Markdown (the field shows it formatted): "## " short headings for topics (e.g. ## Structure, ## Priorities, ## Phase 1, ## Gates), "- " bullet points with one point each (sub-points indented by two spaces), **bold** for the key terms, numbers and decisions (e.g. **Squat max 120 kg**, **pain ≤ 3/10**). Use "->" only inside a progression line. No long run-on paragraphs — break them into bullets.
-  mode "append" (default) adds your text as a new line after whatever is already there — use this for adding an idea without erasing existing notes. mode "replace" overwrites the entire field — only use this when the coach explicitly asks to rewrite, clean up, or clear the notes (clearing means notes:"" with mode "replace"). When appending, do not repeat content that is already in the current Notes & Brainstorming context.
+  mode "append" (default) adds your text as a new line after whatever is already there — use this for adding an idea without erasing existing notes. mode "replace" overwrites the entire document (the previous version is kept and can be restored) — use it when the coach asks to write up, rewrite, clean up or clear the strategy (clearing means notes:"" with mode "replace"). When appending, do not repeat content that is already in the current Notes & Brainstorming context.
 - add_parameter: {"type":"add_parameter","name":"<parameter name>","category":"<one of: strength|speed|power|endurance|mobility|technique|body_composition|other>","unit":"<unit e.g. kg, s, cm — omit if not applicable>","applicableSports":["<sport>","<sport>"]}
   applicableSports is optional — include when the parameter is sport-specific (e.g. ["Soccer","Rugby"]). Omit for universal parameters.
 - add_parameters_bulk: {"type":"add_parameters_bulk","parameters":[{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>","applicableSports":["<sport>"]},{"name":"<parameter name>","category":"<category>","unit":"<unit or omit>"}]}
@@ -958,6 +963,7 @@ export function WizardAIAssistant({
   assistantRole,
   globalContext,
   forceOpen,
+  promptRequest,
   focusedSessionContext,
   anamnesisContext,
 }: WizardAIAssistantProps) {
@@ -1122,17 +1128,18 @@ export function WizardAIAssistant({
     }
   };
 
-  const sendUserMessage = async () => {
+  /** Sends the typed text — or `preset` (a request from outside the chat, the input stays as it is) */
+  const sendUserMessage = async (preset?: string) => {
     if (isLoading) return;
     // Still recording: stop — the text lands in the input to check before sending
-    if (isListening) { await stopListening(); return; }
-    if (isTranscribing) return;
-    const text = inputRef.current.trim();
+    if (!preset && isListening) { await stopListening(); return; }
+    if (!preset && isTranscribing) return;
+    const text = (preset ?? inputRef.current).trim();
     if (!text) return;
 
     const newMessages: Message[] = [...messagesRef.current, { role: "user" as const, content: text }];
     setChatMessages?.(resolvedChatId, newMessages);
-    setInput("");
+    if (!preset) setInput("");
     setIsLoading(true);
 
     try {
@@ -1160,6 +1167,16 @@ export function WizardAIAssistant({
       setIsLoading(false);
     }
   };
+
+  // A request from outside (e.g. the strategy document's "Write up from conversation"): open and send once
+  const handledPromptId = useRef<number | null>(null);
+  useEffect(() => {
+    if (!promptRequest || promptRequest.id === handledPromptId.current) return;
+    handledPromptId.current = promptRequest.id;
+    setIsOpen(true);
+    void sendUserMessage(promptRequest.text);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [promptRequest?.id]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendUserMessage(); }
@@ -1360,7 +1377,7 @@ export function WizardAIAssistant({
                 />
                 <Button
                   size="icon"
-                  onClick={sendUserMessage}
+                  onClick={() => { void sendUserMessage(); }}
                   disabled={!input.trim() || isLoading}
                   className="flex-shrink-0"
                 >
