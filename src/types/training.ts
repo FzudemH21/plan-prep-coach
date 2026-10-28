@@ -29,6 +29,9 @@ export interface PlanDuration {
 }
 
 // Individual SMART goal - for performance targets
+/** The side a goal refers to for a parameter recorded per side */
+export type GoalSide = 'L' | 'R' | 'both' | 'weaker' | 'lsi';
+
 export interface SmartGoal {
   id: string;
   description: string;
@@ -38,6 +41,13 @@ export interface SmartGoal {
   percentChange: number;
   // Optional link to athlete parameter for auto-fill
   linkedParameterId?: string;
+  /** Which measure of the linked parameter the goal is about (unset = the main measure) — several
+   *  goals can share a parameter, e.g. its pain for the first phases and its time for the last one */
+  measureId?: string;
+  /** Parameters recorded per side: which side the goal refers to (or the weaker side / the LSI) */
+  side?: GoalSide;
+  /** When in the plan the goal applies, e.g. "Phase 1–2" */
+  phaseNote?: string;
   // Optional scheduled test dates for this goal
   testDates?: string[];
   // Optional legacy fields (deprecated)

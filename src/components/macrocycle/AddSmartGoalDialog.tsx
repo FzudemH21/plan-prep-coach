@@ -1,4 +1,3 @@
-import { latestNumericValue } from '@/utils/latestParameterValue';
 import { useState, useMemo, useEffect } from "react";
 import {
   Dialog,
@@ -28,9 +27,12 @@ import {
 } from "@/components/ui/popover";
 import { Check, ChevronsUpDown, Target, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SmartGoal } from "@/types/training";
+import { SmartGoal, type GoalSide } from "@/types/training";
 import { AthletePerformanceParameter } from "@/types/athlete";
 import { ParameterV2 } from "@/types/parametersV2";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { hasCustomMeasures, measureById, parameterMeasures } from "@/utils/parameterMeasures";
+import { GOAL_SIDE_LABELS, goalBaseline, goalDescription, goalShowsPercent, goalUnit } from "@/utils/goalMeasures";
 
 interface ParameterOptionItem {
   id: string;
@@ -52,6 +54,8 @@ interface AddSmartGoalDialogProps {
   athleticismParameters: ParameterV2[];
   onOpenCreateParameter?: () => void;
   defaultParameterId?: string | null;
+  /** With defaultParameterId: the measure to start with (e.g. "add a goal for another measure") */
+  defaultMeasureId?: string;
 }
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -66,6 +70,7 @@ export function AddSmartGoalDialog({
   athleticismParameters,
   onOpenCreateParameter,
   defaultParameterId,
+  defaultMeasureId,
 }: AddSmartGoalDialogProps) {
   const [comboboxOpen, setComboboxOpen] = useState(false);
   const [selectedParameterId, setSelectedParameterId] = useState<string | null>(defaultParameterId ?? null);
@@ -73,6 +78,28 @@ export function AddSmartGoalDialog({
   const [baselineValue, setBaselineValue] = useState<number | "">("");
   const [desiredValue, setDesiredValue] = useState<number | "">("");
   const [unit, setUnit] = useState("");
+  // Which measure of the parameter (unset = main), which side (parameters recorded per side), when
+  const [measureId, setMeasureId] = useState<string | undefined>(undefined);
+  const [side, setSide] = useState<GoalSide | undefined>(undefined);
+  const [phaseNote, setPhaseNote] = useState("");
+  const selectedParam = useMemo(() => athleticismParameters.find((p) => p.id === selectedParameterId), [athleticismParameters, selectedParameterId]);
+  const measure = selectedParam ? measureById(selectedParam, measureId) : undefined;
+  const kind = measure?.kind ?? "number";
+
+  /** Baseline = the athlete's latest value of exactly this measure (and side) */
+  const fillBaseline = (paramId: string | null, mId: string | undefined, sd: GoalSide | undefined) => {
+    const param = athleticismParameters.find((p) => p.id === paramId);
+    const athleteParam = athletePerformanceParams.find((pp) => pp.athleticismParameterId === paramId);
+    const latest = param && athleteParam ? goalBaseline({ measureId: mId, side: sd }, param, athleteParam.values) : null;
+    const m = param ? measureById(param, mId) : undefined;
+    setBaselineValue(latest ?? (m?.kind === "passFail" ? 0 : ""));
+    setDesiredValue(m?.kind === "passFail" ? 1 : "");
+  };
+  /** The side to start with for a parameter recorded per side: the LSI for numbers, both sides otherwise */
+  const defaultSide = (param: ParameterV2 | undefined, mId: string | undefined): GoalSide | undefined => {
+    if (!param?.perSide) return undefined;
+    return measureById(param, mId)?.kind === "number" ? "lsi" : "both";
+  };
 
   // Pre-fill form when editing
   useEffect(() => {
@@ -82,6 +109,9 @@ export function AddSmartGoalDialog({
       setDesiredValue(editGoal.desiredValue);
       setUnit(editGoal.unit);
       setSelectedParameterId(editGoal.linkedParameterId || null);
+      setMeasureId(editGoal.measureId);
+      setSide(editGoal.side);
+      setPhaseNote(editGoal.phaseNote ?? "");
     }
   }, [editGoal]);
 
@@ -93,20 +123,24 @@ export function AddSmartGoalDialog({
       setBaselineValue("");
       setDesiredValue("");
       setUnit("");
+      setMeasureId(undefined);
+      setSide(undefined);
+      setPhaseNote("");
     } else if (!editGoal && defaultParameterId) {
       const param = athleticismParameters.find((p) => p.id === defaultParameterId);
       if (param) {
         setSelectedParameterId(param.id);
         setDescription(param.name);
         setUnit(param.unit ?? "");
+        setMeasureId(defaultMeasureId);
+        const sd = defaultSide(param, defaultMeasureId);
+        setSide(sd);
         // Auto-fill baseline from athlete profile if available
-        const athleteParam = athletePerformanceParams.find((pp) => pp.athleticismParameterId === param.id);
-        const latest = athleteParam ? latestNumericValue(athleteParam.values) : null;
-        setBaselineValue(latest ?? "");
-        setDesiredValue("");
+        fillBaseline(param.id, defaultMeasureId, sd);
       }
     }
-  }, [open, defaultParameterId, editGoal, athleticismParameters, athletePerformanceParams]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultParameterId, defaultMeasureId, editGoal, athleticismParameters, athletePerformanceParams]);
 
   // Get athlete's performance parameters with their details. Filters out
   // entries whose underlying parameter has been deleted from the database —
@@ -155,24 +189,26 @@ export function AddSmartGoalDialog({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [athletePerformanceParams, athleticismParameters]);
 
-  // Calculate percent change
+  // Calculate percent change (numbers and LSI only)
+  const showsPercent = goalShowsPercent({ measureId, side }, selectedParam);
   const percentChange = useMemo(() => {
-    if (typeof baselineValue === "number" && typeof desiredValue === "number" && baselineValue > 0) {
+    if (showsPercent && typeof baselineValue === "number" && typeof desiredValue === "number" && baselineValue > 0) {
       return ((desiredValue - baselineValue) / baselineValue) * 100;
     }
     return 0;
-  }, [baselineValue, desiredValue]);
+  }, [baselineValue, desiredValue, showsPercent]);
 
   const handleSelectParameter = (param: ParameterOptionItem) => {
     setSelectedParameterId(param.athleticismParameterId);
     setDescription(param.name);
     setUnit(param.unit);
-    
-    // Baseline = the athlete's most recent value of this parameter (decimal comma or point)
-    const athleteParam = athletePerformanceParams.find((pp) => pp.athleticismParameterId === param.athleticismParameterId);
-    const latest = param.isFromAthlete && athleteParam ? latestNumericValue(athleteParam.values) : null;
-    setBaselineValue(latest ?? "");
-    setDesiredValue("");
+    // Starts with the main measure; per side with the LSI (numbers) / both sides
+    const full = athleticismParameters.find((p) => p.id === param.athleticismParameterId);
+    setMeasureId(undefined);
+    const sd = defaultSide(full, undefined);
+    setSide(sd);
+    // Baseline = the athlete's most recent value of this measure (decimal comma or point)
+    fillBaseline(param.athleticismParameterId, undefined, sd);
     setComboboxOpen(false);
   };
 
@@ -186,25 +222,35 @@ export function AddSmartGoalDialog({
     if (!description || baselineValue === "" || desiredValue === "") {
       return;
     }
+    // Name and unit follow the measure / side: "30 m Sprint · Pain" in /10, "Single-leg hop · LSI" in %
+    const measureFields = {
+      measureId: measureId && measureId !== "main" ? measureId : undefined,
+      side,
+      phaseNote: phaseNote.trim() || undefined,
+    };
+    const name = selectedParam ? goalDescription(selectedParam, measureFields) : description;
+    const goalUnitText = selectedParam ? goalUnit(measure, side, selectedParam.unit ?? unit) : unit;
 
     if (editGoal && onEditGoal) {
       onEditGoal({
         ...editGoal,
-        description,
+        description: name,
         baselineValue: typeof baselineValue === "number" ? baselineValue : 0,
         desiredValue: typeof desiredValue === "number" ? desiredValue : 0,
-        unit,
+        unit: goalUnitText,
         percentChange,
         linkedParameterId: selectedParameterId || undefined,
+        ...measureFields,
       });
     } else {
       onAddGoal({
-        description,
+        description: name,
         baselineValue: typeof baselineValue === "number" ? baselineValue : 0,
         desiredValue: typeof desiredValue === "number" ? desiredValue : 0,
-        unit,
+        unit: goalUnitText,
         percentChange,
         linkedParameterId: selectedParameterId || undefined,
+        ...measureFields,
       });
     }
 
@@ -334,38 +380,123 @@ export function AddSmartGoalDialog({
             </Popover>
           </div>
 
-          {/* Baseline & Target Values */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Measure of the parameter (time, pain, quality …) — only when it has several */}
+          {selectedParam && hasCustomMeasures(selectedParam) && (
             <div className="space-y-2">
-              <Label htmlFor="baseline">Baseline Value</Label>
-              <Input
-                id="baseline"
-                type="number"
-                step="0.01"
-                value={baselineValue}
-                onChange={(e) => setBaselineValue(e.target.value ? parseFloat(e.target.value) : "")}
-                placeholder="Current value"
-                className="flex-1"
-              />
+              <Label>Measure</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {parameterMeasures(selectedParam).map((m) => {
+                  const on = (measureId ?? "main") === m.id;
+                  return (
+                    <Button key={m.id} type="button" size="sm" variant={on ? "default" : "outline"} className="h-8"
+                      onClick={() => { const sd = defaultSide(selectedParam, m.id); setMeasureId(m.id); setSide(sd); fillBaseline(selectedParam.id, m.id, sd); }}>
+                      {m.name}
+                    </Button>
+                  );
+                })}
+              </div>
             </div>
+          )}
 
+          {/* Side — parameters recorded per side */}
+          {selectedParam?.perSide && (
             <div className="space-y-2">
-              <Label htmlFor="target">Target Value</Label>
-              <Input
-                id="target"
-                type="number"
-                step="0.01"
-                value={desiredValue}
-                onChange={(e) => setDesiredValue(e.target.value ? parseFloat(e.target.value) : "")}
-                placeholder="Goal value"
-              />
+              <Label>Side</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {(Object.keys(GOAL_SIDE_LABELS) as GoalSide[])
+                  .filter((sd) => sd !== "lsi" || kind === "number")
+                  .map((sd) => (
+                    <Button key={sd} type="button" size="sm" variant={side === sd ? "default" : "outline"} className="h-8"
+                      onClick={() => { setSide(sd); fillBaseline(selectedParam.id, measureId, sd); }}>
+                      {GOAL_SIDE_LABELS[sd]}
+                    </Button>
+                  ))}
+              </div>
+              {side === "lsi" && <p className="text-xs text-muted-foreground">Limb symmetry index: smaller ÷ larger side × 100 %, e.g. target 90 %.</p>}
+              {(side === "both" || side === "weaker") && <p className="text-xs text-muted-foreground">The baseline is the weaker side; the target applies to {side === "both" ? "both sides" : "the weaker side"}.</p>}
             </div>
-          </div>
+          )}
+
+          {/* Baseline & target — the input matches the measure */}
+          {(kind === "number" || side === "lsi") && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="baseline">Baseline Value</Label>
+                <Input id="baseline" type="number" step="0.01" value={baselineValue}
+                  onChange={(e) => setBaselineValue(e.target.value ? parseFloat(e.target.value) : "")} placeholder="Current value" className="flex-1" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="target">Target Value</Label>
+                <Input id="target" type="number" step="0.01" value={desiredValue}
+                  onChange={(e) => setDesiredValue(e.target.value ? parseFloat(e.target.value) : "")} placeholder="Goal value" />
+              </div>
+            </div>
+          )}
+          {kind === "scale" && side !== "lsi" && measure && (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="baseline">Now ({measure.scaleMin ?? 0}–{measure.scaleMax ?? 10})</Label>
+                  <Input id="baseline" type="number" min={measure.scaleMin ?? 0} max={measure.scaleMax ?? 10} value={baselineValue}
+                    onChange={(e) => setBaselineValue(e.target.value ? parseFloat(e.target.value) : "")} placeholder="Current value" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="target">Target ({measure.betterWhen === "higher" ? "at least" : "at most"})</Label>
+                  <Input id="target" type="number" min={measure.scaleMin ?? 0} max={measure.scaleMax ?? 10} value={desiredValue}
+                    onChange={(e) => setDesiredValue(e.target.value ? parseFloat(e.target.value) : "")} placeholder="Goal value" />
+                </div>
+              </div>
+              {measure.betterWhen !== "higher" && (
+                <Button type="button" variant="outline" size="sm" className="h-7 text-xs"
+                  onClick={() => setDesiredValue(measure.scaleMin ?? 0)}>
+                  Target: {measure.scaleMin ?? 0}{measure.scaleMinLabel ? ` (${measure.scaleMinLabel})` : ""}
+                </Button>
+              )}
+              {(measure.scaleMinLabel || measure.scaleMaxLabel) && (
+                <p className="text-xs text-muted-foreground">
+                  {measure.scaleMin ?? 0} = {measure.scaleMinLabel || "—"} · {measure.scaleMax ?? 10} = {measure.scaleMaxLabel || "—"}
+                </p>
+              )}
+            </div>
+          )}
+          {kind === "levels" && side !== "lsi" && measure && (
+            <div className="grid grid-cols-2 gap-4">
+              {([["Now", baselineValue, setBaselineValue], ["Target level", desiredValue, setDesiredValue]] as const).map(([label, value, set]) => (
+                <div key={label} className="space-y-2">
+                  <Label>{label}</Label>
+                  <Select value={value === "" ? undefined : String(value)} onValueChange={(v) => set(Number(v))}>
+                    <SelectTrigger><SelectValue placeholder="Pick a level" /></SelectTrigger>
+                    <SelectContent>
+                      {(measure.levels ?? []).map((l, i) => <SelectItem key={i} value={String(i)}>{l}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+          )}
+          {kind === "passFail" && side !== "lsi" && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Now</Label>
+                <Select value={String(baselineValue === "" ? 0 : baselineValue)} onValueChange={(v) => setBaselineValue(Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Not passed</SelectItem>
+                    <SelectItem value="1">Passed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Target</Label>
+                <p className="h-10 flex items-center text-sm">Passed</p>
+              </div>
+            </div>
+          )}
 
           {/* Unit display and percent change */}
-          {unit && (
+          {(kind === "number" || side === "lsi") && (
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Unit: {unit}</span>
+              <span className="text-muted-foreground">{side === "lsi" ? "Unit: % (LSI)" : unit ? `Unit: ${unit}` : ""}</span>
               {percentChange !== 0 && (
                 <Badge variant={percentChange < 0 ? "destructive" : "default"}>
                   {percentChange > 0 ? "+" : ""}{percentChange.toFixed(1)}%
@@ -374,11 +505,12 @@ export function AddSmartGoalDialog({
             </div>
           )}
 
-          {!unit && percentChange !== 0 && (
-            <div className="flex justify-end">
-              <Badge variant={percentChange < 0 ? "destructive" : "default"}>
-                {percentChange > 0 ? "+" : ""}{percentChange.toFixed(1)}%
-              </Badge>
+          {/* When in the plan */}
+          {selectedParameterId && (
+            <div className="space-y-2">
+              <Label htmlFor="phase-note">When in the plan <span className="font-normal text-muted-foreground">(optional)</span></Label>
+              <Input id="phase-note" value={phaseNote} onChange={(e) => setPhaseNote(e.target.value)}
+                placeholder="e.g. Phase 1–2, before returning to sprinting" />
             </div>
           )}
         </div>
