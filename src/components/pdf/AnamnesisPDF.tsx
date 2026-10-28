@@ -98,7 +98,8 @@ const DEFAULT_ACCENT = '#e2522b';
 const LINE_H = 20;
 
 const s = StyleSheet.create({
-  page: { fontFamily: 'Geist', fontSize: 10, color: C.fg1, paddingTop: 44, paddingBottom: 56, paddingHorizontal: 44 },
+  // paddingBottom leaves room for the fixed footer (bottom 24 + its own height) plus a gap
+  page: { fontFamily: 'Geist', fontSize: 10, color: C.fg1, paddingTop: 44, paddingBottom: 64, paddingHorizontal: 44 },
   fieldLabel: { fontSize: 10, fontWeight: 600, color: C.fg1, marginBottom: 4 },
   answer: { backgroundColor: C.box, borderRadius: 3, paddingVertical: 5, paddingHorizontal: 7, fontSize: 10, lineHeight: 1.4, color: C.fg1 },
   writeLine: { height: LINE_H, borderBottomWidth: 0.6, borderBottomColor: C.line },
@@ -122,6 +123,25 @@ function ageFrom(birthday: string | undefined): number | null {
   let age = now.getFullYear() - b.getFullYear();
   if (now.getMonth() < b.getMonth() || (now.getMonth() === b.getMonth() && now.getDate() < b.getDate())) age--;
   return age;
+}
+
+// ── Page breaks ───────────────────────────────────────────────────────────────
+// A heading never ends a page: it is put into one unbreakable block with the START of what follows
+// (`head`); the remainder (`rest`) may continue on the next page. A block that may get taller than a
+// page (body map with many spots, long text, long notes) must never be unbreakable as a whole —
+// react-pdf can't move it and it runs over the page margin into the footer.
+
+/** The start of a block (kept with its heading) and the remainder (may break across pages) */
+interface Parts { head: React.ReactNode; rest: React.ReactNode }
+
+/** Long text: a first piece to keep with its heading and the remainder; short text stays whole */
+function splitForHead(text: string, keep = 900): [string, string] {
+  if (text.length <= keep) return [text, ''];
+  // Cut at a line break or a sentence end within the first ~500 characters
+  const window = text.slice(0, 500);
+  const at = Math.max(window.lastIndexOf('\n'), window.lastIndexOf('. ') + 1);
+  const cut = at > 80 ? at : 500;
+  return [text.slice(0, cut).trimEnd(), text.slice(cut).trimStart()];
 }
 
 function Lines({ count }: { count: number }) {
@@ -148,15 +168,17 @@ function Options({ labels, values, picked }: { labels: string[]; values?: string
 const BODY_VIEWBOX = { front: { w: 193, h: 306 }, back: { w: 211, h: 317 } } as const;
 const BODY_PDF_H = 190;
 
-function BodyMapBlock({ field, value, lang, skipNegative = false }: {
-  field: AnamnesisField; value: string; lang: AnamnesisPdfLang; skipNegative?: boolean;
-}) {
+/**
+ * Body map in two parts: the figures (`head` — kept with the question) and the list of spots
+ * (`rest` — may continue on the next page; one spot is never split). With many spots and their
+ * answers the whole block can be taller than a page, so it must not be one unbreakable block.
+ */
+function bodyMapParts(field: AnamnesisField, value: string, lang: AnamnesisPdfLang, skipNegative = false): Parts {
   const sideLabel = lang === 'de' ? { front: 'Vorne', back: 'Hinten' } : { front: 'Front', back: 'Back' };
-  if (isBodyMapNone(value)) return <Text style={{ fontSize: 10, color: C.fg1 }}>{lang === 'de' ? 'Keine' : 'None'}</Text>;
+  if (isBodyMapNone(value)) return { head: <Text style={{ fontSize: 10, color: C.fg1 }}>{lang === 'de' ? 'Keine' : 'None'}</Text>, rest: null };
   const spots = parseBodyMap(value);
   const perSpot = !!field.spotFields?.length;
-  return (
-    <View>
+  const head = (
       <View style={{ flexDirection: 'row', marginBottom: 4 }}>
         {(['front', 'back'] as const).map((view) => {
           const vb = BODY_VIEWBOX[view];
@@ -181,6 +203,10 @@ function BodyMapBlock({ field, value, lang, skipNegative = false }: {
           );
         })}
       </View>
+  );
+  if (spots.length === 0) return { head, rest: null };
+  const rest = (
+    <View>
       {spots.map((spot, i) => (perSpot ? (
         // With questions per spot: the spot, then its answers indented
         <View key={spot.id} wrap={false} style={{ marginBottom: 4 }}>
@@ -198,6 +224,7 @@ function BodyMapBlock({ field, value, lang, skipNegative = false }: {
       )))}
     </View>
   );
+  return { head, rest };
 }
 
 // ── Weekly schedule: hours × days, coloured cells (empty grid to fill in by hand) ──
@@ -325,30 +352,73 @@ function FilesLine({ files, lang }: { files: AnamnesisFile[]; lang: AnamnesisPdf
   );
 }
 
-function FieldBlock({ field: original, value, lang, onlyIf, files = [] }: {
+/** Text types whose answer is printed as plain text in a box */
+const STRUCTURED_TYPES = new Set(['info', 'bodyMap', 'weekGrid', 'dateRanges', 'list', 'yesnoList', 'multiselect', 'scale']);
+
+function FieldBlock({ field: original, value, lang, onlyIf, files = [], lead }: {
   field: AnamnesisField; value: string; lang: AnamnesisPdfLang;
   /** Files uploaded below the answer */
   files?: AnamnesisFile[];
   /** Shown when it depends on an earlier answer that isn't known yet */
   onlyIf?: string;
+  /** A heading kept together with this question (the section title of its first question) */
+  lead?: React.ReactNode;
 }) {
   const t = L[lang];
   // The question in the PDF's language when the template has a translation into it
   const field = localizeField(original, lang);
   const answered = isAnswered(field, value) && field.fieldType !== 'info';
   const type = field.fieldType;
-  // A question is never split across two pages (a block taller than a page still breaks)
+  const noteLines = <><View style={s.noteLine} /><View style={s.noteLine} /></>;
+
+  // The start of the answer stays with the question; a body map's spots and a long text answer may
+  // continue on the next page (see "Page breaks")
+  let parts: Parts;
+  if (type === 'bodyMap') {
+    parts = bodyMapParts(field, value, lang);
+  } else if (answered && !STRUCTURED_TYPES.has(type)) {
+    const [first, more] = splitForHead(formatAnswer(field, value, lang));
+    parts = more ? {
+      head: <Text style={[s.answer, { paddingBottom: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }]}>{first}</Text>,
+      rest: <><Text style={[s.answer, { paddingTop: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }]}>{more}</Text>{noteLines}</>,
+    } : { head: <><Text style={s.answer}>{first}</Text>{noteLines}</>, rest: null };
+  } else {
+    parts = { head: fieldAnswerArea(field, value, lang, answered), rest: null };
+  }
+
+  // Both parts directly on the page (no wrapping View): react-pdf does not move an unbreakable block
+  // to the next page when it sits inside a breakable parent — it ran over the page into the footer
   return (
-    <View wrap={false} style={{ marginBottom: 11 }}>
-      <Text style={s.fieldLabel} minPresenceAhead={40}>{field.label}</Text>
-      {onlyIf && <Text style={{ fontSize: 8, color: C.fg3, marginTop: -2, marginBottom: 3 }}>{t.onlyIf(onlyIf)}</Text>}
-      {field.helpText && (
-        <Text style={type === 'info'
-          ? { fontSize: 9.5, color: C.fg2, lineHeight: 1.4 }
-          : { fontSize: 8.5, color: C.fg3, marginTop: -2, marginBottom: 4 }}>{field.helpText}</Text>
-      )}
+    <>
+      <View wrap={false} style={{ marginBottom: parts.rest ? 0 : 11 }}>
+        {lead}
+        <Text style={s.fieldLabel}>{field.label}</Text>
+        {onlyIf && <Text style={{ fontSize: 8, color: C.fg3, marginTop: -2, marginBottom: 3 }}>{t.onlyIf(onlyIf)}</Text>}
+        {field.helpText && (
+          <Text style={type === 'info'
+            ? { fontSize: 9.5, color: C.fg2, lineHeight: 1.4 }
+            : { fontSize: 8.5, color: C.fg3, marginTop: -2, marginBottom: 4 }}>{field.helpText}</Text>
+        )}
+        {parts.head}
+        {!parts.rest && <FilesLine files={files} lang={lang} />}
+      </View>
+      {parts.rest ? (
+        <View style={{ marginBottom: 11 }}>
+          {parts.rest}
+          <FilesLine files={files} lang={lang} />
+        </View>
+      ) : null}
+    </>
+  );
+}
+
+/** The answer area of a question on the worksheet (everything but the body map and long text) */
+function fieldAnswerArea(field: AnamnesisField, value: string, lang: AnamnesisPdfLang, answered: boolean): React.ReactNode {
+  const t = L[lang];
+  const type = field.fieldType;
+  return (
+    <>
       {type === 'info' ? null
-        : type === 'bodyMap' ? <BodyMapBlock field={field} value={value} lang={lang} />
         : type === 'weekGrid' ? <WeekGridBlock value={value} lang={lang} />
         : type === 'dateRanges' ? <PeriodsBlock value={value} lang={lang} />
         : type === 'list' ? <ListBlock field={field} value={value} lang={lang} />
@@ -399,14 +469,14 @@ function FieldBlock({ field: original, value, lang, onlyIf, files = [] }: {
         ) : (
           <Lines count={2} />
         )}
-      <FilesLine files={files} lang={lang} />
-    </View>
+    </>
   );
 }
 
+/** Section heading — always rendered inside the unbreakable start of what follows (see "Page breaks") */
 function SectionTitle({ title, accent }: { title: string; accent: string }) {
   return (
-    <View wrap={false} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, marginBottom: 10 }} minPresenceAhead={60}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, marginBottom: 10 }}>
       <View style={{ width: 3, height: 13, backgroundColor: accent, marginRight: 7, borderRadius: 1 }} />
       <Text style={{ fontSize: 12.5, fontWeight: 700, color: C.fg1 }}>{title}</Text>
     </View>
@@ -485,8 +555,9 @@ export function AnamnesisPDF(props: AnamnesisPdfProps) {
           if (sectionState === 'notMet') return null;
           const fields = section.fields.filter((f) => conditionState(f.condition, ctx) !== 'notMet');
           if (fields.length === 0) return null;
-          return (
-            <View key={section.id}>
+          // The section title (+ its notes) is kept together with the first question
+          const lead = (
+            <>
               <SectionTitle title={localizeSection(section, lang).title} accent={accent} />
               {sectionState === 'unknown' && section.condition && (
                 <Text style={{ fontSize: 8, color: C.fg3, marginTop: -6, marginBottom: 6 }}>
@@ -494,9 +565,15 @@ export function AnamnesisPDF(props: AnamnesisPdfProps) {
                 </Text>
               )}
               {localizeSection(section, lang).helpText && <Text style={{ fontSize: 8.5, color: C.fg3, marginTop: -4, marginBottom: 8 }}>{localizeSection(section, lang).helpText}</Text>}
-              {fields.map((field) => (
+            </>
+          );
+          // A fragment, not a View: the questions' unbreakable blocks must sit directly on the page
+          return (
+            <React.Fragment key={section.id}>
+              {fields.map((field, i) => (
                 <FieldBlock
                   key={field.id}
+                  lead={i === 0 ? lead : undefined}
                   field={field}
                   value={props.fieldValues[field.id] ?? ''}
                   files={parseAnswerFiles(props.fieldValues[filesKey(field.id)])}
@@ -505,24 +582,21 @@ export function AnamnesisPDF(props: AnamnesisPdfProps) {
                     ? describeCondition(field.condition, allFields, lang) : undefined}
                 />
               ))}
-            </View>
+            </React.Fragment>
           );
         })}
 
-        {customs.length > 0 && (
-          <View>
-            <SectionTitle title={t.custom} accent={accent} />
-            {customs.map((field) => (
-              <FieldBlock key={field.id} field={field} value={props.customFieldValues[field.id] ?? ''} lang={lang} />
-            ))}
-          </View>
-        )}
+        {customs.map((field, i) => (
+          <FieldBlock key={field.id} field={field} value={props.customFieldValues[field.id] ?? ''} lang={lang}
+            lead={i === 0 ? <SectionTitle title={t.custom} accent={accent} /> : undefined} />
+        ))}
 
-        {/* Notes — a page's worth of lines (may continue on the next page) */}
-        <View>
+        {/* Notes — a page's worth of lines (may continue on the next page); the title keeps a few lines */}
+        <View wrap={false}>
           <SectionTitle title={t.notes} accent={accent} />
-          <Lines count={24} />
+          <Lines count={4} />
         </View>
+        <Lines count={20} />
 
         {/* Footer */}
         <View
@@ -581,38 +655,81 @@ export interface AnamnesisReportProps extends AnamnesisPdfProps {
 }
 
 /** One answered question: label + answer (structured answers as their block) */
-function ReportAnswer({ field: original, value, lang, files = [], skipNegative = false }: {
-  field: AnamnesisField; value: string; lang: AnamnesisPdfLang; files?: AnamnesisFile[]; skipNegative?: boolean;
+const answerText = { fontSize: 10, lineHeight: 1.4, color: C.fg1 };
+
+/** One answered question: label + answer (structured answers as their block); `lead` = a heading kept with it */
+function ReportAnswer({ field: original, value, lang, files = [], skipNegative = false, lead }: {
+  field: AnamnesisField; value: string; lang: AnamnesisPdfLang; files?: AnamnesisFile[]; skipNegative?: boolean; lead?: React.ReactNode;
 }) {
   const field = localizeField(original, lang);
   const type = field.fieldType;
-  const block = type === 'bodyMap' ? <BodyMapBlock field={field} value={value} lang={lang} skipNegative={skipNegative} />
-    : type === 'weekGrid' ? <WeekGridBlock value={value} lang={lang} />
-    : type === 'list' ? <ListBlock field={field} value={value} lang={lang} />
-    : type === 'dateRanges' ? <PeriodsBlock value={value} lang={lang} />
-    : null;
+  let parts: Parts;
+  if (type === 'bodyMap') parts = bodyMapParts(field, value, lang, skipNegative);
+  else if (type === 'weekGrid') parts = { head: <WeekGridBlock value={value} lang={lang} />, rest: null };
+  else if (type === 'list') parts = { head: <ListBlock field={field} value={value} lang={lang} />, rest: null };
+  else if (type === 'dateRanges') parts = { head: <PeriodsBlock value={value} lang={lang} />, rest: null };
+  else {
+    const [first, more] = splitForHead(formatAnswer(field, value, lang));
+    parts = { head: <Text style={answerText}>{first}</Text>, rest: more ? <Text style={answerText}>{more}</Text> : null };
+  }
   return (
-    <View wrap={false} style={{ marginBottom: 7 }}>
-      <Text style={{ fontSize: 9, fontWeight: 600, color: C.fg2, marginBottom: 2 }}>{field.label}</Text>
-      {block ?? <Text style={{ fontSize: 10, lineHeight: 1.4, color: C.fg1 }}>{formatAnswer(field, value, lang)}</Text>}
-      <FilesLine files={files} lang={lang} />
-    </View>
+    // Directly on the page (no wrapping View) — see FieldBlock
+    <>
+      <View wrap={false} style={{ marginBottom: parts.rest ? 0 : 7 }}>
+        {lead}
+        <Text style={{ fontSize: 9, fontWeight: 600, color: C.fg2, marginBottom: 2 }}>{field.label}</Text>
+        {parts.head}
+        {!parts.rest && <FilesLine files={files} lang={lang} />}
+      </View>
+      {parts.rest ? (
+        <View style={{ marginBottom: 7 }}>
+          {parts.rest}
+          <FilesLine files={files} lang={lang} />
+        </View>
+      ) : null}
+    </>
   );
 }
 
-/** "## Heading" / "- item" / "**bold**" of the AI summary as PDF text */
-function SummaryText({ text }: { text: string }) {
+/**
+ * "## Heading" / "- item" / "**bold**" of the AI summary as PDF text. Each heading is kept with its
+ * first point; `lead` (the "Summary" title) with the first heading.
+ */
+function SummaryText({ text, lead }: { text: string; lead?: React.ReactNode }) {
+  const clean = (line: string) => line.replace(/^#{1,3}\s+/, '').replace(/^\s*[-*]\s+/, '').replace(/\*\*([^*]+)\*\*/g, '$1');
+  const isHeading = (line: string) => /^#{1,3}\s+/.test(line);
+  const lineText = (line: string, key: number) => {
+    const style = { fontSize: 9.5, lineHeight: 1.4, color: C.fg1 };
+    // A bullet's wrapped lines start under its text, not under the dot; one bullet (a few lines) is
+    // never split — the dot would stay behind on its own
+    return /^\s*[-*]\s+/.test(line) ? (
+      <View key={key} wrap={false} style={{ flexDirection: 'row', marginLeft: 6 }}>
+        <Text style={[style, { width: 9 }]}>•</Text>
+        <Text style={[style, { flex: 1 }]}>{clean(line)}</Text>
+      </View>
+    ) : <Text key={key} style={style}>{clean(line)}</Text>;
+  };
+  // Groups: a heading (or the text before the first one) with its lines
+  const groups: Array<{ heading?: string; lines: string[] }> = [];
+  for (const line of text.split('\n').filter((l) => l.trim())) {
+    if (isHeading(line) || groups.length === 0) groups.push(isHeading(line) ? { heading: clean(line), lines: [] } : { lines: [line] });
+    else groups[groups.length - 1].lines.push(line);
+  }
+  // Directly on the page (fragments, no wrapping Views) — see FieldBlock
   return (
-    <View>
-      {text.split('\n').filter((l) => l.trim()).map((line, i) => {
-        const heading = /^#{1,3}\s+/.test(line);
-        const bullet = /^\s*[-*]\s+/.test(line);
-        const clean = line.replace(/^#{1,3}\s+/, '').replace(/^\s*[-*]\s+/, '').replace(/\*\*([^*]+)\*\*/g, '$1');
-        return heading
-          ? <Text key={i} style={{ fontSize: 10, fontWeight: 700, marginTop: i === 0 ? 0 : 6, marginBottom: 2 }}>{clean}</Text>
-          : <Text key={i} style={{ fontSize: 9.5, lineHeight: 1.4, marginLeft: bullet ? 8 : 0, color: C.fg1 }}>{bullet ? `• ${clean}` : clean}</Text>;
-      })}
-    </View>
+    <>
+      {groups.map((g, gi) => (
+        <React.Fragment key={gi}>
+          <View wrap={false}>
+            {gi === 0 ? lead : null}
+            {g.heading && <Text style={{ fontSize: 10, fontWeight: 700, marginTop: gi === 0 ? 0 : 6, marginBottom: 2 }}>{g.heading}</Text>}
+            {g.lines.slice(0, 1).map((l) => lineText(l, 0))}
+          </View>
+          {g.lines.slice(1).map((l, li) => lineText(l, li + 1))}
+        </React.Fragment>
+      ))}
+      {groups.length === 0 ? lead : null}
+    </>
   );
 }
 
@@ -689,50 +806,52 @@ export function AnamnesisReportPDF(props: AnamnesisReportProps) {
         </View>
 
         {include.summary && props.aiSummary?.trim() ? (
-          <View>
-            <SectionTitle title={r.summary} accent={accent} />
-            <SummaryText text={props.aiSummary} />
-          </View>
+          <SummaryText text={props.aiSummary} lead={<SectionTitle title={r.summary} accent={accent} />} />
         ) : null}
 
+        {/* Every section title is kept with its first answer (see "Page breaks") */}
         {sections.map(({ sec, fields }) => (
-          <View key={sec.id}>
-            <SectionTitle title={localizeSection(sec, lang).title} accent={accent} />
-            {fields.map((f) => (
+          <React.Fragment key={sec.id}>
+            {fields.map((f, i) => (
               <ReportAnswer key={f.id} field={f} lang={lang} files={parseAnswerFiles(props.fieldValues[filesKey(f.id)])} skipNegative={include.hideNegatives}
+                lead={i === 0 ? <SectionTitle title={localizeSection(sec, lang).title} accent={accent} /> : undefined}
                 value={include.hideNegatives && f.fieldType === 'yesnoList' ? onlyYesItems(props.fieldValues[f.id]) : (props.fieldValues[f.id] ?? '')} />
             ))}
-          </View>
+          </React.Fragment>
         ))}
 
-        {customs.length > 0 && (
-          <View>
-            <SectionTitle title={t.custom} accent={accent} />
-            {customs.map((f) => <ReportAnswer key={f.id} field={f} value={props.customFieldValues[f.id] ?? ''} lang={lang} />)}
-          </View>
-        )}
+        {customs.map((f, i) => (
+          <ReportAnswer key={f.id} field={f} value={props.customFieldValues[f.id] ?? ''} lang={lang}
+            lead={i === 0 ? <SectionTitle title={t.custom} accent={accent} /> : undefined} />
+        ))}
 
-        {include.notes && props.notes.length > 0 && (
-          <View>
-            <SectionTitle title={r.notes} accent={accent} />
-            {props.notes.map((n) => (
-              <View key={n.id} wrap={false} style={{ marginBottom: 6 }}>
-                <Text style={{ fontSize: 8, color: C.fg3, marginBottom: 1 }}>
-                  {formatDate(n.createdAt, t.locale)}{n.source === 'dictated' ? ` · ${r.dictated}` : ''}
-                </Text>
-                <Text style={{ fontSize: 9.5, lineHeight: 1.4 }}>{n.text}</Text>
-              </View>
-            ))}
-          </View>
-        )}
+        {/* Notes: date + the start of the text stay together, a long (dictated) note may continue on the next page */}
+        {include.notes && props.notes.map((n, i) => {
+              const [first, more] = splitForHead(n.text);
+              return (
+                <React.Fragment key={n.id}>
+                  <View wrap={false} style={{ marginBottom: more ? 0 : 6 }}>
+                    {i === 0 ? <SectionTitle title={r.notes} accent={accent} /> : null}
+                    <Text style={{ fontSize: 8, color: C.fg3, marginBottom: 1 }}>
+                      {formatDate(n.createdAt, t.locale)}{n.source === 'dictated' ? ` · ${r.dictated}` : ''}
+                    </Text>
+                    <Text style={{ fontSize: 9.5, lineHeight: 1.4 }}>{first}</Text>
+                  </View>
+                  {more ? <Text style={{ fontSize: 9.5, lineHeight: 1.4, marginBottom: 6 }}>{more}</Text> : null}
+                </React.Fragment>
+              );
+            })}
 
-        {include.attachments && (props.attachments.length > 0 || formFiles.length > 0) && (
-          <View>
-            <SectionTitle title={r.attachments} accent={accent} />
-            {props.attachments.map((a) => <Text key={a.path} style={{ fontSize: 9.5, marginBottom: 2 }}>• {a.name}</Text>)}
-            {/* Uploaded by the athlete in the form */}
-            {formFiles.map((f) => <Text key={f.path} style={{ fontSize: 9.5, marginBottom: 2 }}>• {f.name}</Text>)}
-          </View>
+        {include.attachments && (
+          <>
+            {[...props.attachments.map((a) => ({ key: a.path, name: a.name })), ...formFiles.map((f) => ({ key: f.path, name: f.name }))]
+              .map((a, i) => (i === 0 ? (
+                <View key={a.key} wrap={false}>
+                  <SectionTitle title={r.attachments} accent={accent} />
+                  <Text style={{ fontSize: 9.5, marginBottom: 2 }}>• {a.name}</Text>
+                </View>
+              ) : <Text key={a.key} style={{ fontSize: 9.5, marginBottom: 2 }}>• {a.name}</Text>))}
+          </>
         )}
 
         {/* Signature */}
