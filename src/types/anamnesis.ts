@@ -70,7 +70,7 @@ export interface AnamnesisTemplateTranslation {
 
 export interface AnamnesisAttachment {
   name: string;
-  type: 'image' | 'document';
+  type: 'image' | 'video' | 'document';
   mimeType: string;
   path: string;
   size: number;

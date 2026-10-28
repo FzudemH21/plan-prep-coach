@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   Plus, Trash2, Loader2, ClipboardList, Sparkles, ChevronRight, X,
-  ChevronUp, ChevronDown, Pencil, Paperclip, FileText, FileImage, ExternalLink, Send, ShieldCheck, Printer,
+  ChevronUp, ChevronDown, Pencil, Paperclip, FileText, FileImage, ExternalLink, Send, ShieldCheck, Printer, Film,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -237,6 +237,8 @@ function RecordForm({
   const [attachments, setAttachments] = useState<AnamnesisAttachment[]>(initial?.attachments ?? []);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [uploadingFile, setUploadingFile] = useState(false);
+  /** A saved attachment to remove in the read-only view (asks first — it is deleted right away) */
+  const [removeTarget, setRemoveTarget] = useState<AnamnesisAttachment | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -307,13 +309,31 @@ function RecordForm({
     })();
   }, [attachments]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A saved record in the read-only view: attachments are additions like notes — saved right away
+  // (e.g. videos from the appointment) and logged in the change history
+  const attachDirectly = mode === 'view' && !!onPatch && !!recordId;
+  const persistAttachments = async (next: AnamnesisAttachment[], summary: string, what: { from: string; to: string }): Promise<boolean> => {
+    if (!onPatch || !recordId) return false;
+    const ok = await onPatch({ attachments: next });
+    if (!ok) return false;
+    setAttachments(next);
+    setSavedAnswers((prev) => (prev ? { ...prev, attachments: next } : prev));
+    void logAnamnesisChange(recordId, changedByName, summary, [{ what: 'Attachments', ...what }]);
+    return true;
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
     e.target.value = '';
-    const oversized = files.filter((f) => f.size > 20 * 1024 * 1024);
+    // Videos up to 50 MB (as for test results), everything else up to 20 MB
+    const oversized = files.filter((f) => f.size > (f.type.startsWith('video/') ? 50 : 20) * 1024 * 1024);
     if (oversized.length > 0) {
-      toast({ title: 'File too large', description: 'Each file must be under 20 MB.', variant: 'destructive' });
+      toast({
+        title: 'File too large',
+        description: `${oversized.map((f) => f.name).join(', ')} — videos max 50 MB, images and documents max 20 MB.`,
+        variant: 'destructive',
+      });
       return;
     }
     setUploadingFile(true);
@@ -321,7 +341,17 @@ function RecordForm({
       const uploaded = await Promise.all(
         files.map((f) => uploadAnamnesisFile(coachUserId, athleteLocalId, f)),
       );
-      setAttachments((prev) => [...prev, ...uploaded]);
+      if (attachDirectly) {
+        const ok = await persistAttachments([...attachments, ...uploaded],
+          uploaded.length === 1 ? 'Attachment added' : `${uploaded.length} attachments added`,
+          { from: '—', to: uploaded.map((a) => a.name).join(', ') });
+        if (!ok) {
+          uploaded.forEach((a) => { deleteFile(a.path).catch(() => {}); });
+          toast({ title: 'Attachment not saved', description: 'Please try again.', variant: 'destructive' });
+        }
+      } else {
+        setAttachments((prev) => [...prev, ...uploaded]);
+      }
     } catch (err) {
       console.error('[AnamnesisTab] upload error', err);
       toast({ title: 'Upload failed', description: 'Could not upload file.', variant: 'destructive' });
@@ -331,11 +361,30 @@ function RecordForm({
   };
 
   const handleRemoveAttachment = async (path: string) => {
+    if (attachDirectly) {
+      const att = attachments.find((a) => a.path === path);
+      if (att) setRemoveTarget(att);
+      return;
+    }
     setAttachments((prev) => prev.filter((a) => a.path !== path));
     setSignedUrls((prev) => { const next = { ...prev }; delete next[path]; return next; });
     // A saved attachment stays until the edit is saved (Cancel brings it back)
     if (savedAnswers?.attachments.some((a) => a.path === path)) setRemovedPaths((prev) => [...prev, path]);
     else deleteFile(path).catch(() => {});
+  };
+
+  /** Read-only view: removes a saved attachment and its file right away */
+  const confirmRemoveAttachment = async () => {
+    const att = removeTarget;
+    setRemoveTarget(null);
+    if (!att) return;
+    const ok = await persistAttachments(attachments.filter((a) => a.path !== att.path), 'Attachment removed', { from: att.name, to: '—' });
+    if (!ok) {
+      toast({ title: 'Attachment not removed', description: 'Please try again.', variant: 'destructive' });
+      return;
+    }
+    setSignedUrls((prev) => { const next = { ...prev }; delete next[att.path]; return next; });
+    deleteFile(att.path).catch(() => {});
   };
 
   const handleTemplateChange = (id: string) => {
@@ -835,7 +884,7 @@ Leave out a heading completely when nothing is stated for it.`,
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label className="text-sm font-semibold">Attachments</Label>
-              {!readOnly && <Button
+              {(!readOnly || attachDirectly) && <Button
                 type="button"
                 variant="ghost"
                 size="sm"
@@ -852,14 +901,16 @@ Leave out a heading completely when nothing is stated for it.`,
                 ref={fileInputRef}
                 type="file"
                 className="hidden"
-                accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+                accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx"
                 multiple
                 onChange={handleFileSelect}
               />
             </div>
             {attachments.length === 0 && !uploadingFile && (
               <p className="text-xs text-muted-foreground">
-                {readOnly ? 'No attachments.' : 'Attach images or documents (max 20 MB each).'}
+                {readOnly && !attachDirectly
+                  ? 'No attachments.'
+                  : `Attach images, videos (e.g. from the appointment) or documents — images and documents max 20 MB, videos max 50 MB.${attachDirectly ? ' Saved right away.' : ''}`}
               </p>
             )}
             <div className="space-y-1.5">
@@ -879,7 +930,9 @@ Leave out a heading completely when nothing is stated for it.`,
                     <div className="h-10 w-10 rounded bg-muted flex items-center justify-center shrink-0">
                       {att.type === 'image'
                         ? <FileImage className="h-5 w-5 text-muted-foreground" />
-                        : <FileText className="h-5 w-5 text-muted-foreground" />}
+                        : att.type === 'video'
+                          ? <Film className="h-5 w-5 text-muted-foreground" />
+                          : <FileText className="h-5 w-5 text-muted-foreground" />}
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
@@ -903,12 +956,13 @@ Leave out a heading completely when nothing is stated for it.`,
                       </Button>
                     </a>
                   )}
-                  {!readOnly && (
+                  {(!readOnly || attachDirectly) && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                      title="Remove attachment"
                       onClick={() => handleRemoveAttachment(att.path)}
                     >
                       <X className="h-3.5 w-3.5" />
@@ -917,6 +971,23 @@ Leave out a heading completely when nothing is stated for it.`,
                 </div>
               ))}
             </div>
+            <AlertDialog open={removeTarget !== null} onOpenChange={(o) => { if (!o) setRemoveTarget(null); }}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Remove this attachment?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {removeTarget?.name} is deleted from the anamnesis and from the storage. This cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={() => { void confirmRemoveAttachment(); }}>
+                    Remove
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
 
           {/* AI Summary */}

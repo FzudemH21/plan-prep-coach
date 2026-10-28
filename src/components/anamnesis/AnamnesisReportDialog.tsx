@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAnamnesisChangeLog, logAnamnesisChange } from '@/utils/anamnesisChangeLog';
-import { contextFor, conditionState, isAnswered } from '@/utils/anamnesisAnswers';
+import { answerFileGroups, contextFor, conditionState, isAnswered } from '@/utils/anamnesisAnswers';
 import type { AnamnesisPdfLang, AnamnesisPdfProps } from '@/components/pdf/AnamnesisPDF';
 import type { AnamnesisAttachment, AnamnesisNote } from '@/types/anamnesis';
 import { cn } from '@/lib/utils';
@@ -60,6 +60,9 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
   const answeredSections = useMemo(() => source.sections.filter((sec) => conditionState(sec.condition, ctx) !== 'notMet'
     && sec.fields.some((f) => f.fieldType !== 'info' && isAnswered(f, source.fieldValues[f.id]))), [source, ctx]);
   const hasCustom = source.customQuestions.some((f) => f.label.trim() && isAnswered(f, source.customFieldValues[f.id]));
+  // The coach's attachments + the files the athlete uploaded in the form link
+  const attachmentCount = source.attachments.length
+    + answerFileGroups(source.sections.flatMap((s) => s.fields), source.fieldValues).reduce((n, g) => n + g.files.length, 0);
 
   const [lang, setLang] = useState<AnamnesisPdfLang>(defaultLang);
   const [sectionIds, setSectionIds] = useState<string[]>([]);
@@ -185,7 +188,7 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
               <div className="border-t my-1.5" />
               <Check checked={notes} onChange={setNotes} disabled={source.notes.length === 0}>Notes from the appointment ({source.notes.length})</Check>
               <Check checked={summary} onChange={setSummary} disabled={!source.aiSummary}>AI summary</Check>
-              <Check checked={attachments} onChange={setAttachments} disabled={source.attachments.length === 0}>List of attachments ({source.attachments.length})</Check>
+              <Check checked={attachments} onChange={setAttachments} disabled={attachmentCount === 0}>List of attachments ({attachmentCount})</Check>
               <div className="border-t my-1.5" />
               <Check checked={hideNegatives} onChange={setHideNegatives}>
                 Leave out "no / none" answers
