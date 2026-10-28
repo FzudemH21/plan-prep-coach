@@ -423,6 +423,24 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     return { tests, events };
   }, [selectedAthleteId, getAthleteCalendarAssignments, getProgram]);
 
+  /**
+   * Whether a day has a test / an event — the athlete's (calendar incl. anamnesis periods, assigned
+   * programs) and the plan's own. Step 1 frames these days already while picking the plan dates
+   * (the same frames as the step-2 calendar).
+   */
+  const dayTestEventMarks = (date: Date): { test: boolean; event: boolean } => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const hookItems = selectedAthleteId ? getEventsForDate(selectedAthleteId, dateStr) : [];
+    const test = hookItems.some(e => e.type === 'test')
+      || athleteExistingTestsAndEvents.tests.some(t => t.testDates?.some(td => td.startsWith(dateStr)))
+      || subGoals.some(sg => sg.testDates?.includes(dateStr))
+      || smartGoals.some(g => g.testDates?.includes(dateStr));
+    const event = hookItems.some(e => e.type === 'event')
+      || athleteExistingTestsAndEvents.events.some(e => e.eventDates?.some(ed => ed.startsWith(dateStr)))
+      || events.some(e => e.eventDates?.includes(dateStr));
+    return { test, event };
+  };
+
   // Save data whenever form data changes (continuous saving)
   useEffect(() => {
     // Always include planDuration dates in legacy smartGoal for backward compatibility
@@ -1297,27 +1315,42 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                       if (!planDuration?.startDate || !planDuration?.endDate) return false;
                       return date > planDuration.startDate && date < planDuration.endDate;
                     },
+                    // The athlete's tests / events framed as in step 2 — visible while picking the dates
+                    testOnly: (date) => { const m = dayTestEventMarks(date); return m.test && !m.event; },
+                    eventOnly: (date) => { const m = dayTestEventMarks(date); return m.event && !m.test; },
+                    testAndEvent: (date) => { const m = dayTestEventMarks(date); return m.test && m.event; },
                   }}
                   modifiersStyles={{
-                    start: { 
+                    start: {
                       backgroundColor: 'hsl(142 76% 36%)',
                       color: 'white',
                       fontWeight: 'bold',
                       borderRadius: '4px'
                     },
-                    end: { 
-                      backgroundColor: 'hsl(142 76% 36%)',
+                    // Same colours as step 2: start green, end red
+                    end: {
+                      backgroundColor: 'hsl(347 77% 50%)',
                       color: 'white',
                       fontWeight: 'bold',
                       borderRadius: '4px'
                     },
-                    middle: { 
+                    middle: {
                       backgroundColor: 'hsl(var(--muted))',
                       color: 'hsl(var(--foreground))'
-                    }
+                    },
+                    testOnly: { boxShadow: `inset 0 0 0 2px ${TEST_COLOR}`, borderRadius: '4px', fontWeight: 600 },
+                    eventOnly: { boxShadow: `inset 0 0 0 2px ${EVENT_COLOR}`, borderRadius: '4px', fontWeight: 600 },
+                    testAndEvent: { boxShadow: `inset 0 0 0 2px ${TEST_COLOR}, inset 0 0 0 4px ${EVENT_COLOR}`, borderRadius: '4px', fontWeight: 600 },
                   }}
                   className="rounded-md pointer-events-auto"
                 />
+                {/* Legend — frames only when the athlete has tests / events */}
+                <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-[3px] bg-[hsl(142_76%_36%)]" />Start</span>
+                  <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-[3px] bg-[hsl(347_77%_50%)]" />End</span>
+                  <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-[3px]" style={{ boxShadow: `inset 0 0 0 2px ${TEST_COLOR}` }} />Test</span>
+                  <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-[3px]" style={{ boxShadow: `inset 0 0 0 2px ${EVENT_COLOR}` }} />Event</span>
+                </div>
                 {planDuration && (
                   <div className="flex justify-center mt-2">
                     <Button
