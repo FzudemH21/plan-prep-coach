@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit, Copy, ChevronU
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToolboxData } from "@/hooks/useToolboxData";
+import { isDatabaseAction, useDatabaseAIActions } from "@/hooks/useDatabaseAIActions";
 import { ToolboxEntry } from "@/types/toolbox";
 import { useToast } from "@/hooks/use-toast";
 import { ParameterManagementDialog } from "@/components/toolbox/ParameterManagementDialog";
@@ -34,6 +35,7 @@ export default function ToolboxDatabase() {
   const { toast } = useToast();
   const { data, isLoading, addEntries, deleteEntry, deleteSubCategory, copyEntry, renameSubCategory, renameMethodCategory, reorderParameters, setMethodDescription, importData, exportData, saveData } = useToolboxData();
   const globalAIContext = useGlobalAIContext(true);
+  const { applyDatabaseActions } = useDatabaseAIActions();
   const { coachMemoryContext } = useCoachMemory();
   const { retrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
@@ -326,34 +328,16 @@ export default function ToolboxDatabase() {
     return lines.join('\n');
   }, [data.entries, data.methodDescriptions]);
 
-  // Keep a ref so batch saves always read the latest data, not a stale closure
-  const dataRef = useRef(data);
-  dataRef.current = data;
-
+  // All AI changes to the toolbox (and the parameter database) go through the shared logic — the
+  // same as in the wizard (useDatabaseAIActions)
   const handleToolboxAIApply = useCallback((action: ApplySuggestion) => {
-    if (action.type === 'set_method_description') {
-      const current = dataRef.current;
-      const updated = { ...(current.methodDescriptions ?? {}), [action.methodKey]: action.description };
-      if (!action.description) delete updated[action.methodKey];
-      void saveData({ ...current, methodDescriptions: updated });
-      toast({ title: 'Description updated', description: action.description ? `Set for ${action.methodKey.replace('|||', ' → ')}` : `Cleared for ${action.methodKey.replace('|||', ' → ')}` });
-    }
-  }, [saveData, toast]);
+    if (isDatabaseAction(action)) void applyDatabaseActions([action]);
+  }, [applyDatabaseActions]);
 
   const handleToolboxAIApplyAll = useCallback((actions: ApplySuggestion[]) => {
-    const descActions = actions.filter(
-      (a): a is Extract<ApplySuggestion, { type: 'set_method_description' }> => a.type === 'set_method_description'
-    );
-    if (descActions.length === 0) return;
-    const current = dataRef.current;
-    const updated = { ...(current.methodDescriptions ?? {}) };
-    for (const a of descActions) {
-      if (a.description) updated[a.methodKey] = a.description;
-      else delete updated[a.methodKey];
-    }
-    void saveData({ ...current, methodDescriptions: updated });
-    toast({ title: `${descActions.length} description${descActions.length !== 1 ? 's' : ''} updated` });
-  }, [saveData, toast]);
+    const dbActions = actions.filter(isDatabaseAction);
+    if (dbActions.length > 0) void applyDatabaseActions(dbActions);
+  }, [applyDatabaseActions]);
 
   useEffect(() => {
     const query = data.entries.length
@@ -729,6 +713,8 @@ export default function ToolboxDatabase() {
 You have full read access to the toolbox (all categories, methods, and parameters) as well as the coach's profile and any relevant uploaded documents. You can discuss, analyse, and advise on method structure, parameter choices, exercise categories, periodization logic, and sports science rationale.
 
 You can also write or update the description for any method using the [[APPLY: {"type":"set_method_description","methodKey":"Category|||SubCategory","description":"..."}]] block. The methodKey must use the exact "Category|||SubCategory" format (three pipe characters). To clear a description, set description to an empty string.
+
+You can also add new methods (toolbox_add_method), add parameters to a method (toolbox_add_method_parameters), change a parameter's units / choices / grid visibility (toolbox_update_method_parameter) and remove a parameter (toolbox_remove_method_parameter, confirm first) — see the action list for the exact format. Follow how similar methods in the toolbox are set up.
 
 IMPORTANT rules:
 - Be honest about the limits of your knowledge. If you are unsure about something or don't know the answer, say so explicitly. Never make things up or present uncertain information as fact.

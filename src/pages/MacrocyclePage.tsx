@@ -53,6 +53,7 @@ import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useCalendarEvents, groupConsecutiveDates } from "@/hooks/useCalendarEvents";
 import { TEST_COLOR, EVENT_COLOR, testEventGradient } from "@/lib/eventColors";
 import { PlanNotesField } from "@/components/shared/PlanNotesField";
+import { isDatabaseAction, useDatabaseAIActions } from "@/hooks/useDatabaseAIActions";
 import { applyNotesAction, readNotesHistory, restoreNotesVersion, strategyContext, WRITE_UP_PROMPT, type PlanNotesVersion } from "@/utils/planStrategy";
 import { useWizardData } from "@/contexts/WizardDataContext";
 
@@ -80,6 +81,9 @@ export default function MacrocyclePage() {
   const { retrieve: ragRetrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
   const globalAIContext = useGlobalAIContext();
+  // The AI sees and edits the Parameter Database and the Training Toolbox from here too
+  const { parameterContext, applyDatabaseActions } = useDatabaseAIActions();
+  const aiGlobalContext = useMemo(() => `${globalAIContext}\n\n## Parameter Database\n${parameterContext}`, [globalAIContext, parameterContext]);
   const [athleteDropdownOpen, setAthleteDropdownOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [planName, setPlanName] = useState<string>("");
@@ -3088,6 +3092,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, subGoals, derivedSubGoals, events, selectedMethods, manuallyAddedMethods, macroStepLabel, parametersDataV2, toolboxData, planNotes]);
 
   const handleAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
+    // Parameter Database / Training Toolbox
+    if (isDatabaseAction(action)) { void applyDatabaseActions([action]); return; }
     switch (action.type) {
       case "set_plan_name":
         setPlanName(action.name);
@@ -3217,7 +3223,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       default:
         break;
     }
-  }, [methodsByQuality, handleAddManualMethod, handleRemoveManualMethod, toggleMethodSelection, manuallyAddedMethods, planDuration]);
+  }, [methodsByQuality, handleAddManualMethod, handleRemoveManualMethod, toggleMethodSelection, manuallyAddedMethods, planDuration, applyDatabaseActions]);
 
   return (
     <>
@@ -3384,7 +3390,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         onApplySuggestion={handleAIApply}
         promptRequest={strategyPrompt}
         ragContext={ragContext}
-        globalContext={globalAIContext}
+        globalContext={aiGlobalContext}
         coachMemoryContext={coachMemoryContext}
         anamnesisContext={anamnesisAIContext || undefined}
       />

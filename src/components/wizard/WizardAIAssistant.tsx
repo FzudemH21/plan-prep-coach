@@ -135,7 +135,27 @@ export type ApplySuggestion =
   /** Exercise Library — delete a column by id (or name as fallback) */
   | { type: "library_delete_column"; libraryId: string; columnId?: string; columnName?: string }
   /** Training Toolbox — set or clear the description for a method (key: "category|||subCategory") */
-  | { type: "set_method_description"; methodKey: string; description: string };
+  | { type: "set_method_description"; methodKey: string; description: string }
+  /** Training Toolbox — add a new method (category + method name) with its parameters */
+  | { type: "toolbox_add_method"; category: string; subCategory: string; description?: string; exerciseCategories?: string[]; parameters: ToolboxParameterSpec[] }
+  /** Training Toolbox — add parameters to an existing method */
+  | { type: "toolbox_add_method_parameters"; methodKey: string; parameters: ToolboxParameterSpec[] }
+  /** Training Toolbox — change a method parameter's type, units / choices or grid visibility */
+  | { type: "toolbox_update_method_parameter"; methodKey: string; parameterName: string; parameterType?: "quantitative" | "qualitative"; options?: string[]; showInGrid?: boolean }
+  /** Training Toolbox — remove a parameter from a method (never the method's last one) */
+  | { type: "toolbox_remove_method_parameter"; methodKey: string; parameterName: string };
+
+/** A method parameter the AI adds to the Training Toolbox */
+export interface ToolboxParameterSpec {
+  name: string;
+  /** quantitative: numbers (options = units, e.g. "kg", "%1RM"); qualitative: choices (options = the choices) */
+  type?: "quantitative" | "qualitative";
+  options?: string[];
+  /** The method's frequency (per week) / set count / rest parameter — at most one each */
+  role?: "frequency" | "sets" | "rest";
+  /** Shown in the exercise grid and the athlete app by default */
+  showInGrid?: boolean;
+}
 
 export interface WizardAIAssistantProps {
   /** Human-readable label for the current wizard step, e.g. "Goal & Method Selection" */
@@ -404,6 +424,15 @@ Available types and their fields:
 - set_method_description: {"type":"set_method_description","methodKey":"<Category|||SubCategory>","description":"<description text>"}
   Sets or updates the coach's description for a training method in the Toolbox. methodKey must be the exact "Category|||SubCategory" key (three pipe characters, no spaces around them). Use the category and method names exactly as listed in the Training Toolbox section of context. To clear a description, set description to an empty string. Emit this immediately when the coach asks you to write, set, or update a method description — do not wait for confirmation.
 
+- toolbox_add_method: {"type":"toolbox_add_method","category":"<existing or new category, e.g. Lower Body Resistance Training>","subCategory":"<method name, e.g. Isometrics>","description":"<optional>","exerciseCategories":["<optional — only to split the method by exercise category>"],"parameters":[{"name":"Frequency","type":"quantitative","options":["x/week"],"role":"frequency"},{"name":"Sets","type":"quantitative","role":"sets","showInGrid":true},{"name":"Reps","type":"quantitative","showInGrid":true},{"name":"Intensity","type":"quantitative","options":["%1RM"],"showInGrid":true},{"name":"Rest","type":"quantitative","options":["s"],"role":"rest"}]}
+  Adds a new training method to the coach's Training Toolbox (works on every page, also in the wizard). Look at how similar methods in the Training Toolbox list are set up and follow that (same parameter names, units and roles where they fit). quantitative = numbers, options are units; qualitative = choices, options are the choices (e.g. {"name":"Contrast","type":"qualitative","options":["Yes","No"]}). role: at most one "frequency" (per week), one "sets" and one "rest" parameter per method. Check the toolbox list first — do not add a method that already exists (add parameters to it instead). Ask the coach before adding a method if they did not ask for it.
+- toolbox_add_method_parameters: {"type":"toolbox_add_method_parameters","methodKey":"<Category|||SubCategory>","parameters":[{"name":"Tempo","type":"qualitative","options":["3-1-1","2-0-2"]}]}
+  Adds parameters to an existing toolbox method (same parameter fields as above). Parameters that already exist are skipped.
+- toolbox_update_method_parameter: {"type":"toolbox_update_method_parameter","methodKey":"<Category|||SubCategory>","parameterName":"<exact parameter name>","parameterType":"quantitative","options":["kg","%1RM"],"showInGrid":true}
+  Changes a method parameter's type, units / choices (the full new list) or whether it is shown in the grid. Parameters cannot be renamed this way (plans store values by name).
+- toolbox_remove_method_parameter: {"type":"toolbox_remove_method_parameter","methodKey":"<Category|||SubCategory>","parameterName":"<exact parameter name>"}
+  Removes a parameter from a method — planned values for it are no longer shown. Always confirm with the coach first. The method's last parameter cannot be removed.
+DATABASE ACTIONS ON EVERY PAGE: the Parameter Database actions (add_parameter, add_parameters_bulk, remove_parameter, interactions, method links) and the Training Toolbox actions (set_method_description, toolbox_*) work on EVERY page with this assistant, including all wizard steps — when planning shows that a parameter or a method parameter is missing (e.g. a goal needs a parameter that is not in the database), suggest adding it right here instead of sending the coach to the database page. The current Parameter Database and Training Toolbox are in your context.
 Rules:
 - You may include MULTIPLE [[APPLY: ...]] blocks in one message — one per action. Place them all at the very end of your message.
 - Only include action blocks when you are confident the suggestion is appropriate and actionable.
@@ -754,6 +783,14 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return `Add column: "${action.name}" (${action.columnType})`;
     case "library_delete_column":
       return `Delete column: "${action.columnName ?? action.columnId}"`;
+    case "toolbox_add_method":
+      return `Add method to the toolbox: ${action.category} → ${action.subCategory} (${action.parameters.map((p) => p.name).join(", ")})`;
+    case "toolbox_add_method_parameters":
+      return `Add to ${action.methodKey.replace('|||', ' → ')}: ${action.parameters.map((p) => p.name).join(", ")}`;
+    case "toolbox_update_method_parameter":
+      return `Change ${action.parameterName} in ${action.methodKey.replace('|||', ' → ')}${action.options ? ` (${action.options.join(", ")})` : ""}`;
+    case "toolbox_remove_method_parameter":
+      return `Remove ${action.parameterName} from ${action.methodKey.replace('|||', ' → ')}`;
     case "set_method_description":
       return action.description
         ? `Set description for ${action.methodKey.replace('|||', ' → ')}: "${action.description.slice(0, 60)}${action.description.length > 60 ? '…' : ''}"`

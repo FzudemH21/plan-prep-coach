@@ -37,6 +37,7 @@ import { ExportPDFButton } from '@/components/pdf/ExportPDFButton';
 import { useWizardData } from '@/contexts/WizardDataContext';
 import { WizardAIAssistant, FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
 import { WIZARD_CHAT_ID } from '@/contexts/AIChatContext';
+import { isDatabaseAction, useDatabaseAIActions } from '@/hooks/useDatabaseAIActions';
 import { applyNotesAction, readNotesHistory, restoreNotesVersion, strategyContext, WRITE_UP_PROMPT } from '@/utils/planStrategy';
 import { onExerciseRenamed, renameExerciseInValue } from '@/utils/exerciseRename';
 import { notifySessionMetaChanged, SESSION_META_CHANGED_EVENT } from '@/utils/parameterVisibility';
@@ -97,6 +98,9 @@ export default function MicrocyclePlanningPage() {
   const { retrieve: ragRetrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
   const globalAIContext = useGlobalAIContext(currentStep === 2);
+  // The AI sees and edits the Parameter Database and the Training Toolbox from here too
+  const { parameterContext, applyDatabaseActions } = useDatabaseAIActions();
+  const aiGlobalContext = useMemo(() => `${globalAIContext}\n\n## Parameter Database\n${parameterContext}`, [globalAIContext, parameterContext]);
   const { coachMemoryContext, saveToMemory } = useCoachMemory({ currentMethods: macrocycleData?.selectedMethods ?? [] });
   // Resolve athlete name from selectedAthleteId
   const selectedAthleteId = macrocycleData?.selectedAthleteId;
@@ -4181,6 +4185,8 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
   }, [currentStep, athleteName, macrocycleData, mesocycles, currentMesocycleIndex, currentMicrocycleIndex, dayMethodAssignments, resolvedMethodAllocations, trainingDays, microStepLabel, exerciseSelectionData, exerciseDistribution, sessionSections, supersets, libraries, parameterValues, athleteExerciseHistoryStr, methodCategoriesWithExercises]);
 
   const handleMicroAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
+    // Parameter Database / Training Toolbox
+    if (isDatabaseAction(action)) { void applyDatabaseActions([action]); return; }
     if (action.type === "set_plan_notes") {
       // A rewrite keeps the text before as a version
       const next = applyNotesAction(macrocycleData?.planNotes ?? "", macrocycleData?.planNotesHistory, action);
@@ -5166,7 +5172,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
       });
       toast({ title: `All sessions cleared from "${microcycleName}"` });
     }
-  }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution, sessionSections, supersets, exerciseSelectionData, libraries, parameterValues, toast]);
+  }, [mesocycles, currentMesocycleIndex, trainingDays, dayMethodAssignments, exerciseDistribution, sessionSections, supersets, exerciseSelectionData, libraries, parameterValues, toast, macrocycleData, setMacrocycleData, applyDatabaseActions]);
 
   return (
     <div className="mx-auto py-6 space-y-6 px-4 w-full max-w-[98vw]">
@@ -5405,7 +5411,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
         onApplySuggestion={handleMicroAIApply}
         promptRequest={strategyPrompt}
         ragContext={ragContext}
-        globalContext={globalAIContext}
+        globalContext={aiGlobalContext}
         coachMemoryContext={coachMemoryContext}
         forceOpen={aiOpenTrigger}
         focusedSessionContext={focusedSessionCtx}

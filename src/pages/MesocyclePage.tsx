@@ -33,6 +33,7 @@ import { DailyIntensity, TrainingDay } from '@/types/daily-intensity';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useDragFill } from '@/hooks/useDragFill';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
+import { isDatabaseAction, useDatabaseAIActions } from '@/hooks/useDatabaseAIActions';
 import { QuantitativeParameterInput, QualitativeParameterInput } from '@/components/ui/parameter-input';
 import { DebouncedTextInput } from '@/components/ui/debounced-input';
 import { ParameterContextMenu } from '@/components/ui/parameter-context-menu';
@@ -192,6 +193,9 @@ export default function MesocyclePage() {
   const { retrieve: ragRetrieve } = useRAGRetrieval();
   const [ragContext, setRagContext] = useState('');
   const globalAIContext = useGlobalAIContext(currentStep === 5);
+  // The AI sees and edits the Parameter Database and the Training Toolbox from here too
+  const { parameterContext, applyDatabaseActions } = useDatabaseAIActions();
+  const aiGlobalContext = useMemo(() => `${globalAIContext}\n\n## Parameter Database\n${parameterContext}`, [globalAIContext, parameterContext]);
   const { coachMemoryContext } = useCoachMemory({ currentMethods: macrocycleData?.selectedMethods ?? [] });
   const anamnesisAIContext = useAnamnesisAIContext(macrocycleData?.selectedAthleteId ?? null);
   const mpTableRef = React.useRef<MicrocyclePlanningTableHandle>(null);
@@ -5377,6 +5381,8 @@ export default function MesocyclePage() {
 
   // ── AI Apply handler ──────────────────────────────────────────────────────
   const handleMesoAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
+    // Parameter Database / Training Toolbox
+    if (isDatabaseAction(action)) { void applyDatabaseActions([action]); return; }
     switch (action.type) {
       case "set_plan_notes": {
         // A rewrite keeps the text before as a version
@@ -5626,7 +5632,7 @@ export default function MesocyclePage() {
       default:
         break;
     }
-  }, [mesocycles, planStartDate, recalculateAllMesocycleDates, setDailyIntensityData, setTrainingDays, handleAIApplyTemplate, handleAISaveAsTemplate]);
+  }, [mesocycles, planStartDate, recalculateAllMesocycleDates, setDailyIntensityData, setTrainingDays, handleAIApplyTemplate, handleAISaveAsTemplate, macrocycleData, setMacrocycleData, applyDatabaseActions]);
 
   return (
     <div className="w-full max-w-none space-y-6 min-w-0">
@@ -5769,7 +5775,7 @@ export default function MesocyclePage() {
         />
 
       {/* AI Assistant */}
-      <WizardAIAssistant stepLabel={mesoStepLabel} chatId={WIZARD_CHAT_ID} wizardContext={mesoWizardContext} onApplySuggestion={handleMesoAIApply} promptRequest={strategyPrompt} ragContext={ragContext} globalContext={globalAIContext} coachMemoryContext={coachMemoryContext} anamnesisContext={anamnesisAIContext || undefined} />
+      <WizardAIAssistant stepLabel={mesoStepLabel} chatId={WIZARD_CHAT_ID} wizardContext={mesoWizardContext} onApplySuggestion={handleMesoAIApply} promptRequest={strategyPrompt} ragContext={ragContext} globalContext={aiGlobalContext} coachMemoryContext={coachMemoryContext} anamnesisContext={anamnesisAIContext || undefined} />
     </div>
   );
 };
