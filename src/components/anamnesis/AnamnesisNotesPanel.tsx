@@ -20,6 +20,18 @@ import { transcribeDictation } from '@/utils/transcribe';
 import type { AnamnesisChange, AnamnesisNote } from '@/types/anamnesis';
 import { cn } from '@/lib/utils';
 
+/** Height of a textarea = its whole text, so a note being edited keeps its size (and grows while typing);
+ *  the scroll position of the page / panel around it stays where it is while the height is measured. */
+function fitToText(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  let scroller: HTMLElement | null = el.parentElement;
+  while (scroller && !(scroller.scrollHeight > scroller.clientHeight && /auto|scroll/.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
+  const top = scroller?.scrollTop;
+  el.style.height = 'auto';
+  el.style.height = `${el.scrollHeight + 2}px`;
+  if (scroller && top !== undefined) scroller.scrollTop = top;
+}
+
 export interface NotesChange {
   summary: string;
   changes: AnamnesisChange[];
@@ -213,7 +225,9 @@ export function AnamnesisNotesPanel({ entries, onChange, coachUserId, athleteLoc
           </div>
           {editingId === note.id ? (
             <div className="space-y-1.5">
-              <Textarea className="min-h-[80px] text-sm resize-y" value={editText} onChange={e => setEditText(e.target.value)} autoFocus />
+              <Textarea className="min-h-[80px] text-sm resize-y overflow-hidden" value={editText} autoFocus
+                ref={fitToText}
+                onChange={e => { setEditText(e.target.value); fitToText(e.target); }} />
               <div className="flex justify-end gap-1.5">
                 <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditingId(null)} disabled={busy}>Cancel</Button>
                 <Button type="button" size="sm" className="h-7 text-xs gap-1" onClick={() => saveEdit(note)} disabled={busy || !editText.trim()}>
