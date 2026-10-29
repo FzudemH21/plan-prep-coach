@@ -137,9 +137,9 @@ function buildTestsAndEvents(
   const reviewed: ReviewedSubGoal[] = (macro.subGoals as SubGoal[] ?? []).map(sg => {
     let baseline = sg.preTestValue || 0;
     if (sg.parameterLinkedId) {
-      // Sub-goals have no measure: the main measure's values (all older values belong to it)
+      // The sub-goal's measure (set for a merged parameter), else the main one — without sides
       const p = athletePerformanceParameters.find(pp => pp.athleticismParameterId === sg.parameterLinkedId);
-      const mainValues = p ? valuesOfMeasure(p.values, undefined) : [];
+      const mainValues = p ? valuesOfMeasure(allValuesOf(p), sg.measureId).filter(v => !v.side) : [];
       if (mainValues.length) {
         const sorted = [...mainValues].sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
         baseline = (parseMeasuredNumber(sorted[0].value) ?? NaN) || baseline;
@@ -154,6 +154,7 @@ function buildTestsAndEvents(
       comments: sg.comments || '',
       scheduledDates: (sg.testDates || []).map(shiftDate),
       parameterLinkedId: sg.parameterLinkedId,
+      ...(sg.measureId ? { measureId: sg.measureId } : {}),
     };
   });
 

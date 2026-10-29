@@ -44,7 +44,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { toParameterId } from '@/utils/parameterRef';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
-import { allValuesOf, formatGoalRange, goalBaseline, mainSeries } from '@/utils/goalMeasures';
+import { allValuesOf, formatGoalRange, goalBaseline, mainSeries, valuesOfMeasure } from '@/utils/goalMeasures';
 
 interface AssignProgramDialogProps {
   open: boolean;
@@ -206,7 +206,9 @@ export function AssignProgramDialog({
       );
     };
     // Sub-goals have no measure: the main measure's values (all older values belong to it)
-    const latestAthleteValue = (ref: string) => latestValueOf(mainSeries(athleteValuesOf(ref)));
+    // (a sub-goal of a merged parameter: its measure)
+    const latestAthleteValue = (ref: string, measureId?: string) =>
+      latestValueOf(measureId ? valuesOfMeasure(athleteValuesOf(ref), measureId).filter(v => !v.side) : mainSeries(athleteValuesOf(ref)));
 
     /** Program test/event date -> assigned date (null when its microcycle isn't assigned) */
     const placeDate = (d: string): string | null => {
@@ -228,7 +230,7 @@ export function AssignProgramDialog({
       // Auto-fill baseline from athlete performance data
       let baseline = sg.preTestValue || 0;
       if (sg.parameterLinkedId) {
-        const latest = latestAthleteValue(sg.parameterLinkedId);
+        const latest = latestAthleteValue(sg.parameterLinkedId, sg.measureId);
         if (latest) baseline = (parseMeasuredNumber(latest.value) ?? NaN) || baseline;
       }
 
@@ -241,6 +243,7 @@ export function AssignProgramDialog({
         comments: sg.comments || '',
         scheduledDates: shiftedDates,
         parameterLinkedId: sg.parameterLinkedId,
+        ...(sg.measureId ? { measureId: sg.measureId } : {}),
       };
     });
 

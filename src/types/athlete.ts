@@ -150,6 +150,9 @@ export interface CustomMetricBlockConfig {
   /** Which measure of the parameter is monitored (unset = the main measure); values are stored under
    *  measureRef(parameterId, measureId) — see src/utils/parameterMeasures.ts */
   measureId?: string;
+  /** Where the values are stored when it isn't measureRef(parameterId, measureId): the block of a
+   *  parameter that was merged into another one keeps its old reference, so its history continues */
+  storageRef?: string;
   /** Cached unit (e.g. "bpm", "kg") or null */
   parameterUnit: string | null;
   /** How the athlete inputs the value */

@@ -31,7 +31,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Search, Edit2, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Filter, X, Loader2 } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Filter, X, Loader2, Merge } from 'lucide-react';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { isDatabaseAction, useDatabaseAIActions } from '@/hooks/useDatabaseAIActions';
@@ -40,6 +40,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ParameterV2, ParameterInteraction, ParameterMethodV2, PARAMETER_CATEGORIES, InteractionDirection, InteractionStrength, type ParameterMeasure } from '@/types/parametersV2';
 import { AddParameterDialogV2 } from '@/components/goals/AddParameterDialogV2';
 import { EditParameterDialogV2 } from '@/components/goals/EditParameterDialogV2';
+import { MergeParameterDialog } from '@/components/goals/MergeParameterDialog';
 
 type SortColumn = 'category' | 'parameter';
 type SortDirection = 'asc' | 'desc';
@@ -112,6 +113,8 @@ export default function AthleticismDatabaseV2() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingParameter, setEditingParameter] = useState<ParameterV2 | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<ParameterV2 | null>(null);
+  // Merge a parameter into another one as one of its measures
+  const [mergeSource, setMergeSource] = useState<ParameterV2 | null>(null);
 
   // Get unique categories from parameters
   const uniqueCategories = useMemo(() => {
@@ -488,6 +491,15 @@ export default function AthleticismDatabaseV2() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-8 w-8"
+                              title="Merge into another parameter (as one of its measures)"
+                              onClick={() => setMergeSource(parameter)}
+                            >
+                              <Merge className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               className="h-8 w-8 text-destructive hover:text-destructive"
                               onClick={() => setDeleteConfirm(parameter)}
                             >
@@ -531,6 +543,16 @@ export default function AthleticismDatabaseV2() {
           onAddMethod={(methodId) => addParameterMethod(editingParameter.id, methodId)}
           onUpdateMethod={updateParameterMethod}
           onRemoveMethod={removeParameterMethod}
+        />
+      )}
+
+      {/* Merge into another parameter */}
+      {mergeSource && (
+        <MergeParameterDialog
+          open={!!mergeSource}
+          onOpenChange={(open) => !open && setMergeSource(null)}
+          source={mergeSource}
+          parameters={data.parameters}
         />
       )}
 

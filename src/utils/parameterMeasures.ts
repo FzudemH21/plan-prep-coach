@@ -137,8 +137,8 @@ export function parseMeasureRef(ref: string): { parameterId: string; measureId?:
 }
 
 /** The stored reference of a monitoring block's values */
-export function metricRefOf(cfg: { parameterId: string; measureId?: string }): string {
-  return measureRef(cfg.parameterId, cfg.measureId);
+export function metricRefOf(cfg: { parameterId: string; measureId?: string; storageRef?: string }): string {
+  return cfg.storageRef ?? measureRef(cfg.parameterId, cfg.measureId);
 }
 
 /** A test of a measure / side in the athlete app: how to ask the value (stored with the test entry) */

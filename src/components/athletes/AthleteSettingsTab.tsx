@@ -626,6 +626,9 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
       parameterUnit: withMeasures ? (selectedMeasure?.kind === 'number' ? (selectedMeasure.unit ?? null) : null) : (selectedParam.unit ?? null),
       inputType,
       ...(mId ? { measureId: mId } : {}),
+      // A block of a merged parameter keeps its old storage while it monitors the same measure
+      ...(editingBlock?.config?.storageRef && editingBlock.config.parameterId === selectedParam.id && editingBlock.config.measureId === mId
+        ? { storageRef: editingBlock.config.storageRef } : {}),
       ...(inputType === 'levels' ? { levels } : {}),
       label: customLabel.trim() || undefined,
       ...(inputType === 'scale' ? {

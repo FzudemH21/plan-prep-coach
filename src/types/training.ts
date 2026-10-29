@@ -75,6 +75,9 @@ export interface SubGoal {
   comments?: string;
   // New fields for parameter linking and derived sub-goals
   parameterLinkedId?: string;        // Link to Athleticism Database parameter (ParameterV2.id)
+  /** Which measure of the linked parameter (unset = the main one) — set when a parameter was merged
+   *  into another one as one of its measures */
+  measureId?: string;
   isDerived?: boolean;               // Auto-generated from "contributes_to" relationships
   interactionStrength?: 'strong' | 'moderate' | 'weak';  // Strength of the relationship
 }
