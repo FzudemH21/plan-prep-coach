@@ -361,7 +361,7 @@ export function AddParameterDialogV2({
       <DialogPortal>
         <DialogOverlay className="z-[190] bg-black/40" />
         <DialogContent className={cn(
-          "w-[calc(100%-2rem)] max-w-[600px] max-h-[85vh] overflow-hidden flex flex-col mx-4 sm:mx-auto z-[200]",
+          "w-[calc(100%-2rem)] max-w-[780px] max-h-[85vh] overflow-hidden flex flex-col mx-4 sm:mx-auto z-[200]",
           containerClassName
         )}>
         <DialogHeader className="shrink-0">

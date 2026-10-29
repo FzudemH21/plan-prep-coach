@@ -357,7 +357,7 @@ export function EditParameterDialogV2({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100%-2rem)] max-w-[600px] max-h-[85vh] overflow-hidden flex flex-col mx-4 sm:mx-auto">
+      <DialogContent className="w-[calc(100%-2rem)] max-w-[780px] max-h-[85vh] overflow-hidden flex flex-col mx-4 sm:mx-auto">
         <DialogHeader className="shrink-0">
           <DialogTitle>Edit Parameter</DialogTitle>
         </DialogHeader>

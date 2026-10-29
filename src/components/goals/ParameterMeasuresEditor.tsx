@@ -131,14 +131,17 @@ function MeasureRow({ measure, isMain, parameterUnit, onChange, onRemove }: {
       )}
 
       {measure.kind === 'scale' && (
-        <div className="grid grid-cols-[56px_56px_1fr_1fr] gap-1.5 pl-14">
-          <Input className="h-7 text-xs" type="number" defaultValue={measure.scaleMin ?? 0} title="From"
+        // Each end of the scale on its own line: its number and its label
+        <div className="grid grid-cols-[40px_64px_1fr] items-center gap-x-1.5 gap-y-1 pl-14">
+          <span className="text-xs text-muted-foreground">From</span>
+          <Input className="h-7 text-xs" type="number" defaultValue={measure.scaleMin ?? 0}
             onBlur={(e) => onChange({ ...measure, scaleMin: num(e.target.value) ?? 0 })} />
-          <Input className="h-7 text-xs" type="number" defaultValue={measure.scaleMax ?? 10} title="To"
-            onBlur={(e) => onChange({ ...measure, scaleMax: num(e.target.value) ?? 10 })} />
-          <Input className="h-7 text-xs" placeholder="Low end, e.g. no pain" defaultValue={measure.scaleMinLabel ?? ''}
+          <Input className="h-7 text-xs" placeholder="Label, e.g. no pain" defaultValue={measure.scaleMinLabel ?? ''}
             onBlur={(e) => onChange({ ...measure, scaleMinLabel: e.target.value.trim() || undefined })} />
-          <Input className="h-7 text-xs" placeholder="High end, e.g. worst pain" defaultValue={measure.scaleMaxLabel ?? ''}
+          <span className="text-xs text-muted-foreground">To</span>
+          <Input className="h-7 text-xs" type="number" defaultValue={measure.scaleMax ?? 10}
+            onBlur={(e) => onChange({ ...measure, scaleMax: num(e.target.value) ?? 10 })} />
+          <Input className="h-7 text-xs" placeholder="Label, e.g. worst imaginable pain" defaultValue={measure.scaleMaxLabel ?? ''}
             onBlur={(e) => onChange({ ...measure, scaleMaxLabel: e.target.value.trim() || undefined })} />
         </div>
       )}

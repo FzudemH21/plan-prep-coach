@@ -54,6 +54,8 @@ import { useCalendarEvents, groupConsecutiveDates } from "@/hooks/useCalendarEve
 import { TEST_COLOR, EVENT_COLOR, testEventGradient } from "@/lib/eventColors";
 import { PlanNotesField } from "@/components/shared/PlanNotesField";
 import type { ParameterMeasure } from "@/types/parametersV2";
+import { formatGoalRange, goalMeasurePart, goalShowsPercent, groupGoalsByParameter } from "@/utils/goalMeasures";
+import { hasCustomMeasures, parameterMeasures } from "@/utils/parameterMeasures";
 import { isDatabaseAction, useDatabaseAIActions } from "@/hooks/useDatabaseAIActions";
 import { applyNotesAction, readNotesHistory, restoreNotesVersion, strategyContext, WRITE_UP_PROMPT, type PlanNotesVersion } from "@/utils/planStrategy";
 import { useWizardData } from "@/contexts/WizardDataContext";
@@ -89,6 +91,8 @@ export default function MacrocyclePage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [planName, setPlanName] = useState<string>("");
   const [planNotes, setPlanNotes] = useState<string>("");
+  /** "Goal for another measure": the measure the goal dialog starts with */
+  const [goalDefaultMeasureId, setGoalDefaultMeasureId] = useState<string | undefined>();
   /** Earlier versions of the strategy document (kept when the AI rewrites it) */
   const [planNotesHistory, setPlanNotesHistory] = useState<PlanNotesVersion[]>([]);
   // The AI handler is memoised without the notes — it reads them here
@@ -1266,57 +1270,85 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                 </p>
               </div>
             ) : (
-              smartGoals.map((goal) => (
-                <div
-                  key={goal.id}
-                  className="p-3 border rounded-lg flex items-start justify-between gap-3 bg-muted/30"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium truncate">{goal.description}</span>
-                      <Badge
-                        variant={(goal.percentChange ?? 0) < 0 ? "destructive" : "default"}
-                        className="shrink-0"
-                      >
-                        {(goal.percentChange ?? 0) > 0 ? "+" : ""}{(goal.percentChange ?? 0).toFixed(1)}%
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {goal.baselineValue} {goal.unit} → {goal.desiredValue} {goal.unit}
-                    </p>
-                    {goal.testDates && goal.testDates.length > 0 && (
-                      <p className="text-xs text-green-600 mt-1">
-                        📅 {goal.testDates.map(d => format(parseDateStr(d), 'd MMM yyyy')).join(', ')}
-                      </p>
+              // Goals of one parameter together: "30 m Sprint" with its goal measures underneath
+              groupGoalsByParameter(smartGoals).map((group) => {
+                const param = group.parameterId ? athleticismParameters.find((p) => p.id === group.parameterId) : undefined;
+                const grouped = !!param && (group.goals.length > 1 || hasCustomMeasures(param) || !!param.perSide);
+                const usedMeasures = new Set(group.goals.map((g) => g.measureId ?? "main"));
+                const nextMeasure = param ? parameterMeasures(param).find((m) => !usedMeasures.has(m.id)) : undefined;
+                return (
+                  <div key={group.key} className="border rounded-lg bg-muted/30">
+                    {grouped && param && (
+                      <div className="flex items-center justify-between gap-2 px-3 pt-2.5">
+                        <span className="font-medium truncate">{param.name}</span>
+                        {(hasCustomMeasures(param) || param.perSide) && (
+                          <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-muted-foreground"
+                            onClick={() => {
+                              setNewlyCreatedParameterId(param.id);
+                              setGoalDefaultMeasureId(nextMeasure?.id);
+                              setIsAddGoalDialogOpen(true);
+                            }}>
+                            <Plus className="h-3.5 w-3.5" />Goal for another measure
+                          </Button>
+                        )}
+                      </div>
                     )}
+                    {group.goals.map((goal) => (
+                      <div key={goal.id} className={cn("p-3 flex items-start justify-between gap-3", grouped && "pl-6 pt-2 border-t first-of-type:border-t-0")}>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={cn("truncate", grouped ? "text-sm font-medium" : "font-medium")}>
+                              {grouped ? (goalMeasurePart(goal, param) || "Value") : goal.description}
+                            </span>
+                            {goalShowsPercent(goal, param) && (
+                              <Badge
+                                variant={(goal.percentChange ?? 0) < 0 ? "destructive" : "default"}
+                                className="shrink-0"
+                              >
+                                {(goal.percentChange ?? 0) > 0 ? "+" : ""}{(goal.percentChange ?? 0).toFixed(1)}%
+                              </Badge>
+                            )}
+                            {goal.phaseNote && <span className="text-xs text-muted-foreground">· {goal.phaseNote}</span>}
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {formatGoalRange(goal, param)}
+                          </p>
+                          {goal.testDates && goal.testDates.length > 0 && (
+                            <p className="text-xs text-green-600 mt-1">
+                              📅 {goal.testDates.map(d => format(parseDateStr(d), 'd MMM yyyy')).join(', ')}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingGoal(goal);
+                              setIsAddGoalDialogOpen(true);
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveGoal(goal.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingGoal(goal);
-                        setIsAddGoalDialogOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRemoveGoal(goal.id);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </CardContent>
         </Card>
@@ -1448,6 +1480,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           if (!open) {
             setEditingGoal(null);
             setNewlyCreatedParameterId(null);
+            setGoalDefaultMeasureId(undefined);
           }
         }}
         onAddGoal={handleAddGoal}
@@ -1456,6 +1489,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         athletePerformanceParams={athletePerformanceParams}
         athleticismParameters={athleticismParameters}
         defaultParameterId={newlyCreatedParameterId}
+        defaultMeasureId={goalDefaultMeasureId}
         onOpenCreateParameter={() => {
           setPendingGoalAfterParameterCreation(true);
           setIsAddGoalDialogOpen(false);
@@ -1555,13 +1589,16 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                           </Badge>
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
-                          {goal.baselineValue} {goal.unit} → {goal.desiredValue} {goal.unit}
-                          <Badge
-                            variant={(goal.percentChange ?? 0) > 0 ? "default" : "secondary"}
-                            className="text-xs ml-2"
-                          >
-                            {(goal.percentChange ?? 0) > 0 ? "+" : ""}{(goal.percentChange ?? 0).toFixed(1)}%
-                          </Badge>
+                          {formatGoalRange(goal, athleticismParameters.find((p) => p.id === goal.linkedParameterId))}
+                          {goalShowsPercent(goal, athleticismParameters.find((p) => p.id === goal.linkedParameterId)) && (
+                            <Badge
+                              variant={(goal.percentChange ?? 0) > 0 ? "default" : "secondary"}
+                              className="text-xs ml-2"
+                            >
+                              {(goal.percentChange ?? 0) > 0 ? "+" : ""}{(goal.percentChange ?? 0).toFixed(1)}%
+                            </Badge>
+                          )}
+                          {goal.phaseNote && <span className="ml-2">· {goal.phaseNote}</span>}
                         </div>
                       </div>
                     </div>
