@@ -22,6 +22,8 @@ import { cn } from '@/lib/utils';
 import { parseDateStr } from '@/utils/dateUtils';
 import { eventDateList, groupConsecutiveDates } from '@/hooks/useCalendarEvents';
 import type { Event, SmartGoal, SubGoal } from '@/types/training';
+import type { ParameterV2 } from '@/types/parametersV2';
+import { formatGoalRange, goalShowsPercent } from '@/utils/goalMeasures';
 
 interface DayScheduleDialogProps {
   open: boolean;
@@ -33,6 +35,8 @@ interface DayScheduleDialogProps {
   smartGoals: SmartGoal[];
   subGoals: SubGoal[];
   events: Event[];
+  /** Parameter definitions — goal values per measure ("4/10 → ≤ 0/10", levels by name) */
+  parameters?: ParameterV2[];
   /** Tests / events already in the athlete's calendar on this day (other programs) — shown only */
   existingOnDay?: string[];
   onToggleGoalTest: (goalId: string) => void;
@@ -53,8 +57,15 @@ function valuesText(baseline: number | undefined, goal: number | undefined, unit
   return `Baseline ${baseline ?? 0}${u} → goal ${goal ?? 0}${u}${p}`;
 }
 
+/** A SMART goal's values, per its measure: "Baseline 4.5 s → goal 4.3 s (−4.4 %)", "4/10 → ≤ 0/10" */
+function goalValuesText(g: SmartGoal, param: ParameterV2 | undefined): string | null {
+  if (!param || (!g.measureId && !g.side)) return valuesText(g.baselineValue, g.desiredValue, g.unit, g.percentChange);
+  const pct = goalShowsPercent(g, param) && g.percentChange ? ` (${g.percentChange > 0 ? '+' : '−'}${Math.abs(g.percentChange).toFixed(1)} %)` : '';
+  return `${formatGoalRange(g, param)}${pct}${g.phaseNote ? ` · ${g.phaseNote}` : ''}`;
+}
+
 export function DayScheduleDialog({
-  open, onOpenChange, date, planEndDate, smartGoals, subGoals, events, existingOnDay = [],
+  open, onOpenChange, date, planEndDate, smartGoals, subGoals, events, existingOnDay = [], parameters = [],
   onToggleGoalTest, onToggleSubGoalTest, onNewSubGoal, onCreateEvent, onAddEventDays, onRemoveEventDays,
 }: DayScheduleDialogProps) {
   const [type, setType] = useState<'test' | 'event'>('test');
@@ -226,7 +237,7 @@ export function DayScheduleDialog({
                           <ChevronDown className={cn('h-4 w-4 transition-transform', !isOpen && '-rotate-90')} />
                         </button>
                         {testRow(g.id, g.description || 'Main goal', !!g.testDates?.includes(date), () => onToggleGoalTest(g.id),
-                          { main: true, dates: g.testDates, values: valuesText(g.baselineValue, g.desiredValue, g.unit, g.percentChange) })}
+                          { main: true, dates: g.testDates, values: goalValuesText(g, parameters.find(p => p.id === g.linkedParameterId)) })}
                       </div>
                       {count > 0 && !isOpen && (
                         <button type="button" className="ml-7 text-xs text-muted-foreground hover:text-foreground"

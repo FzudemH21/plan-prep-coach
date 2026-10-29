@@ -21,14 +21,16 @@ export const GOAL_SIDE_LABELS: Record<GoalSide, string> = {
 };
 
 type GoalRef = Pick<SmartGoal, 'measureId' | 'side'>;
+/** A recorded value — only what the goal logic needs */
+export type MeasuredValue = Pick<ParameterValue, 'value' | 'recordedAt' | 'measureId' | 'side'>;
 
 /** The values of one measure (older values without a measure id belong to the main measure) */
-export function valuesOfMeasure(values: ParameterValue[], measureId: string | undefined, side?: 'L' | 'R'): ParameterValue[] {
+export function valuesOfMeasure<V extends MeasuredValue>(values: V[], measureId: string | undefined, side?: 'L' | 'R'): V[] {
   const id = measureId ?? MAIN_MEASURE_ID;
   return values.filter((v) => (v.measureId ?? MAIN_MEASURE_ID) === id && (side ? v.side === side : true));
 }
 
-function latestOf(values: ParameterValue[]): ParameterValue | undefined {
+function latestOf<V extends MeasuredValue>(values: V[]): V | undefined {
   return [...values].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0];
 }
 
@@ -47,7 +49,7 @@ export function goalNumberOf(measure: ParameterMeasure | undefined, raw: string 
  * The athlete's current value for a goal (its baseline): latest value of that measure; per side the
  * side, the weaker side ("both" also takes the weaker one) or the LSI of the latest left / right values.
  */
-export function goalBaseline(goal: GoalRef, param: ParameterV2 | undefined, values: ParameterValue[]): number | null {
+export function goalBaseline(goal: GoalRef, param: ParameterV2 | undefined, values: MeasuredValue[]): number | null {
   if (!param) return latestNumericValue(values);
   const measure = measureById(param, goal.measureId);
   if (!measure) return null;

@@ -17,7 +17,7 @@ import { useRAGRetrieval } from "@/hooks/useRAGRetrieval";
 /** Structured actions the AI can suggest for direct application into the wizard. */
 export type ApplySuggestion =
   | { type: "set_plan_name"; name: string }
-  | { type: "add_goal"; parameterName: string }
+  | { type: "add_goal"; parameterName: string; measureName?: string; side?: "L" | "R" | "both" | "weaker" | "lsi"; targetValue?: number | string; phaseNote?: string }
   /** MacrocyclePage Steps 1 & 2 — remove a goal by exact name */
   | { type: "remove_goal"; goalName: string }
   /** MacrocyclePage Steps 1 & 2 — schedule or remove test dates for main goals / sub-goals, or dates for events */
@@ -293,7 +293,8 @@ Available types and their fields:
 - set_plan_name: {"type":"set_plan_name","name":"<plan name>"}
 - set_plan_duration: {"type":"set_plan_duration","startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","weeks":<total weeks>}
   Sets the plan start date, end date, and/or duration. Provide startDate and endDate as ISO strings when the coach specifies actual dates. weeks is computed automatically from the dates but can be supplied alone if only duration changes (keeps existing start date). You CAN and SHOULD set dates when the coach asks.
-- add_goal: {"type":"add_goal","parameterName":"<exact parameter name from the database list>"}
+- add_goal: {"type":"add_goal","parameterName":"<exact parameter name from the database list>","measureName":"<optional — one of the parameter's measures, e.g. Pain>","side":"<optional, only for parameters recorded per side: L | R | both | weaker | lsi>","targetValue":<optional target — a number (for pain the scale value, 0 = pain-free; for the LSI a %), a level name for levels, \"pass\" for pass / fail>,"phaseNote":"<optional, e.g. Phase 1–2>"}
+  A goal is one parameter + one of its measures. For several measures of the same parameter (e.g. pain-free in the first phases, a sprint time in the last one) add one goal per measure. The baseline is taken from the athlete's latest value of that measure automatically.
 - remove_goal: {"type":"remove_goal","goalName":"<exact goal name from the Goals list in context>"}
   Removes a goal entirely. Use the EXACT name shown in the Goals list.
 - schedule_tests: {"type":"schedule_tests","schedule":[{"goalDescription":"<exact name>","isMainGoal":<true|false>,"isEvent":<true for events, omit/false for goals>,"action":"add","dates":["YYYY-MM-DD"]}]}
@@ -675,7 +676,7 @@ function getSuggestionPreview(action: ApplySuggestion): string {
     case "set_plan_name":
       return `Set plan name: "${action.name}"`;
     case "add_goal":
-      return `Add goal: ${action.parameterName}`;
+      return `Add goal: ${action.parameterName}${action.measureName ? ` · ${action.measureName}` : ""}${action.side ? ` · ${action.side === "lsi" ? "LSI" : action.side}` : ""}${action.targetValue !== undefined ? ` → ${action.targetValue}` : ""}${action.phaseNote ? ` (${action.phaseNote})` : ""}`;
     case "schedule_tests":
       return `Schedule tests for ${action.schedule.length} goal${action.schedule.length !== 1 ? "s" : ""}`;
     case "create_event":

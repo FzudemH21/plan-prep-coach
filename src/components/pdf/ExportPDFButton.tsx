@@ -265,6 +265,7 @@ export function ExportPDFButton({
           athleteSport={athlete?.sport}
           athleteTeam={athlete?.team}
           methodRationale={methodRationale}
+          parameters={parametersData.parameters}
         />
       );
       const blob = await pdf(doc).toBlob();

@@ -43,6 +43,8 @@ import { recalculateMesocycleDates } from '@/utils/dateShifting';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { toParameterId } from '@/utils/parameterRef';
+import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
+import { goalBaseline, valuesOfMeasure } from '@/utils/goalMeasures';
 
 interface AssignProgramDialogProps {
   open: boolean;
@@ -74,6 +76,8 @@ export function AssignProgramDialog({
   const [reviewedSubGoals, setReviewedSubGoals] = useState<ReviewedSubGoal[]>([]);
   // The athlete's own test results from the athlete app (baseline pre-fill)
   const selfReportedResults = useSelfReportedResults(athleteId);
+  // Parameter definitions: a goal's baseline comes from its own measure (and side)
+  const { data: parametersData } = useParametersDataV2();
   const [reviewedEvents, setReviewedEvents] = useState<ReviewedEvent[]>([]);
   // Tests / events the coach removed in step 3 — stay removed when the list is rebuilt
   // (start date or microcycle selection changes)
@@ -193,13 +197,15 @@ export function AssignProgramDialog({
 
     /** The athlete's latest value for a parameter — coach-recorded or self-reported in the app */
     // Old "bio:{id}" goal links → the biometric parameter with that id (body metrics moved)
-    const latestAthleteValue = (ref: string) => {
+    const athleteValuesOf = (ref: string) => {
       const parameterId = toParameterId(ref);
-      return latestValueOf(withSelfReported(
+      return withSelfReported(
         stableAthleteParams.find(pp => pp.athleticismParameterId === parameterId)?.values ?? [],
         [...(selfReportedResults.get(parameterId) ?? []), ...(selfReportedResults.get(`bio:${parameterId}`) ?? [])],
-      ));
+      );
     };
+    // Sub-goals have no measure: the main measure's values (all older values belong to it)
+    const latestAthleteValue = (ref: string) => latestValueOf(valuesOfMeasure(athleteValuesOf(ref), undefined));
 
     /** Program test/event date -> assigned date (null when its microcycle isn't assigned) */
     const placeDate = (d: string): string | null => {
@@ -238,14 +244,17 @@ export function AssignProgramDialog({
     });
 
     // Also include SMART goals that have test dates (scheduled via selectedSmartGoal in MacrocyclePage)
-    const smartGoals: Array<{ id: string; description: string; baselineValue: number; desiredValue: number; unit: string; linkedParameterId?: string; testDates?: string[] }> = macro.smartGoals || [];
+    const smartGoals: Array<{ id: string; description: string; baselineValue: number; desiredValue: number; unit: string; linkedParameterId?: string; testDates?: string[]; measureId?: string; side?: 'L' | 'R' | 'both' | 'weaker' | 'lsi' }> = macro.smartGoals || [];
     smartGoals.forEach(sg => {
       if (!sg.testDates || sg.testDates.length === 0) return;
       const shiftedDates = sg.testDates.map(placeDate).filter((d): d is string => d !== null);
       let baseline = sg.baselineValue || 0;
       if (sg.linkedParameterId) {
-        const latest = latestAthleteValue(sg.linkedParameterId);
-        if (latest) baseline = (parseMeasuredNumber(latest.value) ?? NaN) || baseline;
+        // The latest value of exactly the goal's measure (and side / LSI) — a pain goal must not
+        // take the sprint time as its baseline
+        const param = parametersData.parameters.find(p => p.id === toParameterId(sg.linkedParameterId!));
+        const latest = goalBaseline(sg, param, athleteValuesOf(sg.linkedParameterId));
+        if (latest !== null) baseline = latest;
       }
       reviewed.push({
         id: sg.id,
@@ -309,7 +318,7 @@ export function AssignProgramDialog({
     setReviewedSubGoals(dedupedTests.filter(t => t.scheduledDates.length > 0 && !removedTestKeys.has(testKey(t))));
     setReviewedEvents(dedupedEvents.filter(e => e.scheduledDates.length > 0 && !removedEventKeys.has(e.name)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProgram, startDate, stableAthleteParams, selectedMesocycleIds, selectedMicrocycleIds, selfReportedResults]);
+  }, [selectedProgram, startDate, stableAthleteParams, selectedMesocycleIds, selectedMicrocycleIds, selfReportedResults, parametersData.parameters]);
 
   // Day 1 of the first selected microcycle lands on the chosen date — empty days included (a
   // microcycle starting with a rest day starts with a rest day); the rest keeps its position

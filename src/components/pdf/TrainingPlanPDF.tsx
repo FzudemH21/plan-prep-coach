@@ -27,6 +27,9 @@ import {
   Path,
   Circle,
 } from "@react-pdf/renderer";
+import type { ParameterV2 } from "@/types/parametersV2";
+import type { GoalSide, SmartGoal } from "@/types/training";
+import { formatGoalRange, goalShowsPercent } from "@/utils/goalMeasures";
 
 // ─── Font registration ────────────────────────────────────────────────────────
 // Fonts are served from public/fonts/ — no module imports needed, just string URLs.
@@ -713,6 +716,8 @@ interface TrainingPlanPDFProps {
   athleteDisplayName?: string | null;
   athleteSport?: string | null;
   athleteTeam?: string | null;
+  /** Parameter definitions — goals per measure are shown with their own values ("4/10 → ≤ 0/10") */
+  parameters?: ParameterV2[];
   /** Parameter DB rationale/evidence per goal, keyed by methodId */
   methodRationale?: Record<string, {
     goalContributions: Array<{ goalName: string; rationale?: string; evidence?: string; evidenceQuality?: string }>;
@@ -730,6 +735,7 @@ export function TrainingPlanPDF({
   athleteSport,
   athleteTeam,
   methodRationale = {},
+  parameters = [],
 }: TrainingPlanPDFProps) {
   // ── Brand ───────────────────────────────────────────────────────────────────
   const accent       = branding?.primaryColor ?? DEFAULT_ACCENT;
@@ -748,6 +754,10 @@ export function TrainingPlanPDF({
     desiredValue?: number | null;
     unit?: string | null;
     percentChange?: number | null;
+    linkedParameterId?: string;
+    measureId?: string;
+    side?: GoalSide;
+    phaseNote?: string;
   }
 
   interface SubGoalRaw {
@@ -1187,12 +1197,24 @@ export function TrainingPlanPDF({
                         }}>
                           {sg.description ?? ""}
                         </Text>
-                        {hasValues && (
-                          <MainValueStrip
-                            baseline={sg.baselineValue} target={sg.desiredValue}
-                            unit={sg.unit} pct={pct}
-                          />
-                        )}
+                        {(() => {
+                          // A goal per measure / side: its own values ("4/10 → ≤ 0/10", levels by name)
+                          const param = (sg.measureId || sg.side) ? parameters.find(p => p.id === sg.linkedParameterId) : undefined;
+                          if (param) {
+                            const goal = { ...sg, baselineValue: sg.baselineValue ?? 0, desiredValue: sg.desiredValue ?? 0, unit: sg.unit ?? '' } as SmartGoal;
+                            return (
+                              <Text style={{ fontFamily: "Geist", fontSize: Math.max(7, 10 * mainScale), color: "#ffffff", marginTop: Math.round(6 * mainScale) }}>
+                                {formatGoalRange(goal, param)}{goalShowsPercent(goal, param) ? pct : ""}{sg.phaseNote ? ` · ${sg.phaseNote}` : ""}
+                              </Text>
+                            );
+                          }
+                          return hasValues ? (
+                            <MainValueStrip
+                              baseline={sg.baselineValue} target={sg.desiredValue}
+                              unit={sg.unit} pct={pct}
+                            />
+                          ) : null;
+                        })()}
                       </View>
                     );
                   })}

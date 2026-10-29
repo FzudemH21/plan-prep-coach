@@ -54,8 +54,8 @@ import { useCalendarEvents, groupConsecutiveDates } from "@/hooks/useCalendarEve
 import { TEST_COLOR, EVENT_COLOR, testEventGradient } from "@/lib/eventColors";
 import { PlanNotesField } from "@/components/shared/PlanNotesField";
 import type { ParameterMeasure } from "@/types/parametersV2";
-import { formatGoalRange, goalMeasurePart, goalShowsPercent, groupGoalsByParameter } from "@/utils/goalMeasures";
-import { hasCustomMeasures, parameterMeasures } from "@/utils/parameterMeasures";
+import { formatGoalRange, goalBaseline, goalDescription, goalMeasurePart, goalNumberOf, goalShowsPercent, goalUnit, groupGoalsByParameter, valuesOfMeasure } from "@/utils/goalMeasures";
+import { appliesToMeasure, hasCustomMeasures, measureById, parameterMeasures } from "@/utils/parameterMeasures";
 import { isDatabaseAction, useDatabaseAIActions } from "@/hooks/useDatabaseAIActions";
 import { applyNotesAction, readNotesHistory, restoreNotesVersion, strategyContext, WRITE_UP_PROMPT, type PlanNotesVersion } from "@/utils/planStrategy";
 import { useWizardData } from "@/contexts/WizardDataContext";
@@ -205,8 +205,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       if (!goal.linkedParameterId) return;
       
       // Get all parameters that "contribute to" this goal's parameter
+      const goalParam = parametersDataV2.parameters.find(p => p.id === goal.linkedParameterId);
       const contributingInteractions = parametersDataV2.interactions.filter(
         i => i.targetParameterId === goal.linkedParameterId && i.direction === 'contributes_to'
+          // Only what contributes to the goal's measure (e.g. its pain) or to the parameter as a whole
+          && appliesToMeasure(i, goal.measureId, goalParam)
       );
       
       contributingInteractions.forEach(interaction => {
@@ -227,7 +230,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             );
             
             // Get the latest recorded value (if any)
-            const preTestValue = athleteParam ? (latestNumericValue(athleteParam.values) ?? 0) : 0;
+            const preTestValue = athleteParam ? (latestNumericValue(valuesOfMeasure(athleteParam.values, undefined)) ?? 0) : 0;
             
             derived.push({
               id: `derived-${goal.id}-${sourceParam.id}`,
@@ -531,8 +534,10 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     const primaryGoalMethods = new Set<string>();
     smartGoals.forEach(goal => {
       if (goal.linkedParameterId) {
+        // Only the methods for the goal's measure (e.g. pain) or for the parameter as a whole
+        const param = parametersDataV2.parameters.find(p => p.id === goal.linkedParameterId);
         const methods = parametersDataV2.parameterMethods.filter(
-          pm => pm.parameterId === goal.linkedParameterId
+          pm => pm.parameterId === goal.linkedParameterId && appliesToMeasure(pm, goal.measureId, param)
         );
         methods.forEach(m => primaryGoalMethods.add(m.methodId));
       }
@@ -915,20 +920,14 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     if (goalBeingDeleted?.linkedParameterId) {
       // Methods linked to the deleted goal's parameter
       const methodsForDeletedGoal = new Set(
-        parametersDataV2.parameterMethods
-          .filter(pm => pm.parameterId === goalBeingDeleted.linkedParameterId)
-          .map(pm => pm.methodId)
+        getMethodsForParameter(goalBeingDeleted.linkedParameterId, goalBeingDeleted.measureId).map(pm => pm.methodId)
       );
 
       // Methods still needed by other remaining goals
       const methodsForRemainingGoals = new Set(
         smartGoals
           .filter(g => g.id !== goalId && g.linkedParameterId)
-          .flatMap(g =>
-            parametersDataV2.parameterMethods
-              .filter(pm => pm.parameterId === g.linkedParameterId)
-              .map(pm => pm.methodId)
-          )
+          .flatMap(g => getMethodsForParameter(g.linkedParameterId!, g.measureId).map(pm => pm.methodId))
       );
 
       setSelectedMethods(prev => {
@@ -2057,9 +2056,10 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                         <span>🎯</span>
                                         {goal.description || "Primary Goal Test"}
                                       </div>
-                                      {goal.desiredValue && goal.unit && (
+                                      {/* Per measure: "4.5 s → 4.3 s", "4/10 → ≤ 0/10" (a target of 0 is shown too) */}
+                                      {goal.desiredValue != null && (goal.unit || goal.measureId || goal.side) && (
                                         <div className="text-muted-foreground">
-                                          Target: {goal.desiredValue} {goal.unit}
+                                          {formatGoalRange(goal, athleticismParameters.find((p) => p.id === goal.linkedParameterId))}
                                         </div>
                                       )}
                                     </div>
@@ -2192,6 +2192,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             date={dayDialogDate}
             planEndDate={planDuration?.endDate ? format(planDuration.endDate, 'yyyy-MM-dd') : undefined}
             smartGoals={smartGoals}
+            parameters={athleticismParameters}
             subGoals={subGoals}
             events={events}
             existingOnDay={[
@@ -2277,9 +2278,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   );
 
   // Get methods for a parameter from the parameters database
-  const getMethodsForParameter = (parameterId: string) => {
-    return parametersDataV2.parameterMethods.filter(pm => pm.parameterId === parameterId);
-  };
+  /** Methods linked to a parameter — for a goal measure only those for it or for the parameter as a whole */
+  function getMethodsForParameter(parameterId: string, measureId?: string) {
+    const param = parametersDataV2.parameters.find(p => p.id === parameterId);
+    return parametersDataV2.parameterMethods.filter(pm => pm.parameterId === parameterId && appliesToMeasure(pm, measureId, param));
+  }
 
   // Build hierarchical data: Primary Goals -> Methods with rationale
   const getMethodsHierarchyByGoal = () => {
@@ -2302,7 +2305,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       if (!goal.linkedParameterId) return;
 
       // Get methods that directly improve this goal's parameter
-      const directMethods = getMethodsForParameter(goal.linkedParameterId);
+      const directMethods = getMethodsForParameter(goal.linkedParameterId, goal.measureId);
 
       // Get sub-goals for this primary goal and their methods
       const allSubGoals = subGoals.filter(
@@ -2376,8 +2379,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       const parameterName = getParameterName(pm.parameterId);
       
       // Check if this is a primary goal
-      const isPrimaryGoal = primaryGoalParameterIds.has(pm.parameterId);
-      const primaryGoal = smartGoals.find(g => g.linkedParameterId === pm.parameterId);
+      const pmParam = parametersDataV2.parameters.find(p => p.id === pm.parameterId);
+      const primaryGoal = smartGoals.find(g => g.linkedParameterId === pm.parameterId && appliesToMeasure(pm, g.measureId, pmParam));
+      const isPrimaryGoal = primaryGoalParameterIds.has(pm.parameterId) && !!primaryGoal;
       
       // Check if this is a sub-goal
       const parentGoal = subGoalToParentGoal.get(pm.parameterId);
@@ -3171,18 +3175,31 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           (p) => p.name.trim().toLowerCase() === action.parameterName.trim().toLowerCase()
         );
         const athleteParam = param ? athleteParamsForGoals.find((pp) => pp.athleticismParameterId === param.id) : undefined;
-        const baseline = athleteParam ? latestNumericValue(athleteParam.values) ?? 0 : 0;
+        // The goal's measure (by name) and side; baseline = the athlete's latest value of exactly that
+        const measure = param && action.measureName
+          ? parameterMeasures(param).find((m) => m.name.trim().toLowerCase() === action.measureName!.trim().toLowerCase())
+          : undefined;
+        const goalRef = {
+          measureId: measure && measure.id !== "main" ? measure.id : undefined,
+          side: param?.perSide ? action.side : undefined,
+        };
+        const baseline = param && athleteParam ? goalBaseline(goalRef, param, athleteParam.values) ?? 0 : 0;
+        const target = action.targetValue === undefined ? 0
+          : (goalNumberOf(param ? measureById(param, goalRef.measureId) : undefined, String(action.targetValue)) ?? 0);
+        const pct = goalShowsPercent(goalRef, param) && baseline > 0 && action.targetValue !== undefined ? ((target - baseline) / baseline) * 100 : 0;
         setSmartGoals((prev) => [
           ...prev,
           {
             id: generateId(),
-            description: param?.name ?? action.parameterName,
+            description: param ? goalDescription(param, goalRef) : action.parameterName,
             baselineValue: baseline,
-            desiredValue: 0,
-            unit: param?.unit ?? "",
-            percentChange: 0,
+            desiredValue: target,
+            unit: param ? goalUnit(measureById(param, goalRef.measureId), goalRef.side, param.unit ?? "") : "",
+            percentChange: pct,
             testDates: [],
             ...(param ? { linkedParameterId: param.id } : {}),
+            ...goalRef,
+            ...(action.phaseNote ? { phaseNote: action.phaseNote } : {}),
           },
         ]);
         break;

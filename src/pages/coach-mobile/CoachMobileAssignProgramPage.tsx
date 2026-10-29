@@ -20,6 +20,8 @@ import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { useTrainingPrograms, TrainingProgram } from '@/hooks/useTrainingPrograms';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
+import { goalBaseline, valuesOfMeasure, type MeasuredValue } from '@/utils/goalMeasures';
+import type { ParameterV2 } from '@/types/parametersV2';
 import { useAuth } from '@/hooks/useAuth';
 import { syncAthleteSchedule, type AthleteFormulaData } from '@/utils/athleteScheduleSync';
 import { epley1RM } from '@/hooks/useExerciseMetrics';
@@ -119,7 +121,9 @@ function parseProgramMesocycles(program: TrainingProgram): AssignedMesocycle[] {
 function buildTestsAndEvents(
   program: TrainingProgram,
   startDate: Date,
-  athletePerformanceParameters: { athleticismParameterId?: string; values: { value: string; recordedAt: string }[] }[]
+  athletePerformanceParameters: { athleticismParameterId?: string; values: MeasuredValue[] }[],
+  /** Parameter definitions: a goal's baseline comes from its own measure (and side) */
+  parameters: ParameterV2[] = [],
 ): { tests: ReviewedSubGoal[]; events: ReviewedEvent[] } {
   if (!program.macrocycleData) return { tests: [], events: [] };
 
@@ -133,9 +137,11 @@ function buildTestsAndEvents(
   const reviewed: ReviewedSubGoal[] = (macro.subGoals as SubGoal[] ?? []).map(sg => {
     let baseline = sg.preTestValue || 0;
     if (sg.parameterLinkedId) {
+      // Sub-goals have no measure: the main measure's values (all older values belong to it)
       const p = athletePerformanceParameters.find(pp => pp.athleticismParameterId === sg.parameterLinkedId);
-      if (p?.values.length) {
-        const sorted = [...p.values].sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
+      const mainValues = p ? valuesOfMeasure(p.values, undefined) : [];
+      if (mainValues.length) {
+        const sorted = [...mainValues].sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
         baseline = (parseMeasuredNumber(sorted[0].value) ?? NaN) || baseline;
       }
     }
@@ -157,11 +163,11 @@ function buildTestsAndEvents(
     if (!sg.testDates?.length) return;
     let baseline = sg.baselineValue || 0;
     if (sg.linkedParameterId) {
+      // The latest value of exactly the goal's measure (and side / LSI)
       const p = athletePerformanceParameters.find(pp => pp.athleticismParameterId === sg.linkedParameterId);
-      if (p?.values.length) {
-        const sorted = [...p.values].sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
-        baseline = (parseMeasuredNumber(sorted[0].value) ?? NaN) || baseline;
-      }
+      const param = parameters.find(x => x.id === sg.linkedParameterId);
+      const latest = p ? goalBaseline(sg, param, p.values) : null;
+      if (latest !== null) baseline = latest;
     }
     reviewed.push({
       id: sg.id,
@@ -367,7 +373,7 @@ export default function CoachMobileAssignProgramPage() {
   // Rebuild tests/events whenever program or startDate changes
   useEffect(() => {
     if (!selectedProgram) { setReviewedTests([]); setReviewedEvents([]); return; }
-    const { tests, events } = buildTestsAndEvents(selectedProgram, startDate, athleteParams);
+    const { tests, events } = buildTestsAndEvents(selectedProgram, startDate, athleteParams, parametersData.parameters);
     setReviewedTests(tests);
     setReviewedEvents(events);
   // eslint-disable-next-line react-hooks/exhaustive-deps
