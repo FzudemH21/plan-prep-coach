@@ -701,18 +701,26 @@ function ReportAnswer({ field: original, value, lang, files = [], skipNegative =
  * first point; `lead` (the "Summary" title) with the first heading.
  */
 function SummaryText({ text, lead }: { text: string; lead?: React.ReactNode }) {
-  const clean = (line: string) => line.replace(/^#{1,3}\s+/, '').replace(/^\s*[-*]\s+/, '').replace(/\*\*([^*]+)\*\*/g, '$1');
-  const isHeading = (line: string) => /^#{1,3}\s+/.test(line);
+  const clean = (line: string) => line.replace(/^#{1,3}\s+/, '').replace(/^\s*[-*]\s+/, '');
+  const isHeading = (line: string) => /^#{1,2}\s+/.test(line);
+  /** "**NRS 6/10**" → bold parts inside the line */
+  const inline = (s: string) => s.split(/(\*\*[^*]+\*\*)/g).filter(Boolean).map((part, i) => (/^\*\*[^*]+\*\*$/.test(part)
+    ? <Text key={i} style={{ fontWeight: 700 }}>{part.slice(2, -2)}</Text>
+    : part));
   const lineText = (line: string, key: number) => {
     const style = { fontSize: 9.5, lineHeight: 1.4, color: C.fg1 };
+    // A subheading (e.g. a body region) — kept with the line below it
+    if (/^###\s+/.test(line)) {
+      return <Text key={key} minPresenceAhead={24} style={{ fontSize: 9.5, fontWeight: 700, color: C.fg1, marginTop: 4, marginBottom: 1 }}>{inline(clean(line))}</Text>;
+    }
     // A bullet's wrapped lines start under its text, not under the dot; one bullet (a few lines) is
     // never split — the dot would stay behind on its own
     return /^\s*[-*]\s+/.test(line) ? (
       <View key={key} wrap={false} style={{ flexDirection: 'row', marginLeft: 6 }}>
         <Text style={[style, { width: 9 }]}>•</Text>
-        <Text style={[style, { flex: 1 }]}>{clean(line)}</Text>
+        <Text style={[style, { flex: 1 }]}>{inline(clean(line))}</Text>
       </View>
-    ) : <Text key={key} style={style}>{clean(line)}</Text>;
+    ) : <Text key={key} style={style}>{inline(clean(line))}</Text>;
   };
   // Groups: a heading (or the text before the first one) with its lines
   const groups: Array<{ heading?: string; lines: string[] }> = [];

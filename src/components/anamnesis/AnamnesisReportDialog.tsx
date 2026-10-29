@@ -11,7 +11,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
-import { AlertTriangle, FileText, Loader2, Sparkles } from 'lucide-react';
+import { AlertTriangle, FileText, HelpCircle, Loader2, Sparkles } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -24,6 +24,9 @@ import { answerFileGroups, contextFor, conditionState, isAnswered } from '@/util
 import type { AnamnesisPdfLang, AnamnesisPdfProps } from '@/components/pdf/AnamnesisPDF';
 import type { AnamnesisAttachment, AnamnesisNote } from '@/types/anamnesis';
 import { cn } from '@/lib/utils';
+
+/** A question the AI asked about the source and the coach's answer */
+export interface BriefClarification { question: string; answer: string }
 
 export interface ReportSource extends Omit<AnamnesisPdfProps, 'lang'> {
   notes: AnamnesisNote[];
@@ -56,8 +59,9 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
   /** Creates (or updates) the AI summary of the record */
   onGenerateSummary: () => Promise<void>;
   generatingSummary: boolean;
-  /** Writes the short report for an external recipient (not saved with the record) */
-  onGenerateBrief?: (reason: string, lang: AnamnesisPdfLang) => Promise<string>;
+  /** Writes the short report for an external recipient (not saved with the record); `questions` =
+   *  what the AI could not make out — left out of the text and asked instead */
+  onGenerateBrief?: (reason: string, lang: AnamnesisPdfLang, clarifications: BriefClarification[]) => Promise<{ text: string; questions: string[] }>;
 }) {
   const { toast } = useToast();
   const { entries } = useAnamnesisChangeLog(open ? recordId : null);
@@ -86,6 +90,10 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
   const [brief, setBrief] = useState('');
   const [briefLang, setBriefLang] = useState<AnamnesisPdfLang | null>(null);
   const [generatingBrief, setGeneratingBrief] = useState(false);
+  // The AI's open questions (answers typed here) and the questions already answered (used for every rewrite)
+  const [questions, setQuestions] = useState<string[]>([]);
+  const [answers, setAnswers] = useState<string[]>([]);
+  const [clarified, setClarified] = useState<BriefClarification[]>([]);
 
   /** Content defaults: everything internally; for someone else the short report, the answers only as an optional appendix */
   const applyAudience = (a: 'internal' | 'third') => {
@@ -102,6 +110,7 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
     setHideNegatives(true);
     setRecipient(''); setConsented(false);
     setReason(''); setBrief(''); setBriefLang(null);
+    setQuestions([]); setAnswers([]); setClarified([]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -113,10 +122,17 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
 
   const createBrief = async () => {
     if (!onGenerateBrief) return;
+    // Answered questions count from now on; unanswered ones may come back
+    const newlyClarified = questions.map((q, i) => ({ question: q, answer: (answers[i] ?? '').trim() })).filter((c) => c.answer);
+    const allClarified = [...clarified, ...newlyClarified];
     setGeneratingBrief(true);
     try {
-      setBrief((await onGenerateBrief(reason, lang)).trim());
+      const result = await onGenerateBrief(reason, lang, allClarified);
+      setBrief(result.text.trim());
       setBriefLang(lang);
+      setClarified(allClarified);
+      setQuestions(result.questions);
+      setAnswers(result.questions.map(() => ''));
     } catch (err) {
       console.error('[AnamnesisReportDialog] short report error', err);
       toast({ title: 'Short report failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' });
@@ -276,6 +292,25 @@ export function AnamnesisReportDialog({ open, onClose, recordId, source, default
                 One page in referral style: current complaints, history, findings from the appointment, diagnostics &amp; treatment,
                 medication. Only what is stated — no conclusions of its own. Check and edit before exporting.
               </p>
+              {/* What the AI could not make out: asked here instead of written into the report */}
+              {questions.length > 0 && !generatingBrief && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2.5 space-y-2">
+                  <p className="text-sm font-medium flex items-center gap-1.5 text-amber-900 dark:text-amber-200">
+                    <HelpCircle className="h-4 w-4" />
+                    {questions.length === 1 ? 'One question before the report is complete' : `${questions.length} questions before the report is complete`}
+                  </p>
+                  {questions.map((q, i) => (
+                    <div key={i} className="space-y-1">
+                      <p className="text-sm">{q}</p>
+                      <Input className="h-8 text-sm bg-background" value={answers[i] ?? ''} placeholder="Your answer (leave empty to skip)"
+                        onChange={(e) => setAnswers((prev) => prev.map((a, j) => (j === i ? e.target.value : a)))} />
+                    </div>
+                  ))}
+                  <Button size="sm" className="h-7 gap-1.5" disabled={!answers.some((a) => a.trim())} onClick={() => { void createBrief(); }}>
+                    <Sparkles className="h-3.5 w-3.5" />Answer &amp; write again
+                  </Button>
+                </div>
+              )}
               {(brief || generatingBrief) && (
                 <Textarea className="min-h-[220px] text-sm font-mono" value={brief} onChange={(e) => setBrief(e.target.value)} disabled={generatingBrief} />
               )}

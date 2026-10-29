@@ -44,7 +44,7 @@ import { useCoachProfile } from '@/hooks/useCoachProfile';
 import type { AnamnesisPdfLang } from '@/components/pdf/AnamnesisPDF';
 import { AnamnesisNotesPanel, type NotesChange } from '@/components/anamnesis/AnamnesisNotesPanel';
 import { AnamnesisChangeHistory } from '@/components/anamnesis/AnamnesisChangeHistory';
-import { AnamnesisReportDialog } from '@/components/anamnesis/AnamnesisReportDialog';
+import { AnamnesisReportDialog, type BriefClarification } from '@/components/anamnesis/AnamnesisReportDialog';
 import { diffAnamnesis, logAnamnesisChange, type AnamnesisAnswersSnapshot } from '@/utils/anamnesisChangeLog';
 import { useAthleteAnamneses } from '@/hooks/useAthleteAnamneses';
 import { useAnamnesisTemplates } from '@/hooks/useAnamnesisTemplates';
@@ -234,6 +234,10 @@ function RecordForm({
   const [noteEntries, setNoteEntries] = useState<AnamnesisNote[]>(() => (initial ? noteEntriesOf(initial) : []));
   const [aiSummary, setAiSummary] = useState<string | null>(initial?.aiSummary ?? null);
   const [generatingSummary, setGeneratingSummary] = useState(false);
+  // What the AI could not make out when summarising — asked here instead of written into the summary
+  const [summaryQuestions, setSummaryQuestions] = useState<string[]>([]);
+  const [summaryAnswers, setSummaryAnswers] = useState<string[]>([]);
+  const [summaryClarified, setSummaryClarified] = useState<BriefClarification[]>([]);
   const [attachments, setAttachments] = useState<AnamnesisAttachment[]>(initial?.attachments ?? []);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -481,14 +485,17 @@ function RecordForm({
    * data as the summary, not saved with the record. Condenses and restructures only; the coach's
    * reason for referral is printed as written (it is only context here).
    */
-  const generateBrief = async (reason: string, lang: 'de' | 'en'): Promise<string> => {
+  const generateBrief = async (reason: string, lang: 'de' | 'en', clarifications: BriefClarification[]): Promise<{ text: string; questions: string[] }> => {
     const dataSnapshot: Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'createdAt' | 'updatedAt'> = {
       athleteLocalId, templateId, templateSnapshot, conductedAt, customQuestions, fieldValues, customFieldValues,
       notes: '', noteEntries, aiSummary: null, attachments,
     };
-    const prompt = `${buildSummaryPrompt(dataSnapshot, athleteName, conditionSex)}\n\nReason for referral (written by the coach — context only, do not repeat it):\n${reason.trim() || '(none given)'}`;
+    const clarificationText = clarifications.length
+      ? `\n\nClarifications from the coach (answers to your earlier questions — they count as stated information):\n${clarifications.map((c) => `- Q: ${c.question}\n  A: ${c.answer}`).join('\n')}`
+      : '';
+    const prompt = `${buildSummaryPrompt(dataSnapshot, athleteName, conditionSex)}\n\nReason for referral (written by the coach — context only, do not repeat it):\n${reason.trim() || '(none given)'}${clarificationText}`;
     const german = lang === 'de';
-    return sendMessage(
+    const raw = await sendMessage(
       [{ role: 'user', content: prompt }],
       `You write a short report (Kurzbefund) of an athlete's intake assessment that the coach forwards to an external physiotherapist or physician.
 You receive the intake answers (partly filled in by the athlete online), the coach's notes from the appointment and the coach's reason for referral.
@@ -504,17 +511,35 @@ You only CONDENSE and RESTRUCTURE what is written. Strict rules:
 - Dictated notes are speech-to-text: fix obvious recognition errors only where the meaning is unambiguous.
 - Length: at most about 250–350 words.
 
-Write in ${german ? 'German' : 'English'}. Structure: these headings in this order, only those with content, each as a Markdown "## " heading with short "- " bullet points:
+UNCLEAR POINTS — never write into the report that something is unclear, contradictory or could not be understood (no "unklar", "nicht eindeutig", "?" or similar). Leave such a point out of the report and ask the coach about it instead: after the report, add a block
+<questions>
+- <one short, concrete question per unclear point, in ${german ? 'German' : 'English'}>
+</questions>
+Ask only about what matters for the recipient (e.g. an ambiguous dictated word, which side, since when, contradictory statements) — at most 5 questions. Answers the coach already gave are listed under "Clarifications" — use them and do not ask again. When nothing is unclear, leave the block out.
+
+Write in ${german ? 'German' : 'English'}. Structure (easy to scan for a busy reader):
+- These headings in this order, only those with content, each as a Markdown "## " heading:
 ${german
-    ? 'Aktuelle Beschwerden (Angaben) / Relevante Vorgeschichte / Befunde aus dem Termin / Bisherige Diagnostik & Therapie / Medikation & relevante Vorerkrankungen'
-    : 'Current complaints (as reported) / Relevant history / Findings from the appointment / Previous diagnostics & treatment / Medication & relevant conditions'}
+    ? '  Aktuelle Beschwerden (Angaben) / Relevante Vorgeschichte / Befunde aus dem Termin / Bisherige Diagnostik & Therapie / Medikation & relevante Vorerkrankungen'
+    : '  Current complaints (as reported) / Relevant history / Findings from the appointment / Previous diagnostics & treatment / Medication & relevant conditions'}
+- Under a heading with more than one body region / topic: one "### " subheading per region (e.g. "### Sprunggelenk re.", "### LWS / Becken") with short "- " bullet points below; with a single region, bullets directly under the heading.
+- **Bold** only the key facts a reader should catch at a glance — pain intensity, sides, diagnoses as stated, dates of injuries / operations, positive test results (e.g. "**NRS 6/10**", "**Z. n. Volkmann-Fraktur 07/2026**"). At most one or two bold parts per bullet; never whole sentences.
 Do not add a heading for the reason for referral — it is printed separately above your text.`,
       AI_MODEL,
       4096,
     );
+    // The questions block → asked in the dialog, not part of the report
+    const block = raw.match(/<questions>([\s\S]*?)(<\/questions>|$)/i);
+    const questions = (block?.[1] ?? '').split('\n').map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '').trim()).filter(Boolean).slice(0, 5);
+    return { text: block ? raw.slice(0, block.index).trim() : raw.trim(), questions };
   };
 
   const handleGenerateSummary = async () => {
+    // Answered questions count from now on (also for later rewrites); unanswered ones may come back
+    const clarified = [
+      ...summaryClarified,
+      ...summaryQuestions.map((q, i) => ({ question: q, answer: (summaryAnswers[i] ?? '').trim() })).filter((c) => c.answer),
+    ];
     setGeneratingSummary(true);
     try {
       const dataSnapshot: Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'createdAt' | 'updatedAt'> = {
@@ -530,8 +555,10 @@ Do not add a heading for the reason for referral — it is printed separately ab
         aiSummary: null,
         attachments,
       };
-      const prompt = buildSummaryPrompt(dataSnapshot, athleteName, conditionSex);
-      const summary = await sendMessage(
+      const prompt = buildSummaryPrompt(dataSnapshot, athleteName, conditionSex) + (clarified.length
+        ? `\n\nClarifications from the coach (answers to your earlier questions — they count as stated information):\n${clarified.map((c) => `- Q: ${c.question}\n  A: ${c.answer}`).join('\n')}`
+        : '');
+      const raw = await sendMessage(
         [{ role: 'user', content: prompt }],
         `You summarise an athlete's intake assessment (anamnesis) for the coach's documentation.
 You receive the intake answers (partly filled in by the athlete through an online form) and the coach's notes from the appointment.
@@ -550,11 +577,23 @@ Structure: these headings in this order (only those with content), each as a Mar
 English: Current status & complaints / Relevant history / Findings from the appointment / Contraindications & precautions (as stated) / Goals & training focus (as stated) / Open points (as noted)
 German: Aktueller Stand & Beschwerden / Relevante Vorgeschichte / Befunde aus dem Termin / Kontraindikationen & Vorsichtsmaßnahmen (laut Angaben) / Ziele & Trainingsfokus (laut Angaben) / Offene Punkte (laut Notizen)
 Write in the language most of the answers and notes are in (German or English), headings included.
-Leave out a heading completely when nothing is stated for it.`,
+Leave out a heading completely when nothing is stated for it.
+
+UNCLEAR POINTS — never write into the summary that something is unclear, contradictory or could not be understood (no "unklar", "nicht eindeutig", "?" or similar; "Open points" is only for what the coach noted as open). Leave such a point out and ask the coach instead: after the summary, add a block
+<questions>
+- <one short, concrete question per unclear point, in the language of the summary>
+</questions>
+At most 5 questions (e.g. an ambiguous dictated word, which side, since when, contradictory statements). Answers the coach already gave are listed under "Clarifications" — use them and do not ask again. When nothing is unclear, leave the block out.`,
         AI_MODEL,
         // Room for long notes — at 1,500 tokens the summary was cut off mid-sentence
         4096,
       );
+      const block = raw.match(/<questions>([\s\S]*?)(<\/questions>|$)/i);
+      const asked = (block?.[1] ?? '').split('\n').map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '').trim()).filter(Boolean).slice(0, 5);
+      const summary = block ? raw.slice(0, block.index).trim() : raw.trim();
+      setSummaryClarified(clarified);
+      setSummaryQuestions(asked);
+      setSummaryAnswers(asked.map(() => ''));
       const previous = aiSummary;
       setAiSummary(summary);
       // A saved record keeps the summary right away (no need to switch to edit mode)
@@ -1047,6 +1086,23 @@ Leave out a heading completely when nothing is stated for it.`,
                 {aiSummary ? 'Regenerate' : 'Generate'}
               </Button>
             </div>
+            {summaryQuestions.length > 0 && !generatingSummary && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2.5 space-y-2">
+                <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                  {summaryQuestions.length === 1 ? 'The AI has one question' : `The AI has ${summaryQuestions.length} questions`} — left out of the summary until answered
+                </p>
+                {summaryQuestions.map((q, i) => (
+                  <div key={i} className="space-y-1">
+                    <p className="text-sm">{q}</p>
+                    <Input className="h-8 text-sm bg-background" value={summaryAnswers[i] ?? ''} placeholder="Your answer (leave empty to skip)"
+                      onChange={(e) => setSummaryAnswers((prev) => prev.map((a, j) => (j === i ? e.target.value : a)))} />
+                  </div>
+                ))}
+                <Button size="sm" className="h-7 gap-1.5 text-xs" disabled={!summaryAnswers.some((a) => a.trim())} onClick={handleGenerateSummary}>
+                  <Sparkles className="h-3 w-3" />Answer &amp; write again
+                </Button>
+              </div>
+            )}
             {aiSummary ? (
               <div className="rounded-md border bg-muted/30 p-3 text-sm whitespace-pre-wrap">
                 {renderMarkdown(aiSummary)}

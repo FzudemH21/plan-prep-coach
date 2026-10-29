@@ -74,11 +74,23 @@ export function DayScheduleDialog({
   const [endDate, setEndDate] = useState('');
   // Main goals whose sub-goals are shown (folded by default)
   const [openGoals, setOpenGoals] = useState<Set<string>>(new Set());
+  // Tests chosen to be added to this day ("g:<goal id>" / "s:<sub-goal id>") — added with the button
+  const [picked, setPicked] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!open) return;
-    setName(''); setComments(''); setEndDate(''); setOpenGoals(new Set());
+    setName(''); setComments(''); setEndDate(''); setOpenGoals(new Set()); setPicked(new Set());
   }, [open, date]);
+
+  const togglePicked = (key: string) => setPicked(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+  const addPicked = () => {
+    picked.forEach(key => (key.startsWith('g:') ? onToggleGoalTest(key.slice(2)) : onToggleSubGoalTest(key.slice(2))));
+    setPicked(new Set());
+  };
 
   const dayLabel = date ? format(parseDateStr(date), 'EEE, d MMM yyyy') : '';
   const fmtShort = (d: string) => format(parseDateStr(d), 'd MMM');
@@ -100,27 +112,32 @@ export function DayScheduleDialog({
     setName(''); setComments(''); setEndDate('');
   };
 
-  /** One goal / sub-goal row: ticked = its test is on this day */
-  const testRow = (key: string, label: string, scheduled: boolean, onToggle: () => void,
-    opts: { main?: boolean; dates?: string[]; values?: string | null } = {}) => (
+  /** One goal / sub-goal row: click = choose it (added with the button below); already on this day = shown, not clickable */
+  const testRow = (key: string, label: string, scheduled: boolean,
+    opts: { main?: boolean; dates?: string[]; values?: string | null } = {}) => {
+    const chosen = !scheduled && picked.has(key);
+    return (
     <button
       key={key}
       type="button"
-      onClick={onToggle}
+      disabled={scheduled}
+      onClick={() => togglePicked(key)}
       className={cn(
         'flex-1 min-w-0 w-full flex items-start gap-2 rounded-md border px-2.5 py-2 text-left text-sm transition-colors',
-        scheduled ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/30' : 'border-input hover:bg-muted/60',
+        scheduled ? 'border-amber-200 bg-amber-50/60 dark:bg-amber-950/20 cursor-default'
+          : chosen ? 'border-primary bg-primary/5' : 'border-input hover:bg-muted/60',
       )}
     >
       <span className={cn('mt-0.5 h-4 w-4 shrink-0 rounded border flex items-center justify-center',
-        scheduled ? 'bg-amber-500 border-amber-500 text-white' : 'border-muted-foreground/40')}>
-        {scheduled && <Check className="h-3 w-3" />}
+        scheduled ? 'bg-amber-500 border-amber-500 text-white' : chosen ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40')}>
+        {(scheduled || chosen) && <Check className="h-3 w-3" />}
       </span>
       <span className="flex-1 min-w-0">
         <span className="flex items-center gap-1.5">
           {opts.main ? <Target className="h-3.5 w-3.5 text-primary shrink-0" /> : <Trophy className="h-3.5 w-3.5 text-amber-600 shrink-0" />}
           <span className={cn('truncate', opts.main && 'font-medium')}>{label}</span>
-          {opts.main && <span className="text-[11px] text-muted-foreground shrink-0">main goal</span>}
+          {opts.main && !scheduled && <span className="text-[11px] text-muted-foreground shrink-0">main goal</span>}
+          {scheduled && <span className="text-[11px] text-amber-700 shrink-0">on this day</span>}
           {/* Baseline → goal on hover, so the list stays short */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -141,7 +158,8 @@ export function DayScheduleDialog({
         )}
       </span>
     </button>
-  );
+    );
+  };
 
   const unlinkedSubGoals = subGoals.filter(sg => !sg.parentGoalId || !smartGoals.some(g => g.id === sg.parentGoalId));
   const otherEvents = events.filter(e => !e.eventDates?.includes(date));
@@ -218,7 +236,7 @@ export function DayScheduleDialog({
 
             {type === 'test' ? (
               <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Tick what is tested on this day.</p>
+                <p className="text-xs text-muted-foreground">Choose what is tested on this day, then add it.</p>
                 {smartGoals.length === 0 && unlinkedSubGoals.length === 0 && (
                   <p className="text-sm text-muted-foreground">No goals yet — add a main goal in step 1.</p>
                 )}
@@ -236,7 +254,7 @@ export function DayScheduleDialog({
                           className="mt-1.5 h-6 w-6 shrink-0 rounded flex items-center justify-center text-muted-foreground hover:bg-muted disabled:opacity-30">
                           <ChevronDown className={cn('h-4 w-4 transition-transform', !isOpen && '-rotate-90')} />
                         </button>
-                        {testRow(g.id, g.description || 'Main goal', !!g.testDates?.includes(date), () => onToggleGoalTest(g.id),
+                        {testRow(`g:${g.id}`, g.description || 'Main goal', !!g.testDates?.includes(date),
                           { main: true, dates: g.testDates, values: goalValuesText(g, parameters.find(p => p.id === g.linkedParameterId)) })}
                       </div>
                       {count > 0 && !isOpen && (
@@ -247,7 +265,7 @@ export function DayScheduleDialog({
                       )}
                       {isOpen && (
                         <div className="ml-7 space-y-1.5">
-                          {own.map(sg => testRow(sg.id, subGoalLabel(sg), !!sg.testDates?.includes(date), () => onToggleSubGoalTest(sg.id),
+                          {own.map(sg => testRow(`s:${sg.id}`, subGoalLabel(sg), !!sg.testDates?.includes(date),
                             { dates: sg.testDates, values: valuesText(sg.preTestValue, sg.goalValue, sg.unit, sg.percentChange) }))}
                         </div>
                       )}
@@ -255,9 +273,13 @@ export function DayScheduleDialog({
                   );
                 })}
                 {unlinkedSubGoals.map(sg =>
-                  testRow(sg.id, subGoalLabel(sg), !!sg.testDates?.includes(date), () => onToggleSubGoalTest(sg.id),
+                  testRow(`s:${sg.id}`, subGoalLabel(sg), !!sg.testDates?.includes(date),
                     { dates: sg.testDates, values: valuesText(sg.preTestValue, sg.goalValue, sg.unit, sg.percentChange) }))}
-                <Button type="button" variant="outline" size="sm" className="w-full mt-1" onClick={onNewSubGoal}>
+                <Button type="button" className="w-full mt-1" disabled={picked.size === 0} onClick={addPicked}>
+                  <Plus className="h-4 w-4 mr-1.5" />
+                  {picked.size > 1 ? `Add ${picked.size} tests to this day` : 'Add test to this day'}
+                </Button>
+                <Button type="button" variant="outline" size="sm" className="w-full" onClick={onNewSubGoal}>
                   <Plus className="h-3.5 w-3.5 mr-1" />New sub-goal / test on this day
                 </Button>
               </div>

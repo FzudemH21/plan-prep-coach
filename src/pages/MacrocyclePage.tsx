@@ -70,6 +70,24 @@ interface ManuallyAddedMethod {
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+/** As many calendar months side by side as fit into the element (up to 5; a month is ~270 px wide).
+ *  `reserve` = the px inside the measured element that are not months (padding / border). */
+function useMonthsThatFit(reserve = 8): [number, (el: HTMLDivElement | null) => void] {
+  const [months, setMonths] = useState(1);
+  const observer = useRef<ResizeObserver | null>(null);
+  const ref = useCallback((el: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([entry]) => {
+      setMonths(Math.max(1, Math.min(5, Math.floor((entry.contentRect.width - reserve) / 268))));
+    });
+    ro.observe(el);
+    observer.current = ro;
+  }, [reserve]);
+  return [months, ref];
+}
+
 export default function MacrocyclePage() {
   const { displayMode } = useDisplayMode();
   const navigate = useNavigate();
@@ -148,20 +166,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const stepTwoDayRender = useRef<(props: any) => React.ReactElement | null>(() => null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const StepTwoDay = useMemo(() => function StepTwoDay(props: any) { return stepTwoDayRender.current(props); }, []);
-  // Step 2 calendar: as many months side by side as fit (up to 5; a month is ~270 px wide)
-  const [calendarMonths, setCalendarMonths] = useState(1);
-  const calendarObserver = useRef<ResizeObserver | null>(null);
-  const calendarBoxRef = useCallback((el: HTMLDivElement | null) => {
-    calendarObserver.current?.disconnect();
-    calendarObserver.current = null;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(([entry]) => {
-      const w = entry.contentRect.width;
-      setCalendarMonths(Math.max(1, Math.min(5, Math.floor((w - 8) / 268))));
-    });
-    ro.observe(el);
-    calendarObserver.current = ro;
-  }, []);
+  // Step 1 and step 2 calendars: as many months side by side as fit (up to 5)
+  const [planDurationMonths, planDurationBoxRef] = useMonthsThatFit(32);
+  const [calendarMonths, calendarBoxRef] = useMonthsThatFit();
   // Main goals whose suggestions (parameters linked to the goal) are shown
   const [openSuggestions, setOpenSuggestions] = useState<Set<string>>(new Set());
   // A new sub-goal started from the day dialog gets that day as its test date
@@ -1382,10 +1389,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex justify-center">
+            <div ref={planDurationBoxRef} className="flex justify-center">
               <div className="border rounded-md p-3 w-fit">
                 <Calendar
                   mode="single"
+                  numberOfMonths={planDurationMonths}
                   selected={planDuration?.startDate || planDuration?.endDate}
                   onSelect={(selectedDate) => {
                     if (!selectedDate) return;
