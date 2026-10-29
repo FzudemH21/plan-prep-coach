@@ -1,6 +1,10 @@
 /**
- * useParameterMerge — merges a parameter into another one as one of its measures, across every
- * store that points at it (see src/utils/parameterMerge.ts for what happens to each).
+ * useParameterMerge — merges a parameter into another one as one of its measures (or sides), across
+ * every store that points at it (see src/utils/parameterMerge.ts for what happens to each).
+ *
+ * Takes several plans (e.g. "mark the target's values as left" + "merge the right parameter as the
+ * right side"), applied in order to every store in one pass — so no store is saved from a copy
+ * older than the previous plan's result.
  *
  * Order: the parameter database result is computed first (it validates the merge), then the data
  * moves — athletes' values and assigned goals, calendar tests (and the athlete app's copy of
@@ -15,10 +19,10 @@ import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { useCalendarEvents, type CalendarEvent } from '@/hooks/useCalendarEvents';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useTrainingPrograms } from '@/hooks/useTrainingPrograms';
-import type { ParameterV2 } from '@/types/parametersV2';
+import type { ParametersDatabaseV2 } from '@/types/parametersV2';
 import type { ScheduleEventEntry } from '@/utils/athleteScheduleSync';
-import { testMeasureSpec } from '@/utils/parameterMeasures';
-import { mergeMonitoringConfig, mergeParameterDatabase, remapParameterRef, type ParameterMergePlan } from '@/utils/parameterMerge';
+import { parseMeasureRef, testMeasureSpec } from '@/utils/parameterMeasures';
+import { applyPlans, mergeMonitoringConfig, mergeParameterDatabase, remapThroughPlans, type ParameterMergePlan } from '@/utils/parameterMerge';
 
 export interface ParameterMergeReport {
   athletesWithValues: number;
@@ -31,7 +35,7 @@ export interface ParameterMergeReport {
 }
 
 /** Upcoming tests in the athlete app's schedule rows → the new reference (and how the app asks the value) */
-async function remapScheduleTests(connectionId: string, plan: ParameterMergePlan, target: ParameterV2, since: string): Promise<void> {
+async function remapScheduleTests(connectionId: string, plans: ParameterMergePlan[], db: ParametersDatabaseV2, since: string): Promise<void> {
   const { data, error } = await supabase
     .from('athlete_schedule')
     .select('id, events')
@@ -42,8 +46,9 @@ async function remapScheduleTests(connectionId: string, plan: ParameterMergePlan
     const events = (row.events as ScheduleEventEntry[] | null) ?? [];
     let changed = false;
     const next = events.map(e => {
-      const ref = remapParameterRef(e.parameterId, plan);
-      if (ref === null) return e;
+      const ref = e.parameterId ? remapThroughPlans(e.parameterId, plans) : null;
+      const target = ref ? db.parameters.find(p => p.id === parseMeasureRef(ref).parameterId) : undefined;
+      if (ref === null || !target) return e;
       changed = true;
       // As the calendar sends it (AthleteCalendarView enrichEvents)
       const measure = testMeasureSpec(target, ref);
@@ -65,12 +70,14 @@ export function useParameterMerge() {
   const programs = useTrainingPrograms();
   const { connections, updateMonitoringConfig } = useAthleteConnections();
 
-  return useCallback(async (plan: ParameterMergePlan): Promise<ParameterMergeReport> => {
+  return useCallback(async (plans: ParameterMergePlan[]): Promise<ParameterMergeReport> => {
     if (!params.data) throw new Error('The parameter database has not loaded yet.');
-    // Validates the merge (throws with the reason) before anything is touched
-    const mergedDb = mergeParameterDatabase(params.data, plan);
-    const target = mergedDb.parameters.find(p => p.id === plan.targetId)!;
-    const remap = (ref: string) => remapParameterRef(ref, plan);
+    // Validates every plan (throws with the reason) before anything is touched
+    const mergedDb = applyPlans(params.data, plans, mergeParameterDatabase);
+    const remap = (ref: string) => remapThroughPlans(ref, plans);
+    const sourceIds = [...new Set(plans.map(p => p.sourceId))];
+    // Parameters whose data moves elsewhere (a marked target keeps its own)
+    const movedIds = plans.filter(p => !p.markTarget).map(p => p.sourceId);
     const report: ParameterMergeReport = { athletesWithValues: 0, calendarTests: 0, appResults: 0, appResultsSkipped: 0, monitoringBlocks: 0, plans: 0 };
     const step = async (what: string, run: () => Promise<void>) => {
       try { await run(); } catch (err) {
@@ -81,8 +88,8 @@ export function useParameterMerge() {
 
     await step('athlete values', async () => {
       report.athletesWithValues = new Set(athletes.athletePerformanceParameters
-        .filter(pp => pp.athleticismParameterId === plan.sourceId).map(pp => pp.athleteId)).size;
-      await athletes.mergePerformanceParameterInto(plan);
+        .filter(pp => movedIds.includes(pp.athleticismParameterId)).map(pp => pp.athleteId)).size;
+      await athletes.mergePerformanceParameterInto(plans);
     });
 
     let movedEvents: Record<string, CalendarEvent[]> = {};
@@ -93,10 +100,10 @@ export function useParameterMerge() {
 
     await step('athlete app', async () => {
       // Results the athletes entered (RLS: only the coach's own athletes)
-      const { data, error } = await supabase
-        .from('athlete_test_results')
-        .select('id, parameter_id')
-        .or(`parameter_id.eq."${plan.sourceId}",parameter_id.like."${plan.sourceId}::*",parameter_id.eq."bio:${plan.sourceId}"`);
+      const filter = sourceIds
+        .flatMap(id => [`parameter_id.eq."${id}"`, `parameter_id.like."${id}::*"`, `parameter_id.eq."bio:${id}"`])
+        .join(',');
+      const { data, error } = await supabase.from('athlete_test_results').select('id, parameter_id').or(filter);
       if (error) throw error;
       const byRef = new Map<string, string[]>();
       for (const row of (data ?? []) as Array<{ id: string; parameter_id: string }>) {
@@ -114,26 +121,31 @@ export function useParameterMerge() {
       // Upcoming tests the athletes see (from two weeks back: tests not yet entered)
       const since = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
       for (const c of connections) {
-        if (movedEvents[c.athleteLocalId]?.length) await remapScheduleTests(c.id, plan, target, since);
+        if (movedEvents[c.athleteLocalId]?.length) await remapScheduleTests(c.id, plans, mergedDb, since);
       }
     });
 
     await step('monitoring', async () => {
       for (const c of connections) {
         if (!c.monitoringConfig) continue;
-        const { config, changed } = mergeMonitoringConfig(c.monitoringConfig, plan, target);
-        if (!changed) continue;
+        let changedAny = false;
+        const config = applyPlans(c.monitoringConfig, plans, (cfg, plan) => {
+          const r = mergeMonitoringConfig(cfg, plan, mergedDb.parameters.find(p => p.id === plan.targetId));
+          changedAny ||= r.changed;
+          return r.config;
+        });
+        if (!changedAny) continue;
         await updateMonitoringConfig(c.id, config);
-        report.monitoringBlocks += c.monitoringConfig.blocks.filter(b => b.config?.parameterId === plan.sourceId).length;
+        report.monitoringBlocks += c.monitoringConfig.blocks.filter(b => b.config && movedIds.includes(b.config.parameterId)).length;
       }
     });
 
     await step('goals in programs', async () => {
-      report.plans = await programs.mergeParameterGoals(plan);
+      report.plans = await programs.mergeParameterGoals(plans);
     });
 
     await step('parameter database', async () => {
-      await params.mergeParameterInto(plan);
+      await params.mergeParameterInto(plans);
     });
     return report;
   }, [params, athletes, calendar, programs, connections, updateMonitoringConfig]);

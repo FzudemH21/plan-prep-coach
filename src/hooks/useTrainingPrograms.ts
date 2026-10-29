@@ -427,11 +427,17 @@ export function useTrainingPrograms() {
   // Update program status
   /** A parameter merged into another one: goals of saved programs and of the plan open in the wizard
    *  point at the target's measure. Returns how many plans changed. */
-  const mergeParameterGoals = useCallback(async (plan: ParameterMergePlan): Promise<number> => {
+  const mergeParameterGoals = useCallback(async (plans: ParameterMergePlan[]): Promise<number> => {
+    // A plan's goals through every merge plan in order
+    const throughPlans = <T extends { smartGoals?: SmartGoal[]; subGoals?: SubGoal[] }>(start: T) => {
+      let changed = false;
+      const macro = plans.reduce((m, plan) => { const r = mergePlanGoals(m, plan); changed ||= r.changed; return r.macro; }, start);
+      return { macro, changed };
+    };
     let changedPrograms = 0;
     const programs = data.programs.map(p => {
       if (!p.macrocycleData) return p;
-      const { macro, changed } = mergePlanGoals(p.macrocycleData, plan);
+      const { macro, changed } = throughPlans(p.macrocycleData);
       if (!changed) return p;
       changedPrograms++;
       return { ...p, macrocycleData: macro };
@@ -441,7 +447,7 @@ export function useTrainingPrograms() {
     try {
       const raw = localStorage.getItem('macrocycleData');
       if (raw) {
-        const { macro, changed } = mergePlanGoals(JSON.parse(raw) as { smartGoals?: SmartGoal[]; subGoals?: SubGoal[] }, plan);
+        const { macro, changed } = throughPlans(JSON.parse(raw) as { smartGoals?: SmartGoal[]; subGoals?: SubGoal[] });
         if (changed) { localStorage.setItem('macrocycleData', JSON.stringify(macro)); changedPrograms++; }
       }
     } catch { /* unreadable draft — left as it is */ }

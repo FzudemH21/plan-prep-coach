@@ -14,9 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useParameterMerge } from '@/hooks/useParameterMerge';
 import { cn } from '@/lib/utils';
-import type { ParameterMeasure, ParameterV2 } from '@/types/parametersV2';
+import { MAIN_MEASURE_ID, type ParameterMeasure, type ParameterV2 } from '@/types/parametersV2';
 import { MEASURE_KIND_LABELS, measureSummary, newMeasureId, parameterMeasures } from '@/utils/parameterMeasures';
-import { mergeBlocker } from '@/utils/parameterMerge';
+import { mergeBlocker, type ParameterMergePlan } from '@/utils/parameterMerge';
 
 interface Props {
   open: boolean;
@@ -26,6 +26,14 @@ interface Props {
 }
 
 const NEW = '__new__';
+/** Merged as the left / right side of the target */
+const SIDE_L = '__side_L';
+const SIDE_R = '__side_R';
+
+/** "SL Hop RSI - Left" → "SL Hop RSI", "Single-Leg CMJ Height - Left (Hands on Hips)" → "Single-Leg CMJ Height (Hands on Hips)" */
+function withoutSide(name: string): string {
+  return name.replace(/\s*[-–]\s*(left|right)\b/i, '').replace(/\b(left|right)\b\s*/i, '').replace(/\s{2,}/g, ' ').trim();
+}
 
 /** "30 m Sprint Pain" merged into "30 m Sprint" → "Pain" */
 function suggestedName(source: ParameterV2, target: ParameterV2 | undefined): string {
@@ -44,11 +52,16 @@ export function MergeParameterDialog({ open, onOpenChange, source, parameters }:
   const [measureChoice, setMeasureChoice] = useState<string>(NEW);
   const [name, setName] = useState('');
   const [betterWhen, setBetterWhen] = useState<'higher' | 'lower'>('higher');
+  // New measure: a number in the source's unit, or a pain scale 0–10
+  const [newKind, setNewKind] = useState<'number' | 'pain'>('number');
+  // Side merge: the target's values so far are the other side; the target's new name
+  const [markOther, setMarkOther] = useState(true);
+  const [rename, setRename] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setSearch(''); setTargetId(null); setMeasureChoice(NEW); setName(''); setBetterWhen('higher'); setBusy(false);
+    setSearch(''); setTargetId(null); setMeasureChoice(NEW); setName(''); setBetterWhen('higher'); setNewKind('number'); setMarkOther(true); setRename(''); setBusy(false);
   }, [open, source.id]);
 
   const target = parameters.find(p => p.id === targetId);
@@ -63,9 +76,14 @@ export function MergeParameterDialog({ open, onOpenChange, source, parameters }:
 
   const pickTarget = (p: ParameterV2) => {
     setTargetId(p.id);
-    setMeasureChoice(NEW);
+    // "… - Right" into "… - Left": as the right side
+    setMeasureChoice(/\bright\b/i.test(source.name) ? SIDE_R : /\bleft\b/i.test(source.name) ? SIDE_L : NEW);
     setName(suggestedName(source, p));
+    setNewKind(/pain/i.test(source.unit ?? '') || /pain/i.test(source.name) ? 'pain' : 'number');
+    setMarkOther(!p.perSide);
+    setRename(withoutSide(p.name));
   };
+  const side: 'L' | 'R' | undefined = measureChoice === SIDE_L ? 'L' : measureChoice === SIDE_R ? 'R' : undefined;
 
   const chosenMeasure = measureChoice === NEW ? undefined : targetMeasures.find(m => m.id === measureChoice);
   // Moving numbers onto a measure with another unit / kind changes what they mean
@@ -73,21 +91,26 @@ export function MergeParameterDialog({ open, onOpenChange, source, parameters }:
     ? `The values of "${source.name}" are moved as they are (${source.unit || 'no unit'}) — "${chosenMeasure.name}" is ${chosenMeasure.kind === 'number' ? `in ${chosenMeasure.unit || 'no unit'}` : `a ${MEASURE_KIND_LABELS[chosenMeasure.kind].toLowerCase()} measure`}.`
     : null;
   const nameTaken = measureChoice === NEW && targetMeasures.some(m => m.name.trim().toLowerCase() === name.trim().toLowerCase());
-  const canMerge = !!target && !blocker && !busy && (measureChoice !== NEW || (name.trim() !== '' && !nameTaken));
+  const canMerge = !!target && !blocker && !busy && (measureChoice !== NEW || (name.trim() !== '' && !nameTaken)) && (!side || rename.trim() !== '');
 
   const handleMerge = async () => {
     if (!target || !canMerge) return;
-    const newMeasure: ParameterMeasure | undefined = measureChoice === NEW
-      ? { id: newMeasureId(), name: name.trim(), kind: 'number', ...(source.unit ? { unit: source.unit } : {}), betterWhen }
-      : undefined;
+    const newMeasure: ParameterMeasure | undefined = measureChoice !== NEW ? undefined
+      : newKind === 'pain'
+        ? { id: newMeasureId(), name: name.trim(), kind: 'scale', scaleMin: 0, scaleMax: 10, scaleMinLabel: 'no pain', scaleMaxLabel: 'worst imaginable pain', betterWhen: 'lower' }
+        : { id: newMeasureId(), name: name.trim(), kind: 'number', ...(source.unit ? { unit: source.unit } : {}), betterWhen };
+    const plans: ParameterMergePlan[] = side
+      ? [
+        // The target's values so far are the other side
+        ...(markOther && !target.perSide
+          ? [{ sourceId: target.id, targetId: target.id, measureId: MAIN_MEASURE_ID, side: side === 'L' ? 'R' as const : 'L' as const, markTarget: true }]
+          : []),
+        { sourceId: source.id, targetId: target.id, measureId: MAIN_MEASURE_ID, side, renameTarget: rename.trim() },
+      ]
+      : [{ sourceId: source.id, targetId: target.id, measureId: newMeasure ? newMeasure.id : measureChoice, newMeasure }];
     setBusy(true);
     try {
-      const report = await merge({
-        sourceId: source.id,
-        targetId: target.id,
-        measureId: newMeasure ? newMeasure.id : measureChoice,
-        newMeasure,
-      });
+      const report = await merge(plans);
       const moved = [
         report.athletesWithValues ? `values of ${report.athletesWithValues} athlete${report.athletesWithValues === 1 ? '' : 's'}` : '',
         report.calendarTests ? `${report.calendarTests} calendar test${report.calendarTests === 1 ? '' : 's'}` : '',
@@ -96,7 +119,7 @@ export function MergeParameterDialog({ open, onOpenChange, source, parameters }:
         report.plans ? `goals in ${report.plans} plan${report.plans === 1 ? '' : 's'}` : '',
       ].filter(Boolean);
       toast({
-        title: `Merged into ${target.name}`,
+        title: `Merged into ${side ? rename.trim() : target.name}`,
         description: (moved.length ? `Moved: ${moved.join(', ')}.` : 'Nothing else pointed at it.')
           + (report.appResultsSkipped
             ? ` ${report.appResultsSkipped} result${report.appResultsSkipped === 1 ? '' : 's'} from the athlete app could not be moved (missing permission to edit results — run the migration 20260929_test_results_scheduled_for_and_edit.sql).`
@@ -157,7 +180,7 @@ export function MergeParameterDialog({ open, onOpenChange, source, parameters }:
                 <label className={cn('flex items-start gap-2 rounded-md border p-2.5 text-sm cursor-pointer', measureChoice === NEW && 'border-primary')}>
                   <RadioGroupItem value={NEW} className="mt-0.5" />
                   <div className="flex-1 space-y-2">
-                    <div>New measure <span className="text-muted-foreground">(number{source.unit ? `, ${source.unit}` : ''})</span></div>
+                    <div>New measure</div>
                     {measureChoice === NEW && (
                       <div className="flex flex-wrap items-end gap-2">
                         <div className="flex-1 min-w-[10rem] space-y-1">
@@ -165,6 +188,16 @@ export function MergeParameterDialog({ open, onOpenChange, source, parameters }:
                           <Input value={name} onChange={e => setName(e.target.value)} className="h-8" />
                         </div>
                         <div className="space-y-1">
+                          <Label className="text-xs">Type</Label>
+                          <Select value={newKind} onValueChange={(v) => setNewKind(v as 'number' | 'pain')}>
+                            <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="number">Number{source.unit ? ` (${source.unit})` : ''}</SelectItem>
+                              <SelectItem value="pain">Pain scale 0–10</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {newKind === 'number' && <div className="space-y-1">
                           <Label className="text-xs">Progress is</Label>
                           <Select value={betterWhen} onValueChange={(v) => setBetterWhen(v as 'higher' | 'lower')}>
                             <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
@@ -173,7 +206,7 @@ export function MergeParameterDialog({ open, onOpenChange, source, parameters }:
                               <SelectItem value="lower">Lower is better</SelectItem>
                             </SelectContent>
                           </Select>
-                        </div>
+                        </div>}
                       </div>
                     )}
                     {measureChoice === NEW && nameTaken && <p className="text-xs text-destructive">"{target.name}" already has a measure with this name.</p>}
@@ -185,6 +218,28 @@ export function MergeParameterDialog({ open, onOpenChange, source, parameters }:
                     <div>
                       {m.name} <span className="text-muted-foreground">({MEASURE_KIND_LABELS[m.kind].toLowerCase()}{measureSummary(m) ? `, ${measureSummary(m)}` : ''})</span>
                       <div className="text-xs text-muted-foreground">Existing measure — the values are added to its series (e.g. for a duplicate parameter)</div>
+                    </div>
+                  </label>
+                ))}
+                {([[SIDE_L, 'L'], [SIDE_R, 'R']] as const).map(([value, sd]) => (
+                  <label key={value} className={cn('flex items-start gap-2 rounded-md border p-2.5 text-sm cursor-pointer', measureChoice === value && 'border-primary')}>
+                    <RadioGroupItem value={value} className="mt-0.5" />
+                    <div className="flex-1 space-y-2">
+                      <div>As the {sd === 'L' ? 'left' : 'right'} side <span className="text-muted-foreground">("{target.name}" is then recorded per side, LSI calculated)</span></div>
+                      {measureChoice === value && (
+                        <div className="space-y-2">
+                          {!target.perSide && (
+                            <div className="flex items-center gap-2 text-xs">
+                              <input type="checkbox" aria-label="Values so far are the other side" checked={markOther} onChange={e => setMarkOther(e.target.checked)} />
+                              <span>Values recorded so far for "{target.name}" are the {sd === 'L' ? 'right' : 'left'} side</span>
+                            </div>
+                          )}
+                          <div className="space-y-1">
+                            <Label className="text-xs">New name of "{target.name}"</Label>
+                            <Input value={rename} onChange={e => setRename(e.target.value)} className="h-8" />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </label>
                 ))}

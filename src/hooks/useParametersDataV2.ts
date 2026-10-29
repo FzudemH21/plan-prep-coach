@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useSupabaseStore } from './useSupabaseStore';
 import { ParametersDatabaseV2, ParameterV2, ParameterInteraction, ParameterMethodV2, InteractionDirection, InteractionStrength } from '@/types/parametersV2';
-import { mergeParameterDatabase, type ParameterMergePlan } from '@/utils/parameterMerge';
+import { applyPlans, mergeParameterDatabase, type ParameterMergePlan } from '@/utils/parameterMerge';
 
 const LEGACY_KEY = 'parameters-database-v2';
 const OLD_LEGACY_KEY = 'goals-database-v2';
@@ -158,9 +158,9 @@ export function useParametersDataV2() {
   }, [data, saveData]);
 
   /** Merge a parameter into another one as one of its measures (links moved, the parameter removed) */
-  const mergeParameterInto = useCallback(async (plan: ParameterMergePlan) => {
+  const mergeParameterInto = useCallback(async (plans: ParameterMergePlan[]) => {
     // Builds on the newest data (pendingRef), not this render's copy
-    const next = mergeParameterDatabase(pendingRef.current, plan);
+    const next = applyPlans(pendingRef.current, plans, mergeParameterDatabase);
     pendingRef.current = next;
     await saveData(next);
   }, [saveData]);

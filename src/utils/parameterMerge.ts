@@ -6,6 +6,10 @@
  * points at the merged parameter is moved over: its values (with the measure), its references
  * ("<id>::s:L" → "<target>::m:<measure>::s:L"), goals, interactions and method links (scoped to
  * the measure). Only a parameter with nothing but its main measure can be merged.
+ *
+ * Sides: "SL Hop RSI - Right" can become the right side of "SL Hop RSI - Left" (`side`); a plan with
+ * `markTarget` (source = target) first marks the target's own values, tests and goals without a side
+ * as the other side. Several plans are applied in order (applyPlans).
  */
 import type { AthleteCalendarAssignment, AthletePerformanceParameter, MonitoringConfig, ParameterValue } from '@/types/athlete';
 import type { SmartGoal, SubGoal } from '@/types/training';
@@ -27,6 +31,17 @@ export interface ParameterMergePlan {
   measureId: string;
   /** A measure added to the target for the source's values */
   newMeasure?: ParameterMeasure;
+  /** The source's values are this side of the target (the target is then recorded per side) */
+  side?: 'L' | 'R';
+  /** Source = target: its values / tests / goals without a side become `side` (nothing is removed) */
+  markTarget?: boolean;
+  /** New name of the target */
+  renameTarget?: string;
+}
+
+/** A store value through several plans in order */
+export function applyPlans<T>(value: T, plans: ParameterMergePlan[], apply: (value: T, plan: ParameterMergePlan) => T): T {
+  return plans.reduce(apply, value);
 }
 
 /** Why a parameter can't be merged into another one (null = it can) */
@@ -45,7 +60,14 @@ export function remapParameterRef(ref: string | null | undefined, plan: Paramete
   if (!ref) return null;
   const parsed = parseMeasureRef(ref);
   if (toParameterId(parsed.parameterId) !== plan.sourceId) return null;
-  return measureRef(plan.targetId, storedMeasureId(plan), parsed.side);
+  if (plan.markTarget) return parsed.side ? null : measureRef(plan.targetId, parsed.measureId, plan.side);
+  return measureRef(plan.targetId, storedMeasureId(plan), plan.side ?? parsed.side);
+}
+
+/** A reference through several plans; null = unchanged */
+export function remapThroughPlans(ref: string, plans: ParameterMergePlan[]): string | null {
+  const out = applyPlans(ref, plans, (r, plan) => remapParameterRef(r, plan) ?? r);
+  return out === ref ? null : out;
 }
 
 // ── Parameter database ──────────────────────────────────────────────────────
@@ -71,6 +93,16 @@ function unionScope(a: string[] | undefined, b: string[] | undefined): string[] 
 export function mergeParameterDatabase(db: ParametersDatabaseV2, plan: ParameterMergePlan): ParametersDatabaseV2 {
   const source = db.parameters.find((p) => p.id === plan.sourceId);
   const target = db.parameters.find((p) => p.id === plan.targetId);
+  if (plan.markTarget) {
+    // Only the target changes: recorded per side (and renamed)
+    if (!target || plan.sourceId !== plan.targetId || !plan.side) throw new Error('Parameter not found.');
+    return {
+      ...db,
+      parameters: db.parameters.map((p) => (p.id === target.id
+        ? { ...p, perSide: true, ...(plan.renameTarget?.trim() ? { name: plan.renameTarget.trim() } : {}) }
+        : p)),
+    };
+  }
   const blocker = mergeBlocker(source, target);
   if (blocker) throw new Error(blocker);
   const scope = [plan.measureId];
@@ -80,7 +112,8 @@ export function mergeParameterDatabase(db: ParametersDatabaseV2, plan: Parameter
   const mergedTarget: ParameterV2 = {
     ...target!,
     measures: measuresToStore(measures),
-    ...(source!.perSide || target!.perSide ? { perSide: true } : {}),
+    ...(source!.perSide || target!.perSide || plan.side ? { perSide: true } : {}),
+    ...(plan.renameTarget?.trim() ? { name: plan.renameTarget.trim() } : {}),
   };
 
   // Interactions: the source's become the target's (as target: scoped to the measure); self-links go
@@ -137,7 +170,7 @@ export function mergeParameterDatabase(db: ParametersDatabaseV2, plan: Parameter
 /** A source value as a value of the target's measure (side kept) */
 function movedValue(v: ParameterValue, plan: ParameterMergePlan): ParameterValue {
   const measureId = storedMeasureId(plan);
-  return { ...withoutMeasure(v), ...(measureId ? { measureId } : {}) };
+  return { ...withoutMeasure(v), ...(measureId ? { measureId } : {}), ...(plan.side ? { side: plan.side } : {}) };
 }
 
 /** Each athlete's values of the source move to the target (created where the athlete has none) */
@@ -146,6 +179,11 @@ export function mergeAthleteParameters(
   plan: ParameterMergePlan,
   newId: () => string,
 ): AthletePerformanceParameter[] {
+  if (plan.markTarget) {
+    return list.map((pp) => (pp.athleticismParameterId === plan.targetId && pp.values.some((v) => !v.side)
+      ? { ...pp, values: pp.values.map((v) => (v.side ? v : { ...v, side: plan.side })) }
+      : pp));
+  }
   const sources = list.filter((pp) => pp.athleticismParameterId === plan.sourceId);
   if (sources.length === 0) return list;
   let next = list.filter((pp) => pp.athleticismParameterId !== plan.sourceId);
@@ -170,8 +208,9 @@ export function mergeAssignmentGoals(list: AthleteCalendarAssignment[], plan: Pa
       ...a,
       reviewedSubGoals: a.reviewedSubGoals.map((g) => {
         if (!g.parameterLinkedId || toParameterId(g.parameterLinkedId) !== plan.sourceId) return g;
+        if (plan.markTarget) return g.side ? g : { ...g, side: plan.side };
         const measureId = storedMeasureId(plan);
-        return { ...withoutMeasure(g), parameterLinkedId: plan.targetId, ...(measureId ? { measureId } : {}) };
+        return { ...withoutMeasure(g), parameterLinkedId: plan.targetId, ...(measureId ? { measureId } : {}), ...(plan.side ? { side: plan.side } : {}) };
       }),
     };
   });
@@ -185,11 +224,17 @@ export function mergePlanGoals<T extends { smartGoals?: SmartGoal[]; subGoals?: 
   const measureId = storedMeasureId(plan);
   const smartGoals = macro.smartGoals?.map((g) => {
     if (!g.linkedParameterId || toParameterId(g.linkedParameterId) !== plan.sourceId) return g;
+    if (plan.markTarget) {
+      if (g.side) return g;
+      changed = true;
+      return { ...g, side: plan.side };
+    }
     changed = true;
-    return { ...withoutMeasure(g), linkedParameterId: plan.targetId, ...(measureId ? { measureId } : {}) };
+    return { ...withoutMeasure(g), linkedParameterId: plan.targetId, ...(measureId ? { measureId } : {}), ...(plan.side ? { side: plan.side } : {}) };
   });
+  // (sub-goals have no side: a marked target's sub-goals stay as they are)
   const subGoals = macro.subGoals?.map((g) => {
-    if (!g.parameterLinkedId || toParameterId(g.parameterLinkedId) !== plan.sourceId) return g;
+    if (plan.markTarget || !g.parameterLinkedId || toParameterId(g.parameterLinkedId) !== plan.sourceId) return g;
     changed = true;
     return { ...withoutMeasure(g), parameterLinkedId: plan.targetId, ...(measureId ? { measureId } : {}) };
   });
@@ -205,8 +250,11 @@ export function mergePlanGoals<T extends { smartGoals?: SmartGoal[]; subGoals?: 
  * old reference (`storageRef`), so the history continues.
  */
 export function mergeMonitoringConfig(config: MonitoringConfig, plan: ParameterMergePlan, target: ParameterV2 | undefined): { config: MonitoringConfig; changed: boolean } {
+  // A marked target's blocks keep their reference (their values have no side)
+  if (plan.markTarget) return { config, changed: false };
   let changed = false;
   const measureId = storedMeasureId(plan);
+  const sideLabel = plan.side === 'L' ? ' · Left' : plan.side === 'R' ? ' · Right' : '';
   const measure = target ? (plan.newMeasure ?? parameterMeasures(target).find((m) => m.id === plan.measureId)) : undefined;
   const blocks = config.blocks.map((b) => {
     if (b.type !== 'custom_metric' || !b.config || toParameterId(b.config.parameterId) !== plan.sourceId) return b;
@@ -220,7 +268,7 @@ export function mergeMonitoringConfig(config: MonitoringConfig, plan: ParameterM
         parameterId: plan.targetId,
         ...(measureId ? { measureId } : {}),
         storageRef,
-        parameterName: target ? (measure && measure.id !== MAIN_MEASURE_ID ? `${target.name} · ${measure.name}` : target.name) : cfg.parameterName,
+        parameterName: target ? `${measure && measure.id !== MAIN_MEASURE_ID ? `${target.name} · ${measure.name}` : target.name}${sideLabel}` : cfg.parameterName,
       },
     };
   });

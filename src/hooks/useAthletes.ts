@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { mainSeries } from '@/utils/goalMeasures';
-import { mergeAssignmentGoals, mergeAthleteParameters, type ParameterMergePlan } from '@/utils/parameterMerge';
+import { applyPlans, mergeAssignmentGoals, mergeAthleteParameters, type ParameterMergePlan } from '@/utils/parameterMerge';
 import { useSupabaseStore } from './useSupabaseStore';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -330,11 +330,11 @@ export function useAthletes() {
 
   /** A parameter merged into another one: every athlete's values move over (with the measure), and
    *  goals of assigned programs point at the target's measure */
-  const mergePerformanceParameterInto = useCallback(async (plan: ParameterMergePlan) => {
+  const mergePerformanceParameterInto = useCallback(async (plans: ParameterMergePlan[]) => {
     await setData(prev => ({
       ...prev,
-      athletePerformanceParameters: mergeAthleteParameters(prev.athletePerformanceParameters, plan, generateId),
-      calendarAssignments: mergeAssignmentGoals(prev.calendarAssignments, plan),
+      athletePerformanceParameters: applyPlans(prev.athletePerformanceParameters, plans, (list, plan) => mergeAthleteParameters(list, plan, generateId)),
+      calendarAssignments: applyPlans(prev.calendarAssignments, plans, mergeAssignmentGoals),
     }));
   }, [setData]);
 
