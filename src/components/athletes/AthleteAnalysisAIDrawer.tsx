@@ -14,7 +14,9 @@ import { supabase } from '@/lib/supabase';
 import { sendMessage, AI_MODEL } from '@/utils/anthropicApi';
 import { format, subMonths } from 'date-fns';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
-import type { AthletePerformanceParameter } from '@/types/athlete';
+import type { AthletePerformanceParameter, ParameterValue } from '@/types/athlete';
+import { parseMeasureRef } from '@/utils/parameterMeasures';
+import { allValuesOf, seriesOfValues } from '@/utils/goalMeasures';
 import type { ParameterV2 } from '@/types/parametersV2';
 import type { AnamnesisSection } from '@/types/anamnesis';
 import { contextFor, fieldState, formatAnswer } from '@/utils/anamnesisAnswers';
@@ -188,34 +190,31 @@ async function fetchAndBuildContext(
   }
 
   // ── Performance parameters (coach-entered + self-reported) ────────────────
-  const srByParamId = new Map<string, Array<{ date: string; value: string }>>();
+  // "<id>::m:<measure>::s:L" = a value of another measure / a side of that parameter
+  const srByParamId = new Map<string, ParameterValue[]>();
   for (const r of testResults as Array<{ parameter_id: string; value: string; recorded_at: string }>) {
-    const bucket = srByParamId.get(r.parameter_id) ?? [];
-    bucket.push({ date: r.recorded_at.slice(0, 10), value: r.value });
-    srByParamId.set(r.parameter_id, bucket);
+    const ref = parseMeasureRef(r.parameter_id);
+    const bucket = srByParamId.get(ref.parameterId) ?? [];
+    bucket.push({
+      id: `${r.parameter_id}-${r.recorded_at}`, value: r.value, recordedAt: r.recorded_at, selfReported: true,
+      ...(ref.measureId ? { measureId: ref.measureId } : {}),
+      ...(ref.side ? { side: ref.side } : {}),
+    });
+    srByParamId.set(ref.parameterId, bucket);
   }
 
+  // One entry per series of a parameter (main measure, other measures, sides)
   const perfSummary = performanceParameters
-    .map((pp) => {
+    .flatMap((pp) => {
       const meta = parametersV2.find((v) => v.id === pp.athleticismParameterId);
-      const coachVals = (pp.values ?? []).map((v) => ({
-        date: v.recordedAt.slice(0, 10),
-        value: v.value,
-        source: 'coach',
+      const merged = [...allValuesOf(pp), ...(srByParamId.get(pp.athleticismParameterId) ?? [])];
+      return seriesOfValues(meta, merged).map((series) => ({
+        name: `${meta?.name ?? pp.athleticismParameterId}${series.label ? ` · ${series.label}` : ''}`,
+        unit: series.unit,
+        values: series.values
+          .map((v) => ({ date: v.recordedAt.slice(0, 10), value: v.value, source: v.selfReported ? 'athlete' : 'coach' }))
+          .sort((a, b) => a.date.localeCompare(b.date)),
       }));
-      const selfVals = (srByParamId.get(pp.athleticismParameterId) ?? []).map((v) => ({
-        date: v.date,
-        value: v.value,
-        source: 'athlete',
-      }));
-      const allVals = [...coachVals, ...selfVals].sort((a, b) =>
-        a.date.localeCompare(b.date)
-      );
-      return {
-        name: meta?.name ?? pp.athleticismParameterId,
-        unit: meta?.unit ?? '',
-        values: allVals,
-      };
     })
     .filter((p) => p.values.length > 0);
 

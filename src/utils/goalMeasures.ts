@@ -14,7 +14,7 @@ import type { ParameterValue } from '@/types/athlete';
 import type { GoalSide, SmartGoal } from '@/types/training';
 import { MAIN_MEASURE_ID, type ParameterMeasure, type ParameterV2 } from '@/types/parametersV2';
 import { latestNumericValue, parseMeasuredNumber } from '@/utils/latestParameterValue';
-import { hasCustomMeasures, limbSymmetryIndex, measureById } from '@/utils/parameterMeasures';
+import { hasCustomMeasures, limbSymmetryIndex, measureById, parameterMeasures } from '@/utils/parameterMeasures';
 
 export const GOAL_SIDE_LABELS: Record<GoalSide, string> = {
   L: 'Left', R: 'Right', both: 'Both sides', weaker: 'Weaker side', lsi: 'LSI',
@@ -38,6 +38,29 @@ export function mainSeries<V extends MeasuredValue>(values: V[]): V[] {
 /** Every value of an athlete's parameter, incl. other measures and sides */
 export function allValuesOf<V extends MeasuredValue>(pp: { values: V[]; allValues?: V[] }): V[] {
   return pp.allValues ?? pp.values;
+}
+
+/** Values grouped per series (measure + side), the main series first; label e.g. "Pain · Left" */
+export function seriesOfValues<V extends MeasuredValue>(param: ParameterV2 | undefined, values: V[]): Array<{ measureId?: string; side?: 'L' | 'R'; label: string; unit: string; values: V[] }> {
+  const groups = new Map<string, { measureId?: string; side?: 'L' | 'R'; values: V[] }>();
+  for (const v of values) {
+    const measureId = v.measureId && v.measureId !== MAIN_MEASURE_ID ? v.measureId : undefined;
+    const key = `${measureId ?? ''}|${v.side ?? ''}`;
+    const g = groups.get(key) ?? { measureId, side: v.side, values: [] };
+    g.values.push(v);
+    groups.set(key, g);
+  }
+  const measures = param ? parameterMeasures(param) : [];
+  const order = (g: { measureId?: string; side?: 'L' | 'R' }) =>
+    Math.max(0, measures.findIndex((m) => m.id === (g.measureId ?? MAIN_MEASURE_ID))) * 3 + (g.side === 'L' ? 1 : g.side === 'R' ? 2 : 0);
+  return [...groups.values()].sort((a, b) => order(a) - order(b)).map((g) => {
+    const measure = param ? measureById(param, g.measureId) : undefined;
+    const label = [
+      g.measureId ? (measure?.name ?? g.measureId) : '',
+      g.side === 'L' ? 'Left' : g.side === 'R' ? 'Right' : '',
+    ].filter(Boolean).join(' · ');
+    return { ...g, label, unit: goalUnit(measure, undefined, param?.unit ?? ''), values: g.values };
+  });
 }
 
 function latestOf<V extends MeasuredValue>(values: V[]): V | undefined {

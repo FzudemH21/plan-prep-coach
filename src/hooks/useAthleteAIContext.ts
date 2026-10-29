@@ -18,6 +18,7 @@ import { TrainingProgram } from '@/hooks/useTrainingPrograms';
 import { CalendarEvent } from '@/hooks/useCalendarEvents';
 import { ParametersDatabaseV2 } from '@/types/parametersV2';
 import { ExerciseDistribution } from '@/types/microcycle-planning';
+import { allValuesOf, seriesOfValues } from '@/utils/goalMeasures';
 
 interface UseAthleteAIContextOptions {
   athlete: Athlete;
@@ -73,15 +74,19 @@ export function useAthleteAIContext({
     let profileSection = `## Athlete: ${name}`;
     if (profileParts.length > 0) profileSection += `\n${profileParts.join(' | ')}`;
 
+    // One line per series: the main measure, other measures and sides (e.g. "Pain · Left")
     const paramLines = performanceParameters
-      .filter(pp => pp.values && pp.values.length > 0)
-      .map(pp => {
-        const sorted = [...pp.values].sort(
-          (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
-        );
-        const latest = sorted[0];
-        const unit = pp.unit ? ` ${pp.unit}` : '';
-        return `  - ${pp.parameterName ?? pp.athleticismParameterId}: ${latest.value}${unit} (recorded ${format(new Date(latest.recordedAt + (latest.recordedAt.length === 10 ? 'T12:00:00' : '')), 'MMM d, yyyy')})`;
+      .filter(pp => allValuesOf(pp).length > 0)
+      .flatMap(pp => {
+        const param = parametersData?.parameters.find(p => p.id === pp.athleticismParameterId);
+        return seriesOfValues(param, allValuesOf(pp)).map(series => {
+          const latest = [...series.values].sort(
+            (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+          )[0];
+          const unit = series.unit ? ` ${series.unit}` : '';
+          const name = `${param?.name ?? pp.athleticismParameterId}${series.label ? ` · ${series.label}` : ''}`;
+          return `  - ${name}: ${latest.value}${unit} (recorded ${format(new Date(latest.recordedAt + (latest.recordedAt.length === 10 ? 'T12:00:00' : '')), 'MMM d, yyyy')})`;
+        });
       });
     if (paramLines.length > 0) {
       profileSection += `\nPerformance Parameters:\n${paramLines.join('\n')}`;

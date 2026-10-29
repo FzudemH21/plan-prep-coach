@@ -17,6 +17,7 @@ import {
 } from '@/hooks/useAthleteCheckins';
 import type { AthleteBiometric, AthletePerformanceParameter, BiometricDefinition } from '@/types/athlete';
 import type { ParameterV2 } from '@/types/parametersV2';
+import { allValuesOf, seriesOfValues } from '@/utils/goalMeasures';
 import { epley1RM, type ExerciseEntry, type ExerciseSession, type ParamTags } from '@/hooks/useExerciseMetrics';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
@@ -174,15 +175,20 @@ export function exportPerformanceXLSX(
   for (const pp of athletePerformanceParams) {
     const param = parameters.find(p => p.id === pp.athleticismParameterId);
     if (!param) continue;
-    for (const v of [...pp.values].sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))) {
-      perfRows.push({
-        'Parameter': param.name,
-        'Category':  param.category ?? '',
-        'Unit':      param.unit ?? '',
-        'Date':      v.recordedAt.slice(0, 10),
-        'Value':     v.value,
-        'Note':      v.note ?? '',
-      });
+    // Every series of the parameter (main measure first, then other measures / sides)
+    for (const series of seriesOfValues(param, allValuesOf(pp))) {
+      for (const v of [...series.values].sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))) {
+        perfRows.push({
+          'Parameter': param.name,
+          'Measure':   series.measureId ? series.label.split(' · ')[0] : '',
+          'Side':      v.side === 'L' ? 'Left' : v.side === 'R' ? 'Right' : '',
+          'Category':  param.category ?? '',
+          'Unit':      series.unit,
+          'Date':      v.recordedAt.slice(0, 10),
+          'Value':     v.value,
+          'Note':      v.note ?? '',
+        });
+      }
     }
   }
   XLSX.utils.book_append_sheet(
