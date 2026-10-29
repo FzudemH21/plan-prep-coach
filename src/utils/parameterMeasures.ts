@@ -141,6 +141,32 @@ export function metricRefOf(cfg: { parameterId: string; measureId?: string }): s
   return measureRef(cfg.parameterId, cfg.measureId);
 }
 
+/** A test of a measure / side in the athlete app: how to ask the value (stored with the test entry) */
+export interface TestMeasureSpec {
+  name: string;
+  kind: MeasureKind;
+  unit?: string;
+  scaleMin?: number;
+  scaleMax?: number;
+  scaleMinLabel?: string;
+  scaleMaxLabel?: string;
+  levels?: string[];
+  side?: 'L' | 'R';
+}
+
+/** The spec for a test reference ("<id>::m:pain::s:L") — undefined for a plain number test */
+export function testMeasureSpec(param: Pick<ParameterV2, 'unit' | 'measures'>, ref: string): TestMeasureSpec | undefined {
+  const parsed = parseMeasureRef(ref);
+  const m = measureById(param, parsed.measureId);
+  if (!m) return undefined;
+  if (m.kind === 'number' && !parsed.side && !parsed.measureId) return undefined;
+  return {
+    name: m.name, kind: m.kind, unit: m.kind === 'number' ? m.unit : undefined,
+    scaleMin: m.scaleMin, scaleMax: m.scaleMax, scaleMinLabel: m.scaleMinLabel, scaleMaxLabel: m.scaleMaxLabel,
+    levels: m.levels, side: parsed.side,
+  };
+}
+
 export function newMeasureId(): string {
   return `m_${Math.random().toString(36).slice(2, 9)}`;
 }

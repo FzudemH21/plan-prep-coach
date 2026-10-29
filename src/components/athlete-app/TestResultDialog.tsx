@@ -2,6 +2,7 @@
  * TestResultDialog — athlete app: enter a test result (value, note, photos / videos).
  * Used by the Plan and Today tabs.
  */
+import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -133,17 +134,47 @@ export function TestResultDialog({
         <div className="space-y-4 mt-1">
           <div>
             <label className="text-sm font-medium mb-1.5 block">
-              Result{ev?.unit ? ` (${ev.unit})` : ''}
+              Result{ev?.measure?.side ? ` · ${ev.measure.side === 'L' ? 'left side' : 'right side'}` : ''}{ev?.unit ? ` (${ev.unit})` : ''}
             </label>
-            <Input
-              type="number"
-              inputMode="decimal"
-              placeholder="Enter value…"
-              value={value}
-              onChange={e => setValue(e.target.value)}
-              className="text-base h-11"
-              autoFocus
-            />
+            {/* The input matches the measure: a scale, own levels, pass / fail — or a number */}
+            {ev?.measure?.kind === 'scale' ? (
+              <div className="space-y-1.5">
+                <div className="grid grid-cols-6 gap-1.5">
+                  {Array.from({ length: (ev.measure.scaleMax ?? 10) - (ev.measure.scaleMin ?? 0) + 1 }, (_, i) => String((ev.measure?.scaleMin ?? 0) + i)).map(n => (
+                    <button key={n} type="button" onClick={() => setValue(n)}
+                      className={cn('h-11 rounded-lg border text-base font-medium tabular-nums active:scale-95',
+                        value === n ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-input')}>
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                {(ev.measure.scaleMinLabel || ev.measure.scaleMaxLabel) && (
+                  <p className="text-xs text-muted-foreground">
+                    {ev.measure.scaleMin ?? 0} = {ev.measure.scaleMinLabel || '—'} · {ev.measure.scaleMax ?? 10} = {ev.measure.scaleMaxLabel || '—'}
+                  </p>
+                )}
+              </div>
+            ) : ev?.measure?.kind === 'levels' || ev?.measure?.kind === 'passFail' ? (
+              <div className="space-y-1.5">
+                {(ev.measure.kind === 'levels' ? (ev.measure.levels ?? []) : ['Passed', 'Not passed']).map(level => (
+                  <button key={level} type="button" onClick={() => setValue(level)}
+                    className={cn('w-full min-h-[44px] rounded-lg border px-3 text-left text-sm font-medium active:scale-[0.98]',
+                      value === level ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-input')}>
+                    {level}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <Input
+                type="number"
+                inputMode="decimal"
+                placeholder="Enter value…"
+                value={value}
+                onChange={e => setValue(e.target.value)}
+                className="text-base h-11"
+                autoFocus
+              />
+            )}
           </div>
 
           <div>

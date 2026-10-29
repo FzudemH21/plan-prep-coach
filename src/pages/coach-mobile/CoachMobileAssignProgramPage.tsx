@@ -20,7 +20,7 @@ import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { useTrainingPrograms, TrainingProgram } from '@/hooks/useTrainingPrograms';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
-import { goalBaseline, valuesOfMeasure, type MeasuredValue } from '@/utils/goalMeasures';
+import { formatGoalRange, goalBaseline, valuesOfMeasure, type MeasuredValue } from '@/utils/goalMeasures';
 import type { ParameterV2 } from '@/types/parametersV2';
 import { useAuth } from '@/hooks/useAuth';
 import { syncAthleteSchedule, type AthleteFormulaData } from '@/utils/athleteScheduleSync';
@@ -169,6 +169,7 @@ function buildTestsAndEvents(
       const latest = p ? goalBaseline(sg, param, p.values) : null;
       if (latest !== null) baseline = latest;
     }
+    const goalParam = sg.linkedParameterId ? parameters.find(x => x.id === sg.linkedParameterId) : undefined;
     reviewed.push({
       id: sg.id,
       testMethod: sg.description,
@@ -178,6 +179,12 @@ function buildTestsAndEvents(
       comments: '',
       scheduledDates: sg.testDates.map(shiftDate),
       parameterLinkedId: sg.linkedParameterId,
+      // A goal per measure / side: its tests ask exactly that (the target as text, e.g. "≤ 0/10")
+      ...(sg.measureId ? { measureId: sg.measureId } : {}),
+      ...(sg.side ? { side: sg.side } : {}),
+      ...((sg.measureId || sg.side) && goalParam
+        ? { targetText: formatGoalRange({ ...sg, percentChange: 0 }, goalParam).split(' → ').pop() }
+        : {}),
     });
   });
 

@@ -341,6 +341,11 @@ export interface ReviewedSubGoal {
   comments?: string;
   scheduledDates: string[];
   parameterLinkedId?: string;
+  /** The goal's measure / side (tests of a goal per measure — stage 4 of the measures concept) */
+  measureId?: string;
+  side?: 'L' | 'R' | 'both' | 'weaker' | 'lsi';
+  /** Text of the target as the athlete sees it ("≤ 0/10", "Clean") — numbers keep goalValue + unit */
+  targetText?: string;
 }
 
 export interface ReviewedEvent {

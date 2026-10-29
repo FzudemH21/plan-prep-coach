@@ -1,3 +1,4 @@
+import { measureRef, parseMeasureRef, testMeasureSpec } from '@/utils/parameterMeasures';
 import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { addDays, format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isSameMonth, isWithinInterval } from 'date-fns';
@@ -322,13 +323,17 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
    *  athlete app can display "Goal: 10.5 s" rather than just "Goal: 10.5". */
   const enrichEvents = useCallback((events: ReturnType<typeof getEventsForAthlete>) =>
     events.map(ev => {
-      const param = ev.parameterId ? parametersData?.parameters.find(p => p.id === ev.parameterId) : undefined;
+      // A test of a measure / side has a reference "<id>::m:<measure>::s:L" — its parameter is the id
+      const ref = ev.parameterId ? parseMeasureRef(ev.parameterId) : undefined;
+      const param = ref ? parametersData?.parameters.find(p => p.id === ref.parameterId) : undefined;
+      const measure = param && ev.parameterId ? testMeasureSpec(param, ev.parameterId) : undefined;
       return {
         ...ev,
-        unit: param?.unit,
+        unit: measure ? measure.unit : param?.unit,
         // Test details from the parameter database, shown in the athlete app
         instructions: param?.testInstructions,
         videoUrl: param?.testVideoUrl,
+        ...(measure ? { measure } : {}),
       };
     }),
   [parametersData]);
@@ -2472,17 +2477,28 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
               const toAdd: Array<Omit<CalendarEvent, 'id'>> = [];
 
               (assignment.reviewedSubGoals || []).forEach(sg => {
+                // A goal per measure: the test is of that measure; per side: one test per side
+                // (left / right — both sides, the weaker side and the LSI need both values)
+                const param = sg.parameterLinkedId ? parametersData?.parameters.find(p => p.id === sg.parameterLinkedId) : undefined;
+                const sides: Array<'L' | 'R' | undefined> = !param?.perSide || !sg.side ? [undefined]
+                  : sg.side === 'L' || sg.side === 'R' ? [sg.side] : ['L', 'R'];
+                const split = sides.length > 1;
                 sg.scheduledDates.forEach(d => {
                   const date = d.substring(0, 10);
-                  if (existingSet.has(existingKey('test', sg.testMethod, date))) return;
-                  toAdd.push({
-                    type: 'test',
-                    title: sg.testMethod,
-                    date,
-                    assignmentId: eventsAssignmentId,
-                    parameterId: sg.parameterLinkedId || undefined,
-                    targetValue: sg.goalValue ? String(sg.goalValue) : undefined,
-                    notes: sg.comments || undefined,
+                  sides.forEach(side => {
+                    const title = split ? `${sg.testMethod.replace(/ · (Both sides|Weaker side|LSI)$/, '')} · ${side === 'L' ? 'Left' : 'Right'}` : sg.testMethod;
+                    if (existingSet.has(existingKey('test', title, date))) return;
+                    const target = sg.targetText ?? (sg.goalValue ? String(sg.goalValue) : undefined);
+                    toAdd.push({
+                      type: 'test',
+                      title,
+                      date,
+                      assignmentId: eventsAssignmentId,
+                      parameterId: sg.parameterLinkedId ? measureRef(sg.parameterLinkedId, sg.measureId, side) : undefined,
+                      // The LSI goal is not a target per side — it goes into the note
+                      targetValue: sg.side === 'lsi' ? undefined : target,
+                      notes: [sg.comments, sg.side === 'lsi' && target ? `Goal: LSI ${target}` : ''].filter(Boolean).join(' · ') || undefined,
+                    });
                   });
                 });
               });

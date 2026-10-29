@@ -44,7 +44,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { toParameterId } from '@/utils/parameterRef';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
-import { goalBaseline, valuesOfMeasure } from '@/utils/goalMeasures';
+import { formatGoalRange, goalBaseline, valuesOfMeasure } from '@/utils/goalMeasures';
 
 interface AssignProgramDialogProps {
   open: boolean;
@@ -256,6 +256,7 @@ export function AssignProgramDialog({
         const latest = goalBaseline(sg, param, athleteValuesOf(sg.linkedParameterId));
         if (latest !== null) baseline = latest;
       }
+      const goalParam = sg.linkedParameterId ? parametersData.parameters.find(p => p.id === toParameterId(sg.linkedParameterId!)) : undefined;
       reviewed.push({
         id: sg.id,
         testMethod: sg.description,
@@ -265,6 +266,12 @@ export function AssignProgramDialog({
         comments: '',
         scheduledDates: shiftedDates,
         parameterLinkedId: sg.linkedParameterId,
+        // A goal per measure / side: its tests ask exactly that (the target as text, e.g. "≤ 0/10")
+        ...(sg.measureId ? { measureId: sg.measureId } : {}),
+        ...(sg.side ? { side: sg.side } : {}),
+        ...((sg.measureId || sg.side) && goalParam
+          ? { targetText: formatGoalRange({ ...sg, percentChange: 0 }, goalParam).split(' → ').pop() }
+          : {}),
       });
     });
 

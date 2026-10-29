@@ -1,3 +1,4 @@
+import type { TestMeasureSpec } from '@/utils/parameterMeasures';
 import type { IntervalSpec } from '@/types/toolbox';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -116,6 +117,8 @@ export interface AthleteCalendarEvent {
   /** Test details from the coach's parameter database */
   instructions?: string;
   videoUrl?: string;
+  /** A test of a measure / side: how the value is asked (scale, levels, pass / fail, side) */
+  measure?: TestMeasureSpec;
   /** An event over several days: its first and last day (the entry is on every one of its days) */
   startDate?: string;
   endDate?: string;

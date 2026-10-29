@@ -5,6 +5,7 @@
  * produced during plan assignment. Called after handleAssignProgram writes to
  * localStorage, so the athlete app can read sessions directly from Supabase.
  */
+import type { TestMeasureSpec } from '@/utils/parameterMeasures';
 import { intervalSpecFor, type IntervalSpec } from '@/types/toolbox';
 import { supabase } from '@/lib/supabase';
 import { getExerciseVisibility, sessionMetaKey, type SessionVisibilityData } from '@/utils/parameterVisibility';
@@ -211,7 +212,7 @@ async function buildExerciseDetailMap(userId: string): Promise<ExerciseDetailMap
 }
 
 /** CalendarEvent enriched with the parameter unit, resolved at call time. */
-export type SyncCalendarEvent = CalendarEvent & { unit?: string; instructions?: string; videoUrl?: string };
+export type SyncCalendarEvent = CalendarEvent & { unit?: string; instructions?: string; videoUrl?: string; measure?: TestMeasureSpec };
 
 /** One test / event as the athlete app reads it from an athlete_schedule row */
 export interface ScheduleEventEntry {
@@ -224,6 +225,8 @@ export interface ScheduleEventEntry {
   parameterId?: string;
   instructions?: string;
   videoUrl?: string;
+  /** A test of a measure / side: how the app asks the value */
+  measure?: TestMeasureSpec;
   /** Multi-day events: first and last day, so the app can show "1–14 Aug" (the entry is on every day) */
   startDate?: string;
   endDate?: string;
@@ -241,6 +244,7 @@ export function scheduleEntryOf(ev: SyncCalendarEvent): ScheduleEventEntry {
     // Test details from the parameter database (athlete app "Test details")
     instructions: ev.instructions ?? undefined,
     videoUrl: ev.videoUrl ?? undefined,
+    ...(ev.measure ? { measure: ev.measure } : {}),
     ...(isMultiDayEvent(ev) ? { startDate: ev.date, endDate: eventEndDate(ev) } : {}),
   };
 }
