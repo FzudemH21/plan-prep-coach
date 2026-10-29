@@ -503,7 +503,7 @@ function SpotFieldsEditor({ field, onChange }: { field: AnamnesisField; onChange
     write(next);
   };
   return (
-    <div className="ml-1 border-l-2 border-primary/40 pl-3 space-y-2">
+    <div className="ml-1 border-l-2 border-primary/40 bg-muted/40 rounded-r-md pl-3 pr-2 py-2 space-y-2">
       <div className="flex items-center gap-1.5"
         title="Asked for every spot the athlete marks, right after tapping it. A spot marked as part of an earlier one (e.g. pain radiating into the leg) is not asked again.">
         <MapPin className="h-3.5 w-3.5 text-primary" />
@@ -776,7 +776,9 @@ export function TemplateEditorDialog({
             <AnamnesisTranslationEditor draft={draft()} lang={translationLang} onChange={applyDraft} />
           </div>
         ) : (<>
-        <div className="px-6 pb-2 shrink-0">
+        {/* Name and introduction scroll with the questions — the questions get the dialog's height */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6">
+        <div className="pb-3">
           {showPresets && (
             <div className="mb-3 rounded-md border bg-muted/30 p-2.5 flex items-center gap-2">
               <Label className="text-sm shrink-0">Start from</Label>
@@ -802,18 +804,14 @@ export function TemplateEditorDialog({
             placeholder="e.g. Hi! Before our first appointment, please answer a few questions about your health and training — it takes about 10 minutes."
             className="min-h-[72px] text-sm resize-y"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            Shown on the start screen when the athlete opens the link. Leave empty for the standard text. The number of questions, the expiry date and "answers are saved" are added automatically.
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">Start screen of the form link — leave empty for the standard text</p>
         </div>
-
-        <div className="flex-1 min-h-0 overflow-y-auto px-6">
           <div className="space-y-2 pb-4">
             {/* The fixed start of every form link — filled from / into the athlete profile */}
             <div className="rounded-lg border border-dashed bg-muted/20 p-3 space-y-2">
               <div>
                 <p className="text-sm font-semibold">About the athlete <span className="font-normal text-muted-foreground">(always first in the form link)</span></p>
-                <p className="text-xs text-muted-foreground">Pre-filled from the athlete profile; the athlete's answers can be applied to the profile afterwards. Switch off what you don't need.</p>
+                <p className="text-xs text-muted-foreground">Pre-filled from the athlete profile — switch off what you don't need</p>
               </div>
               <div className="grid gap-1.5 sm:grid-cols-2">
                 {ANAMNESIS_PROFILE_STEPS.map(stepDef => {
