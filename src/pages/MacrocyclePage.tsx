@@ -16,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { SmartGoal, SubGoal, TrainableQuality, Event, PlanDuration } from "@/types/training";
-import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText, Check, ChevronsUpDown, ChevronDown, ChevronRight, Pencil, Link, CheckSquare } from "lucide-react";
+import { User, Target, Calendar as CalendarIcon, Plus, Bot, X, Trash2, FileText, Check, ChevronsUpDown, ChevronDown, ChevronRight, Pencil, Link, CheckSquare, Layers } from "lucide-react";
 import { ResourcesButton } from "@/components/programs/ResourcesButton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -54,7 +54,7 @@ import { useCalendarEvents, groupConsecutiveDates } from "@/hooks/useCalendarEve
 import { TEST_COLOR, EVENT_COLOR, testEventGradient } from "@/lib/eventColors";
 import { PlanNotesField } from "@/components/shared/PlanNotesField";
 import type { ParameterMeasure } from "@/types/parametersV2";
-import { allValuesOf, formatGoalRange, goalBaseline, goalDescription, goalMeasurePart, goalNumberOf, goalShowsPercent, goalUnit, groupGoalsByParameter, valuesOfMeasure } from "@/utils/goalMeasures";
+import { allValuesOf, formatGoalRange, goalBaseline, goalDescription, goalMeasurePart, goalNumberOf, goalShowsPercent, goalUnit, groupGoalsByParameter, relinkMergedSideGoal, valuesOfMeasure } from "@/utils/goalMeasures";
 import { appliesToMeasure, hasCustomMeasures, measureById, parameterMeasures } from "@/utils/parameterMeasures";
 import { isDatabaseAction, useDatabaseAIActions } from "@/hooks/useDatabaseAIActions";
 import { applyNotesAction, readNotesHistory, restoreNotesVersion, strategyContext, WRITE_UP_PROMPT, type PlanNotesVersion } from "@/utils/planStrategy";
@@ -850,7 +850,14 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   // Get athlete performance parameters for the Add Goal dialog
   const athletePerformanceParams = athleteParamsForGoals;
   const athleticismParameters = parametersDataV2?.parameters || [];
-  
+
+  // Goals of left / right parameters merged into one per-side parameter: under it, with their side
+  useEffect(() => {
+    if (athleticismParameters.length === 0) return;
+    const relinked = smartGoals.map((g) => relinkMergedSideGoal(g, athleticismParameters));
+    if (relinked.some((g, i) => g !== smartGoals[i])) setSmartGoals(relinked);
+  }, [athleticismParameters, smartGoals]);
+
   // State for create parameter dialog
   const [isCreateParameterDialogOpen, setIsCreateParameterDialogOpen] = useState(false);
   const [pendingGoalAfterParameterCreation, setPendingGoalAfterParameterCreation] = useState(false);
@@ -1276,10 +1283,16 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                 const usedMeasures = new Set(group.goals.map((g) => g.measureId ?? "main"));
                 const nextMeasure = param ? parameterMeasures(param).find((m) => !usedMeasures.has(m.id)) : undefined;
                 return (
-                  <div key={group.key} className="border rounded-lg bg-muted/30">
+                  <div key={group.key} className={cn("border rounded-lg overflow-hidden", grouped ? "bg-background" : "bg-muted/30")}>
                     {grouped && param && (
-                      <div className="flex items-center justify-between gap-2 px-3 pt-2.5">
-                        <span className="font-medium truncate">{param.name}</span>
+                      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-muted/70 border-b">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="font-semibold truncate">{param.name}</span>
+                          {group.goals.length > 1 && (
+                            <Badge variant="outline" className="shrink-0 text-xs font-normal">{group.goals.length} goals</Badge>
+                          )}
+                        </div>
                         {(hasCustomMeasures(param) || param.perSide) && (
                           <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-muted-foreground"
                             onClick={() => {
@@ -1292,8 +1305,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                         )}
                       </div>
                     )}
+                    <div className={cn(grouped && "ml-4 border-l-2 border-primary/30")}>
                     {group.goals.map((goal) => (
-                      <div key={goal.id} className={cn("p-3 flex items-start justify-between gap-3", grouped && "pl-6 pt-2 border-t first-of-type:border-t-0")}>
+                      <div key={goal.id} className={cn("p-3 flex items-start justify-between gap-3", grouped && "border-t first:border-t-0")}>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className={cn("truncate", grouped ? "text-sm font-medium" : "font-medium")}>
@@ -1312,6 +1326,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                           <p className="text-sm text-muted-foreground mt-1">
                             {formatGoalRange(goal, param)}
                           </p>
+                          {goal.linkedParameterId && !param && athleticismParameters.length > 0 && (
+                            <p className="text-xs text-amber-600 mt-1">Its parameter is no longer in the database — edit the goal to link another one.</p>
+                          )}
                           {goal.testDates && goal.testDates.length > 0 && (
                             <p className="text-xs text-green-600 mt-1">
                               📅 {goal.testDates.map(d => format(parseDateStr(d), 'd MMM yyyy')).join(', ')}
@@ -1345,6 +1362,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                         </div>
                       </div>
                     ))}
+                    </div>
                   </div>
                 );
               })

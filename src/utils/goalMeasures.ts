@@ -152,6 +152,33 @@ export function goalDescription(param: ParameterV2, goal: GoalRef): string {
   return part ? `${param.name} · ${part}` : param.name;
 }
 
+/** "DB RFESS 3RM - Right" → 'R' */
+function sideInName(name: string): 'L' | 'R' | undefined {
+  const m = name.match(/\b(left|right)\b/i);
+  return m ? (m[1].toLowerCase() === 'left' ? 'L' : 'R') : undefined;
+}
+
+/** "DB RFESS 3RM - Right" → "DB RFESS 3RM", "Single-Leg CMJ Height - Left (Hands on Hips)" → "Single-Leg CMJ Height (Hands on Hips)" */
+function withoutSideInName(name: string): string {
+  return name.replace(/\s*[-–]\s*(left|right)\b/i, '').replace(/\b(left|right)\b\s*/i, '').replace(/\s{2,}/g, ' ').trim();
+}
+
+/**
+ * A goal whose left / right parameter was merged into one parameter recorded per side (2026-10-29):
+ * the side comes from the goal's old name ("… - Right"), and a goal of the removed parameter moves to
+ * the parameter now named like it without the side. Other goals stay as they are.
+ */
+export function relinkMergedSideGoal<G extends SmartGoal>(goal: G, parameters: ParameterV2[]): G {
+  if (!goal.linkedParameterId || goal.side) return goal;
+  const side = sideInName(goal.description);
+  if (!side) return goal;
+  const own = parameters.find((p) => p.id === goal.linkedParameterId);
+  const param = own ?? parameters.find((p) => p.name.trim().toLowerCase() === withoutSideInName(goal.description).toLowerCase());
+  if (!param?.perSide) return goal;
+  const next = { ...goal, linkedParameterId: param.id, side };
+  return { ...next, description: goalDescription(param, next) };
+}
+
 /** Goals grouped by their parameter (in order of first appearance); goals without one stay alone */
 export function groupGoalsByParameter<G extends Pick<SmartGoal, 'id' | 'linkedParameterId'>>(goals: G[]): Array<{ key: string; parameterId?: string; goals: G[] }> {
   const groups: Array<{ key: string; parameterId?: string; goals: G[] }> = [];
