@@ -84,6 +84,36 @@ const normalizeForComparison = (str: unknown): string => {
     .replace(/[^a-z0-9]/g, '');
 };
 
+/** A microcycle's length in days — a whole number ≥ 1 (an empty / broken stored value counts as 7) */
+const microcycleDays = (duration: unknown): number => {
+  const n = typeof duration === 'number' ? duration : Number(duration);
+  return Number.isFinite(n) && n >= 1 ? Math.round(n) : 7;
+};
+
+/**
+ * The days of a microcycle: the field may be empty while typing (e.g. 7 → 5), but only a whole
+ * number ≥ 1 is passed on — an empty value used to become NaN days and crash the page (invalid dates).
+ */
+function MicrocycleDaysInput({ value, onChange }: { value: number; onChange: (days: number) => void }) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => { setDraft(String(value)); }, [value]);
+  return (
+    <Input
+      type="number"
+      min="1"
+      max="14"
+      value={draft}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        const n = Number(e.target.value);
+        if (e.target.value.trim() !== '' && Number.isInteger(n) && n >= 1) onChange(n);
+      }}
+      onBlur={() => setDraft(String(value))}
+      className="w-16"
+    />
+  );
+}
+
 export default function MesocyclePage() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(() => {
@@ -323,6 +353,7 @@ export default function MesocyclePage() {
             // Convert date strings back to Date objects (localStorage serializes dates as strings)
             const mesocyclesWithDates = savedMesocycles.mesocycles.map((meso: any) => ({
               ...meso,
+              microcycles: (meso.microcycles || []).map((mc: any) => ({ ...mc, duration: microcycleDays(mc.duration) })),
               startDate: meso.startDate ? new Date(meso.startDate) : new Date(),
               endDate: meso.endDate ? new Date(meso.endDate) : new Date(),
             }));
@@ -330,7 +361,7 @@ export default function MesocyclePage() {
             // Recalculate all dates based on microcycle durations to fix any stale endDate values
             let currentMesoStart = startDate;
             const recalculatedMesocycles = mesocyclesWithDates.map((meso: any) => {
-              const totalDays = (meso.microcycles || []).reduce((sum: number, mc: any) => sum + (mc.duration || 7), 0);
+              const totalDays = (meso.microcycles || []).reduce((sum: number, mc: any) => sum + microcycleDays(mc.duration), 0);
               const mesoStartDate = currentMesoStart;
               const mesoEndDate = addDays(currentMesoStart, totalDays - 1);
               currentMesoStart = addDays(mesoEndDate, 1);
@@ -790,7 +821,7 @@ export default function MesocyclePage() {
   const recalculateAllMesocycleDates = (mesocyclesArray: ExtendedMesocycle[], startDate: Date): ExtendedMesocycle[] => {
     let currentDate = startDate;
     return mesocyclesArray.map(meso => {
-      const totalDays = meso.microcycles.reduce((sum, mc) => sum + mc.duration, 0);
+      const totalDays = meso.microcycles.reduce((sum, mc) => sum + microcycleDays(mc.duration), 0);
       const mesoStartDate = currentDate;
       const mesoEndDate = addDays(currentDate, totalDays - 1);
       currentDate = addDays(mesoEndDate, 1); // Next mesocycle starts day after
@@ -1062,13 +1093,9 @@ export default function MesocyclePage() {
                               />
                               <div className="flex items-center space-x-2">
                                 <Label className="text-sm">Days:</Label>
-                                <Input
-                                  type="number"
-                                  min="1"
-                                  max="14"
+                                <MicrocycleDaysInput
                                   value={micro.duration}
-                                  onChange={(e) => updateMicrocycle(index, microIndex, 'duration', parseInt(e.target.value))}
-                                  className="w-16"
+                                  onChange={(days) => updateMicrocycle(index, microIndex, 'duration', days)}
                                 />
                               </div>
                               <Button
@@ -5431,7 +5458,7 @@ export default function MesocyclePage() {
           microcycles: m.microcycles.map((mc, j) => ({
             id: `micro-${i + 1}-${j + 1}`,
             name: mc.name ?? `Microcycle ${j + 1}`,
-            duration: mc.duration,
+            duration: microcycleDays(mc.duration),
             intensity: migrateLegacyIntensity(mc.intensity ?? "5") as IntensityLevel,
           })),
         }));

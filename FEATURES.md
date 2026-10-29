@@ -130,6 +130,7 @@ These features extend the existing Athlete Profile page in the coach web app.
 
 | Feature | Notes |
 |---|---|
+| **Fix: crash when changing a microcycle's days (2026-10-29)** | ✅ Done — mesocycle setup: while typing (e.g. 7 → 5) the days field was briefly empty, the empty value became NaN days and the date calculation crashed the page (white screen). The field (`MicrocycleDaysInput`) now only passes on whole numbers ≥ 1 and shows the stored value again when left empty; stored broken durations (and durations from the AI) become a valid number (`microcycleDays`, 7 if missing). |
 | **Delete anamneses together with the athlete** | ✅ Done — `deleteAthleteCloudData` (`src/utils/athleteDataDeletion.ts`) removes anamnesis records + their files, the athlete-app connection's files (test-result photos/videos in `athlete-uploads`, chat files) and then the connection (DB cascade: schedule, logs, test results, check-ins, chat); the athlete calendar's per-session browser data is cleared too. Revoking the app connection also removes its files. Needs migration `20261001_coach_delete_athlete_files.sql` (coach delete/list policies); the dialog lists everything and a toast reports leftovers. Not covered: training programs the coach built for the athlete (the coach's own work) and the 25 Sept anamnesis backup tables (drop them via the commented lines in the migration). |
 | Code Audit Quick Fixes (1-4) | |
 | Remove Athleticism DB v1 | |
