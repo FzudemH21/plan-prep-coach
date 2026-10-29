@@ -185,7 +185,9 @@ export default function MesocyclePage() {
   
   // Collapse/expand state for Step 4 (Method Periodization)
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
-  const [collapsedMethods, setCollapsedMethods] = useState<Set<string>>(new Set());
+  // Methods are collapsed until opened — the step starts with all of them closed (it is a lot otherwise)
+  const [expandedMethods, setExpandedMethods] = useState<Set<string>>(new Set());
+  const isMethodCollapsed = (fullMethodName: string) => !expandedMethods.has(fullMethodName);
   
   // Method parameter visibility overrides for Step 4
   // Key: methodName (or fullMethodName with category), Value: { parameterName: boolean }
@@ -206,7 +208,7 @@ export default function MesocyclePage() {
   };
   
   const toggleMethodCollapse = (methodName: string) => {
-    setCollapsedMethods(prev => {
+    setExpandedMethods(prev => {
       const next = new Set(prev);
       if (next.has(methodName)) {
         next.delete(methodName);
@@ -217,6 +219,11 @@ export default function MesocyclePage() {
     });
   };
   
+  // Entering step 4: all methods closed again
+  useEffect(() => {
+    if (currentStep === 4) setExpandedMethods(new Set());
+  }, [currentStep]);
+
   const { data: toolboxData } = useToolboxData();
   const { data: parametersDataV2 } = useParametersDataV2();
   const { libraries: exerciseLibraries } = useCustomLibraries();
@@ -1029,6 +1036,7 @@ export default function MesocyclePage() {
                               setMesocycles(updated);
                             }}
                             onClick={(e) => e.stopPropagation()}
+                            placeholder="Phase name, e.g. Accumulation"
                             className="font-medium flex-1"
                           />
                           <div className="flex items-center space-x-2">
@@ -1066,6 +1074,20 @@ export default function MesocyclePage() {
                           </div>
                         </div>
                       </div>
+                    </div>
+
+                    {/* The phase's aim — the same text as the "Description" row of the periodization table
+                        (step 4), so it is clear there what each block should achieve */}
+                    <div className="px-4 py-3 border-b bg-muted/20 space-y-1">
+                      <Label htmlFor={`meso-aim-${meso.id}`} className="text-xs text-muted-foreground">Aim of this phase</Label>
+                      <Textarea
+                        id={`meso-aim-${meso.id}`}
+                        rows={2}
+                        className="min-h-[56px] text-sm bg-background"
+                        placeholder="What should this phase achieve? e.g. Restore ankle loading capacity, build strength base, pain ≤ 2/10 in hops"
+                        value={mesocycleNotes[meso.id] ?? ''}
+                        onChange={(e) => setMesocycleNotes((prev) => ({ ...prev, [meso.id]: e.target.value }))}
+                      />
                     </div>
 
                     {/* Microcycles List - Expandable */}
@@ -1774,7 +1796,7 @@ export default function MesocyclePage() {
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p>{mesocycleNotes[meso.id] ? 'Edit coach notes' : 'Add coach notes'}</p>
+                              <p>{mesocycleNotes[meso.id] ? 'Edit the aim of this phase' : 'Add the aim of this phase'}</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -3249,6 +3271,10 @@ export default function MesocyclePage() {
       .flat()
       .reduce((longest, name) => (name.length > longest.length ? name : longest), '');
     const periodizationLeftColumnWidth = Math.max(220, Math.min(300, widestMethodName.length * 4.5 + 130));
+    // Every method row of the table (split methods: one per exercise category) — for "Expand all"
+    const allPeriodizationRows = Object.values(groupedMethods).flatMap((subCategories) => Object.values(subCategories)).flat()
+      .flatMap((method) => (categorySplitStates[method] ? getMethodExerciseCategories(method).map((cat) => `${method}::${cat}`) : [method]));
+    const allRowsExpanded = allPeriodizationRows.length > 0 && allPeriodizationRows.every((row) => expandedMethods.has(row));
 
     // Helper function to get mesocycle overview data
     const getMesocycleOverview = (mesocycle: ExtendedMesocycle) => {
@@ -3346,7 +3372,16 @@ export default function MesocyclePage() {
               })()}
               
               <div className="space-y-3">
-               <h3 className="text-lg font-semibold">Method Periodization</h3>
+               <div className="flex items-center justify-between gap-2">
+                 <h3 className="text-lg font-semibold">Method Periodization</h3>
+                 {allPeriodizationRows.length > 0 && (
+                   <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs"
+                     onClick={() => setExpandedMethods(allRowsExpanded ? new Set() : new Set(allPeriodizationRows))}>
+                     <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', allRowsExpanded && 'rotate-180')} />
+                     {allRowsExpanded ? 'Collapse all' : 'Expand all'}
+                   </Button>
+                 )}
+               </div>
                
                {/* Mesocycle Toggle Bar — shared selection with Exercise Selection (step 5) */}
                <MesocycleVisibilityToggles
@@ -3420,7 +3455,7 @@ export default function MesocyclePage() {
                                             </p>
                                           ) : (
                                             <span className="text-muted-foreground italic">
-                                              No description added
+                                              No aim for this phase yet
                                             </span>
                                           )}
                                         </div>
@@ -3445,7 +3480,7 @@ export default function MesocyclePage() {
                                               </Button>
                                             </TooltipTrigger>
                                             <TooltipContent>
-                                              {mesocycleNotes[meso.id] ? 'Edit description' : 'Add description'}
+                                              {mesocycleNotes[meso.id] ? 'Edit the aim of this phase' : 'Add the aim of this phase'}
                                             </TooltipContent>
                                           </Tooltip>
                                         </TooltipProvider>
@@ -3624,7 +3659,7 @@ export default function MesocyclePage() {
                                                       <ChevronDown
                                                         className={cn(
                                                           "h-4 w-4 transition-transform text-muted-foreground",
-                                                          (collapsedMethods.has(fullMethodName) || (categoryName && collapsedMethods.has(method))) && "-rotate-90"
+                                                          isMethodCollapsed(fullMethodName) && "-rotate-90"
                                                         )}
                                                       />
                                                     </button>
@@ -3874,7 +3909,7 @@ export default function MesocyclePage() {
                                          </div>
                                       
                                        {/* Parameter sub-rows */}
-                                       {parameters.length > 0 && !collapsedMethods.has(fullMethodName) && !(categoryName && collapsedMethods.has(method)) && (
+                                       {parameters.length > 0 && !isMethodCollapsed(fullMethodName) && (
                                          <div className="divide-y">
                                              {parameters.filter((param) => isParameterVisibleForMethod(fullMethodName, param.name, true)).map((param) => (
                                                   <div key={param.name} className="grid gap-1 w-fit hover:bg-muted/5" style={{ 
@@ -5205,6 +5240,10 @@ export default function MesocyclePage() {
       : totalWeeks > 0 ? `Plan duration: ${totalWeeks} weeks` : "";
     const notesStr = strategyContext(macrocycleData?.planNotes);
     const mesoCount = mesocycles.length;
+    // Setup: the mesocycles are the phases of the plan — named and with an aim before the details
+    const phaseHint = currentStep === 1 && mesoCount > 0
+      ? "Mesocycle Setup — think in PHASES: each mesocycle should have a meaningful name (e.g. \"Accumulation\", \"Return to Run\") and an aim (what the block should achieve). When names are still the defaults (\"Mesocycle 1\") or descriptions are missing, offer to name them (rename_cycles) and write the aims (set_mesocycle_description), based on the goals, the strategy notes and the structure — one short paragraph or a few bullets per phase. The aims are shown above the periodization table in step 4."
+      : "";
     const mesoStr = mesoCount > 0
       ? `Mesocycles (${mesoCount}):\n${mesocycles.map((m) => {
           const mesoDays = m.microcycles?.reduce((s, mc) => s + mc.duration, 0) ?? 0;
@@ -5389,6 +5428,7 @@ export default function MesocyclePage() {
       goalStr,
       durationStr,
       mesoStr,
+      phaseHint,
       dailyIntensityStr,
       methodsStr,
       notesStr,
@@ -5766,7 +5806,7 @@ export default function MesocyclePage() {
         <Dialog open={notesDialogOpen} onOpenChange={setNotesDialogOpen}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Coach Notes - {selectedMesocycleForNotes?.name}</DialogTitle>
+              <DialogTitle>Aim of this phase — {selectedMesocycleForNotes?.name}</DialogTitle>
               <DialogDescription>
                 {selectedMesocycleForNotes && (
                   <>
@@ -5777,7 +5817,7 @@ export default function MesocyclePage() {
               </DialogDescription>
             </DialogHeader>
             <Textarea
-              placeholder="Add notes about training focus, adaptations, special considerations, tapering strategies..."
+              placeholder="What should this phase achieve? Focus, key adaptations, special considerations…"
               value={selectedMesocycleForNotes ? (mesocycleNotes[selectedMesocycleForNotes.id] || '') : ''}
               onChange={(e) => {
                 if (selectedMesocycleForNotes) {
