@@ -1,3 +1,4 @@
+import { metricRefOf } from '@/utils/parameterMeasures';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, BookOpen, Check, GripVertical, Trash2, MessageCircle, Trophy, Calendar, ClipboardCheck, Loader2 } from 'lucide-react';
@@ -616,7 +617,7 @@ export default function CoachMobileAthleteProfilePage() {
   const enabledCustomBlocks = enabledBlocks.filter(
     (b): b is typeof b & { config: NonNullable<typeof b.config> } => b.type === 'custom_metric' && !!b.config
   );
-  const customBlockParamIds = enabledCustomBlocks.map(b => b.config.parameterId).join(',');
+  const customBlockParamIds = enabledCustomBlocks.map(b => metricRefOf(b.config)).join(',');
 
   const { checkins, loading: checkinsLoading } = useAthleteCheckins(connection?.id ?? null, 90);
   const todayCheckin   = checkins.find(c => c.date === today) ?? null;
@@ -645,13 +646,13 @@ export default function CoachMobileAthleteProfilePage() {
           .from('athlete_test_results')
           .select('value, recorded_at')
           .eq('athlete_connection_id', connection.id)
-          .eq('parameter_id', block.config.parameterId)
+          .eq('parameter_id', metricRefOf(block.config))
           .order('recorded_at', { ascending: true });
         const rows = (data ?? []).map((r: { value: string; recorded_at: string }) => ({
           date: (r.recorded_at as string).slice(0, 10),
           value: parseFloat(String(r.value)),
         }));
-        return { parameterId: block.config.parameterId, rows };
+        return { parameterId: metricRefOf(block.config), rows };
       })
     ).then(results => {
       if (cancelled) return;
@@ -1230,7 +1231,7 @@ export default function CoachMobileAthleteProfilePage() {
 
                 {/* Custom metric cards — tap to expand chart */}
                 {enabledCustomBlocks.map(block => {
-                  const pid = block.config.parameterId;
+                  const pid = metricRefOf(block.config);
                   const metric = customMetricValues.get(pid);
                   const history = customMetricHistory.get(pid) ?? [];
                   const isExpanded = expandedMetricId === pid;

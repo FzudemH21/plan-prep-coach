@@ -133,7 +133,7 @@ export const getAthleteDisplayName = (athlete: Athlete): string => {
 // ============ MONITORING CONFIG ============
 
 export type MonitoringBlockType = 'wellbeing' | 'ostrc' | 'custom_metric';
-export type CustomMetricInputType = 'number' | 'scale';
+export type CustomMetricInputType = 'number' | 'scale' | 'levels';
 
 export interface ScaleAnchor {
   value: number;
@@ -145,8 +145,11 @@ export interface CustomMetricBlockConfig {
   parameterId: string;
   /** Which database this metric lives in */
   parameterSource: 'biometric' | 'performance';
-  /** Cached display name */
+  /** Cached display name ("30 m Sprint · Pain" for a measure) */
   parameterName: string;
+  /** Which measure of the parameter is monitored (unset = the main measure); values are stored under
+   *  measureRef(parameterId, measureId) — see src/utils/parameterMeasures.ts */
+  measureId?: string;
   /** Cached unit (e.g. "bpm", "kg") or null */
   parameterUnit: string | null;
   /** How the athlete inputs the value */
@@ -157,6 +160,8 @@ export interface CustomMetricBlockConfig {
   scaleMin?: number;
   scaleMax?: number;
   scaleAnchors?: ScaleAnchor[];
+  /** levels: the levels from worst to best (the athlete picks one; stored as its name) */
+  levels?: string[];
 }
 
 export interface MonitoringBlock {

@@ -32,7 +32,7 @@ import { AthletePerformanceParameter } from "@/types/athlete";
 import { ParameterV2 } from "@/types/parametersV2";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { hasCustomMeasures, measureById, parameterMeasures } from "@/utils/parameterMeasures";
-import { GOAL_SIDE_LABELS, goalBaseline, goalDescription, goalShowsPercent, goalUnit } from "@/utils/goalMeasures";
+import { GOAL_SIDE_LABELS, goalBaseline, goalDescription, goalShowsPercent, goalUnit, valuesOfMeasure } from "@/utils/goalMeasures";
 
 interface ParameterOptionItem {
   id: string;
@@ -151,8 +151,10 @@ export function AddSmartGoalDialog({
       .map((pp): ParameterOptionItem | null => {
         const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
         if (!param) return null;
-        const latestValue = pp.values.length > 0
-          ? pp.values.reduce((latest, v) =>
+        // "current" = the main measure's latest value (values of other measures, e.g. pain, are separate)
+        const mainValues = valuesOfMeasure(pp.values, undefined);
+        const latestValue = mainValues.length > 0
+          ? mainValues.reduce((latest, v) =>
               new Date(v.recordedAt) > new Date(latest.recordedAt) ? v : latest
             ).value
           : null;

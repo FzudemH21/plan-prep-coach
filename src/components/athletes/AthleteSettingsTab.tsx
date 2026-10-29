@@ -55,6 +55,8 @@ import {
 import type { CustomMetricBlockConfig } from '@/types/athlete';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
+import type { ParameterV2 } from '@/types/parametersV2';
+import { MEASURE_KIND_LABELS, hasCustomMeasures, measureById, measureLabel, measureSummary, parameterMeasures } from '@/utils/parameterMeasures';
 import { useAthletes } from '@/hooks/useAthletes';
 
 // ── Monitoring templates (localStorage) ──────────────────────────────────────
@@ -484,7 +486,10 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
   const [editingBlock, setEditingBlock] = useState<MonitoringBlock | null>(null);
   const [addStep, setAddStep] = useState<'pick_param' | 'create_new' | 'configure'>('pick_param');
   const [selectedParam, setSelectedParam] = useState<{ id: string; name: string; unit?: string; source: 'biometric' | 'performance' } | null>(null);
-  const [inputType, setInputType] = useState<'number' | 'scale'>('number');
+  const [inputType, setInputType] = useState<'number' | 'scale' | 'levels'>('number');
+  // A performance parameter with several measures: which one is monitored (the input comes from it)
+  const [measureId, setMeasureId] = useState<string | undefined>(undefined);
+  const [levels, setLevels] = useState<string[]>([]);
   const [scaleMin, setScaleMin] = useState(0);
   const [scaleMax, setScaleMax] = useState(10);
   const [scaleMinLabel, setScaleMinLabel] = useState('');
@@ -560,6 +565,7 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
     setInputType('number');
     setScaleMin(0); setScaleMax(10);
     setScaleMinLabel(''); setScaleMaxLabel('');
+    setMeasureId(undefined); setLevels([]);
     setCustomLabel(''); setParamSearch('');
     setNewName(''); setNewUnit(''); setCreating(false);
     setCreateSource('biometric');
@@ -582,19 +588,45 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
     const maxAnchor = cfg.scaleAnchors?.find(a => a.value === (cfg.scaleMax ?? 10));
     setScaleMinLabel(minAnchor?.label ?? '');
     setScaleMaxLabel(maxAnchor?.label ?? '');
+    setMeasureId(cfg.measureId);
+    setLevels(cfg.levels ?? []);
     setCustomLabel(cfg.label ?? '');
     setAddStep('configure');
     setShowAddDialog(true);
   };
 
+  /** Picks a measure: the input follows it (number with unit, scale with its ends, levels) */
+  const applyMeasure = (param: ParameterV2, mId: string) => {
+    const m = measureById(param, mId);
+    if (!m) return;
+    setMeasureId(mId);
+    if (m.kind === 'scale') {
+      setInputType('scale');
+      setScaleMin(m.scaleMin ?? 0); setScaleMax(m.scaleMax ?? 10);
+      setScaleMinLabel(m.scaleMinLabel ?? ''); setScaleMaxLabel(m.scaleMaxLabel ?? '');
+    } else if (m.kind === 'levels' || m.kind === 'passFail') {
+      setInputType('levels');
+      setLevels(m.kind === 'levels' ? (m.levels ?? []) : ['Not passed', 'Passed']);
+    } else {
+      setInputType('number');
+    }
+  };
+  const selectedParamDef = selectedParam?.source === 'performance' ? (paramDb?.parameters ?? []).find(p => p.id === selectedParam.id) : undefined;
+  const withMeasures = !!selectedParamDef && hasCustomMeasures(selectedParamDef);
+  const selectedMeasure = selectedParamDef ? measureById(selectedParamDef, measureId) : undefined;
+
   const handleSaveBlock = () => {
     if (!selectedParam) return;
+    // A measure: its name and unit ("30 m Sprint · Pain"), its values under their own reference
+    const mId = withMeasures && measureId && measureId !== 'main' ? measureId : undefined;
     const blockConfig: CustomMetricBlockConfig = {
       parameterId: selectedParam.id,
       parameterSource: selectedParam.source,
-      parameterName: selectedParam.name,
-      parameterUnit: selectedParam.unit ?? null,
+      parameterName: withMeasures && selectedParamDef ? measureLabel(selectedParamDef, mId) : selectedParam.name,
+      parameterUnit: withMeasures ? (selectedMeasure?.kind === 'number' ? (selectedMeasure.unit ?? null) : null) : (selectedParam.unit ?? null),
       inputType,
+      ...(mId ? { measureId: mId } : {}),
+      ...(inputType === 'levels' ? { levels } : {}),
       label: customLabel.trim() || undefined,
       ...(inputType === 'scale' ? {
         scaleMin, scaleMax,
@@ -686,7 +718,7 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
     if (block.type === 'wellbeing') return 'McLean 5-item scale';
     if (block.type === 'ostrc') return 'Pain & illness screening';
     const src = block.config?.parameterSource === 'biometric' ? 'Body metric' : 'Performance';
-    const it = block.config?.inputType === 'scale' ? 'Scale' : 'Number';
+    const it = block.config?.inputType === 'scale' ? 'Scale' : block.config?.inputType === 'levels' ? 'Levels' : 'Number';
     const unit = block.config?.parameterUnit ? ` · ${block.config.parameterUnit}` : '';
     return `${src} · ${it}${unit}`;
   };
@@ -895,7 +927,12 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
                         {performanceMatches.map(p => (
                           <button
                             key={p.id}
-                            onClick={() => { setSelectedParam({ id: p.id, name: p.name, unit: p.unit, source: 'performance' }); setAddStep('configure'); }}
+                            onClick={() => {
+                              setSelectedParam({ id: p.id, name: p.name, unit: p.unit, source: 'performance' });
+                              // Several measures: starts with the main one, its input
+                              if (hasCustomMeasures(p)) applyMeasure(p, 'main'); else { setMeasureId(undefined); setInputType('number'); }
+                              setAddStep('configure');
+                            }}
                             className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/60 text-left transition-colors border-b last:border-b-0"
                           >
                             <div className="flex-1 min-w-0">
@@ -950,6 +987,25 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
           {/* ── Configure (add & edit) ── */}
           {addStep === 'configure' && selectedParam && (
             <div className="space-y-4 py-1 overflow-y-auto">
+              {/* Several measures: pick one — the input comes from it */}
+              {withMeasures && selectedParamDef && (
+                <div className="space-y-1.5">
+                  <Label>Measure</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {parameterMeasures(selectedParamDef).map(m => (
+                      <Button key={m.id} type="button" size="sm" variant={(measureId ?? 'main') === m.id ? 'default' : 'outline'} className="h-8"
+                        onClick={() => applyMeasure(selectedParamDef, m.id)}>
+                        {m.name}
+                      </Button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Input from the measure: {selectedMeasure ? `${MEASURE_KIND_LABELS[selectedMeasure.kind]}${measureSummary(selectedMeasure) ? ` (${measureSummary(selectedMeasure)})` : ''}` : '—'}
+                    {' '}— the values count for this measure (e.g. its goals and charts).
+                  </p>
+                </div>
+              )}
+              {!withMeasures && (
               <div className="space-y-1.5">
                 <Label>Input type</Label>
                 <div className="flex rounded-md border overflow-hidden w-fit">
@@ -967,7 +1023,8 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
                   </button>
                 </div>
               </div>
-              {inputType === 'scale' && (
+              )}
+              {inputType === 'scale' && !withMeasures && (
                 <div className="rounded-lg bg-muted/30 p-3 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">

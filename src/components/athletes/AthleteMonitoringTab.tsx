@@ -1,3 +1,4 @@
+import { metricRefOf } from '@/utils/parameterMeasures';
 import { useState, useMemo, useEffect } from 'react';
 import { format, isWithinInterval } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -536,7 +537,7 @@ function CustomMetricCard({
         .from('athlete_test_results')
         .select('value, recorded_at')
         .eq('athlete_connection_id', connectionId)
-        .eq('parameter_id', cfg.parameterId)
+        .eq('parameter_id', metricRefOf(cfg))
         .gte('recorded_at', from.toISOString())
         .order('recorded_at', { ascending: true });
 
@@ -546,8 +547,9 @@ function CustomMetricCard({
         const byDate = new Map<string, number>();
         for (const r of rows) {
           const date = (r.recorded_at as string).slice(0, 10);
-          const val = parseFloat(r.value as string);
-          if (!isNaN(val)) byDate.set(date, val);
+          // Levels are stored by name — charted as their position (0 = worst)
+          const val = cfg.inputType === 'levels' ? (cfg.levels ?? []).indexOf(String(r.value)) : parseFloat(r.value as string);
+          if (!isNaN(val) && val >= 0) byDate.set(date, val);
         }
         setData(
           Array.from(byDate.entries())
@@ -559,7 +561,7 @@ function CustomMetricCard({
     }
     load();
     return () => { cancelled = true; };
-  }, [connectionId, cfg.parameterId, rangeKey]);
+  }, [connectionId, cfg.parameterId, cfg.measureId, rangeKey]);
 
   const currentEntry = data.length > 0 ? data[data.length - 1] : null;
   const unit = cfg.parameterUnit ?? '';
@@ -782,7 +784,7 @@ export function AthleteMonitoringTab({ athlete, connectionsLoading = false, conn
           .from('athlete_test_results')
           .select('value, recorded_at')
           .eq('athlete_connection_id', athleteId)
-          .eq('parameter_id', cfg.parameterId)
+          .eq('parameter_id', metricRefOf(cfg))
           .order('recorded_at', { ascending: true });
         customBlocks.push({
           name: cfg.parameterName,

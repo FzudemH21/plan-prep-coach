@@ -9,6 +9,7 @@
  * Keyed like CalendarEventDialog's parameter ids: performance parameter id, or `bio:${defId}` for
  * body metrics.
  */
+import { parseMeasureRef } from '@/utils/parameterMeasures';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
@@ -32,9 +33,15 @@ export function useSelfReportedResults(athleteId: string | null | undefined): Se
         if (cancelled || !data) return;
         const next: SelfReportedMap = new Map();
         for (const row of data as Array<{ id: string; parameter_id: string; value: string; recorded_at: string; note: string | null }>) {
-          const list = next.get(row.parameter_id) ?? [];
-          list.push({ id: row.id, value: row.value, recordedAt: row.recorded_at, selfReported: true, note: row.note ?? undefined });
-          next.set(row.parameter_id, list);
+          // "<id>::m:<measure>" = a value of another measure / a side of that parameter
+          const ref = parseMeasureRef(row.parameter_id);
+          const list = next.get(ref.parameterId) ?? [];
+          list.push({
+            id: row.id, value: row.value, recordedAt: row.recorded_at, selfReported: true, note: row.note ?? undefined,
+            ...(ref.measureId ? { measureId: ref.measureId } : {}),
+            ...(ref.side ? { side: ref.side } : {}),
+          });
+          next.set(ref.parameterId, list);
         }
         setMap(next);
       });

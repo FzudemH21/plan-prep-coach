@@ -49,7 +49,7 @@ export interface DailyCheckinInput {
   illnessSymptomOther: string;
   illnessNrs: number | null;
   notes?: string;
-  customMetricValues?: Record<string, number>;
+  customMetricValues?: Record<string, number | string>;
 }
 
 // ── DB row ────────────────────────────────────────────────────────────────────

@@ -14,6 +14,7 @@
  * Load/AU shows the totals for the ISO week that contains selectedDate.
  */
 
+import { metricRefOf } from '@/utils/parameterMeasures';
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { startOfISOWeek, subDays, format } from 'date-fns';
@@ -158,7 +159,9 @@ export function useSquadOverview(
     for (const conn of connections) {
       for (const block of conn.monitoringConfig?.blocks ?? []) {
         if (block.type === 'custom_metric' && block.enabled && block.config) {
-          const { parameterId, parameterName, parameterUnit } = block.config;
+          // A measure's values have their own reference ("<id>::m:<measure>") — one column each
+          const { parameterName, parameterUnit } = block.config;
+          const parameterId = metricRefOf(block.config);
           if (!seen.has(parameterId)) {
             seen.set(parameterId, { parameterId, name: parameterName, unit: parameterUnit });
           }

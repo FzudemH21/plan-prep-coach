@@ -112,6 +112,35 @@ export function scopeLabel(link: { measureIds?: string[] }, target: Pick<Paramet
   return names.length ? names.join(', ') : 'all measures';
 }
 
+// ── Stored values of a measure ──
+// Results / monitoring values are stored per parameter id (athlete_test_results.parameter_id, text).
+// A value of another measure than the main one (or of a side) is stored under a reference that
+// extends the id: "<parameter>::m:<measure>" / "…::s:L". Every place that reads by the exact
+// parameter id therefore keeps seeing only the main measure's values — nothing gets mixed.
+
+/** The stored reference of a measure's (and side's) values — the main measure keeps the plain id */
+export function measureRef(parameterId: string, measureId?: string, side?: 'L' | 'R'): string {
+  return parameterId
+    + (measureId && measureId !== MAIN_MEASURE_ID ? `::m:${measureId}` : '')
+    + (side ? `::s:${side}` : '');
+}
+
+/** "<parameter>::m:pain::s:L" → its parts (a plain id → the main measure) */
+export function parseMeasureRef(ref: string): { parameterId: string; measureId?: string; side?: 'L' | 'R' } {
+  const [parameterId, ...rest] = ref.split('::');
+  const out: { parameterId: string; measureId?: string; side?: 'L' | 'R' } = { parameterId };
+  for (const part of rest) {
+    if (part.startsWith('m:')) out.measureId = part.slice(2);
+    else if (part === 's:L' || part === 's:R') out.side = part.slice(2) as 'L' | 'R';
+  }
+  return out;
+}
+
+/** The stored reference of a monitoring block's values */
+export function metricRefOf(cfg: { parameterId: string; measureId?: string }): string {
+  return measureRef(cfg.parameterId, cfg.measureId);
+}
+
 export function newMeasureId(): string {
   return `m_${Math.random().toString(36).slice(2, 9)}`;
 }

@@ -1,3 +1,4 @@
+import { valuesOfMeasure } from '@/utils/goalMeasures';
 import type { ParameterMeasure } from '@/types/parametersV2';
 import React, { useState, useEffect } from 'react';
 import {
@@ -108,7 +109,8 @@ export function CalendarEventDialog({
       ...(athletePerformanceParameters.find(p => p.athleticismParameterId === id)?.values ?? []),
     ];
     const own = [...(selfReported.get(id) ?? []), ...(selfReported.get(`bio:${id}`) ?? [])];
-    return latestValueOf(withSelfReported(recorded, own));
+    // The main measure only — values of other measures (e.g. pain) are not this test's baseline
+    return latestValueOf(valuesOfMeasure(withSelfReported(recorded, own), undefined));
   };
 
   // Load baseline value from athlete profile when parameter changes

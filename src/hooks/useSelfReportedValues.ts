@@ -4,6 +4,7 @@
  * connection. Used together with the coach-entered values of the athlete profile, e.g. so a SMART
  * goal's baseline is the most recent value from either source.
  */
+import { parseMeasureRef } from '@/utils/parameterMeasures';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
@@ -27,9 +28,13 @@ export function useSelfReportedValues(athleteLocalId: string | null | undefined)
       if (error) { console.error('[useSelfReportedValues] load error', error); return; }
       const map = new Map<string, ParameterValue[]>();
       for (const row of (data ?? []) as Array<{ id: string; parameter_id: string; value: string; recorded_at: string; note: string | null }>) {
-        const key = toParameterId(row.parameter_id);
+        // "<id>::m:<measure>" = a value of another measure / a side of that parameter
+        const ref = parseMeasureRef(row.parameter_id);
+        const key = toParameterId(ref.parameterId);
         map.set(key, [...(map.get(key) ?? []), {
           id: row.id, value: row.value, recordedAt: row.recorded_at, selfReported: true, note: row.note ?? undefined,
+          ...(ref.measureId ? { measureId: ref.measureId } : {}),
+          ...(ref.side ? { side: ref.side } : {}),
         }]);
       }
       setByParam(map);

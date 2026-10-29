@@ -1,3 +1,4 @@
+import { metricRefOf } from '@/utils/parameterMeasures';
 import { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -366,6 +367,17 @@ function prevOfMainStep(currentMain: string, config?: MonitoringConfig): string 
   return prev === 'wellness' ? 'wellness_confirm' : prev;
 }
 
+/** The values to store: a level is stored as its name (the index is only the picked button) */
+function storedMetricValues(values: Record<string, number>, config: MonitoringConfig | null | undefined): Record<string, number | string> {
+  const out: Record<string, number | string> = { ...values };
+  for (const b of config?.blocks ?? []) {
+    if (b.type !== 'custom_metric' || b.config?.inputType !== 'levels') continue;
+    const key = metricRefOf(b.config);
+    if (typeof values[key] === 'number') out[key] = b.config.levels?.[values[key]] ?? String(values[key]);
+  }
+  return out;
+}
+
 export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitoringConfig, existingCheckin, existingCustomMetricValues }: Props) {
   const _now = new Date();
   const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
@@ -519,7 +531,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
       illnessSymptomOther: illnessSymptoms.has('other') ? illnessOther : '',
       illnessNrs: hasIllness ? illnessNrs : null,
       notes: notes.trim() || undefined,
-      customMetricValues: Object.keys(customMetricValues).length > 0 ? customMetricValues : undefined,
+      customMetricValues: Object.keys(customMetricValues).length > 0 ? storedMetricValues(customMetricValues, monitoringConfig) : undefined,
     };
     const ok = await onSave(input);
     setSaving(false);
@@ -959,8 +971,9 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
       const cfg = block?.config;
       if (!cfg) return null;
 
-      // Key by cfg.parameterId so athlete_test_results rows match what useSquadOverview queries.
-      const metricKey = cfg.parameterId;
+      // Key by the block's reference (the parameter id; a measure: "<id>::m:<measure>") so the
+      // athlete_test_results rows match what the coach views query
+      const metricKey = metricRefOf(cfg);
       const currentVal = customMetricValues[metricKey] ?? null;
       const questionLabel = cfg.label || cfg.parameterName;
       const unitSuffix = cfg.parameterUnit ? ` (${cfg.parameterUnit})` : '';
@@ -970,6 +983,40 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
         if (prev) setStep(prev);
       };
       const goNext = () => setStep(nextMainStep(step, monitoringConfig));
+
+      if (cfg.inputType === 'levels') {
+        const levels = cfg.levels ?? [];
+        return (
+          <>
+            <Header title={questionLabel} subtitle="Pick what applies today" />
+            <div className="flex-1 overflow-y-auto space-y-1.5">
+              {levels.map((level, i) => {
+                const isSelected = currentVal === i;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setCustomMetricValues(prev => ({ ...prev, [metricKey]: i }))}
+                    className={cn(
+                      'w-full min-h-[48px] flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all active:scale-[0.98]',
+                      isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-border bg-background hover:border-primary/30'
+                    )}
+                  >
+                    <span className="text-sm font-medium leading-snug">{level}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="shrink-0 flex gap-3 pt-2">
+              <Button variant="outline" className="flex-1" onClick={goBack}>
+                <ChevronLeft className="h-4 w-4 mr-1" /> Back
+              </Button>
+              <Button className="flex-1" disabled={currentVal === null || saving} onClick={goNext}>
+                Continue <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </>
+        );
+      }
 
       if (cfg.inputType === 'scale') {
         const min = cfg.scaleMin ?? 0;
