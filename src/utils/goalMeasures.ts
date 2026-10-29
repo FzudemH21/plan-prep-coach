@@ -30,6 +30,16 @@ export function valuesOfMeasure<V extends MeasuredValue>(values: V[], measureId:
   return values.filter((v) => (v.measureId ?? MAIN_MEASURE_ID) === id && (side ? v.side === side : true));
 }
 
+/** The main series of a parameter: main measure, no side (what readers without measures show) */
+export function mainSeries<V extends MeasuredValue>(values: V[]): V[] {
+  return values.filter((v) => (v.measureId ?? MAIN_MEASURE_ID) === MAIN_MEASURE_ID && !v.side);
+}
+
+/** Every value of an athlete's parameter, incl. other measures and sides */
+export function allValuesOf<V extends MeasuredValue>(pp: { values: V[]; allValues?: V[] }): V[] {
+  return pp.allValues ?? pp.values;
+}
+
 function latestOf<V extends MeasuredValue>(values: V[]): V | undefined {
   return [...values].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0];
 }

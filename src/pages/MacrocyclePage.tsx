@@ -54,7 +54,7 @@ import { useCalendarEvents, groupConsecutiveDates } from "@/hooks/useCalendarEve
 import { TEST_COLOR, EVENT_COLOR, testEventGradient } from "@/lib/eventColors";
 import { PlanNotesField } from "@/components/shared/PlanNotesField";
 import type { ParameterMeasure } from "@/types/parametersV2";
-import { formatGoalRange, goalBaseline, goalDescription, goalMeasurePart, goalNumberOf, goalShowsPercent, goalUnit, groupGoalsByParameter, valuesOfMeasure } from "@/utils/goalMeasures";
+import { allValuesOf, formatGoalRange, goalBaseline, goalDescription, goalMeasurePart, goalNumberOf, goalShowsPercent, goalUnit, groupGoalsByParameter, valuesOfMeasure } from "@/utils/goalMeasures";
 import { appliesToMeasure, hasCustomMeasures, measureById, parameterMeasures } from "@/utils/parameterMeasures";
 import { isDatabaseAction, useDatabaseAIActions } from "@/hooks/useDatabaseAIActions";
 import { applyNotesAction, readNotesHistory, restoreNotesVersion, strategyContext, WRITE_UP_PROMPT, type PlanNotesVersion } from "@/utils/planStrategy";
@@ -3183,7 +3183,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           measureId: measure && measure.id !== "main" ? measure.id : undefined,
           side: param?.perSide ? action.side : undefined,
         };
-        const baseline = param && athleteParam ? goalBaseline(goalRef, param, athleteParam.values) ?? 0 : 0;
+        const baseline = param && athleteParam ? goalBaseline(goalRef, param, allValuesOf(athleteParam)) ?? 0 : 0;
         const target = action.targetValue === undefined ? 0
           : (goalNumberOf(param ? measureById(param, goalRef.measureId) : undefined, String(action.targetValue)) ?? 0);
         const pct = goalShowsPercent(goalRef, param) && baseline > 0 && action.targetValue !== undefined ? ((target - baseline) / baseline) * 100 : 0;

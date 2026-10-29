@@ -5,6 +5,7 @@
  * goal's baseline is the most recent value from either source.
  */
 import { parseMeasureRef } from '@/utils/parameterMeasures';
+import { allValuesOf, mainSeries } from '@/utils/goalMeasures';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
@@ -61,11 +62,13 @@ export function useAthleteParamsWithSelfReported(
       seen.add(pp.athleticismParameterId);
       const extra = selfReported.get(pp.athleticismParameterId);
       if (!extra?.length) return pp;
-      const ids = new Set(pp.values.map((v) => v.id));
-      return { ...pp, values: [...pp.values, ...extra.filter((v) => !ids.has(v.id))] };
+      const all = allValuesOf(pp);
+      const ids = new Set(all.map((v) => v.id));
+      const allValues = [...all, ...extra.filter((v) => !ids.has(v.id))];
+      return { ...pp, values: mainSeries(allValues), allValues };
     });
     for (const [paramId, values] of selfReported) {
-      if (!seen.has(paramId)) merged.push({ id: `self-${paramId}`, athleteId: athleteLocalId, athleticismParameterId: paramId, values });
+      if (!seen.has(paramId)) merged.push({ id: `self-${paramId}`, athleteId: athleteLocalId, athleticismParameterId: paramId, values: mainSeries(values), allValues: values });
     }
     return merged;
   }, [athleteLocalId, performanceParams, selfReported]);

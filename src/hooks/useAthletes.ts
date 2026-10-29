@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { mainSeries } from '@/utils/goalMeasures';
 import { useSupabaseStore } from './useSupabaseStore';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -330,8 +331,16 @@ export function useAthletes() {
     await setData(prev => ({ ...prev, athletePerformanceParameters: prev.athletePerformanceParameters.filter(pp => pp.id !== performanceParameterId) }));
   }, [setData]);
 
-  const addPerformanceParameterValue = useCallback(async (performanceParameterId: string, value: string, recordedAt?: string, note?: string): Promise<ParameterValue> => {
-    const newValue: ParameterValue = { id: generateId(), value, recordedAt: recordedAt ?? new Date().toISOString(), note: note || undefined };
+  const addPerformanceParameterValue = useCallback(async (
+    performanceParameterId: string, value: string, recordedAt?: string, note?: string,
+    /** A value of another measure than the main one / of a side (parameter measures) */
+    measure?: { measureId?: string; side?: 'L' | 'R' },
+  ): Promise<ParameterValue> => {
+    const newValue: ParameterValue = {
+      id: generateId(), value, recordedAt: recordedAt ?? new Date().toISOString(), note: note || undefined,
+      ...(measure?.measureId && measure.measureId !== 'main' ? { measureId: measure.measureId } : {}),
+      ...(measure?.side ? { side: measure.side } : {}),
+    };
     await setData(prev => ({
       ...prev,
       athletePerformanceParameters: prev.athletePerformanceParameters.map(pp =>
@@ -396,7 +405,13 @@ export function useAthletes() {
   const getAthletesWithoutGroup = useCallback(() => data.athletes.filter(a => a.groupIds.length === 0 && !a.isArchived), [data.athletes]);
   const getAthleteBiometrics = useCallback((athleteId: string) => data.athleteBiometrics.filter(ab => ab.athleteId === athleteId), [data.athleteBiometrics]);
   const getBiometricDefinition = useCallback((id: string) => data.biometricDefinitions.find(bd => bd.id === id), [data.biometricDefinitions]);
-  const getAthletePerformanceParameters = useCallback((athleteId: string) => data.athletePerformanceParameters.filter(pp => pp.athleteId === athleteId), [data.athletePerformanceParameters]);
+  // Readers get the main series as `values` (values of other measures / sides would otherwise show up
+  // in charts and baselines that know no measures); measure-aware readers use `allValues`
+  const performanceParametersForReaders = useMemo(
+    () => data.athletePerformanceParameters.map(pp => ({ ...pp, values: mainSeries(pp.values), allValues: pp.values })),
+    [data.athletePerformanceParameters],
+  );
+  const getAthletePerformanceParameters = useCallback((athleteId: string) => performanceParametersForReaders.filter(pp => pp.athleteId === athleteId), [performanceParametersForReaders]);
   const getAthlete = useCallback((id: string) => data.athletes.find(a => a.id === id), [data.athletes]);
 
   // ── Calendar Assignments ──────────────────────────────────────────────────
@@ -439,7 +454,7 @@ export function useAthletes() {
     athletes: data.athletes,
     biometricDefinitions: data.biometricDefinitions,
     athleteBiometrics: data.athleteBiometrics,
-    athletePerformanceParameters: data.athletePerformanceParameters,
+    athletePerformanceParameters: performanceParametersForReaders,
     calendarAssignments: data.calendarAssignments,
     isLoading,
     biometricsMigrated,

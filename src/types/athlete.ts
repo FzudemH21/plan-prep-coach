@@ -228,7 +228,10 @@ export interface AthletePerformanceParameter {
   id: string;
   athleteId: string;
   athleticismParameterId: string; // Links to ParameterV2 in Athleticism Database
+  /** As read from useAthletes: the main series only (main measure, no side) */
   values: ParameterValue[];
+  /** As read from useAthletes: every value, incl. other measures and sides (parameter measures) */
+  allValues?: ParameterValue[];
 }
 
 // ============ LEGACY ALIASES (for backward compatibility) ============

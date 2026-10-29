@@ -44,7 +44,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { toParameterId } from '@/utils/parameterRef';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
-import { formatGoalRange, goalBaseline, valuesOfMeasure } from '@/utils/goalMeasures';
+import { allValuesOf, formatGoalRange, goalBaseline, mainSeries } from '@/utils/goalMeasures';
 
 interface AssignProgramDialogProps {
   open: boolean;
@@ -199,13 +199,14 @@ export function AssignProgramDialog({
     // Old "bio:{id}" goal links → the biometric parameter with that id (body metrics moved)
     const athleteValuesOf = (ref: string) => {
       const parameterId = toParameterId(ref);
+      const pp = stableAthleteParams.find(pp => pp.athleticismParameterId === parameterId);
       return withSelfReported(
-        stableAthleteParams.find(pp => pp.athleticismParameterId === parameterId)?.values ?? [],
+        pp ? allValuesOf(pp) : [],
         [...(selfReportedResults.get(parameterId) ?? []), ...(selfReportedResults.get(`bio:${parameterId}`) ?? [])],
       );
     };
     // Sub-goals have no measure: the main measure's values (all older values belong to it)
-    const latestAthleteValue = (ref: string) => latestValueOf(valuesOfMeasure(athleteValuesOf(ref), undefined));
+    const latestAthleteValue = (ref: string) => latestValueOf(mainSeries(athleteValuesOf(ref)));
 
     /** Program test/event date -> assigned date (null when its microcycle isn't assigned) */
     const placeDate = (d: string): string | null => {

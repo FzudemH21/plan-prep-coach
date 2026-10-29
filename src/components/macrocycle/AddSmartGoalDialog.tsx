@@ -32,7 +32,7 @@ import { AthletePerformanceParameter } from "@/types/athlete";
 import { ParameterV2 } from "@/types/parametersV2";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { hasCustomMeasures, measureById, parameterMeasures } from "@/utils/parameterMeasures";
-import { GOAL_SIDE_LABELS, goalBaseline, goalDescription, goalShowsPercent, goalUnit, valuesOfMeasure } from "@/utils/goalMeasures";
+import { GOAL_SIDE_LABELS, allValuesOf, goalBaseline, goalDescription, goalShowsPercent, goalUnit, valuesOfMeasure } from "@/utils/goalMeasures";
 
 interface ParameterOptionItem {
   id: string;
@@ -90,7 +90,7 @@ export function AddSmartGoalDialog({
   const fillBaseline = (paramId: string | null, mId: string | undefined, sd: GoalSide | undefined) => {
     const param = athleticismParameters.find((p) => p.id === paramId);
     const athleteParam = athletePerformanceParams.find((pp) => pp.athleticismParameterId === paramId);
-    const latest = param && athleteParam ? goalBaseline({ measureId: mId, side: sd }, param, athleteParam.values) : null;
+    const latest = param && athleteParam ? goalBaseline({ measureId: mId, side: sd }, param, allValuesOf(athleteParam)) : null;
     const m = param ? measureById(param, mId) : undefined;
     setBaselineValue(latest ?? (m?.kind === "passFail" ? 0 : ""));
     setDesiredValue(m?.kind === "passFail" ? 1 : "");

@@ -73,6 +73,8 @@ import {
   ParameterValue,
 } from '@/types/athlete';
 import { ParameterV2 } from '@/types/parametersV2';
+import { hasCustomMeasures, limbSymmetryIndex, measureById, measureRef, parameterMeasures } from '@/utils/parameterMeasures';
+import { allValuesOf, valuesOfMeasure } from '@/utils/goalMeasures';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 
@@ -203,6 +205,8 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
   const [search, setSearch] = useState('');
 
   const [selected, setSelected] = useState<SelectedItem | null>(null);
+  // A parameter with several measures / recorded per side: which series is shown (and added to)
+  const [measureView, setMeasureView] = useState<{ measureId?: string; side?: 'L' | 'R' | 'lsi' }>({});
   const [timeRange, setTimeRange] = useState<TimeRange>('All');
   const [newValue, setNewValue] = useState('');
   const [newDate, setNewDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -393,8 +397,41 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
     }
   }, [selected, topTab, athleteBiometrics, athletePerformanceParams, isBiometricParam]);
 
+  const measureParam = resolvedSelected?.kind === 'performance' ? resolvedSelected.param : undefined;
+  const showMeasureSwitch = !!measureParam && (hasCustomMeasures(measureParam) || !!measureParam.perSide);
+  const activeMeasure = measureParam ? measureById(measureParam, measureView.measureId) : undefined;
+  useEffect(() => { setMeasureView({}); }, [resolvedSelected?.kind === 'performance' ? resolvedSelected.pp.id : null]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const selectedValues: ParameterValue[] = useMemo(() => {
     if (!resolvedSelected) return [];
+    // One measure / side of the parameter: the coach's values of it + the athlete's (stored under
+    // the measure's reference); the LSI from left and right of the same day
+    if (resolvedSelected.kind === 'performance' && showMeasureSwitch) {
+      const paramId = resolvedSelected.pp.athleticismParameterId;
+      const seriesOf = (side?: 'L' | 'R') => {
+        const own = valuesOfMeasure(allValuesOf(resolvedSelected.pp), measureView.measureId, side)
+          // "no side" = the values recorded without one (older values)
+          .filter(v => side || !v.side);
+        const extra = selfReportedMap.get(measureRef(paramId, measureView.measureId, side)) ?? [];
+        const ids = new Set(own.map(v => v.id));
+        return [...own, ...extra.filter(v => !ids.has(v.id))];
+      };
+      if (measureView.side !== 'lsi') return seriesOf(measureView.side);
+      const latestByDay = (list: ParameterValue[]) => {
+        const m = new Map<string, ParameterValue>();
+        for (const v of [...list].sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))) m.set(v.recordedAt.slice(0, 10), v);
+        return m;
+      };
+      const left = latestByDay(seriesOf('L'));
+      const right = latestByDay(seriesOf('R'));
+      const out: ParameterValue[] = [];
+      for (const [day, l] of left) {
+        const r = right.get(day);
+        const lsi = r ? limbSymmetryIndex(l.value, r.value) : null;
+        if (lsi !== null) out.push({ id: `lsi-${day}`, value: String(lsi), recordedAt: `${day}T12:00:00` });
+      }
+      return out;
+    }
     const base = resolvedSelected.kind === 'biometric'
       ? resolvedSelected.ab.values
       : resolvedSelected.pp.values;
@@ -409,18 +446,25 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
       return [...base, ...selfReported.filter(v => !ids.has(v.id))];
     }
     return base;
-  }, [resolvedSelected, selfReportedMap]);
+  }, [resolvedSelected, selfReportedMap, showMeasureSwitch, measureView]);
 
   const selectedUnit = resolvedSelected
     ? resolvedSelected.kind === 'biometric'
       ? resolvedSelected.def.unit
-      : resolvedSelected.param.unit
+      : showMeasureSwitch
+        ? measureView.side === 'lsi' ? '%'
+          : activeMeasure?.kind === 'number' ? (activeMeasure.unit ?? '')
+          : activeMeasure?.kind === 'scale' ? `/${activeMeasure.scaleMax ?? 10}` : ''
+        : resolvedSelected.param.unit
     : null;
 
   const selectedName = resolvedSelected
     ? resolvedSelected.kind === 'biometric'
       ? resolvedSelected.def.name
-      : resolvedSelected.param.name
+      : showMeasureSwitch
+        ? [resolvedSelected.param.name, hasCustomMeasures(resolvedSelected.param) ? activeMeasure?.name : '',
+          measureView.side === 'lsi' ? 'LSI' : measureView.side === 'L' ? 'Left' : measureView.side === 'R' ? 'Right' : ''].filter(Boolean).join(' · ')
+        : resolvedSelected.param.name
     : '';
 
   const latestValue = getLatestValue(selectedValues);
@@ -428,7 +472,8 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
   const isQuantitative = resolvedSelected
     ? resolvedSelected.kind === 'biometric'
       ? resolvedSelected.def.type === 'quantitative'
-      : true
+      // Levels / pass-fail are shown as a list, not a chart
+      : !showMeasureSwitch || measureView.side === 'lsi' || activeMeasure?.kind === 'number' || activeMeasure?.kind === 'scale'
     : false;
 
   const sortedHistory = [...selectedValues].sort(
@@ -445,12 +490,13 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
     if (resolvedSelected.kind === 'biometric') {
       athleteData.addBiometricValue(resolvedSelected.ab.id, newValue.trim(), recordedAt, newNote.trim() || undefined);
     } else {
-      athleteData.addPerformanceParameterValue(resolvedSelected.pp.id, newValue.trim(), recordedAt, newNote.trim() || undefined);
+      athleteData.addPerformanceParameterValue(resolvedSelected.pp.id, newValue.trim(), recordedAt, newNote.trim() || undefined,
+        showMeasureSwitch && measureView.side !== 'lsi' ? { measureId: measureView.measureId, side: measureView.side } : undefined);
     }
     setNewValue('');
     setNewDate(format(new Date(), 'yyyy-MM-dd'));
     setNewNote('');
-  }, [resolvedSelected, newValue, newDate, newNote, athleteData]);
+  }, [resolvedSelected, newValue, newDate, newNote, athleteData, showMeasureSwitch, measureView]);
 
   const handleDeleteValue = useCallback((valueId: string) => {
     if (!resolvedSelected) return;
@@ -599,6 +645,31 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
               )}
             </div>
 
+            {/* Measure / side of the parameter */}
+            {showMeasureSwitch && measureParam && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {hasCustomMeasures(measureParam) && parameterMeasures(measureParam).map(m => (
+                  <Button key={m.id} size="sm" variant={(measureView.measureId ?? 'main') === m.id ? 'default' : 'outline'} className="h-7 text-xs"
+                    onClick={() => setMeasureView(v => ({ measureId: m.id, side: v.side === 'lsi' && m.kind !== 'number' ? undefined : v.side }))}>
+                    {m.name}
+                  </Button>
+                ))}
+                {measureParam.perSide && (
+                  <>
+                    {hasCustomMeasures(measureParam) && <span className="mx-1 h-4 w-px bg-border" />}
+                    {([[undefined, 'No side'], ['L', 'Left'], ['R', 'Right'], ['lsi', 'LSI']] as const)
+                      .filter(([sd]) => sd !== 'lsi' || activeMeasure?.kind === 'number')
+                      .map(([sd, label]) => (
+                        <Button key={label} size="sm" variant={measureView.side === sd ? 'default' : 'outline'} className="h-7 text-xs"
+                          onClick={() => setMeasureView(v => ({ ...v, side: sd }))}>
+                          {label}
+                        </Button>
+                      ))}
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Chart */}
             {isQuantitative && (
               <div className="space-y-2">
@@ -687,14 +758,24 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
                 </div>
                 <div className="space-y-1 flex-1">
                   <Label className="text-xs">Value{selectedUnit ? ` (${selectedUnit})` : ''}</Label>
-                  <Input
-                    ref={valueInputRef}
-                    value={newValue}
-                    onChange={e => setNewValue(e.target.value)}
-                    placeholder={isQuantitative ? '0.0' : 'Enter value'}
-                    className="h-8 text-sm"
-                    onKeyDown={e => e.key === 'Enter' && !newNote.trim() && handleAddValue()}
-                  />
+                  {showMeasureSwitch && (activeMeasure?.kind === 'levels' || activeMeasure?.kind === 'passFail') && measureView.side !== 'lsi' ? (
+                    // Levels / pass-fail: pick one (stored as its name)
+                    <select value={newValue} onChange={e => setNewValue(e.target.value)}
+                      className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm">
+                      <option value="">Pick…</option>
+                      {(activeMeasure.kind === 'levels' ? (activeMeasure.levels ?? []) : ['Passed', 'Not passed']).map(l => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                  ) : (
+                    <Input
+                      ref={valueInputRef}
+                      value={newValue}
+                      onChange={e => setNewValue(e.target.value)}
+                      placeholder={measureView.side === 'lsi' ? 'calculated from left and right' : isQuantitative ? '0.0' : 'Enter value'}
+                      disabled={showMeasureSwitch && measureView.side === 'lsi'}
+                      className="h-8 text-sm"
+                      onKeyDown={e => e.key === 'Enter' && !newNote.trim() && handleAddValue()}
+                    />
+                  )}
                 </div>
                 <Button size="sm" className="h-8" onClick={handleAddValue} disabled={!newValue.trim()}>
                   <Plus className="h-3.5 w-3.5 mr-1" /> Add

@@ -20,7 +20,7 @@ import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { useTrainingPrograms, TrainingProgram } from '@/hooks/useTrainingPrograms';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
-import { formatGoalRange, goalBaseline, valuesOfMeasure, type MeasuredValue } from '@/utils/goalMeasures';
+import { allValuesOf, formatGoalRange, goalBaseline, valuesOfMeasure, type MeasuredValue } from '@/utils/goalMeasures';
 import type { ParameterV2 } from '@/types/parametersV2';
 import { useAuth } from '@/hooks/useAuth';
 import { syncAthleteSchedule, type AthleteFormulaData } from '@/utils/athleteScheduleSync';
@@ -166,7 +166,7 @@ function buildTestsAndEvents(
       // The latest value of exactly the goal's measure (and side / LSI)
       const p = athletePerformanceParameters.find(pp => pp.athleticismParameterId === sg.linkedParameterId);
       const param = parameters.find(x => x.id === sg.linkedParameterId);
-      const latest = p ? goalBaseline(sg, param, p.values) : null;
+      const latest = p ? goalBaseline(sg, param, allValuesOf(p)) : null;
       if (latest !== null) baseline = latest;
     }
     const goalParam = sg.linkedParameterId ? parameters.find(x => x.id === sg.linkedParameterId) : undefined;
