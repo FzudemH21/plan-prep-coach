@@ -40,7 +40,6 @@ import { useToast } from '@/hooks/use-toast';
 import { ParameterV2, ParameterInteraction, ParameterMethodV2, PARAMETER_CATEGORIES, InteractionDirection, InteractionStrength, type ParameterMeasure } from '@/types/parametersV2';
 import { AddParameterDialogV2 } from '@/components/goals/AddParameterDialogV2';
 import { EditParameterDialogV2 } from '@/components/goals/EditParameterDialogV2';
-import { LsiCleanupDialog } from '@/components/goals/LsiCleanupDialog';
 
 type SortColumn = 'category' | 'parameter';
 type SortDirection = 'asc' | 'desc';
@@ -113,8 +112,6 @@ export default function AthleticismDatabaseV2() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingParameter, setEditingParameter] = useState<ParameterV2 | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<ParameterV2 | null>(null);
-  // Temporary: LSI parameters → parameters recorded per side
-  const [showLsiCleanup, setShowLsiCleanup] = useState(false);
 
   // Get unique categories from parameters
   const uniqueCategories = useMemo(() => {
@@ -276,9 +273,6 @@ export default function AthleticismDatabaseV2() {
       <div className="container mx-auto px-4 py-4">
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-end">
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => setShowLsiCleanup(true)}>
-              LSI clean-up
-            </Button>
             <Button size="sm" onClick={() => setShowAddDialog(true)}>
               <Plus className="h-4 w-4 mr-1" />
               Add Parameter
@@ -539,9 +533,6 @@ export default function AthleticismDatabaseV2() {
           onRemoveMethod={removeParameterMethod}
         />
       )}
-
-      {/* Temporary: LSI clean-up */}
-      <LsiCleanupDialog open={showLsiCleanup} onOpenChange={setShowLsiCleanup} parameters={data.parameters} />
 
       {/* Delete Confirmation */}
       <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
