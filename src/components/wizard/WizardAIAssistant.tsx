@@ -35,6 +35,8 @@ export type ApplySuggestion =
   | { type: "configure_mesocycles"; mesocycles: Array<{ name?: string; microcycles: Array<{ duration: number; intensity?: string; name?: string }> }> }
   /** MesocyclePage Step 1 — rename one or more meso- or microcycles without changing any other structure */
   | { type: "rename_cycles"; renames: Array<{ currentName: string; newName: string }> }
+  /** Mesocycle Planning — the description of a mesocycle (the "Description" row above the periodization table) */
+  | { type: "set_mesocycle_description"; mesocycleName: string; description: string; mode?: "append" | "replace" }
   /** MesocyclePage Step 3 — distribute existing methods across specific mesocycles */
   | { type: "allocate_methods"; allocations: Array<{ methodName: string; mesocycleNames: string[] }> }
   /** MesocyclePage Step 3 — add new training methods to the plan */
@@ -311,6 +313,8 @@ Available types and their fields:
   Full structure replacement — use when microcycles have different durations or when adding/removing mesocycles or microcycles. Duration is in days. Intensity is optional (defaults to "5"). Valid intensities (Borg CR10): "0" (Rest), "1" (Very Easy), "2" (Easy), "3" (Moderate), "4" (Somewhat Hard), "5" (Hard), "6" (Hard+), "7" (Very Hard), "8" (Very Hard+), "9" (Extremely Hard), "10" (Maximal).
 - rename_cycles: {"type":"rename_cycles","renames":[{"currentName":"Mesocycle 1","newName":"Accumulation"},{"currentName":"Microcycle 1","newName":"Week 1 - Base"}]}
   Renames one or more mesocycles or microcycles without touching any other structure. Use the EXACT current name shown in the mesocycle structure in context.
+- set_mesocycle_description: {"type":"set_mesocycle_description","mesocycleName":"<exact mesocycle name>","description":"<text>","mode":"replace"}
+  Writes the description of a mesocycle — the "Description" row above the periodization table (also the mesocycle's coach notes in step 1): its focus, aims, key adaptations, what matters in this block. One action per mesocycle. mode "replace" (default) overwrites the description, "append" adds the text as a new paragraph below the existing one. The current descriptions are in the mesocycle structure in context ("description: …"). Keep it short and plain (a few lines; "- " bullets are fine), no Markdown headings.
 - allocate_methods: {"type":"allocate_methods","allocations":[{"methodName":"<exact method name>","mesocycleNames":["Mesocycle 1","Mesocycle 2"]},{"methodName":"<exact method name>","mesocycleNames":["Mesocycle 1","Mesocycle 2","Mesocycle 3"]}]}
 - remove_methods: {"type":"remove_methods","methodNames":["<exact method name>","<exact method name>"]}
   Removes methods from the plan entirely. Use exact method names as listed in the wizard context.
@@ -683,6 +687,8 @@ function getSuggestionPreview(action: ApplySuggestion): string {
       return action.methods.length === 1
         ? `Add method: ${action.methods[0].name}`
         : `Add ${action.methods.length} methods: ${action.methods.map((m) => m.name).join(", ")}`;
+    case "set_mesocycle_description":
+      return `${action.mode === "append" ? "Add to" : "Set"} description of ${action.mesocycleName}: "${action.description.length > 80 ? `${action.description.slice(0, 80)}…` : action.description}"`;
     case "set_mesocycle_config":
       return `Configure ${action.count} mesocycle${action.count !== 1 ? "s" : ""}, ${action.weeksDuration} week${action.weeksDuration !== 1 ? "s" : ""} each`;
     case "configure_mesocycles": {

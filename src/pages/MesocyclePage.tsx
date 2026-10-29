@@ -2833,12 +2833,6 @@ export default function MesocyclePage() {
               }
             }
             break;
-          case 'c':
-            e.preventDefault();
-            break;
-          case 'v':
-            e.preventDefault();
-            break;
         }
       } else if (e.key === 'Escape') {
         clearSelection();
@@ -5215,7 +5209,8 @@ export default function MesocyclePage() {
       ? `Mesocycles (${mesoCount}):\n${mesocycles.map((m) => {
           const mesoDays = m.microcycles?.reduce((s, mc) => s + mc.duration, 0) ?? 0;
           const micros = m.microcycles?.map(mc => `    - ${mc.name}: ${mc.duration}d, intensity: ${mc.intensity}`).join("\n") ?? "";
-          return `  - ${m.name}: ${Math.ceil(mesoDays / 7)} weeks (${mesoDays}d)${micros ? "\n" + micros : ""}`;
+          const description = mesocycleNotes[m.id]?.trim();
+          return `  - ${m.name}: ${Math.ceil(mesoDays / 7)} weeks (${mesoDays}d)${description ? ` | description: "${description.replace(/\n/g, " / ")}"` : " | no description yet"}${micros ? "\n" + micros : ""}`;
         }).join("\n")}`
       : "No mesocycles configured yet";
     // Step 2 only: per-day intensity breakdown so the AI can see (and edit via
@@ -5404,7 +5399,7 @@ export default function MesocyclePage() {
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, planStartDate, planEndDate, totalWeeks, expectedTotalDays, totalMesocycleDays, daysMismatch, mesocycles, trainingDays, methodAllocations, mesoStepLabel, exerciseLibraries, exerciseCellData, parameterValues, templates, getTemplatesForWizardMethod, toolboxData, methodParametersMap]);
+  }, [currentStep, athleteName, macrocycleData, planStartDate, planEndDate, totalWeeks, expectedTotalDays, totalMesocycleDays, daysMismatch, mesocycles, mesocycleNotes, trainingDays, methodAllocations, mesoStepLabel, exerciseLibraries, exerciseCellData, parameterValues, templates, getTemplatesForWizardMethod, toolboxData, methodParametersMap]);
 
   // ── AI Apply handler ──────────────────────────────────────────────────────
   const handleMesoAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
@@ -5463,6 +5458,16 @@ export default function MesocyclePage() {
           })),
         }));
         setMesocycles(recalculateAllMesocycleDates(newMesocycles, planStartDate));
+        break;
+      }
+      case "set_mesocycle_description": {
+        const meso = mesocycles.find((m) => m.name.trim().toLowerCase() === action.mesocycleName.trim().toLowerCase());
+        if (!meso) break;
+        const text = action.description.trim();
+        setMesocycleNotes((prev) => ({
+          ...prev,
+          [meso.id]: action.mode === "append" && prev[meso.id]?.trim() ? `${prev[meso.id].trim()}\n\n${text}` : text,
+        }));
         break;
       }
       case "rename_cycles": {
