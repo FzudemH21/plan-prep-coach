@@ -179,13 +179,7 @@ export function ParameterMeasuresEditor({ measures, perSide, parameterUnit, onCh
 
   return (
     <div className="space-y-2">
-      <div>
-        <Label>Measures</Label>
-        <p className="text-xs text-muted-foreground">
-          What is recorded for this parameter — e.g. for a 30 m sprint the time, the pain and the quality. Goals and tests pick one of them;
-          interactions and methods apply to the parameter as a whole.
-        </p>
-      </div>
+      <Label>Measures</Label>
       {measures.map((m, i) => (
         <MeasureRow key={m.id} measure={m} isMain={m.id === MAIN_MEASURE_ID} parameterUnit={parameterUnit}
           onChange={(next) => update(i, next)}
@@ -200,7 +194,7 @@ export function ParameterMeasuresEditor({ measures, perSide, parameterUnit, onCh
             <DropdownMenuItem key={p.id} className="text-xs" onSelect={() => add(p.measure)}>{p.label}</DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
-          <DropdownMenuItem className="text-xs" onSelect={() => add({ name: 'Value', kind: 'number' })}>Number with unit</DropdownMenuItem>
+          <DropdownMenuItem className="text-xs" onSelect={() => add({ name: 'Value', kind: 'number' })}>Numeric with unit</DropdownMenuItem>
           <DropdownMenuItem className="text-xs" onSelect={() => add(withKind({ id: '', name: 'Rating', kind: 'scale' }, 'scale'))}>Scale (own range)</DropdownMenuItem>
           <DropdownMenuItem className="text-xs" onSelect={() => add(withKind({ id: '', name: 'Quality', kind: 'levels' }, 'levels'))}>Levels (own)</DropdownMenuItem>
           <DropdownMenuItem className="text-xs" onSelect={() => add({ name: 'Passed', kind: 'passFail' })}>Pass / fail</DropdownMenuItem>
@@ -212,7 +206,7 @@ export function ParameterMeasuresEditor({ measures, perSide, parameterUnit, onCh
         <span className="text-sm">
           Recorded per side (left / right)
           <span className="block text-xs text-muted-foreground">
-            Every value gets a side. For number measures the limb symmetry index (LSI = smaller ÷ larger side) is calculated — goals can target a side or the LSI.
+            Limb Symmetry Index calculated automatically
           </span>
         </span>
       </label>

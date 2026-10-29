@@ -9,7 +9,7 @@
 import { MAIN_MEASURE_ID, type MeasureKind, type ParameterMeasure, type ParameterV2 } from '@/types/parametersV2';
 
 export const MEASURE_KIND_LABELS: Record<MeasureKind, string> = {
-  number: 'Number',
+  number: 'Numeric',
   scale: 'Scale',
   levels: 'Levels',
   passFail: 'Pass / fail',

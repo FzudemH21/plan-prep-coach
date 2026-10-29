@@ -31,7 +31,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
-  Plus, Trash2, ChevronUp, ChevronDown, Edit, Loader2, ClipboardList, X, GitBranch, Eye, EyeOff, CalendarDays, MapPin,
+  Plus, Trash2, ChevronUp, ChevronDown, Edit, Loader2, ClipboardList, X, GitBranch, Eye, EyeOff, CalendarDays, MapPin, Paperclip,
 } from 'lucide-react';
 import { AnamnesisFieldInput } from '@/components/anamnesis/AnamnesisInputs';
 import { ANAMNESIS_PRESETS } from '@/data/anamnesisPresets';
@@ -360,13 +360,6 @@ function FieldRow({
           Add "Sonstiges" with free text
         </label>
       )}
-      {type !== 'info' && (
-        <label className="flex items-center gap-2 text-xs cursor-pointer w-fit">
-          <Checkbox className="h-3.5 w-3.5" checked={!!field.allowFiles}
-            onCheckedChange={(v) => onChange({ ...field, allowFiles: v === true || undefined })} />
-          Allow file upload <span className="text-muted-foreground">(e.g. a report — PDF or photo, below the answer; the AI doesn't read the files)</span>
-        </label>
-      )}
       {type === 'yesnoList' && (
         <LinesInput key={`${field.id}-${type}`} label="Items, each answered with yes / no (one per line)" placeholder={'Unintended weight loss\nFever or night sweats'}
           value={field.options ?? []} onCommit={(options) => onChange({ ...field, options })} />
@@ -391,42 +384,43 @@ function FieldRow({
       )}
       {type === 'list' && (
         <>
-          <p className="text-xs text-muted-foreground">The athlete adds as many entries as needed ("Add another") — each entry has the columns below. E.g. injuries: When / What / Time out / Treatment; events: Type / From / To / Note.</p>
+          <p className="text-xs text-muted-foreground">Columns of each entry (the athlete adds as many as needed)</p>
           <ListColumnsEditor columns={field.listColumns ?? []} onChange={(listColumns) => onChange({ ...field, listColumns })} />
         </>
       )}
       {type === 'bodyMap' && (
-        <div className="space-y-1.5">
-          <label className="flex items-center gap-2 text-xs cursor-pointer w-fit">
-            <Checkbox className="h-3.5 w-3.5" checked={!!field.bodyMapIntensity}
-              onCheckedChange={(v) => onChange({ ...field, bodyMapIntensity: v === true || undefined })} />
-            Also ask for the pain intensity (0–10) of each spot
-          </label>
-          <label className="flex items-center gap-2 text-xs cursor-pointer w-fit">
-            <Checkbox className="h-3.5 w-3.5" checked={!!field.bodyMapNone}
-              onCheckedChange={(v) => onChange({ ...field, bodyMapNone: v === true || undefined })} />
-            Offer &quot;None of these&quot; <span className="text-muted-foreground">(nothing to mark — counts as answered, e.g. so everyone answers it)</span>
-          </label>
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-x-5 gap-y-1">
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <Checkbox className="h-3.5 w-3.5" checked={!!field.bodyMapIntensity}
+                onCheckedChange={(v) => onChange({ ...field, bodyMapIntensity: v === true || undefined })} />
+              Pain intensity (0–10) per spot
+            </label>
+            <label className="flex items-center gap-2 text-xs cursor-pointer" title="Nothing to mark counts as answered">
+              <Checkbox className="h-3.5 w-3.5" checked={!!field.bodyMapNone}
+                onCheckedChange={(v) => onChange({ ...field, bodyMapNone: v === true || undefined })} />
+              Offer &quot;None of these&quot;
+            </label>
+          </div>
+          <SpotFieldsEditor field={field} onChange={onChange} />
           <Input className="h-7 text-xs" placeholder={field.spotFields?.length
-            ? 'Prompt for the optional note at the end of each spot (e.g. "Anything else that matters?")'
+            ? 'Prompt for the optional note at the end of each spot'
             : 'Prompt for the note at each spot (default: "What happened / how does it feel?")'}
             value={field.placeholder ?? ''} onChange={(e) => onChange({ ...field, placeholder: e.target.value || undefined })} />
-          <SpotFieldsEditor field={field} onChange={onChange} />
         </div>
       )}
       {type === 'dateRanges' && (
         <>
-          <p className="text-xs text-muted-foreground">The athlete marks a period in a month calendar (tap the first and then the last day, double-tap for a single day) and types what it is — e.g. holidays, competitions, travel, training camps.</p>
-          <p className="text-xs text-blue-700 flex items-start gap-1.5">
-            <CalendarDays className="h-3.5 w-3.5 shrink-0 mt-px" />
-            Every period lands in the athlete&apos;s calendar as an event (over several days where it has them) once the anamnesis is submitted — and from there in the athlete app. The form tells the athlete.
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+            Periods become events in the athlete&apos;s calendar when the form is submitted
           </p>
           <Input className="h-7 text-xs" placeholder='Prompt for the name (default: "What is it? e.g. holiday in Spain, competition, training camp")'
             value={field.placeholder ?? ''} onChange={(e) => onChange({ ...field, placeholder: e.target.value || undefined })} />
         </>
       )}
       {type === 'weekGrid' && (
-        <p className="text-xs text-muted-foreground">Mon–Sun, 5:00–23:00 in hours. The athlete marks: available for training · regular training (team/club) · other physical load.</p>
+        <p className="text-xs text-muted-foreground">Mon–Sun, 5–23 h: available · regular training · other load</p>
       )}
 
       {type === 'info' ? (
@@ -459,8 +453,8 @@ function FieldRow({
       )}
 
       {/* Preview only in the template editor — a record's own questions show the real answer field below */}
-      {(!showHelp && type !== 'info') || allowCondition ? (
-        <div className="flex gap-1">
+      {type !== 'info' || allowCondition ? (
+        <div className="flex flex-wrap gap-1">
           {!showHelp && type !== 'info' && (
             <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs text-muted-foreground gap-1" onClick={() => setShowHelp(true)}>
               <Plus className="h-3 w-3" />Help text
@@ -469,13 +463,21 @@ function FieldRow({
           {allowCondition && !field.condition && (
             <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs text-muted-foreground gap-1"
               onClick={() => onChange({ ...field, condition: { sourceId: '', values: [] } })}>
-              <GitBranch className="h-3 w-3" />Show only if…
+              <GitBranch className="h-3 w-3" />Condition
             </Button>
           )}
           {perSpot && !field.spotRegions && (
             <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs text-muted-foreground gap-1"
               onClick={() => onChange({ ...field, spotRegions: [] })}>
-              <MapPin className="h-3 w-3" />Only for some body areas…
+              <MapPin className="h-3 w-3" />Body areas
+            </Button>
+          )}
+          {type !== 'info' && (
+            <Button variant="ghost" size="sm"
+              className={cn('h-6 px-1.5 text-xs gap-1', field.allowFiles ? 'text-primary bg-primary/10 hover:bg-primary/15' : 'text-muted-foreground')}
+              title="Lets the athlete attach a file (e.g. a report — PDF or photo) below the answer; the AI doesn't read the files"
+              onClick={() => onChange({ ...field, allowFiles: field.allowFiles ? undefined : true })}>
+              <Paperclip className="h-3 w-3" />{field.allowFiles ? 'File upload on' : 'File upload'}
             </Button>
           )}
           {allowCondition && (
@@ -501,15 +503,12 @@ function SpotFieldsEditor({ field, onChange }: { field: AnamnesisField; onChange
     write(next);
   };
   return (
-    <div className="rounded-md border bg-muted/30 p-2 space-y-1.5">
-      <div>
-        <p className="text-xs font-medium">Questions per spot</p>
-        <p className="text-[11px] text-muted-foreground">
-          Asked for every spot the athlete marks — in the form link one per screen right after tapping the spot, then back to the body.
-          They can depend on an earlier answer of the same spot or only be asked for some body areas. A spot can be marked as part of an
-          earlier one (e.g. pain radiating into the leg) — then its questions are not asked again.
-          {subs.length > 0 && ' The note comes last (optional).'}
-        </p>
+    <div className="ml-1 border-l-2 border-primary/40 pl-3 space-y-2">
+      <div className="flex items-center gap-1.5"
+        title="Asked for every spot the athlete marks, right after tapping it. A spot marked as part of an earlier one (e.g. pain radiating into the leg) is not asked again.">
+        <MapPin className="h-3.5 w-3.5 text-primary" />
+        <p className="text-sm font-medium">Questions per spot</p>
+        {subs.length > 0 && <span className="text-xs text-muted-foreground">({subs.length})</span>}
       </div>
       {subs.map((sub, idx) => (
         <FieldRow
