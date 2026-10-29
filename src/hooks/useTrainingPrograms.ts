@@ -4,6 +4,7 @@ import { useAuth } from './useAuth';
 import { savePlanMemory } from '@/lib/planMemory';
 import { isProgramChatId } from '@/contexts/AIChatContext';
 import { PlanDuration, SmartGoal, SubGoal, Event, TrainableQuality, IntensityLevel } from '@/types/training';
+import { mergePlanGoals, type ParameterMergePlan } from '@/utils/parameterMerge';
 
 // Interface for manually added methods
 interface ManuallyAddedMethod {
@@ -424,6 +425,35 @@ export function useTrainingPrograms() {
   }, [flushExtraStateToActiveProgram]);
 
   // Update program status
+  /** A parameter merged into another one: goals of saved programs and of the plan open in the wizard
+   *  point at the target's measure. Returns how many plans changed. */
+  const mergeParameterGoals = useCallback(async (plans: ParameterMergePlan[]): Promise<number> => {
+    // A plan's goals through every merge plan in order
+    const throughPlans = <T extends { smartGoals?: SmartGoal[]; subGoals?: SubGoal[] }>(start: T) => {
+      let changed = false;
+      const macro = plans.reduce((m, plan) => { const r = mergePlanGoals(m, plan); changed ||= r.changed; return r.macro; }, start);
+      return { macro, changed };
+    };
+    let changedPrograms = 0;
+    const programs = data.programs.map(p => {
+      if (!p.macrocycleData) return p;
+      const { macro, changed } = throughPlans(p.macrocycleData);
+      if (!changed) return p;
+      changedPrograms++;
+      return { ...p, macrocycleData: macro };
+    });
+    if (changedPrograms > 0) await saveData({ ...data, programs });
+    // The plan open in the wizard (kept in localStorage until it is saved)
+    try {
+      const raw = localStorage.getItem('macrocycleData');
+      if (raw) {
+        const { macro, changed } = throughPlans(JSON.parse(raw) as { smartGoals?: SmartGoal[]; subGoals?: SubGoal[] });
+        if (changed) { localStorage.setItem('macrocycleData', JSON.stringify(macro)); changedPrograms++; }
+      }
+    } catch { /* unreadable draft — left as it is */ }
+    return changedPrograms;
+  }, [data, saveData]);
+
   const updateProgramStatus = useCallback(async (id: string, status: TrainingProgram['status']): Promise<boolean> => {
     const program = data.programs.find(p => p.id === id);
     if (!program) return false;
@@ -470,6 +500,7 @@ export function useTrainingPrograms() {
     saveCurrentSession,
     clearSession,
     updateProgramStatus,
+    mergeParameterGoals,
     getRecentPrograms,
     mergeSeedPrograms,
   };

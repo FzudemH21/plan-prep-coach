@@ -142,7 +142,9 @@ export function goalShowsPercent(goal: GoalRef, param?: ParameterV2): boolean {
 export function goalMeasurePart(goal: GoalRef, param?: ParameterV2): string {
   if (!param) return '';
   const measure = measureById(param, goal.measureId);
-  const parts = [hasCustomMeasures(param) ? measure?.name : '', goal.side ? GOAL_SIDE_LABELS[goal.side] : ''].filter(Boolean);
+  // A main measure without its own name: just the side ("SL Heel Raise · LSI", not "· Value · LSI")
+  const plainMain = measure?.id === MAIN_MEASURE_ID && measure.name === 'Value' && !!goal.side;
+  const parts = [hasCustomMeasures(param) && !plainMain ? measure?.name : '', goal.side ? GOAL_SIDE_LABELS[goal.side] : ''].filter(Boolean);
   return parts.join(' · ');
 }
 
@@ -170,6 +172,15 @@ function withoutSideInName(name: string): string {
  */
 export function relinkMergedSideGoal<G extends SmartGoal>(goal: G, parameters: ParameterV2[]): G {
   if (!goal.linkedParameterId || goal.side) return goal;
+  // LSI parameters merged into a per-side one, or turned into one ("SL Heel Raise LSI" → "SL Heel Raise")
+  const linkedId = goal.linkedParameterId;
+  const lsiTarget = parameters.find((p) => p.mergedParameters?.some((m) => m.id === linkedId && m.asLsi))
+    ?? parameters.find((p) => p.id === linkedId && p.perSide && /\bLSI\b/.test(goal.description));
+  if (lsiTarget) {
+    const next = { ...goal, linkedParameterId: lsiTarget.id, side: 'lsi' as const };
+    delete next.measureId;
+    return { ...next, description: goalDescription(lsiTarget, next) };
+  }
   const side = sideInName(goal.description);
   if (!side) return goal;
   const own = parameters.find((p) => p.id === goal.linkedParameterId);

@@ -59,6 +59,9 @@ export interface ParameterV2 {
   measures?: ParameterMeasure[];
   /** Recorded per side (left / right) — number measures then also get the limb symmetry index (LSI) */
   perSide?: boolean;
+  /** Parameters merged into this one (2026-10-29) — goals a plan still links to them are moved here;
+   *  `asLsi`: a separate LSI parameter, its goals become this parameter's LSI goals */
+  mergedParameters?: Array<{ id: string; name: string; asLsi?: boolean }>;
   createdAt: string;
 }
 

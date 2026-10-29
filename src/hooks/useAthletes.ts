@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { mainSeries } from '@/utils/goalMeasures';
+import { applyPlans, mergeAssignmentGoals, mergeAthleteParameters, type ParameterMergePlan } from '@/utils/parameterMerge';
 import { useSupabaseStore } from './useSupabaseStore';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -327,6 +328,16 @@ export function useAthletes() {
     return newPp;
   }, [data.athletePerformanceParameters, setData]);
 
+  /** A parameter merged into another one: every athlete's values move over (with the measure), and
+   *  goals of assigned programs point at the target's measure */
+  const mergePerformanceParameterInto = useCallback(async (plans: ParameterMergePlan[]) => {
+    await setData(prev => ({
+      ...prev,
+      athletePerformanceParameters: applyPlans(prev.athletePerformanceParameters, plans, (list, plan) => mergeAthleteParameters(list, plan, generateId)),
+      calendarAssignments: applyPlans(prev.calendarAssignments, plans, mergeAssignmentGoals),
+    }));
+  }, [setData]);
+
   const removePerformanceParameter = useCallback(async (performanceParameterId: string) => {
     await setData(prev => ({ ...prev, athletePerformanceParameters: prev.athletePerformanceParameters.filter(pp => pp.id !== performanceParameterId) }));
   }, [setData]);
@@ -460,6 +471,7 @@ export function useAthletes() {
     biometricsMigrated,
     movedBiometricDefinitions,
     moveBiometricsToParameters,
+    mergePerformanceParameterInto,
 
     parameterDefinitions,
     athleteParameters,

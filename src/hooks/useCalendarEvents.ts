@@ -277,9 +277,28 @@ export function useCalendarEvents() {
     return changed;
   }, [write]);
 
+  /** Test links rewritten (`remap` returns the new reference, null = unchanged); returns the changed events per athlete */
+  const remapParameterRefs = useCallback(async (remap: (ref: string) => string | null): Promise<Record<string, CalendarEvent[]>> => {
+    const changed: Record<string, CalendarEvent[]> = {};
+    await write(cur => {
+      const next: CalendarEventsStore = {};
+      for (const [athleteId, events] of Object.entries(cur)) {
+        next[athleteId] = events.map(e => {
+          const ref = e.parameterId ? remap(e.parameterId) : null;
+          if (ref === null) return e;
+          const moved = { ...e, parameterId: ref };
+          (changed[athleteId] ??= []).push(moved);
+          return moved;
+        });
+      }
+      return next;
+    });
+    return changed;
+  }, [write]);
+
   return {
     getEventsForDate, getEventsForAthlete, addEvent, addEvents, deleteEvent, deleteEventsWhere, updateEvent, deleteEventsForAthlete,
     syncAnamnesisEvents,
-    normalizeParameterRefs, isLoaded: !isLoading,
+    normalizeParameterRefs, remapParameterRefs, isLoaded: !isLoading,
   };
 }
