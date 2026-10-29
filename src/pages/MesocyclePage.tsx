@@ -5583,9 +5583,17 @@ export default function MesocyclePage() {
             mcIndices.forEach(mcIdx => {
               if (!next[meso.id]) next[meso.id] = {};
               if (!next[meso.id][mcIdx]) next[meso.id][mcIdx] = {};
+              // "clear": the method's values in this microcycle go (all sessions) before anything is set
+              if (entry.clear) delete next[meso.id][mcIdx][entry.methodName];
               if (!next[meso.id][mcIdx][entry.methodName]) next[meso.id][mcIdx][entry.methodName] = {};
-              if (!next[meso.id][mcIdx][entry.methodName][0]) next[meso.id][mcIdx][entry.methodName][0] = {};
-              const cell = next[meso.id][mcIdx][entry.methodName][0];
+              const slots = next[meso.id][mcIdx][entry.methodName];
+              // One session (1-based sessionIndex) or every session the cell has (at least the first)
+              const sessionIdxs = entry.sessionIndex != null
+                ? [entry.sessionIndex - 1]
+                : Object.keys(slots).length > 0 ? Object.keys(slots).map(Number) : [0];
+              sessionIdxs.forEach(sIdx => {
+              if (!slots[sIdx]) slots[sIdx] = {};
+              const cell = slots[sIdx];
               // Reps/Intensity render in a plain <input type="number">, which silently shows
               // blank for anything the AI writes that isn't a bare number (a range like "3-5" or
               // a compound string like "80-85% 1RM") — pull out the first number as a safety net
@@ -5595,11 +5603,21 @@ export default function MesocyclePage() {
                 const match = raw.match(/-?\d+(\.\d+)?/);
                 return match ? match[0] : raw;
               };
-              if (entry.frequency != null) cell['Frequency'] = entry.frequency;
-              if (entry.sets != null) cell['Sets'] = entry.sets;
-              if (entry.reps != null) cell['Reps'] = extractNumber(entry.reps);
-              if (entry.intensity != null) cell['Intensity'] = extractNumber(entry.intensity);
-              if (entry.extraParams) Object.assign(cell, entry.extraParams);
+              // A value replaces what is there; null deletes it (with its unit)
+              const put = (key: string, value: string | number | null | undefined) => {
+                if (value === undefined) return;
+                if (value === null) { delete cell[key]; delete cell[`${key}_unit`]; return; }
+                cell[key] = value;
+              };
+              put('Frequency', entry.frequency);
+              put('Sets', entry.sets);
+              put('Reps', entry.reps == null ? entry.reps : extractNumber(entry.reps));
+              put('Intensity', entry.intensity == null ? entry.intensity : extractNumber(entry.intensity));
+              Object.entries(entry.extraParams ?? {}).forEach(([key, value]) => put(key, value));
+              if (Object.keys(cell).length === 0) delete slots[sIdx];
+              });
+              // Nothing left: the method disappears from this microcycle
+              if (Object.keys(slots).length === 0) delete next[meso.id][mcIdx][entry.methodName];
             });
           });
           return next;
