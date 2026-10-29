@@ -183,7 +183,6 @@ export default function AthleticismDatabaseV2() {
     name: string;
     unit?: string;
     category?: string;
-    applicableSports?: string[];
     isBiometric?: boolean;
     measures?: ParameterMeasure[];
     perSide?: boolean;
@@ -196,7 +195,6 @@ export default function AthleticismDatabaseV2() {
       name: parameterData.name,
       unit: parameterData.unit,
       category: parameterData.category,
-      applicableSports: parameterData.applicableSports,
       isBiometric: parameterData.isBiometric,
       measures: parameterData.measures,
       perSide: parameterData.perSide,
@@ -359,7 +357,7 @@ export default function AthleticismDatabaseV2() {
                   </TableHead>
                   
                   {/* Parameter Column Header */}
-                  <TableHead className="w-[50%]">
+                  <TableHead className="w-[65%]">
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleSort('parameter')}
@@ -401,15 +399,13 @@ export default function AthleticismDatabaseV2() {
                       )}
                     </div>
                   </TableHead>
-                  
-                  <TableHead className="w-[22%]">Applicable Sports</TableHead>
-                  <TableHead className="w-[18%] text-right">Actions</TableHead>
+                  <TableHead className="w-[15%] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredParameters.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={3} className="text-center py-12 text-muted-foreground">
                       {parametersLoading
                         ? <Loader2 className="h-5 w-5 animate-spin mx-auto" />
                         : parameterSearch || selectedCategories.length > 0
@@ -422,7 +418,7 @@ export default function AthleticismDatabaseV2() {
                     const categoryLabel = PARAMETER_CATEGORIES.find((c) => c.value === parameter.category)?.label || parameter.category;
 
                     return (
-                      <TableRow key={parameter.id}>
+                      <TableRow key={parameter.id} className="cursor-pointer" onClick={() => setEditingParameter(parameter)}>
                         <TableCell>
                           {categoryLabel ? (
                             <Badge variant="secondary" className="text-xs">
@@ -462,21 +458,9 @@ export default function AthleticismDatabaseV2() {
                             </div>
                           )}
                         </TableCell>
-                        <TableCell>
-                          {parameter.applicableSports?.length ? (
-                            <div className="flex flex-wrap gap-1">
-                              {parameter.applicableSports.map((sport) => (
-                                <Badge key={sport} variant="outline" className="text-xs">
-                                  {sport}
-                                </Badge>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">—</span>
-                          )}
-                        </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
+                          {/* Row click opens the editor — the buttons must not trigger it twice */}
+                          <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                             <Button
                               variant="ghost"
                               size="icon"

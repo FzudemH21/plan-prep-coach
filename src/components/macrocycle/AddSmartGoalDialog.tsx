@@ -32,7 +32,7 @@ import { AthletePerformanceParameter } from "@/types/athlete";
 import { ParameterV2 } from "@/types/parametersV2";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { hasCustomMeasures, measureById, parameterMeasures } from "@/utils/parameterMeasures";
-import { GOAL_SIDE_LABELS, allValuesOf, goalBaseline, goalDescription, goalShowsPercent, goalUnit, valuesOfMeasure } from "@/utils/goalMeasures";
+import { GOAL_SIDE_LABELS, allValuesOf, defaultGoalSide, goalBaseline, goalDescription, goalShowsPercent, goalUnit, valuesOfMeasure } from "@/utils/goalMeasures";
 
 interface ParameterOptionItem {
   id: string;
@@ -96,10 +96,7 @@ export function AddSmartGoalDialog({
     setDesiredValue(m?.kind === "passFail" ? 1 : "");
   };
   /** The side to start with for a parameter recorded per side: the LSI for numbers, both sides otherwise */
-  const defaultSide = (param: ParameterV2 | undefined, mId: string | undefined): GoalSide | undefined => {
-    if (!param?.perSide) return undefined;
-    return measureById(param, mId)?.kind === "number" ? "lsi" : "both";
-  };
+  const defaultSide = (param: ParameterV2 | undefined, mId: string | undefined): GoalSide | undefined => defaultGoalSide(param, mId);
 
   // Pre-fill form when editing
   useEffect(() => {

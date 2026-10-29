@@ -67,6 +67,33 @@ function latestOf<V extends MeasuredValue>(values: V[]): V | undefined {
   return [...values].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0];
 }
 
+/**
+ * The athlete's latest values of a parameter for the AI, one line per series ("Pain · Left: 3 /10
+ * (2026-10-01)") — plus the LSI of every number measure recorded per side, calculated from the
+ * latest left and right values.
+ */
+export function latestValueLines(param: ParameterV2 | undefined, values: MeasuredValue[], name: string): string[] {
+  const lines = seriesOfValues(param, values).map((series) => {
+    const latest = latestOf(series.values);
+    const unit = !series.unit ? '' : series.unit.startsWith('/') ? series.unit : ` ${series.unit}`;
+    return `${name}${series.label ? ` · ${series.label}` : ''}: ${latest?.value ?? '—'}${unit} (${latest?.recordedAt.slice(0, 10) ?? '—'})`;
+  });
+  if (param?.perSide) {
+    for (const m of parameterMeasures(param)) {
+      if (m.kind !== 'number') continue;
+      const lsi = goalBaseline({ measureId: m.id === MAIN_MEASURE_ID ? undefined : m.id, side: 'lsi' }, param, values);
+      if (lsi !== null) lines.push(`${goalDescription(param, { measureId: m.id === MAIN_MEASURE_ID ? undefined : m.id, side: 'lsi' })}: ${lsi} % (calculated from the latest left / right values)`);
+    }
+  }
+  return lines;
+}
+
+/** The side a new goal of a parameter recorded per side starts with: the LSI for numbers, both sides otherwise */
+export function defaultGoalSide(param: ParameterV2 | undefined, measureId: string | undefined): GoalSide | undefined {
+  if (!param?.perSide) return undefined;
+  return measureById(param, measureId)?.kind === 'number' ? 'lsi' : 'both';
+}
+
 /** A stored value as the goal's number: level → index, pass / fail → 0 / 1, else the number */
 export function goalNumberOf(measure: ParameterMeasure | undefined, raw: string | undefined): number | null {
   if (raw === undefined || raw === null || `${raw}`.trim() === '') return null;

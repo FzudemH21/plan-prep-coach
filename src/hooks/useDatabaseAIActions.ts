@@ -54,9 +54,8 @@ export function buildParameterDatabaseContext(data: ParametersDatabaseV2 | undef
         `- name: "${p.name}"`
         + (p.category ? ` | category: ${p.category}` : '')
         + (p.unit ? ` | unit: ${p.unit}` : '')
-        + (p.applicableSports?.length ? ` | sports: ${p.applicableSports.join(', ')}` : '')
         + (p.measures?.length ? ` | measures: ${parameterMeasures(p).map((m) => `${m.name} (${m.id === MAIN_MEASURE_ID ? 'main, ' : ''}${m.kind}${measureSummary(m) ? `: ${measureSummary(m)}` : ''})`).join('; ')}` : '')
-        + (p.perSide ? ' | recorded per side (L / R)' : '')).join('\n')
+        + (p.perSide ? ' | recorded per side (L / R) — LSI calculated' : '')).join('\n')
     : 'No parameters defined yet.';
 
   const seen = new Set<string>();
@@ -137,13 +136,13 @@ export function applyParameterActions(base: ParametersDatabaseV2, actions: Apply
       ?? parameters.find((p) => p.name.trim().toLowerCase() === lower)
       ?? parameters.find((p) => bare(p.name) === bare(t) && bare(t).length > 0);
   };
-  const addParam = (p: { name: string; category?: string; unit?: string; applicableSports?: string[]; mainMeasureName?: string; mainBetterWhen?: 'higher' | 'lower'; measures?: AIMeasureSpec[]; perSide?: boolean }) => {
+  const addParam = (p: { name: string; category?: string; unit?: string; mainMeasureName?: string; mainBetterWhen?: 'higher' | 'lower'; measures?: AIMeasureSpec[]; perSide?: boolean }) => {
     if (find(p.name)) { failed.push(`"${p.name}" already exists`); return; }
     const measures: ParameterMeasure[] = [
       { id: MAIN_MEASURE_ID, name: p.mainMeasureName?.trim() || 'Value', kind: 'number', betterWhen: p.mainBetterWhen },
       ...(p.measures ?? []).map(toMeasure),
     ];
-    const param: ParameterV2 = { id: newId('p'), name: p.name, category: p.category, unit: p.unit, applicableSports: p.applicableSports, createdAt: new Date().toISOString() };
+    const param: ParameterV2 = { id: newId('p'), name: p.name, category: p.category, unit: p.unit, createdAt: new Date().toISOString() };
     const stored = measuresToStore(measures);
     if (stored) param.measures = stored;
     if (p.perSide) param.perSide = true;

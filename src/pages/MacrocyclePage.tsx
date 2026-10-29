@@ -54,7 +54,7 @@ import { useCalendarEvents, groupConsecutiveDates } from "@/hooks/useCalendarEve
 import { TEST_COLOR, EVENT_COLOR, testEventGradient } from "@/lib/eventColors";
 import { PlanNotesField } from "@/components/shared/PlanNotesField";
 import type { ParameterMeasure } from "@/types/parametersV2";
-import { allValuesOf, formatGoalRange, goalBaseline, goalDescription, goalMeasurePart, goalNumberOf, goalShowsPercent, goalUnit, groupGoalsByParameter, relinkMergedSideGoal, valuesOfMeasure } from "@/utils/goalMeasures";
+import { allValuesOf, defaultGoalSide, formatGoalRange, goalBaseline, goalDescription, goalMeasurePart, goalNumberOf, goalShowsPercent, goalUnit, GOAL_SIDE_LABELS, groupGoalsByParameter, latestValueLines, relinkMergedSideGoal, valuesOfMeasure } from "@/utils/goalMeasures";
 import { appliesToMeasure, hasCustomMeasures, measureById, parameterMeasures } from "@/utils/parameterMeasures";
 import { isDatabaseAction, useDatabaseAIActions } from "@/hooks/useDatabaseAIActions";
 import { applyNotesAction, readNotesHistory, restoreNotesVersion, strategyContext, WRITE_UP_PROMPT, type PlanNotesVersion } from "@/utils/planStrategy";
@@ -3091,13 +3091,41 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     const durationStr = planDuration
       ? `Plan dates: ${format(planDuration.startDate, 'yyyy-MM-dd')} → ${format(planDuration.endDate, 'yyyy-MM-dd')} (${planDuration.totalDays} days / ${Math.round(planDuration.totalDays / 7)} weeks)`
       : "";
+    // Goals with what they are about: parameter, measure, side, baseline → target
+    const paramOf = (id: string | undefined) => (id ? parametersDataV2.parameters.find((p) => p.id === id) : undefined);
     const goalsStr = smartGoals.length
-      ? `Goals (use EXACT names for schedule_tests):\n${smartGoals.map((g) => {
+      ? `Goals (use the EXACT name for schedule_tests / remove_goal):\n${smartGoals.map((g) => {
           const name = g.description || g.specific || "";
-          const dates = g.testDates?.length ? ` [tests: ${g.testDates.join(", ")}]` : "";
-          return `- ${name}${dates}`;
+          if (!name) return "";
+          const param = paramOf(g.linkedParameterId);
+          const meta = [
+            param ? `parameter: "${param.name}"` : g.linkedParameterId ? "parameter: no longer in the database" : "",
+            param && hasCustomMeasures(param) ? `measure: ${measureById(param, g.measureId)?.name ?? "main"}` : "",
+            g.side ? `side: ${GOAL_SIDE_LABELS[g.side]}` : "",
+            formatGoalRange(g, param),
+            g.phaseNote ? `when: ${g.phaseNote}` : "",
+            g.testDates?.length ? `tests: ${g.testDates.join(", ")}` : "",
+          ].filter(Boolean);
+          return `- name: "${name}" | ${meta.join(" | ")}`;
         }).filter(Boolean).join("\n")}`
       : "";
+    const allSubGoals = [...subGoals, ...derivedSubGoals];
+    const subGoalsStr = allSubGoals.length
+      ? `Sub-goals (parameters that contribute to a goal):\n${allSubGoals.map((sg) => {
+          const parent = smartGoals.find((g) => g.id === sg.parentGoalId);
+          const unit = sg.unit ? ` ${sg.unit}` : "";
+          const range = sg.goalValue ? `${sg.preTestValue} → ${sg.goalValue}${unit}` : `current ${sg.preTestValue}${unit}, no target yet`;
+          return `- "${sg.description}"${parent ? ` (for "${parent.description}")` : ""} | ${range}${sg.isDerived ? " | suggested from the parameter database" : ""}`;
+        }).join("\n")}`
+      : "";
+    // The athlete's latest values: per measure and side, plus the calculated LSI
+    const valueLines = athleteParamsForGoals.flatMap((pp) => {
+      const param = paramOf(pp.athleticismParameterId);
+      return latestValueLines(param, allValuesOf(pp), param?.name ?? pp.athleticismParameterId);
+    });
+    const valuesStr = !selectedAthlete ? ""
+      : valueLines.length ? `Athlete's latest values (goal baselines):\n${valueLines.map((l) => `- ${l}`).join("\n")}`
+      : "Athlete's latest values: none recorded yet";
     const eventsStr = events.length
       ? `Events (use EXACT names for schedule_tests — do NOT create a new event if one already exists here):\n${events.map((e) => {
           const dates = e.eventDates?.length ? ` [scheduled: ${e.eventDates.join(", ")}]` : " [no dates yet]";
@@ -3150,6 +3178,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       planStr,
       durationStr,
       goalsStr,
+      subGoalsStr,
+      valuesStr,
       eventsStr,
       methodsStr,
       notesStr,
@@ -3157,7 +3187,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, subGoals, derivedSubGoals, events, selectedMethods, manuallyAddedMethods, macroStepLabel, parametersDataV2, toolboxData, planNotes]);
+  }, [currentStep, selectedAthlete, planName, planDuration, smartGoals, subGoals, derivedSubGoals, athleteParamsForGoals, events, selectedMethods, manuallyAddedMethods, macroStepLabel, parametersDataV2, toolboxData, planNotes]);
 
   const handleAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
     // Parameter Database / Training Toolbox
@@ -3197,9 +3227,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         const measure = param && action.measureName
           ? parameterMeasures(param).find((m) => m.name.trim().toLowerCase() === action.measureName!.trim().toLowerCase())
           : undefined;
+        const measureId = measure && measure.id !== "main" ? measure.id : undefined;
+        // Per side without a side given: the same default as the goal dialog (LSI for numbers, else both sides)
         const goalRef = {
-          measureId: measure && measure.id !== "main" ? measure.id : undefined,
-          side: param?.perSide ? action.side : undefined,
+          measureId,
+          side: param?.perSide ? (action.side ?? defaultGoalSide(param, measureId)) : undefined,
         };
         const baseline = param && athleteParam ? goalBaseline(goalRef, param, allValuesOf(athleteParam)) ?? 0 : 0;
         const target = action.targetValue === undefined ? 0

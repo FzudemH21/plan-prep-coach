@@ -18,7 +18,8 @@ import { TrainingProgram } from '@/hooks/useTrainingPrograms';
 import { CalendarEvent } from '@/hooks/useCalendarEvents';
 import { ParametersDatabaseV2 } from '@/types/parametersV2';
 import { ExerciseDistribution } from '@/types/microcycle-planning';
-import { allValuesOf, seriesOfValues } from '@/utils/goalMeasures';
+import { allValuesOf, latestValueLines } from '@/utils/goalMeasures';
+import { hasCustomMeasures, parameterMeasures } from '@/utils/parameterMeasures';
 
 interface UseAthleteAIContextOptions {
   athlete: Athlete;
@@ -74,19 +75,13 @@ export function useAthleteAIContext({
     let profileSection = `## Athlete: ${name}`;
     if (profileParts.length > 0) profileSection += `\n${profileParts.join(' | ')}`;
 
-    // One line per series: the main measure, other measures and sides (e.g. "Pain · Left")
+    // One line per series: the main measure, other measures and sides (e.g. "Pain · Left"), plus the
+    // calculated LSI of parameters recorded per side
     const paramLines = performanceParameters
       .filter(pp => allValuesOf(pp).length > 0)
       .flatMap(pp => {
         const param = parametersData?.parameters.find(p => p.id === pp.athleticismParameterId);
-        return seriesOfValues(param, allValuesOf(pp)).map(series => {
-          const latest = [...series.values].sort(
-            (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
-          )[0];
-          const unit = series.unit ? ` ${series.unit}` : '';
-          const name = `${param?.name ?? pp.athleticismParameterId}${series.label ? ` · ${series.label}` : ''}`;
-          return `  - ${name}: ${latest.value}${unit} (recorded ${format(new Date(latest.recordedAt + (latest.recordedAt.length === 10 ? 'T12:00:00' : '')), 'MMM d, yyyy')})`;
-        });
+        return latestValueLines(param, allValuesOf(pp), param?.name ?? pp.athleticismParameterId).map(l => `  - ${l}`);
       });
     if (paramLines.length > 0) {
       profileSection += `\nPerformance Parameters:\n${paramLines.join('\n')}`;
@@ -151,6 +146,8 @@ export function useAthleteAIContext({
         const meta: string[] = [];
         if (p.category) meta.push(p.category);
         if (p.unit) meta.push(p.unit);
+        if (hasCustomMeasures(p)) meta.push(`measures: ${parameterMeasures(p).map(m => m.name).join(' / ')}`);
+        if (p.perSide) meta.push('per side, LSI calculated');
         return `  - ${p.name}${meta.length > 0 ? ' [' + meta.join(', ') + ']' : ''}`;
       });
       sections.push(`## Parameter Database (${dbParams.length} parameters)\n${dbLines.join('\n')}`);
