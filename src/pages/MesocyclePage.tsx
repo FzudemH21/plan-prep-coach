@@ -4378,7 +4378,22 @@ export default function MesocyclePage() {
     if (!isIntensityDataLoaded) return;
     
     const days = calculateTrainingDays();
-    setTrainingDays(days);
+    // Rebuilt from the structure, but a day that still exists keeps what was set on it later
+    // (session names and count from microcycle planning) — without this every visit here
+    // reset all sessions to "Session 1" and auto-save stored that.
+    setTrainingDays(prev => {
+      const previous = new Map(prev.map(d => [d.date, d]));
+      return days.map(day => {
+        const before = previous.get(day.date);
+        if (!before) return day;
+        return {
+          ...before,
+          ...day,
+          sessions: day.sessions === 0 ? 0 : (before.sessions || day.sessions),
+          sessionNames: before.sessionNames?.length ? before.sessionNames : day.sessionNames,
+        };
+      });
+    });
     
     // Create a map of existing intensities from state
     const existingIntensities = dailyIntensityData.reduce((acc, di) => {
