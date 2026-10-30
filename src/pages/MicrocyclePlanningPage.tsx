@@ -1599,6 +1599,79 @@ export default function MicrocyclePlanningPage() {
     );
   };
 
+  /** Mesocycle id of a day (the session intensity keys carry it) */
+  const mesocycleIdOfDay = (dayDate: string): string | undefined => {
+    const day = trainingDays.find(d => d.date === dayDate);
+    return day?.mesocycleId ?? mesocycles.find(m => m.microcycles.some(mc => mc.id === day?.microcycleId))?.id;
+  };
+
+  /** Removes every stored session intensity of these days (any mesocycle) */
+  const removeSessionIntensities = (dayDates: string[]) => {
+    const dates = new Set(dayDates);
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      const m = key?.match(/^sessionIntensity_.+_(\d{4}-\d{2}-\d{2})_\d+$/);
+      if (key && m && dates.has(m[1])) keys.push(key);
+    }
+    keys.forEach(k => localStorage.removeItem(k));
+  };
+
+  // Method distribution "copy": the target days get the source days' sessions — how many, their
+  // names and (on days with several sessions) their intensities. A single session's intensity is
+  // the day intensity, so there the target keeps its own (its loading wave isn't overwritten).
+  const handleCopySessionSetup = (pairs: Array<{ sourceDate: string; targetDate: string }>) => {
+    if (pairs.length === 0) return;
+    const dayByDate = new Map(trainingDays.map(d => [d.date, d]));
+    const sessionCount = (date: string) =>
+      migrateLegacyIntensity(dayByDate.get(date)?.intensity) === '0' ? 0 : (daySplitStates[date] ?? 1);
+    const counts = new Map(pairs.map(({ sourceDate, targetDate }) => [targetDate, Math.max(1, sessionCount(sourceDate))]));
+
+    removeSessionIntensities(pairs.map(p => p.targetDate));
+    pairs.forEach(({ sourceDate, targetDate }) => {
+      const source = dayByDate.get(sourceDate);
+      const n = counts.get(targetDate) ?? 1;
+      if (!source || sessionCount(sourceDate) < 2) return;
+      const sourceMeso = mesocycleIdOfDay(sourceDate);
+      const targetMeso = mesocycleIdOfDay(targetDate);
+      if (!targetMeso) return;
+      for (let si = 0; si < n; si++) {
+        const value = (sourceMeso && localStorage.getItem(`sessionIntensity_${sourceMeso}_${sourceDate}_${si}`))
+          || migrateLegacyIntensity(source.intensity);
+        localStorage.setItem(`sessionIntensity_${targetMeso}_${targetDate}_${si}`, value);
+      }
+    });
+    notifySessionMetaChanged();
+
+    setDaySplitStates(prev => {
+      const next = { ...prev };
+      counts.forEach((n, date) => { next[date] = n; });
+      return next;
+    });
+    const sourceOf = new Map(pairs.map(p => [p.targetDate, p.sourceDate]));
+    setTrainingDays(prev => prev.map(day => {
+      const sourceDate = sourceOf.get(day.date);
+      if (!sourceDate) return day;
+      const n = counts.get(day.date) ?? 1;
+      const sourceNames = dayByDate.get(sourceDate)?.sessionNames ?? [];
+      return { ...day, sessionNames: Array.from({ length: n }, (_, i) => sourceNames[i] ?? `Session ${i + 1}`) };
+    }));
+  };
+
+  // Method distribution "clear": the days go back to one unnamed session with the day intensity
+  const handleResetSessions = (dayDates: string[]) => {
+    if (dayDates.length === 0) return;
+    const dates = new Set(dayDates);
+    removeSessionIntensities(dayDates);
+    notifySessionMetaChanged();
+    setDaySplitStates(prev => {
+      const next = { ...prev };
+      dayDates.forEach(date => { delete next[date]; });
+      return next;
+    });
+    setTrainingDays(prev => prev.map(day => dates.has(day.date) ? { ...day, sessionNames: [] } : day));
+  };
+
   // Handle clearing all data for an entire mesocycle
   const handleClearMesocycleData = (mesocycleId: string) => {
     const mesocycle = mesocycles.find(m => m.id === mesocycleId);
@@ -5234,6 +5307,8 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
             onAddSession={handleAddSession}
             onRemoveSession={handleRemoveSession}
             onRenameSession={handleRenameSession}
+            onCopySessionSetup={handleCopySessionSetup}
+            onResetSessions={handleResetSessions}
             getMethodFrequencyTarget={getMethodFrequency}
             hasCategoryFrequency={hasCategoryFrequency}
             isMethodCharacterizedInMesocycle={isMethodCharacterizedInMesocycle}

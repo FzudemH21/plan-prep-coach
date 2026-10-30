@@ -68,6 +68,10 @@ export interface MethodSessionArchitectureProps {
   onAddSession: (dayDate: string) => void;
   onRemoveSession: (dayDate: string, sessionIndex: number) => void;
   onRenameSession: (dayDate: string, sessionIndex: number, newName: string) => void;
+  /** Copy: the target days get the source days' sessions (count, names, intensities) */
+  onCopySessionSetup?: (pairs: Array<{ sourceDate: string; targetDate: string }>) => void;
+  /** Clear: the days go back to one unnamed session */
+  onResetSessions?: (dayDates: string[]) => void;
   /** Returns the periodization-table target frequency for a method in a specific microcycle */
   getMethodFrequencyTarget?: (methodId: string, microcycleId: string) => number;
   /** True when the periodization table has a frequency for this exercise category of its own */
@@ -139,6 +143,8 @@ export function MethodSessionArchitecture({
   onAddSession,
   onRemoveSession,
   onRenameSession,
+  onCopySessionSetup,
+  onResetSessions,
   getMethodFrequencyTarget,
   hasCategoryFrequency,
   isMethodCharacterizedInMesocycle,
@@ -432,10 +438,11 @@ export function MethodSessionArchitecture({
       targetMicrocycleId: string,
       targetMesocycleId: string,
       assignments: Record<string, string[]>
-    ): { skipped: Set<string> } => {
+    ): { skipped: Set<string>; dayPairs: Array<{ sourceDate: string; targetDate: string }> } => {
       const sourceDays = trainingDays.filter(d => d.microcycleId === sourceMicrocycleId);
       const targetDays = trainingDays.filter(d => d.microcycleId === targetMicrocycleId);
       const skipped = new Set<string>();
+      const dayPairs: Array<{ sourceDate: string; targetDate: string }> = [];
       const placed: Record<string, number> = {};
       const caps: Record<string, number> = {};
 
@@ -479,14 +486,12 @@ export function MethodSessionArchitecture({
           delete assignments[`${targetDate}_${si}`];
         }
 
-        // Add sessions to target day if source had more
-        for (let j = 0; j < sourceSessionCount - targetSessionCount; j++) {
-          onAddSession(targetDate);
-        }
+        // The sessions themselves (count, names, intensities) are copied by the caller in one go
+        dayPairs.push({ sourceDate, targetDate });
       }
-      return { skipped };
+      return { skipped, dayPairs };
     },
-    [trainingDays, dayMethodAssignments, daySplitStates, getMethodFrequencyTarget, isMethodCharacterizedInMesocycle, onAddSession]
+    [trainingDays, dayMethodAssignments, daySplitStates, getMethodFrequencyTarget, isMethodCharacterizedInMesocycle]
   );
 
   const describeCopyResult = (base: string, skipped: Set<string>, targetName: string) =>
@@ -530,10 +535,11 @@ export function MethodSessionArchitecture({
         }
 
         const newAssignments: Record<string, string[]> = { ...dayMethodAssignments };
-        const { skipped } = copyMicrocycleAssignments(
+        const { skipped, dayPairs } = copyMicrocycleAssignments(
           sourceMicrocycleId, targetMicrocycleId, allMesocycles[targetMesoIndex].id, newAssignments
         );
         onDayMethodAssignmentsChange(newAssignments);
+        onCopySessionSetup?.(dayPairs);
         toast({
           title: 'Copied',
           description: describeCopyResult('Method assignments copied from previous microcycle.', skipped, allMesocycles[targetMesoIndex].name),
@@ -542,7 +548,7 @@ export function MethodSessionArchitecture({
         setCopyingMicrocycleId(null);
       }
     },
-    [allMesocycles, trainingDays, dayMethodAssignments, copyMicrocycleAssignments, onDayMethodAssignmentsChange, toast]
+    [allMesocycles, trainingDays, dayMethodAssignments, copyMicrocycleAssignments, onDayMethodAssignmentsChange, onCopySessionSetup, toast]
   );
 
   // ── copy whole previous mesocycle ───────────────────────────────────────────
@@ -557,16 +563,20 @@ export function MethodSessionArchitecture({
     }
     const newAssignments: Record<string, string[]> = { ...dayMethodAssignments };
     const skipped = new Set<string>();
+    const dayPairs: Array<{ sourceDate: string; targetDate: string }> = [];
     mesocycle.microcycles.forEach((micro, i) => {
       const source = previous.microcycles[Math.min(i, previous.microcycles.length - 1)];
-      copyMicrocycleAssignments(source.id, micro.id, mesocycle.id, newAssignments).skipped.forEach(m => skipped.add(m));
+      const result = copyMicrocycleAssignments(source.id, micro.id, mesocycle.id, newAssignments);
+      result.skipped.forEach(m => skipped.add(m));
+      dayPairs.push(...result.dayPairs);
     });
     onDayMethodAssignmentsChange(newAssignments);
+    onCopySessionSetup?.(dayPairs);
     toast({
       title: 'Copied',
       description: describeCopyResult(`Method setup copied from ${previous.name}.`, skipped, mesocycle.name),
     });
-  }, [allMesocycles, mesocycle, dayMethodAssignments, copyMicrocycleAssignments, onDayMethodAssignmentsChange, toast]);
+  }, [allMesocycles, mesocycle, dayMethodAssignments, copyMicrocycleAssignments, onDayMethodAssignmentsChange, onCopySessionSetup, toast]);
 
   // ── clear microcycle ─────────────────────────────────────────────────────────
   const handleClearMicrocycle = useCallback(
@@ -583,9 +593,10 @@ export function MethodSessionArchitecture({
         }
       });
       onDayMethodAssignmentsChange(newAssignments);
-      toast({ title: 'Microcycle cleared', description: `Method assignments removed from ${micro.name}` });
+      onResetSessions?.(dayDates);
+      toast({ title: 'Microcycle cleared', description: `Methods and sessions removed from ${micro.name}` });
     },
-    [mesocycle.microcycles, trainingDays, dayMethodAssignments, onDayMethodAssignmentsChange, toast]
+    [mesocycle.microcycles, trainingDays, dayMethodAssignments, onDayMethodAssignmentsChange, onResetSessions, toast]
   );
 
   // ── clear mesocycle ───────────────────────────────────────────────────────────
@@ -603,9 +614,10 @@ export function MethodSessionArchitecture({
         }
       });
       onDayMethodAssignmentsChange(newAssignments);
-      toast({ title: 'Mesocycle cleared', description: `All method assignments removed from ${meso.name}` });
+      onResetSessions?.(dayDates);
+      toast({ title: 'Mesocycle cleared', description: `All methods and sessions removed from ${meso.name}` });
     },
-    [allMesocycles, trainingDays, dayMethodAssignments, onDayMethodAssignmentsChange, toast]
+    [allMesocycles, trainingDays, dayMethodAssignments, onDayMethodAssignmentsChange, onResetSessions, toast]
   );
 
   // ── dnd ──────────────────────────────────────────────────────────────────────
