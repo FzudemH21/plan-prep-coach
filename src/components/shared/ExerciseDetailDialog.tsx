@@ -570,11 +570,12 @@ export function ExerciseDetailDialog({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogPortal>
-        {/* Custom overlay with higher z-index for better darkening over sheets */}
+        {/* Same layer as the exercise picker (z 130): what opens later lies on top, so the overlay darkens a
+            picker it was opened from, and a picker opened from here (progressions) still shows above it */}
         <DialogPrimitive.Overlay
           className={cn(
             "fixed inset-0 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-            "z-[120]"
+            "z-[130]"
           )}
         />
         <DialogPrimitive.Content
