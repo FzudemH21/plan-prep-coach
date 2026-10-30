@@ -1039,20 +1039,20 @@ export default function MicrocyclePlanningPage() {
     const microcycleIndex = currentMesocycle.microcycles.findIndex(m => m.id === microcycleId);
     if (microcycleIndex === -1) return 1;
 
-    // Try both methodId and methodId::categoryName formats
-    const methodKey = categoryName ? `${methodId}::${categoryName}` : methodId;
-    let cellData = parameterValues[currentMesocycle.id]?.[microcycleIndex]?.[methodKey]?.[0];
-    
-    // If no data found with category suffix, try without it
-    if (!cellData && categoryName) {
-      cellData = parameterValues[currentMesocycle.id]?.[microcycleIndex]?.[methodId]?.[0];
-    }
+    // The method distribution passes "Method::Category" when the method's exercises have categories,
+    // but the periodization table may hold the method as a whole (not split) — then that row's
+    // frequency is the target. Before, only the split key was tried and the target fell back to 1.
+    const [baseMethodId, categoryFromKey] = methodId.split('::');
+    const category = categoryName ?? categoryFromKey;
+    const microData = parameterValues[currentMesocycle.id]?.[microcycleIndex];
+    const cellData = (category ? microData?.[`${baseMethodId}::${category}`]?.[0] : undefined)
+      ?? microData?.[baseMethodId]?.[0];
     
     if (!cellData) return 1;
 
     // Get the method's toolbox entries
     const methodEntries = (toolboxData?.entries || []).filter(
-      entry => `${entry.category} → ${entry.subCategory}` === methodId
+      entry => `${entry.category} → ${entry.subCategory}` === baseMethodId || `${entry.category} - ${entry.subCategory}` === baseMethodId
     );
     
     // Find the parameter marked as frequency parameter
