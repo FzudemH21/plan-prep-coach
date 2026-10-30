@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTrainingPrograms } from './useTrainingPrograms';
 
 export type AutoSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -24,24 +24,48 @@ export function useWizardAutoSave() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Always the latest save (it closes over the current programs list)
+  const saveRef = useRef(saveCurrentSession);
+  saveRef.current = saveCurrentSession;
+
+  const runSave = useCallback(async () => {
+    timerRef.current = null;
+    setStatus('saving');
+    try {
+      await saveRef.current();
+      setStatus('saved');
+      resetTimerRef.current = setTimeout(() => setStatus('idle'), SAVED_DISPLAY_MS);
+    } catch {
+      setStatus('error');
+      resetTimerRef.current = setTimeout(() => setStatus('idle'), ERROR_DISPLAY_MS);
+    }
+  }, []);
+
   const markDirty = useCallback(() => {
     if (!hasSaveableContent()) return;
 
     if (timerRef.current) clearTimeout(timerRef.current);
     if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
 
-    timerRef.current = setTimeout(async () => {
-      setStatus('saving');
-      try {
-        await saveCurrentSession();
-        setStatus('saved');
-        resetTimerRef.current = setTimeout(() => setStatus('idle'), SAVED_DISPLAY_MS);
-      } catch {
-        setStatus('error');
-        resetTimerRef.current = setTimeout(() => setStatus('idle'), ERROR_DISPLAY_MS);
-      }
-    }, DEBOUNCE_MS);
-  }, [saveCurrentSession]);
+    timerRef.current = setTimeout(runSave, DEBOUNCE_MS);
+  }, [runSave]);
+
+  // Leaving the page (or the tab) with a save still waiting: save now. Otherwise a change made in
+  // the last 3 s was lost when the plan was left and reopened quickly — reopening loads the saved
+  // version, and the late save then stored that old version again.
+  useEffect(() => {
+    const flush = () => {
+      if (!timerRef.current) return;
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+      void saveRef.current().catch(() => {});
+    };
+    window.addEventListener('pagehide', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      flush();
+    };
+  }, []);
 
   return { markDirty, status };
 }
