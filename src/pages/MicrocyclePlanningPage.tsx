@@ -1689,6 +1689,132 @@ export default function MicrocyclePlanningPage() {
     }));
   };
 
+  /**
+   * Method distribution: a session dragged to another position — on its own day or another one.
+   * Everything that belongs to the session moves with it: methods, exercises, sections, supersets,
+   * name, session intensity, notes and stored session data. The other sessions of both days close
+   * up / make room. A rest day that receives a session becomes a training day with the session's
+   * intensity; a day that gives away its last session keeps its day intensity (no session left).
+   */
+  const handleMoveSessionAcrossDays = (fromDate: string, fromIndex: number, toDate: string, toIndex: number) => {
+    const dayOf = (date: string) => trainingDays.find(d => d.date === date);
+    const countOf = (date: string) => {
+      const day = dayOf(date);
+      return migrateLegacyIntensity(day?.intensity) === '0' ? 0 : (daySplitStates[date] ?? day?.sessions ?? 1);
+    };
+    const sameDay = fromDate === toDate;
+    const fromCount = countOf(fromDate);
+    const toCount = countOf(toDate);
+    if (fromIndex >= fromCount || (sameDay && fromIndex === toIndex)) return;
+    const destIndex = Math.max(0, Math.min(toIndex, sameDay ? fromCount - 1 : toCount));
+
+    // New place of every session of the two days ("date|index" → [date, index])
+    const moves = new Map<string, [string, number]>();
+    if (sameDay) {
+      const order = Array.from({ length: fromCount }, (_, i) => i);
+      const [moved] = order.splice(fromIndex, 1);
+      order.splice(destIndex, 0, moved);
+      order.forEach((oldIdx, newIdx) => moves.set(`${fromDate}|${oldIdx}`, [fromDate, newIdx]));
+    } else {
+      for (let i = 0; i < fromCount; i++) {
+        moves.set(`${fromDate}|${i}`, i === fromIndex ? [toDate, destIndex] : [fromDate, i < fromIndex ? i : i - 1]);
+      }
+      for (let i = 0; i < toCount; i++) moves.set(`${toDate}|${i}`, [toDate, i < destIndex ? i : i + 1]);
+    }
+    const moveOf = (date: string, index: number): [string, number] | undefined => moves.get(`${date}|${index}`);
+    const dates = sameDay ? [fromDate] : [fromDate, toDate];
+
+    // Methods
+    setDayMethodAssignments(prev => {
+      const next = { ...prev };
+      const taken: Array<[string, string[]]> = [];
+      Object.entries(prev).forEach(([key, methods]) => {
+        const sep = key.lastIndexOf('_');
+        const to = moveOf(key.slice(0, sep), Number(key.slice(sep + 1)));
+        if (!to) return;
+        delete next[key];
+        taken.push([`${to[0]}_${to[1]}`, methods]);
+      });
+      taken.forEach(([key, methods]) => { next[key] = methods; });
+      return next;
+    });
+    // Exercises and sections
+    setExerciseDistribution(prev => prev.map(ex => {
+      const to = moveOf(ex.dayDate, ex.sessionIndex);
+      return to ? { ...ex, dayDate: to[0], sessionIndex: to[1] } : ex;
+    }));
+    setSessionSections(prev => prev.map(section => {
+      const to = moveOf(section.dayDate, section.sessionIndex);
+      return to ? { ...section, dayDate: to[0], sessionIndex: to[1] } : section;
+    }));
+    // Supersets
+    setSupersets(prev => {
+      const next = { ...prev };
+      const taken: Array<[string, number, SupersetMapping[string][number]]> = [];
+      dates.forEach(date => {
+        Object.entries(prev[date] ?? {}).forEach(([idx, value]) => {
+          const to = moveOf(date, Number(idx));
+          if (to) taken.push([to[0], to[1], value]);
+        });
+        delete next[date];
+      });
+      taken.forEach(([date, idx, value]) => { next[date] = { ...(next[date] ?? {}), [idx]: value }; });
+      return next;
+    });
+    // Stored per-session data (session intensity, notes, session sheet)
+    const prefixes = ['sessionIntensity_', 'workoutSessions_', 'workoutSections_', 'sessionComments_'];
+    const stored: Array<{ key: string; prefix: string; meso: string; to: [string, number]; value: string }> = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      const prefix = key && prefixes.find(p => key.startsWith(p));
+      if (!key || !prefix) continue;
+      const m = key.slice(prefix.length).match(/^(.+)_(\d{4}-\d{2}-\d{2})_(\d+)$/);
+      if (!m || !dates.includes(m[2])) continue;
+      const to = moveOf(m[2], Number(m[3]));
+      if (to) stored.push({ key, prefix, meso: m[1], to, value: localStorage.getItem(key) ?? '' });
+    }
+    // The moved session's intensity (stored, else its day's) — a rest day that receives it gets it
+    const fromMeso = mesocycleIdOfDay(fromDate);
+    const movedIntensity = (fromMeso && localStorage.getItem(`sessionIntensity_${fromMeso}_${fromDate}_${fromIndex}`))
+      || migrateLegacyIntensity(dayOf(fromDate)?.intensity);
+    stored.forEach(({ key }) => localStorage.removeItem(key));
+    stored.forEach(({ prefix, meso, to, value }) => {
+      localStorage.setItem(`${prefix}${mesocycleIdOfDay(to[0]) ?? meso}_${to[0]}_${to[1]}`, value);
+    });
+    notifySessionMetaChanged();
+
+    // Session counts and names
+    const namesOf = (date: string, count: number) => {
+      const names = dayOf(date)?.sessionNames ?? [];
+      return Array.from({ length: count }, (_, i) => names[i] ?? `Session ${i + 1}`);
+    };
+    const newNames = new Map<string, string[]>();
+    dates.forEach(date => newNames.set(date, []));
+    dates.forEach(date => {
+      namesOf(date, countOf(date)).forEach((name, i) => {
+        const to = moveOf(date, i);
+        if (to) newNames.get(to[0])![to[1]] = name;
+      });
+    });
+    const newCounts = new Map<string, number>(sameDay
+      ? [[fromDate, fromCount]]
+      : [[fromDate, fromCount - 1], [toDate, toCount + 1]]);
+    setDaySplitStates(prev => {
+      const next = { ...prev };
+      newCounts.forEach((count, date) => { next[date] = count; });
+      return next;
+    });
+    if (!sameDay && toCount === 0) {
+      setDayIntensities(new Map([[toDate, (movedIntensity && movedIntensity !== '0' ? movedIntensity : '5') as IntensityLevel]]));
+    }
+    setTrainingDays(prev => prev.map(day => {
+      const count = newCounts.get(day.date);
+      if (count === undefined) return day;
+      const names = newNames.get(day.date) ?? [];
+      return { ...day, sessions: count, sessionNames: Array.from({ length: count }, (_, i) => names[i] ?? `Session ${i + 1}`) };
+    }));
+  };
+
   // Method distribution "clear": the days go back to one unnamed session with the day intensity
   const handleResetSessions = (dayDates: string[]) => {
     if (dayDates.length === 0) return;
@@ -5339,6 +5465,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
             onRemoveSession={handleRemoveSession}
             onRenameSession={handleRenameSession}
             onCopySessionSetup={handleCopySessionSetup}
+            onMoveSession={handleMoveSessionAcrossDays}
             onResetSessions={handleResetSessions}
             getMethodFrequencyTarget={getMethodFrequency}
             hasCategoryFrequency={hasCategoryFrequency}

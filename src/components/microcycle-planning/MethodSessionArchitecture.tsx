@@ -70,6 +70,8 @@ export interface MethodSessionArchitectureProps {
   onRenameSession: (dayDate: string, sessionIndex: number, newName: string) => void;
   /** Copy: the target days get the source days' sessions (count, names, intensities) */
   onCopySessionSetup?: (pairs: Array<{ sourceDate: string; targetDate: string }>) => void;
+  /** A session dragged to another position, on its own day or another one */
+  onMoveSession?: (fromDate: string, fromIndex: number, toDate: string, toIndex: number) => void;
   /** Clear: the days go back to one unnamed session */
   onResetSessions?: (dayDates: string[]) => void;
   /** Returns the periodization-table target frequency for a method in a specific microcycle */
@@ -144,6 +146,7 @@ export function MethodSessionArchitecture({
   onRemoveSession,
   onRenameSession,
   onCopySessionSetup,
+  onMoveSession,
   onResetSessions,
   getMethodFrequencyTarget,
   hasCategoryFrequency,
@@ -623,10 +626,22 @@ export function MethodSessionArchitecture({
   );
 
   // ── dnd ──────────────────────────────────────────────────────────────────────
+  // A session is being dragged — empty days show a drop area
+  const [draggingSession, setDraggingSession] = useState(false);
+
   const handleDragEnd = useCallback(
     (result: DropResult) => {
+      setDraggingSession(false);
       const { source, destination, draggableId } = result;
       if (!destination) return;
+      // A whole session moved (droppables "day-sessions::{date}")
+      if (result.type === 'SESSION') {
+        const fromDate = source.droppableId.split('::')[1];
+        const toDate = destination.droppableId.split('::')[1];
+        if (fromDate === toDate && source.index === destination.index) return;
+        onMoveSession?.(fromDate, source.index, toDate, destination.index);
+        return;
+      }
       if (
         source.droppableId === 'method-pool' &&
         destination.droppableId.startsWith('session-drop::')
@@ -650,7 +665,7 @@ export function MethodSessionArchitecture({
         moveMethodBetweenSessions(fromDate, parseInt(fromSi, 10), toDate, parseInt(toSi, 10), methodId, destination.index);
       }
     },
-    [addMethodToSession, moveMethodBetweenSessions]
+    [addMethodToSession, moveMethodBetweenSessions, onMoveSession]
   );
 
   // ── render ───────────────────────────────────────────────────────────────────
@@ -663,8 +678,8 @@ export function MethodSessionArchitecture({
           <AlertDialogTitle>Clear Microcycle</AlertDialogTitle>
           <AlertDialogDescription>
             This will remove all method assignments from{' '}
-            <strong>{clearingMicrocycleId && mesocycle.microcycles.find(m => m.id === clearingMicrocycleId)?.name}</strong>.
-            This action cannot be undone.
+            <strong>{clearingMicrocycleId && mesocycle.microcycles.find(m => m.id === clearingMicrocycleId)?.name}</strong>{' '}
+            and reset each day to one session. Day intensities stay. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -707,7 +722,7 @@ export function MethodSessionArchitecture({
           <AlertDialogTitle>Clear Entire Mesocycle</AlertDialogTitle>
           <AlertDialogDescription>
             This will remove all method assignments from every microcycle in{' '}
-            <strong>{mesocycle.name}</strong>.
+            <strong>{mesocycle.name}</strong> and reset each day to one session. Day intensities stay.
             This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -724,7 +739,7 @@ export function MethodSessionArchitecture({
     </AlertDialog>
 
     <TooltipProvider>
-      <DragDropContext onDragEnd={handleDragEnd}>
+      <DragDropContext onDragStart={start => setDraggingSession(start.type === 'SESSION')} onDragEnd={handleDragEnd}>
         <div className="flex h-full w-full">
 
           {/* ── LEFT PANEL: method list ─────────────────────────────────────── */}
@@ -1087,8 +1102,20 @@ export function MethodSessionArchitecture({
                               </div>
                             )}
 
-                            {/* Sessions */}
-                            <div className="flex flex-col gap-2 px-1 mt-1">
+                            {/* Sessions — drag a session by its handle to another day (or position) */}
+                            <Droppable droppableId={`day-sessions::${day.date}`} type="SESSION">
+                              {(dayDropProv, dayDropSnap) => (
+                            <div
+                              ref={dayDropProv.innerRef}
+                              {...dayDropProv.droppableProps}
+                              className={cn(
+                                'flex flex-col px-1 mt-1 rounded-md transition-colors',
+                                // Sized before a drag starts — drop areas are measured when it begins
+                                sessionsCount === 0 && 'min-h-[56px] border border-dashed border-transparent',
+                                draggingSession && sessionsCount === 0 && 'border-border/60',
+                                dayDropSnap.isDraggingOver && 'bg-primary/5 border-primary/50',
+                              )}
+                            >
                               {Array.from({ length: sessionsCount }, (_, si) => {
                                     const sessionName =
                                       day.sessionNames?.[si] ?? `Session ${si + 1}`;
@@ -1102,8 +1129,18 @@ export function MethodSessionArchitecture({
                                       renamingSession?.dayDate === day.date &&
                                       renamingSession.sessionIndex === si;
                                     return (
+                                      <Draggable
+                                        key={`session::${day.date}::${si}`}
+                                        draggableId={`session::${day.date}::${si}`}
+                                        index={si}
+                                      >
+                                        {(sessDragProv, sessDragSnap) => (
+                                      <div
+                                        ref={sessDragProv.innerRef}
+                                        {...sessDragProv.draggableProps}
+                                        className="pb-2"
+                                      >
                                       <Droppable
-                                        key={`session-drop::${day.date}::${si}`}
                                         droppableId={`session-drop::${day.date}::${si}`}
                                       >
                                         {(sessDropProv, sessDropSnap) => (
@@ -1112,11 +1149,19 @@ export function MethodSessionArchitecture({
                                             {...sessDropProv.droppableProps}
                                             className={cn(
                                               'border border-border rounded-md bg-card transition-colors',
-                                              sessDropSnap.isDraggingOver && 'ring-2 ring-primary/40 bg-accent/10'
+                                              sessDropSnap.isDraggingOver && 'ring-2 ring-primary/40 bg-accent/10',
+                                              sessDragSnap.isDragging && 'shadow-lg ring-2 ring-primary/40'
                                             )}
                                           >
                                         {/* Session header */}
                                         <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border/50">
+                                          <div
+                                            {...sessDragProv.dragHandleProps}
+                                            className="-ml-1 shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/60 hover:text-foreground"
+                                            title="Drag to another day"
+                                          >
+                                            <GripVertical className="h-3.5 w-3.5" />
+                                          </div>
                                           {isRenamingThisSession ? (
                                             <div className="flex items-center gap-1 flex-1 min-w-0">
                                               <Input
@@ -1310,9 +1355,18 @@ export function MethodSessionArchitecture({
                                           </div>
                                         )}
                                       </Droppable>
+                                      </div>
+                                        )}
+                                      </Draggable>
                                     );
                                   })}
+                              {dayDropProv.placeholder}
+                              {draggingSession && sessionsCount === 0 && !dayDropSnap.isDraggingOver && (
+                                <p className="text-xs text-muted-foreground text-center py-4">Drop session here</p>
+                              )}
                             </div>
+                              )}
+                            </Droppable>
 
                             {/* Add session */}
                             <Button
