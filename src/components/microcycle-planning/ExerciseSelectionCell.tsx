@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { X, Plus, Copy, Info, Ban } from 'lucide-react';
 import { CellData, ExerciseSelection, ExerciseLibraryType } from '@/types/microcycle-planning';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
+import { ExerciseDetailDialog } from '@/components/shared/ExerciseDetailDialog';
+import { useCustomLibraries, getNameColumnId } from '@/contexts/CustomLibrariesContext';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ExerciseSelectionCellProps {
@@ -26,6 +28,15 @@ export function ExerciseSelectionCell({
   disabled = false,
 }: ExerciseSelectionCellProps) {
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+  const [openExercise, setOpenExercise] = useState<ExerciseSelection | null>(null);
+  const { libraries } = useCustomLibraries();
+
+  // The library's current name — the copy in the cell is stale right after a rename
+  const currentName = (exercise: ExerciseSelection) => {
+    const lib = libraries.find(l => l.id === exercise.library);
+    const name = lib?.exercises.find(e => e.id === exercise.exerciseId)?.data?.[getNameColumnId(lib) ?? ''];
+    return typeof name === 'string' && name.trim() ? name : exercise.exerciseName;
+  };
 
   const addExercise = (exercise: ExerciseSelection) => {
     const newExercises = [...cellData.exercises, exercise];
@@ -101,9 +112,20 @@ export function ExerciseSelectionCell({
       <div className="space-y-1 flex-1">
         {cellData.exercises.map((exercise) => (
           <div key={exercise.id} className="flex items-center justify-between bg-muted/50 rounded px-2 py-1">
-            <span className="text-xs font-medium truncate flex-1">
-              {exercise.exerciseName}
-            </span>
+            {exercise.isCircuit ? (
+              <span className="text-xs font-medium truncate flex-1">
+                {exercise.exerciseName}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setOpenExercise(exercise)}
+                className="text-xs font-medium truncate flex-1 text-left hover:text-primary hover:underline"
+                title="Open / edit exercise"
+              >
+                {currentName(exercise)}
+              </button>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -128,6 +150,18 @@ export function ExerciseSelectionCell({
         selectedExerciseIds={cellData.exercises.map(ex => ex.exerciseId)}
         onExerciseCreated={handleExerciseCreated}
       />
+
+      {/* The exercise's library entry — Edit saves it to the exercise database */}
+      {openExercise && (
+        <ExerciseDetailDialog
+          isOpen={!!openExercise}
+          onClose={() => setOpenExercise(null)}
+          exerciseId={openExercise.exerciseId}
+          exerciseName={openExercise.exerciseName}
+          libraryId={openExercise.library}
+          mode="edit"
+        />
+      )}
     </div>
   );
 }

@@ -19,7 +19,7 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { Search, Plus, ChevronUp, ChevronDown, ChevronsUpDown, X, Recycle } from 'lucide-react';
+import { Search, Plus, ChevronUp, ChevronDown, ChevronsUpDown, X, Recycle, Pencil } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { ExerciseSelection, ExerciseLibraryType } from '@/types/microcycle-planning';
 import { FilterState } from '@/types/exercises';
@@ -95,6 +95,8 @@ export function ExerciseLibraryPopup({
   };
   const [isNewExerciseDialogOpen, setIsNewExerciseDialogOpen] = useState(false);
   const [newExerciseName, setNewExerciseName] = useState('');
+  // An existing exercise opened in the editor (pencil in its row)
+  const [editingExercise, setEditingExercise] = useState<{ id: string; libraryId: string; name: string } | null>(null);
 
   const { libraries, addExerciseToLibrary } = useCustomLibraries();
   const { toast } = useToast();
@@ -635,7 +637,7 @@ export function ExerciseLibraryPopup({
                               <li key={`${exercise.library}-${exercise.id}`}>
                                 <label
                                   className={cn(
-                                    "flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-muted/40",
+                                    "group flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-muted/40",
                                     isAlreadySelected && "opacity-50 cursor-default"
                                   )}
                                 >
@@ -645,6 +647,14 @@ export function ExerciseLibraryPopup({
                                     onCheckedChange={(checked) => handleItemSelect(exercise.id, checked as boolean)}
                                   />
                                   <span className="flex-1 truncate font-medium" title={name}>{name || '-'}</span>
+                                  <button
+                                    type="button"
+                                    className="shrink-0 p-1 rounded text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-primary hover:bg-muted"
+                                    title="Edit exercise"
+                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditingExercise({ id: exercise.id, libraryId: exercise.library, name }); }}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
                                   {isAlreadySelected && (
                                     <Badge variant="secondary" className="text-xs">Already selected</Badge>
                                   )}
@@ -735,7 +745,7 @@ export function ExerciseLibraryPopup({
                             const isCurrentlySelected = selectedItems.has(exercise.id);
                             
                             return (
-                              <tr key={exercise.id} className={`border-b hover:bg-muted/25 transition-colors ${isAlreadySelected ? 'opacity-50' : ''}`}>
+                              <tr key={exercise.id} className={`group border-b hover:bg-muted/25 transition-colors ${isAlreadySelected ? 'opacity-50' : ''}`}>
                                 <td className="px-3 py-2 border-r border-border bg-background sticky left-0 z-30">
                                   <Checkbox
                                     checked={isCurrentlySelected}
@@ -747,6 +757,7 @@ export function ExerciseLibraryPopup({
                                 </td>
                                 {currentColumns.map(column => (
                                   <td key={column.key} className="px-3 py-2 border-r border-border text-xs min-w-[120px]">
+                                    <div className="flex items-center gap-1">
                                     <div className="max-w-[200px] truncate" title={exercise[column.key] || ''}>
                                       {column.key === currentColumns[0].key && isAlreadySelected && (
                                         <>
@@ -759,6 +770,17 @@ export function ExerciseLibraryPopup({
                                       {(column.key !== currentColumns[0].key || !isAlreadySelected) && (
                                         exercise[column.key] || '-'
                                       )}
+                                    </div>
+                                    {column.key === currentColumns[0].key && (
+                                      <button
+                                        type="button"
+                                        className="shrink-0 p-1 rounded text-muted-foreground opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-primary hover:bg-muted"
+                                        title="Edit exercise"
+                                        onClick={() => setEditingExercise({ id: exercise.id, libraryId: exercise.library, name: exercise[column.key] || '' })}
+                                      >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
                                     </div>
                                   </td>
                                 ))}
@@ -846,6 +868,19 @@ export function ExerciseLibraryPopup({
               mode="create"
               columns={libraries.find(l => l.id === activeTab)?.columns ?? []}
               onSave={handleNewExerciseSaved}
+            />
+          )}
+
+          {/* Existing exercise — Edit saves it to its library (the list updates with it) */}
+          {editingExercise && (
+            <ExerciseDetailDialog
+              isOpen={!!editingExercise}
+              onClose={() => setEditingExercise(null)}
+              exerciseId={editingExercise.id}
+              exerciseName={editingExercise.name}
+              libraryId={editingExercise.libraryId}
+              mode="edit"
+              startEditing
             />
           )}
         </DialogPrimitive.Content>

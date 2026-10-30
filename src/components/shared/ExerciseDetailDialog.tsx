@@ -32,6 +32,8 @@ interface ExerciseDetailDialogProps {
   mode?: 'create' | 'edit' | 'view';
   // For workout views (read-only mode) - legacy prop, use mode='view' instead
   readOnly?: boolean;
+  /** Edit mode: open with the fields editable instead of the view first */
+  startEditing?: boolean;
   // Columns for editable mode
   columns?: LibraryColumn[];
   // Pre-fetched data (optional - if not provided, will lookup from libraries)
@@ -96,6 +98,7 @@ export function ExerciseDetailDialog({
   libraryId,
   mode: propMode,
   readOnly = false,
+  startEditing = false,
   columns: propColumns,
   exerciseData: propExerciseData,
   videoUrl: propVideoUrl,
@@ -296,7 +299,7 @@ export function ExerciseDetailDialog({
       setLocalVideoUrl(initVideo);
       setLocalData(dataInit);
       setShowVideoEmbed(false);
-      setIsEditing(false); // Start in view mode
+      setIsEditing(startEditing); // View first, unless opened to edit
     }
   }, [isOpen, exerciseName, videoUrl, description, exerciseData, columns]);
 
@@ -342,10 +345,16 @@ export function ExerciseDetailDialog({
 
     // If we found the exercise in a library, update it directly
     if (foundExercise && library) {
+      const nameColumnId = getNameColumnId(library);
       updateExerciseInLibrary(library.id, exerciseId, {
         videoUrl: finalVideoUrl || undefined,
         description: finalDescription || undefined,
-        data: { ...(foundExercise.exercise.data || {}), ...localData },
+        // The name too (a rename reaches programs, selections and schedules via the library)
+        data: {
+          ...(foundExercise.exercise.data || {}),
+          ...localData,
+          ...(nameColumnId && localName.trim() ? { [nameColumnId]: localName.trim() } : {}),
+        },
       });
     }
 
