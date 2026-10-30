@@ -26,7 +26,8 @@ import { FilterState } from '@/types/exercises';
 import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { ColumnFilter } from '@/components/exercises/ColumnFilter';
 import { PlyometricsColumnFilter } from '@/components/plyometrics/PlyometricsColumnFilter';
-import { NewExerciseDialog } from './NewExerciseDialog';
+import { ExerciseDetailDialog } from '@/components/shared/ExerciseDetailDialog';
+import { useToast } from '@/hooks/use-toast';
 
 // Define a more flexible column type for the popup
 interface PopupTableColumn {
@@ -57,7 +58,8 @@ interface ExerciseLibraryPopupProps {
   onClose: () => void;
   onSelectExercises: (exercises: ExerciseSelection[]) => void;
   selectedExerciseIds: string[];
-  onExerciseCreated: (exercise: ExerciseSelection) => void;
+  /** No longer called — a new exercise is added to the open library and selected in the picker */
+  onExerciseCreated?: (exercise: ExerciseSelection) => void;
   singleSelect?: boolean;
   title?: string;
   defaultLibraryId?: string; // Pre-select this library tab when the popup opens
@@ -68,7 +70,6 @@ export function ExerciseLibraryPopup({
   onClose,
   onSelectExercises,
   selectedExerciseIds,
-  onExerciseCreated,
   singleSelect = false,
   title,
   defaultLibraryId,
@@ -95,7 +96,8 @@ export function ExerciseLibraryPopup({
   const [isNewExerciseDialogOpen, setIsNewExerciseDialogOpen] = useState(false);
   const [newExerciseName, setNewExerciseName] = useState('');
 
-  const { libraries } = useCustomLibraries();
+  const { libraries, addExerciseToLibrary } = useCustomLibraries();
+  const { toast } = useToast();
 
   // When the popup opens: the caller's default library if given, otherwise the library the
   // coach last had open in this picker (remembered per browser), otherwise the first one.
@@ -403,16 +405,29 @@ export function ExerciseLibraryPopup({
     onClose();
   };
 
+  /** New exercise in the library that is open (name pre-filled from the search, if any) */
   const handleCreateNewExercise = () => {
-    if (newExerciseName.trim()) {
-      setIsNewExerciseDialogOpen(true);
-    }
+    if (!activeTab) return;
+    setNewExerciseName(filterState.search.trim());
+    setIsNewExerciseDialogOpen(true);
   };
 
-  const handleExerciseCreated = (exercise: ExerciseSelection) => {
-    onExerciseCreated(exercise);
+  /** Saved: added to the open library and ticked, so "Add Exercises" puts it into the cell */
+  const handleNewExerciseSaved = (data: { name: string; data: Record<string, unknown>; videoUrl?: string; description?: string }) => {
+    const lib = libraries.find(l => l.id === activeTab);
+    if (!lib) return;
+    const firstColumnId = lib.columns[0]?.id;
+    const created = addExerciseToLibrary(lib.id, {
+      data: { ...data.data, ...(firstColumnId ? { [firstColumnId]: data.name } : {}) },
+      videoUrl: data.videoUrl || undefined,
+      description: data.description || undefined,
+    });
+    setSelectedItems(prev => (singleSelect ? new Set([created.id]) : new Set(prev).add(created.id)));
+    // Shown in the list (the search finds it), ticked
+    setFilterState(prev => ({ ...prev, search: data.name }));
     setIsNewExerciseDialogOpen(false);
     setNewExerciseName('');
+    toast({ title: 'Exercise created', description: `"${data.name}" was added to ${lib.name} and is selected.` });
   };
 
   const hasActiveFilters = filterState.search || Object.keys(filterState.columnFilters).length > 0;
@@ -534,10 +549,18 @@ export function ExerciseLibraryPopup({
                       </Button>
                     )}
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    {searchAllLibraries
-                      ? (filterState.search.trim() ? `${allLibraryMatches.length} matches in all libraries` : '')
-                      : `${filteredAndSortedExercises.length} exercises`}
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-muted-foreground">
+                      {searchAllLibraries
+                        ? (filterState.search.trim() ? `${allLibraryMatches.length} matches in all libraries` : '')
+                        : `${filteredAndSortedExercises.length} exercises`}
+                    </span>
+                    {activeTab && allLibraries[activeTab] && (
+                      <Button variant="outline" size="sm" className="gap-1.5" onClick={handleCreateNewExercise}
+                        title={`Create a new exercise in ${allLibraries[activeTab].name}`}>
+                        <Plus className="h-3.5 w-3.5" />New exercise
+                      </Button>
+                    )}
                   </div>
                 </div>
 
@@ -808,16 +831,23 @@ export function ExerciseLibraryPopup({
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
 
-          {/* New Exercise Dialog */}
-          <NewExerciseDialog
-            isOpen={isNewExerciseDialogOpen}
-            onClose={() => {
-              setIsNewExerciseDialogOpen(false);
-              setNewExerciseName('');
-            }}
-            exerciseName={newExerciseName}
-            onExerciseCreated={handleExerciseCreated}
-          />
+          {/* New exercise — the same editor as in the exercise database, in the library that is open */}
+          {isNewExerciseDialogOpen && activeTab && (
+            <ExerciseDetailDialog
+              isOpen={isNewExerciseDialogOpen}
+              onClose={() => {
+                setIsNewExerciseDialogOpen(false);
+                setNewExerciseName('');
+              }}
+              exerciseId=""
+              exerciseName={newExerciseName}
+              libraryId={activeTab}
+              readOnly={false}
+              mode="create"
+              columns={libraries.find(l => l.id === activeTab)?.columns ?? []}
+              onSave={handleNewExerciseSaved}
+            />
+          )}
         </DialogPrimitive.Content>
       </DialogPortal>
     </Dialog>

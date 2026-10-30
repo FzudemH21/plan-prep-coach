@@ -3,7 +3,6 @@ export type { MicrocyclePlanningTableHandle } from './MicrocyclePlanningTable';
 export { ExerciseSelectionCell } from './ExerciseSelectionCell';
 export { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 export { ExerciseChangePopup } from './ExerciseChangePopup';
-export { NewExerciseDialog } from './NewExerciseDialog';
 export { ExerciseLibraryFilter } from './ExerciseLibraryFilter';
 export { ExerciseCopyDialog } from './ExerciseCopyDialog';
 export { TrainingCalendarView } from './TrainingCalendarView';
