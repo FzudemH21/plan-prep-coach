@@ -1366,6 +1366,16 @@ export default function MicrocyclePlanningPage() {
 
   // Handle adding a session to a day
   const handleAddSession = (dayDate: string) => {
+    const day = trainingDays.find(d => d.date === dayDate);
+    if (day && migrateLegacyIntensity(day.intensity) === '0') {
+      // "Start Training Day" on a rest day: it becomes a training day at the microcycle's intensity
+      // with one session (a rest day shows no sessions, so only adding one did nothing)
+      const micro = mesocycles.flatMap(m => m.microcycles).find(mc => mc.id === day.microcycleId);
+      const microIntensity = migrateLegacyIntensity(micro?.intensity);
+      setDayIntensities(new Map([[dayDate, microIntensity && microIntensity !== '0' ? microIntensity : '5']]));
+      setDaySplitStates(prev => ({ ...prev, [dayDate]: 1 }));
+      return;
+    }
     setDaySplitStates(prev => {
       const currentSessions = prev[dayDate] ?? 1;
       return {
@@ -1599,6 +1609,17 @@ export default function MicrocyclePlanningPage() {
     );
   };
 
+  /** Sets day intensities (calendar days and the stored daily intensities) */
+  const setDayIntensities = (intensities: Map<string, IntensityLevel>) => {
+    if (intensities.size === 0) return;
+    setTrainingDays(prev => prev.map(day => intensities.has(day.date) ? { ...day, intensity: intensities.get(day.date)! } : day));
+    setDailyIntensityData(prev => {
+      const updated = prev.map(di => intensities.has(di.date) ? { ...di, intensity: intensities.get(di.date)! } : di);
+      localStorage.setItem('dailyIntensityData', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   /** Mesocycle id of a day (the session intensity keys carry it) */
   const mesocycleIdOfDay = (dayDate: string): string | undefined => {
     const day = trainingDays.find(d => d.date === dayDate);
@@ -1626,6 +1647,16 @@ export default function MicrocyclePlanningPage() {
     const sessionCount = (date: string) =>
       migrateLegacyIntensity(dayByDate.get(date)?.intensity) === '0' ? 0 : (daySplitStates[date] ?? 1);
     const counts = new Map(pairs.map(({ sourceDate, targetDate }) => [targetDate, Math.max(1, sessionCount(sourceDate))]));
+
+    // A rest day that gets sessions becomes a training day with the source day's intensity.
+    // Days that already have an intensity keep theirs.
+    const becomeTrainingDays = new Map<string, IntensityLevel>();
+    pairs.forEach(({ sourceDate, targetDate }) => {
+      if (sessionCount(sourceDate) > 0 && migrateLegacyIntensity(dayByDate.get(targetDate)?.intensity) === '0') {
+        becomeTrainingDays.set(targetDate, migrateLegacyIntensity(dayByDate.get(sourceDate)?.intensity));
+      }
+    });
+    setDayIntensities(becomeTrainingDays);
 
     removeSessionIntensities(pairs.map(p => p.targetDate));
     pairs.forEach(({ sourceDate, targetDate }) => {

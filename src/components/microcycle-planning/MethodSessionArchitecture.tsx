@@ -466,7 +466,9 @@ export function MethodSessionArchitecture({
         // Rest days (Borg "0") have no sessions — same rule as the day columns below
         const sourceSessionCount = migrateLegacyIntensity(sourceDays[i].intensity) === '0' ? 0 : (daySplitStates[sourceDate] ?? 1);
         const targetSessionCount = migrateLegacyIntensity(targetDays[i].intensity) === '0' ? 0 : (daySplitStates[targetDate] ?? 1);
-        if (targetSessionCount === 0) continue; // never put methods (or new sessions) on a rest day
+        // Rest on both days: nothing to copy. A rest target day with a training source day becomes
+        // a training day (the caller gives it the source day's intensity).
+        if (sourceSessionCount === 0 && targetSessionCount === 0) continue;
 
         for (let si = 0; si < sourceSessionCount; si++) {
           const targetKey = `${targetDate}_${si}`;
