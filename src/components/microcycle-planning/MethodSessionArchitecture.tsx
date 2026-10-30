@@ -792,13 +792,20 @@ export function MethodSessionArchitecture({
                                           const actual = methodFrequency[draggableKey] ?? 0;
                                           const target = methodTargetFrequency[draggableKey] ?? 0;
                                           if (target === 0 && actual === 0) return null;
-                                          if (target === 0 && hasExCat(draggableKey)) return (
-                                            <div className="flex gap-[3px] shrink-0 items-center" title={`Placed in ${actual} session${actual === 1 ? '' : 's'} — the method's frequency counts for all its categories`}>
-                                              {Array.from({ length: Math.min(actual, 7) }, (_, i) => (
-                                                <div key={i} className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
-                                              ))}
-                                            </div>
-                                          );
+                                          if (target === 0 && hasExCat(draggableKey)) {
+                                            // No target of its own: coloured like the method as a whole (its header)
+                                            const placed = wholeMethodFrequency[methodId] ?? 0;
+                                            const goal = wholeMethodTarget[methodId] ?? 0;
+                                            const colour = goal === 0 ? 'bg-muted-foreground/60'
+                                              : placed === goal ? 'bg-green-500' : placed < goal ? 'bg-amber-400' : 'bg-red-500';
+                                            return (
+                                              <div className="flex gap-[3px] shrink-0 items-center" title={`Placed on ${actual} day${actual === 1 ? '' : 's'} — the method's frequency counts for all its categories`}>
+                                                {Array.from({ length: Math.min(actual, 7) }, (_, i) => (
+                                                  <div key={i} className={cn('h-1.5 w-1.5 shrink-0 rounded-full', colour)} />
+                                                ))}
+                                              </div>
+                                            );
+                                          }
                                           const totalDots = Math.max(target, actual);
                                           if (totalDots > 7) return (
                                             <span className={cn(
@@ -815,7 +822,7 @@ export function MethodSessionArchitecture({
                                             <div className="flex gap-[3px] shrink-0 items-center" title={`${actual} of ${target} sessions placed`}>
                                               {Array.from({ length: totalDots }, (_, i) => (
                                                 <div key={i} className={cn(
-                                                  'h-1.5 w-1.5 rounded-full transition-colors',
+                                                  'h-1.5 w-1.5 shrink-0 rounded-full transition-colors',
                                                   i < actual && i < target
                                                     ? actual === target ? 'bg-green-500' : 'bg-amber-400'
                                                     : i < actual && i >= target
