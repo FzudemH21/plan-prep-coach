@@ -5367,10 +5367,18 @@ export default function MesocyclePage() {
         'Configurable parameters per method (Frequency, Sets, Reps, Intensity are set via their own set_periodization fields — everything else below MUST go in extraParams using this EXACT name as the key, do not rename, abbreviate, or add units to the key):',
       ];
       allocatedMethods.forEach(method => {
-        const params = (methodParametersMap[method] ?? []).filter(
+        const allParams = methodParametersMap[method] ?? [];
+        const params = allParams.filter(
           p => !['Frequency', 'Sets', 'Reps', 'Intensity'].includes(p.name)
         );
-        if (params.length === 0) return;
+        // The typed fields' units (e.g. Intensity in RiR, not %1RM)
+        const typedUnits = allParams
+          .filter(p => ['Frequency', 'Sets', 'Reps', 'Intensity'].includes(p.name) && p.options?.length)
+          .map(p => `${p.name} in ${p.options.join(' / ')}`);
+        if (params.length === 0) {
+          if (typedUnits.length) paramLines.push(`  ${method}: (${typedUnits.join('; ')})`);
+          return;
+        }
         const paramDescs = params.map(p => {
           if (p.isQuantitative) {
             const unit = p.options?.[0] ? ` (unit: ${p.options[0]})` : '';
@@ -5382,7 +5390,7 @@ export default function MesocyclePage() {
           }
           return `"${p.name}"`;
         });
-        paramLines.push(`  ${method}: ${paramDescs.join('; ')}`);
+        paramLines.push(`  ${method}: ${paramDescs.join('; ')}${typedUnits.length ? ` (${typedUnits.join('; ')})` : ''}`);
       });
       if (paramLines.length > 1) methodParametersStr = paramLines.join('\n');
     }
@@ -5390,7 +5398,9 @@ export default function MesocyclePage() {
     // Periodization table params — always included once any values exist
     let parameterTableStr = '';
     if (Object.keys(parameterValues).length > 0) {
-      const tableLines: string[] = ['Method parameters from periodization table (Sets, Reps, Intensity per mesocycle × microcycle):'];
+      const tableLines: string[] = [
+        'Periodization table — the values per mesocycle × microcycle, exactly as the table shows them (only methods allocated to that mesocycle; a method missing under a mesocycle has no values there). Each value is given with its unit — read intensity in that unit (e.g. "Intensity: 2 RiR" = 2 reps in reserve), never assume %1RM:',
+      ];
       mesocycles.forEach(meso => {
         const mesoParams = parameterValues[meso.id] ?? {};
         if (Object.keys(mesoParams).length === 0) return;
@@ -5401,12 +5411,19 @@ export default function MesocyclePage() {
           const microLabel = micro.name ?? `Microcycle ${mIdx + 1}`;
           const methodLines: string[] = [];
           Object.entries(slotData).forEach(([methodId, sessions]) => {
+            // Values left over from before the method was taken out of this mesocycle are not in the table
+            if (!isMethodAllocatedToMesocycle(methodId, meso.id)) return;
+            const paramDefs = methodParametersMap[getBaseMethodName(methodId)] ?? [];
             const sessionEntries = Object.entries(sessions as Record<number, Record<string, string | number>>)
               .sort(([a], [b]) => Number(a) - Number(b));
             sessionEntries.forEach(([sIdx, params]) => {
               const paramStr = Object.entries(params)
-                .filter(([k]) => !k.endsWith('_unit'))
-                .map(([k, v]) => `${k}: ${v}`)
+                .filter(([k, v]) => !k.endsWith('_unit') && v !== '' && v != null)
+                .map(([k, v]) => {
+                  // Unit as the table shows it: the one picked in the cell, else the parameter's first unit
+                  const unit = params[`${k}_unit`] || paramDefs.find(p => p.name === k && p.isQuantitative)?.options?.[0] || '';
+                  return `${k}: ${v}${unit ? ` ${unit}` : ''}`;
+                })
                 .join(', ');
               if (paramStr) {
                 const sessionLabel = sessionEntries.length > 1 ? ` session ${Number(sIdx) + 1}` : '';
@@ -5439,7 +5456,7 @@ export default function MesocyclePage() {
     ]
       .filter(Boolean)
       .join("\n\n");
-  }, [currentStep, athleteName, macrocycleData, planStartDate, planEndDate, totalWeeks, expectedTotalDays, totalMesocycleDays, daysMismatch, mesocycles, mesocycleNotes, trainingDays, methodAllocations, mesoStepLabel, exerciseLibraries, exerciseCellData, parameterValues, templates, getTemplatesForWizardMethod, toolboxData, methodParametersMap]);
+  }, [currentStep, athleteName, macrocycleData, planStartDate, planEndDate, totalWeeks, expectedTotalDays, totalMesocycleDays, daysMismatch, mesocycles, mesocycleNotes, trainingDays, methodAllocations, mesoStepLabel, exerciseLibraries, exerciseCellData, parameterValues, templates, getTemplatesForWizardMethod, toolboxData, methodParametersMap, isMethodAllocatedToMesocycle]);
 
   // ── AI Apply handler ──────────────────────────────────────────────────────
   const handleMesoAIApply = useCallback((action: import("@/components/wizard/WizardAIAssistant").ApplySuggestion) => {
