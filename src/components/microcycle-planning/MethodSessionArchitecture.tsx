@@ -70,6 +70,8 @@ export interface MethodSessionArchitectureProps {
   onRenameSession: (dayDate: string, sessionIndex: number, newName: string) => void;
   /** Returns the periodization-table target frequency for a method in a specific microcycle */
   getMethodFrequencyTarget?: (methodId: string, microcycleId: string) => number;
+  /** True when the periodization table has a frequency for this exercise category of its own */
+  hasCategoryFrequency?: (methodKey: string, microcycleId: string) => boolean;
   /** True if the method has at least one periodization value in the mesocycle (copy only copies these) */
   isMethodCharacterizedInMesocycle?: (methodKey: string, mesocycleId: string) => boolean;
   /** Controlled selected microcycle index (lifted to page for pill navigation) */
@@ -138,6 +140,7 @@ export function MethodSessionArchitecture({
   onRemoveSession,
   onRenameSession,
   getMethodFrequencyTarget,
+  hasCategoryFrequency,
   isMethodCharacterizedInMesocycle,
   selectedMicrocycleIndex: selectedMicrocycleIndexProp,
   onSelectedMicrocycleIndexChange,
@@ -242,10 +245,24 @@ export function MethodSessionArchitecture({
     const counts: Record<string, number> = {};
     if (!selectedEntry) return counts;
     const [selectedMicroId, { days }] = selectedEntry;
-    days.filter(d => d.microcycleId === selectedMicroId && d.intensity !== 'off').forEach(day => {
+    days.filter(d => d.microcycleId === selectedMicroId && migrateLegacyIntensity(d.intensity) !== '0').forEach(day => {
       const seen = new Set<string>();
       for (let si = 0; si < 4; si++) {
         (dayMethodAssignments[`${day.date}_${si}`] ?? []).forEach(m => seen.add(m));
+      }
+      seen.forEach(m => { counts[m] = (counts[m] ?? 0) + 1; });
+    });
+    return counts;
+  }, [selectedEntry, dayMethodAssignments]);
+
+  const wholeMethodFrequency = useMemo(() => {
+    const counts: Record<string, number> = {};
+    if (!selectedEntry) return counts;
+    const [selectedMicroId, { days }] = selectedEntry;
+    days.filter(d => d.microcycleId === selectedMicroId && migrateLegacyIntensity(d.intensity) !== '0').forEach(day => {
+      const seen = new Set<string>();
+      for (let si = 0; si < 4; si++) {
+        (dayMethodAssignments[`${day.date}_${si}`] ?? []).forEach(m => seen.add(m.split('::')[0]));
       }
       seen.forEach(m => { counts[m] = (counts[m] ?? 0) + 1; });
     });
@@ -258,11 +275,25 @@ export function MethodSessionArchitecture({
     if (!getMethodFrequencyTarget || !selectedEntry) return targets;
     const [microId] = selectedEntry;
     flatAvailable.forEach(key => {
+      // A category without a frequency of its own has no target — the method's target counts for all of them
+      if (key.includes('::') && hasCategoryFrequency && !hasCategoryFrequency(key, microId)) return;
       const freq = getMethodFrequencyTarget(key, microId);
       if (freq > 0) targets[key] = freq;
     });
     return targets;
-  }, [getMethodFrequencyTarget, selectedEntry, flatAvailable]);
+  }, [getMethodFrequencyTarget, hasCategoryFrequency, selectedEntry, flatAvailable]);
+
+  // Target of the method as a whole (its periodization row, not split by exercise category)
+  const wholeMethodTarget = useMemo(() => {
+    const targets: Record<string, number> = {};
+    if (!getMethodFrequencyTarget || !selectedEntry) return targets;
+    const [microId] = selectedEntry;
+    allMethods.forEach(methodId => {
+      const freq = getMethodFrequencyTarget(methodId, microId);
+      if (freq > 0) targets[methodId] = freq;
+    });
+    return targets;
+  }, [getMethodFrequencyTarget, selectedEntry, allMethods]);
 
   // ── init: expand all categories whenever methodsByCategory changes ──────────
   useEffect(() => {
@@ -761,6 +792,13 @@ export function MethodSessionArchitecture({
                                           const actual = methodFrequency[draggableKey] ?? 0;
                                           const target = methodTargetFrequency[draggableKey] ?? 0;
                                           if (target === 0 && actual === 0) return null;
+                                          if (target === 0 && hasExCat(draggableKey)) return (
+                                            <div className="flex gap-[3px] shrink-0 items-center" title={`Placed in ${actual} session${actual === 1 ? '' : 's'} — the method's frequency counts for all its categories`}>
+                                              {Array.from({ length: Math.min(actual, 7) }, (_, i) => (
+                                                <div key={i} className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
+                                              ))}
+                                            </div>
+                                          );
                                           const totalDots = Math.max(target, actual);
                                           if (totalDots > 7) return (
                                             <span className={cn(
@@ -799,8 +837,15 @@ export function MethodSessionArchitecture({
                                 // the header still shows how many sessions are placed vs. targeted.
                                 const isOpen = expandedMethods.has(methodId);
                                 const keys = exCats!.map(cat => `${methodId}::${cat}`);
-                                const placedSum = keys.reduce((s, k) => s + (methodFrequency[k] ?? 0), 0);
-                                const targetSum = keys.reduce((s, k) => s + (methodTargetFrequency[k] ?? 0), 0);
+                                // Split in the table: each category has its own target, the header sums them.
+                                // Not split: the method's frequency — sessions with any of its categories count once.
+                                const splitTargets = keys.some(k => (methodTargetFrequency[k] ?? 0) > 0);
+                                const placedSum = splitTargets
+                                  ? keys.reduce((s, k) => s + (methodFrequency[k] ?? 0), 0)
+                                  : wholeMethodFrequency[methodId] ?? 0;
+                                const targetSum = splitTargets
+                                  ? keys.reduce((s, k) => s + (methodTargetFrequency[k] ?? 0), 0)
+                                  : wholeMethodTarget[methodId] ?? 0;
                                 return (
                                   <div key={methodId}>
                                     <button
@@ -824,7 +869,9 @@ export function MethodSessionArchitecture({
                                             targetSum > 0 && placedSum === targetSum ? 'text-green-600' :
                                             placedSum > targetSum ? 'text-red-600' : 'text-muted-foreground'
                                           )}
-                                          title={`${placedSum} of ${targetSum} sessions placed across ${keys.length} categories`}
+                                          title={splitTargets
+                                            ? `${placedSum} of ${targetSum} sessions placed across ${keys.length} categories`
+                                            : `${placedSum} of ${targetSum} sessions with this method (any category)`}
                                         >
                                           {placedSum}/{targetSum}
                                         </span>

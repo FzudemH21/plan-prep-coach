@@ -1079,6 +1079,14 @@ export default function MicrocyclePlanningPage() {
     return 1;
   };
 
+  /** True when the periodization table has its own row for this "Method::Category" (split by exercise
+   *  category) in that microcycle — otherwise the method's frequency counts for all its categories together */
+  const hasCategoryFrequency = (methodKey: string, microcycleId: string): boolean => {
+    if (!currentMesocycle || !methodKey.includes('::')) return false;
+    const microcycleIndex = currentMesocycle.microcycles.findIndex(m => m.id === microcycleId);
+    return !!parameterValues[currentMesocycle.id]?.[microcycleIndex]?.[methodKey]?.[0];
+  };
+
   // Calculate actual frequency (number of sessions per microcycle)
   const calculateActualFrequency = (methodId: string, microcycleId: string): number => {
     if (!currentMesocycle) return 0;
@@ -5227,6 +5235,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
             onRemoveSession={handleRemoveSession}
             onRenameSession={handleRenameSession}
             getMethodFrequencyTarget={getMethodFrequency}
+            hasCategoryFrequency={hasCategoryFrequency}
             isMethodCharacterizedInMesocycle={isMethodCharacterizedInMesocycle}
             selectedMicrocycleIndex={currentMicrocycleIndex}
             onSelectedMicrocycleIndexChange={setCurrentMicrocycleIndex}
