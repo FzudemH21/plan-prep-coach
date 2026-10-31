@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { format } from 'date-fns';
 import { parseDateStr } from '@/utils/dateUtils';
@@ -211,12 +211,15 @@ export function MethodSessionArchitecture({
 
   // ── derived: only methods explicitly allocated to this mesocycle ─────────────
   // Strip any "::category" split suffix so the panel is always split-state-independent.
+  // Alphabetical by main method, then by method — the panel groups follow this order.
   const allMethods = useMemo(() => {
     const seen = new Set<string>();
+    const mainMethod = (m: string) => (m.includes(' - ') ? m.split(' - ')[0] : 'General');
     return Object.keys(methodAllocations)
       .filter(m => methodAllocations[m]?.includes(mesocycle.id))
       .map(m => m.split('::')[0])
-      .filter(m => !seen.has(m) && seen.add(m) !== undefined);
+      .filter(m => !seen.has(m) && seen.add(m) !== undefined)
+      .sort((a, b) => mainMethod(a).localeCompare(mainMethod(b)) || shortName(a).localeCompare(shortName(b)));
   }, [methodAllocations, mesocycle.id]);
 
   // ── derived: methods grouped by parent category label ───────────────────────
@@ -304,14 +307,31 @@ export function MethodSessionArchitecture({
     return targets;
   }, [getMethodFrequencyTarget, selectedEntry, allMethods]);
 
-  // ── init: expand all categories whenever methodsByCategory changes ──────────
+  // ── init: categories start expanded — only newly appearing ones, so a category the coach
+  // collapsed stays collapsed when the list is rebuilt (every store refresh / auto-save) ─────
+  const seenCategoriesRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    setExpandedCategories(prev => {
-      const next = new Set(prev);
-      Object.keys(methodsByCategory).forEach(cat => next.add(cat));
-      return next;
-    });
+    const added = Object.keys(methodsByCategory).filter(cat => !seenCategoriesRef.current.has(cat));
+    if (added.length === 0) return;
+    added.forEach(cat => seenCategoriesRef.current.add(cat));
+    setExpandedCategories(prev => new Set([...prev, ...added]));
   }, [methodsByCategory]);
+
+  // Session cards list methods alphabetically by full name; a method's exercise categories
+  // follow in the panel's order, so they can sit grouped below the method name.
+  const sortSessionMethods = useCallback((keys: string[]) => {
+    const categoryIndex = (key: string) => {
+      const [base, cat] = key.split('::');
+      if (cat === undefined) return -1;
+      const idx = methodExerciseCategories?.[base]?.indexOf(cat) ?? -1;
+      return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
+    };
+    return [...keys].sort((a, b) => {
+      const baseA = a.split('::')[0];
+      const baseB = b.split('::')[0];
+      return baseA.localeCompare(baseB) || categoryIndex(a) - categoryIndex(b) || a.localeCompare(b);
+    });
+  }, [methodExerciseCategories]);
 
   // ── init: load session intensities from localStorage ─────────────────────────
   useEffect(() => {
@@ -1290,29 +1310,41 @@ export function MethodSessionArchitecture({
                                         <div className="px-2 py-2 space-y-2">
                                           {/* Method cards assigned to this session */}
                                           {(() => {
-                                            const sessionMethods = dayMethodAssignments[`${day.date}_${si}`] ?? [];
+                                            const sessionMethods = sortSessionMethods(dayMethodAssignments[`${day.date}_${si}`] ?? []);
                                             return (
                                               <div className="space-y-1.5 min-h-[32px]">
-                                                {sessionMethods.map((methodId, mi) => (
-                                                  // Draggable to another session (or to reorder) — no need to remove and re-add
+                                                {sessionMethods.map((methodId, mi) => {
+                                                  const base = methodId.split('::')[0];
+                                                  const isCategory = hasExCat(methodId);
+                                                  // Exercise categories sit indented below the full method name
+                                                  const startsGroup = isCategory && (mi === 0 || sessionMethods[mi - 1].split('::')[0] !== base);
+                                                  return (
+                                                  // Draggable to another session — no need to remove and re-add.
+                                                  // The method name sits inside the first category's draggable so it
+                                                  // shifts along with the cards while dragging; only the card is the handle.
                                                   <Draggable
                                                     key={methodId}
                                                     draggableId={`assigned::${day.date}::${si}::${methodId}`}
                                                     index={mi}
                                                   >
                                                     {(dragProv, dragSnap) => (
+                                                  <div ref={dragProv.innerRef} {...dragProv.draggableProps}>
+                                                  {startsGroup && (
+                                                    <div className={cn('px-0.5 pb-1.5 text-xs font-semibold leading-snug', mi > 0 && 'pt-1')} title={base}>
+                                                      {base}
+                                                    </div>
+                                                  )}
                                                   <div
-                                                    ref={dragProv.innerRef}
-                                                    {...dragProv.draggableProps}
                                                     {...dragProv.dragHandleProps}
                                                     className={cn(
                                                       'flex items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 shadow-sm cursor-grab active:cursor-grabbing',
+                                                      isCategory && 'ml-3 py-1.5',
                                                       dragSnap.isDragging && 'ring-2 ring-primary/40 bg-background shadow-md',
                                                     )}
                                                     title="Drag to another session"
                                                   >
-                                                    <span className="text-xs font-medium leading-snug" title={methodId}>
-                                                      {displayLabel(methodId)}
+                                                    <span className={cn('text-xs leading-snug', !isCategory && 'font-semibold')} title={methodId}>
+                                                      {isCategory ? exCatLabel(methodId) : base}
                                                     </span>
                                                     <button
                                                       onClick={() => removeMethodFromSession(day.date, si, methodId)}
@@ -1322,9 +1354,11 @@ export function MethodSessionArchitecture({
                                                       <X className="h-3 w-3" />
                                                     </button>
                                                   </div>
+                                                  </div>
                                                     )}
                                                   </Draggable>
-                                                ))}
+                                                  );
+                                                })}
                                                 {sessDropSnap.isDraggingOver && sessionMethods.length === 0 && (
                                                   <div className="w-full text-center text-xs text-primary border border-dashed border-primary/50 rounded py-2">
                                                     Drop method here
