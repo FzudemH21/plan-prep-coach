@@ -78,7 +78,9 @@ interface AllocationWarning {
 export default function MicrocyclePlanningPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { macrocycleData, setMacrocycleData, trainingDays, setTrainingDays } = useWizardData();
+  // Daily intensities come from the shared wizard state (not a page-local copy), so a day intensity
+  // changed here shows in Mesocycle Planning step 2 — and its save doesn't write the old values back.
+  const { macrocycleData, setMacrocycleData, trainingDays, setTrainingDays, dailyIntensityData, setDailyIntensityData } = useWizardData();
   /** Strategy document → "Write up from conversation" → a message for the AI chat */
   const [strategyPrompt, setStrategyPrompt] = useState<{ id: number; text: string } | undefined>();
   const [currentStep, setCurrentStep] = useState(1);
@@ -88,7 +90,6 @@ export default function MicrocyclePlanningPage() {
   const [exerciseSelectionData, setExerciseSelectionData] = useState<Record<string, CellData>>({});
   const [exerciseDistribution, setExerciseDistribution] = useState<ExerciseDistribution[]>([]);
   const [parameterValues, setParameterValues] = useState<Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>>({});
-  const [dailyIntensityData, setDailyIntensityData] = useState<any[]>([]);
   const [daySplitStates, setDaySplitStates] = useState<Record<string, number>>({});
   const [splitStates, setSplitStates] = useState<Record<string, boolean>>({});
   const { data: toolboxData } = useToolboxData();
