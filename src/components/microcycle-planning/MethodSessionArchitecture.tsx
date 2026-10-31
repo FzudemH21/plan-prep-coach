@@ -100,6 +100,13 @@ function shortName(methodId: string) {
   return idx > -1 ? base.slice(idx + 3) : base;
 }
 
+/** The main method of "Main Method - Method" (e.g. "Lower Body Resistance Training"), null when there is none */
+function mainMethodOf(methodId: string): string | null {
+  const base = methodId.split('::')[0];
+  const idx = base.indexOf(' - ');
+  return idx > -1 ? base.slice(0, idx) : null;
+}
+
 /**
  * Human-readable display label for a draggable/assigned key.
  * Plain method  → "Power"
@@ -317,7 +324,7 @@ export function MethodSessionArchitecture({
     setExpandedCategories(prev => new Set([...prev, ...added]));
   }, [methodsByCategory]);
 
-  // Session cards list methods alphabetically by full name; a method's exercise categories
+  // Session cards: alphabetical by main method, then method; a method's exercise categories
   // follow in the panel's order, so they can sit grouped below the method name.
   const sortSessionMethods = useCallback((keys: string[]) => {
     const categoryIndex = (key: string) => {
@@ -329,7 +336,10 @@ export function MethodSessionArchitecture({
     return [...keys].sort((a, b) => {
       const baseA = a.split('::')[0];
       const baseB = b.split('::')[0];
-      return baseA.localeCompare(baseB) || categoryIndex(a) - categoryIndex(b) || a.localeCompare(b);
+      const mainA = mainMethodOf(baseA) ?? baseA;
+      const mainB = mainMethodOf(baseB) ?? baseB;
+      return mainA.localeCompare(mainB) || shortName(baseA).localeCompare(shortName(baseB))
+        || categoryIndex(a) - categoryIndex(b) || a.localeCompare(b);
     });
   }, [methodExerciseCategories]);
 
@@ -1314,14 +1324,20 @@ export function MethodSessionArchitecture({
                                             return (
                                               <div className="space-y-1.5 min-h-[32px]">
                                                 {sessionMethods.map((methodId, mi) => {
+                                                  // Tree: main method (e.g. "Lower Body Resistance Training") › method
+                                                  // (e.g. "Hypertrophy") › exercise categories (Squat, Hinge…).
+                                                  // A method without categories is the card itself, below its main method.
                                                   const base = methodId.split('::')[0];
                                                   const isCategory = hasExCat(methodId);
-                                                  // Exercise categories sit indented below the full method name
-                                                  const startsGroup = isCategory && (mi === 0 || sessionMethods[mi - 1].split('::')[0] !== base);
+                                                  const main = mainMethodOf(base);
+                                                  const prevBase = mi > 0 ? sessionMethods[mi - 1].split('::')[0] : null;
+                                                  const startsMain = main !== null && (prevBase === null || mainMethodOf(prevBase) !== main);
+                                                  const startsMethod = isCategory && prevBase !== base;
+                                                  const cardLabel = isCategory ? exCatLabel(methodId) : main !== null ? shortName(base) : base;
                                                   return (
                                                   // Draggable to another session — no need to remove and re-add.
-                                                  // The method name sits inside the first category's draggable so it
-                                                  // shifts along with the cards while dragging; only the card is the handle.
+                                                  // The headings sit inside the first card's draggable so they shift
+                                                  // along with the cards while dragging; only the card is the handle.
                                                   <Draggable
                                                     key={methodId}
                                                     draggableId={`assigned::${day.date}::${si}::${methodId}`}
@@ -1329,22 +1345,27 @@ export function MethodSessionArchitecture({
                                                   >
                                                     {(dragProv, dragSnap) => (
                                                   <div ref={dragProv.innerRef} {...dragProv.draggableProps}>
-                                                  {startsGroup && (
-                                                    <div className={cn('px-0.5 pb-1.5 text-xs font-semibold leading-snug', mi > 0 && 'pt-1')} title={base}>
-                                                      {base}
+                                                  {startsMain && (
+                                                    <div className={cn('px-0.5 pb-1.5 text-xs font-semibold leading-snug', mi > 0 && 'pt-1.5')}>
+                                                      {main}
+                                                    </div>
+                                                  )}
+                                                  {startsMethod && (
+                                                    <div className={cn('pb-1.5 text-xs font-medium leading-snug text-muted-foreground', main !== null ? 'ml-3' : 'px-0.5', mi > 0 && !startsMain && 'pt-0.5')}>
+                                                      {main !== null ? shortName(base) : base}
                                                     </div>
                                                   )}
                                                   <div
                                                     {...dragProv.dragHandleProps}
                                                     className={cn(
-                                                      'flex items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 shadow-sm cursor-grab active:cursor-grabbing',
-                                                      isCategory && 'ml-3 py-1.5',
+                                                      'flex items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-1.5 shadow-sm cursor-grab active:cursor-grabbing',
+                                                      main !== null && isCategory ? 'ml-6' : (main !== null || isCategory) && 'ml-3',
                                                       dragSnap.isDragging && 'ring-2 ring-primary/40 bg-background shadow-md',
                                                     )}
                                                     title="Drag to another session"
                                                   >
-                                                    <span className={cn('text-xs leading-snug', !isCategory && 'font-semibold')} title={methodId}>
-                                                      {isCategory ? exCatLabel(methodId) : base}
+                                                    <span className="text-xs leading-snug" title={methodId}>
+                                                      {cardLabel}
                                                     </span>
                                                     <button
                                                       onClick={() => removeMethodFromSession(day.date, si, methodId)}
