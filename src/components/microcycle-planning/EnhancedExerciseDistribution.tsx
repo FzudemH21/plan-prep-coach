@@ -2391,8 +2391,8 @@ export function EnhancedExerciseDistribution({
 
       <DragDropContext onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
       <div className="flex h-full w-full">
-        {/* Definite height (same as the session columns) so the panel scrolls on its own */}
-        <div className="w-[15%] shrink-0 border-r h-[78vh] min-h-[640px]">
+        {/* Definite height (same as the sessions area) so the panel scrolls on its own */}
+        <div className="w-[15%] shrink-0 border-r h-[calc(100vh-200px)] min-h-[420px]">
           <ExerciseLibraryPanel
             exercisesByMethod={exercisesByMethod}
             exerciseDistribution={exerciseDistribution}
@@ -2405,8 +2405,10 @@ export function EnhancedExerciseDistribution({
           />
         </div>
 
-        <div className="flex-1 overflow-hidden">
-          <div className="overflow-x-auto p-4">
+        {/* One scroll area for the sessions (both directions) — sessions grow with their content,
+            and dragging auto-scrolls it, so exercises can be dropped into any session */}
+        <div className="flex-1 min-w-0 h-[calc(100vh-200px)] min-h-[420px] overflow-auto">
+          <div className="p-4">
             <div className="w-max min-w-full">
               
               {/* Mesocycle Header */}

@@ -506,8 +506,8 @@ export function SessionColumnView({
   return (
     <>
       <div className={cn(
-        // Tall enough to drag exercises into comfortably (was a fixed 600px)
-        "w-80 flex-shrink-0 flex flex-col h-[78vh] min-h-[640px] rounded-lg border bg-muted text-card-foreground shadow-sm transition-all duration-150",
+        // Grows with its content (sections, exercises) — no fixed height, no inner scrolling
+        "w-80 flex-shrink-0 flex flex-col rounded-lg border bg-muted text-card-foreground shadow-sm transition-all duration-150",
         methodMatchState === 'match' && "ring-2 ring-green-500/60 bg-green-500/5",
         methodMatchState === 'no-match' && "opacity-50"
       )}>
@@ -730,8 +730,8 @@ export function SessionColumnView({
           </div>
         )}
 
-        <CardContent className="flex-1 overflow-hidden p-3 pt-0">
-          <div className="h-full overflow-y-auto overflow-x-hidden">
+        <CardContent className="p-3 pt-0">
+          <div>
             <div className="space-y-3">
               {/* Unsectioned exercises */}
               {exercisesBySection.unsectioned.length > 0 && (

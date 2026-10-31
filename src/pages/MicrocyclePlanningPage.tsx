@@ -36,7 +36,7 @@ import { useTrainingPrograms, TrainingProgram } from '@/hooks/useTrainingProgram
 import { ExportPDFButton } from '@/components/pdf/ExportPDFButton';
 import { useWizardData } from '@/contexts/WizardDataContext';
 import { WizardAIAssistant, FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
-import { WIZARD_CHAT_ID } from '@/contexts/AIChatContext';
+import { WIZARD_CHAT_ID } from '@/contexts/AIChatContext';
 import { isDatabaseAction, useDatabaseAIActions } from '@/hooks/useDatabaseAIActions';
 import { applyNotesAction, readNotesHistory, restoreNotesVersion, strategyContext, WRITE_UP_PROMPT } from '@/utils/planStrategy';
 import { onExerciseRenamed, renameExerciseInValue } from '@/utils/exerciseRename';
@@ -615,17 +615,43 @@ export default function MicrocyclePlanningPage() {
   }, [dayMethodAssignments, exerciseDistribution, sessionSections]);
 
   // Sessions per day as used from Exercise Distribution onwards (step 2, training calendar,
-  // saved trainingDays → athlete schedule). A day with nothing on it gets NO session, whatever its
-  // intensity — so no empty "Rest" sessions end up in the final calendar. Step 1 keeps using the
-  // raw daySplitStates, so every training day still offers a slot to drop methods onto.
+  // saved trainingDays → athlete schedule) — the same sessions as step 1 (method distribution):
+  // - rest day (Borg "0") → no sessions, even if old content is still stored for it
+  // - a day in use (methods, exercises or sections on it, a session named, or more than the default
+  //   one session) → exactly step 1's sessions, empty ones included (e.g. a session meant for a circuit)
+  // - an untouched day (one unnamed, empty default session) → no session, so no empty sessions end
+  //   up in the final calendar. Step 1 still shows its slot to drop methods onto.
   const effectiveDaySplitStates = useMemo(() => {
     const result: Record<string, number> = {};
     trainingDays.forEach(day => {
+      if (migrateLegacyIntensity(day.intensity) === '0') { result[day.date] = 0; return; }
+      const slots = daySplitStates[day.date] ?? 1;
       const maxIdx = dayContentMaxIndex.get(day.date);
-      result[day.date] = maxIdx === undefined ? 0 : Math.max(daySplitStates[day.date] ?? 1, maxIdx + 1);
+      const named = (day.sessionNames ?? []).slice(0, slots)
+        .some((name: string | undefined) => !!name?.trim() && !/^Session \d+$/.test(name.trim()));
+      const inUse = maxIdx !== undefined || named || slots > 1;
+      result[day.date] = inUse ? Math.max(slots, (maxIdx ?? -1) + 1) : 0;
     });
     return result;
   }, [trainingDays, daySplitStates, dayContentMaxIndex]);
+
+  // Step 1's sessions cover everything stored for a training day: content in a session beyond its
+  // count (e.g. from older plans, or a rest day made a training day again) raises the count, so
+  // method distribution and exercise distribution always show the same sessions.
+  useEffect(() => {
+    setDaySplitStates(prev => {
+      let changed = false;
+      const next = { ...prev };
+      trainingDays.forEach(day => {
+        if (migrateLegacyIntensity(day.intensity) === '0') return;
+        const maxIdx = dayContentMaxIndex.get(day.date);
+        if (maxIdx === undefined || (prev[day.date] ?? 1) >= maxIdx + 1) return;
+        next[day.date] = maxIdx + 1;
+        changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [trainingDays, dayContentMaxIndex]);
 
   // Sync effective session counts to trainingDays (returns the same array when nothing changed,
   // so effects watching trainingDays don't re-run needlessly)
@@ -1394,6 +1420,9 @@ export default function MicrocyclePlanningPage() {
       handleAddSession(dayDate);
       return;
     }
+    // A rest day becomes a training day first (rest days show no sessions)
+    const day = trainingDays.find(d => d.date === dayDate);
+    if (day && migrateLegacyIntensity(day.intensity) === '0') handleAddSession(dayDate);
     setSessionSections(prev => [
       ...prev,
       {
@@ -3993,7 +4022,7 @@ export default function MicrocyclePlanningPage() {
     }
 
     return (
-      <div className="min-h-[400px] max-h-[calc(100vh-200px)] overflow-y-auto">
+      <div className="min-h-[400px]">
         <EnhancedExerciseDistribution
           mesocycle={currentMesocycle}
           allMesocycles={mesocycles}
