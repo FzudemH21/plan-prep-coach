@@ -462,9 +462,10 @@ export function MethodSessionArchitecture({
 
   // ── copy helpers ────────────────────────────────────────────────────────────
   // Copies one microcycle's day→method assignments onto another, day by day and session by
-  // session, into `assignments` (mutated). A method is only copied if it's characterised in the
-  // target mesocycle — i.e. has at least one periodization value there (an unassigned method
-  // never has one) — and only up to its periodization frequency in the target microcycle.
+  // session, into `assignments` (mutated). A method is only copied if it's allocated to the target
+  // mesocycle (the same rule as the method panel — leftover periodization values of a method that
+  // is no longer allocated don't count) and characterised there (has at least one periodization
+  // value), and only up to its periodization frequency in the target microcycle.
   const copyMicrocycleAssignments = useCallback(
     (
       sourceMicrocycleId: string,
@@ -480,6 +481,10 @@ export function MethodSessionArchitecture({
       const caps: Record<string, number> = {};
 
       const isAllowed = (method: string): boolean => {
+        if (!methodAllocations[method.split('::')[0]]?.includes(targetMesocycleId)) {
+          skipped.add(method);
+          return false;
+        }
         if (isMethodCharacterizedInMesocycle && !isMethodCharacterizedInMesocycle(method, targetMesocycleId)) {
           skipped.add(method);
           return false;
@@ -526,13 +531,13 @@ export function MethodSessionArchitecture({
       }
       return { skipped, dayPairs };
     },
-    [trainingDays, dayMethodAssignments, daySplitStates, getMethodFrequencyTarget, isMethodCharacterizedInMesocycle]
+    [trainingDays, dayMethodAssignments, daySplitStates, getMethodFrequencyTarget, isMethodCharacterizedInMesocycle, methodAllocations]
   );
 
   const describeCopyResult = (base: string, skipped: Set<string>, targetName: string) =>
     skipped.size === 0
       ? base
-      : `${base} Not copied — no periodization values in ${targetName}: ${[...skipped].map(m => m.replace('::', ' › ')).join(', ')}.`;
+      : `${base} Not copied — not planned in ${targetName}: ${[...skipped].map(m => m.replace('::', ' › ')).join(', ')}.`;
 
   // ── copy from previous microcycle ───────────────────────────────────────────
   const handleCopyFromPreviousMicrocycle = useCallback(
