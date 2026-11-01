@@ -530,7 +530,11 @@ export function CircuitBuilderDialog({
       {/* ── Library picker sub-dialog (standalone mode) ───────────────────── */}
       {isStandaloneMode && (
         <Dialog open={libraryPickerOpen} onOpenChange={(open) => !open && setLibraryPickerOpen(false)}>
-          <DialogContent className={`max-w-sm ${darkOverlay ? 'z-[210]' : ''}`}>
+          {/* Its backdrop sits above the circuit dialog, so the circuit dialog is dimmed behind it */}
+          <DialogContent
+            className={`max-w-sm ${darkOverlay ? 'z-[210]' : 'z-[120]'}`}
+            overlayClassName={`bg-black/50 ${darkOverlay ? 'z-[205]' : 'z-[115]'}`}
+          >
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Library className="h-4 w-4" />
@@ -567,7 +571,10 @@ export function CircuitBuilderDialog({
 
       {/* ── Name-conflict resolution dialog ───────────────────────────────── */}
       <Dialog open={!!conflictInfo} onOpenChange={(open) => !open && setConflictInfo(null)}>
-        <DialogContent className={`max-w-sm ${darkOverlay ? 'z-[220]' : ''}`}>
+        <DialogContent
+          className={`max-w-sm ${darkOverlay ? 'z-[220]' : 'z-[130]'}`}
+          overlayClassName={`bg-black/50 ${darkOverlay ? 'z-[215]' : 'z-[125]'}`}
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
               <AlertTriangle className="h-4 w-4 shrink-0" />
