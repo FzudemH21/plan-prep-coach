@@ -46,8 +46,9 @@ export interface AccumulatedContextDialogProps {
   planMemorySaved?: Promise<void>;
   /** Called when the coach chooses "No, just save" — no AI interaction */
   onJustSave: () => void;
-  /** Called when the full flow completes (either path) */
-  onDone: () => void;
+  /** Called when the dialog closes — `completed`: the feedback is done (answers saved or nothing to
+   *  ask); closing with X or skipping the questions isn't, so it is offered again next time */
+  onDone: (completed: boolean) => void;
 }
 
 // ── AI prompt ─────────────────────────────────────────────────────────────────
@@ -135,7 +136,7 @@ export function AccumulatedContextDialog({
       const qs = await (pendingQuestions.current ?? generateQuestions(planSummary));
       if (qs.length === 0) {
         // No meaningful questions generated — treat as done
-        onDone();
+        onDone(true);
         reset();
         return;
       }
@@ -164,8 +165,8 @@ export function AccumulatedContextDialog({
     }
   };
 
-  const handleClose = () => {
-    onDone();
+  const handleClose = (completed = false) => {
+    onDone(completed);
     reset();
   };
 
@@ -255,7 +256,7 @@ export function AccumulatedContextDialog({
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <DialogFooter className="gap-2 sm:gap-0">
-              <Button variant="ghost" onClick={handleClose}>
+              <Button variant="ghost" onClick={() => handleClose()}>
                 Skip
               </Button>
               <Button onClick={handleSubmitAnswers}>
@@ -290,7 +291,7 @@ export function AccumulatedContextDialog({
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button onClick={handleClose}>Done</Button>
+              <Button onClick={() => handleClose(true)}>Done</Button>
             </DialogFooter>
           </>
         )}

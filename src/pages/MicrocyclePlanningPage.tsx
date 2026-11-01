@@ -3895,7 +3895,9 @@ export default function MicrocyclePlanningPage() {
                       planMemorySaved.current = saveToMemory(program).catch(err => {
                         console.error('[planMemory] save failed:', err);
                       });
-                      const alreadyDone = localStorage.getItem(`rationale_done_${program.id}`) === '1';
+                      // (The old `rationale_done_` flag was also set by closing the dialog with X —
+                      // not used any more, so those programs are offered the feedback again.)
+                      const alreadyDone = localStorage.getItem(`aiFeedbackDone_${program.id}`) === '1';
                       if (alreadyDone) {
                         toast({ title: "Program saved", description: "Your training program has been saved." });
                         navigate("/templates/programs");
@@ -5641,13 +5643,13 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
         userId={user?.id ?? ''}
         planMemorySaved={planMemorySaved.current}
         onJustSave={() => {
-          if (accumulatedProgramId) localStorage.setItem(`rationale_done_${accumulatedProgramId}`, '1');
+          if (accumulatedProgramId) localStorage.setItem(`aiFeedbackDone_${accumulatedProgramId}`, '1');
           setAccumulatedDialogOpen(false);
           toast({ title: "Program saved", description: "Your training program has been saved." });
           navigate("/templates/programs");
         }}
-        onDone={() => {
-          if (accumulatedProgramId) localStorage.setItem(`rationale_done_${accumulatedProgramId}`, '1');
+        onDone={(completed) => {
+          if (completed && accumulatedProgramId) localStorage.setItem(`aiFeedbackDone_${accumulatedProgramId}`, '1');
           setAccumulatedDialogOpen(false);
           navigate("/templates/programs");
         }}
