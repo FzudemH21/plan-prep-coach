@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { ChevronRight, ChevronLeft, CheckCircle2, X, Info } from 'lucide-react';
+import { ChevronRight, ChevronLeft, CheckCircle2, X, Info, PlayCircle } from 'lucide-react';
 import { TestDetailsDialog } from '@/components/athlete-app/TestDetailsDialog';
 import {
   FRONT_REGIONS,
@@ -620,11 +620,14 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
 
   // ── Render helpers ─────────────────────────────────────────────────────────
 
-  function Header({ title, subtitle }: { title: string; subtitle?: string }) {
+  function Header({ title, subtitle, action }: { title: string; subtitle?: string; action?: React.ReactNode }) {
     return (
-      <div className="shrink-0 pb-3">
-        <p className="text-lg font-bold leading-snug">{title}</p>
-        {subtitle && <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>}
+      <div className="shrink-0 pb-3 flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-lg font-bold leading-snug">{title}</p>
+          {subtitle && <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>}
+        </div>
+        {action}
       </div>
     );
   }
@@ -1038,16 +1041,19 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
       };
       const goNext = () => { setMetricSide('L'); setStep(nextMainStep(step, monitoringConfig)); };
 
-      // The parameter's test instructions / demo video, like a scheduled test's "Test details"
-      const howTo = (cfg.instructions || cfg.videoUrl) && (
+      // The parameter's test instructions / demo video, like a scheduled test's "Test details" —
+      // an icon next to the title, so the whole scale stays on screen
+      const howTo = (cfg.instructions || cfg.videoUrl) ? (
         <button
           type="button"
           onClick={() => setHowToBlockId(blockId)}
-          className="shrink-0 -mt-1 mb-2 min-h-[44px] w-full flex items-center justify-center gap-1.5 rounded-xl border text-sm font-medium text-muted-foreground active:bg-muted"
+          aria-label="How to do it"
+          title="How to do it"
+          className="shrink-0 -mt-1 -mr-1 w-11 h-11 flex items-center justify-center rounded-full text-primary bg-primary/10 active:bg-primary/20"
         >
-          <Info className="h-4 w-4" /> How to do it
+          {cfg.videoUrl ? <PlayCircle className="h-6 w-6" /> : <Info className="h-6 w-6" />}
         </button>
-      );
+      ) : undefined;
 
       // Left / Right with the value picked for each
       const sideSwitch = sided && (
@@ -1077,8 +1083,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
         const levels = cfg.levels ?? [];
         return (
           <>
-            <Header title={questionLabel} subtitle="Pick what applies today" />
-            {howTo}
+            <Header title={questionLabel} subtitle="Pick what applies today" action={howTo} />
             {sideSwitch}
             <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 py-0.5 space-y-1.5">
               {levels.map((level, i) => {
@@ -1115,8 +1120,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
         const count = max - min + 1;
         return (
           <>
-            <Header title={questionLabel} subtitle={`${max} = highest · ${min} = lowest${unitSuffix}`} />
-            {howTo}
+            <Header title={questionLabel} subtitle={`${max} = highest · ${min} = lowest${unitSuffix}`} action={howTo} />
             {sideSwitch}
             {/* The options share the screen height (no scrolling); scrolls only below a usable size */}
             <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 py-0.5 flex flex-col gap-1">
@@ -1128,7 +1132,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
                     key={`${metricKey}-${n}`}
                     onClick={() => pick(n)}
                     className={cn(
-                      'w-full flex-1 min-h-[32px] max-h-[60px] flex items-center gap-3 px-4 py-1 rounded-xl border text-left transition-all active:scale-[0.98]',
+                      'w-full flex-1 min-h-[30px] max-h-[60px] flex items-center gap-3 px-4 py-1 rounded-xl border text-left transition-all active:scale-[0.98]',
                       isSelected
                         ? 'bg-primary border-primary text-primary-foreground'
                         : 'border-border bg-background [@media(hover:hover)]:hover:border-primary/30'
@@ -1167,8 +1171,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
       // Number input type
       return (
         <>
-          <Header title={questionLabel} subtitle={`Enter today's value${unitSuffix}`} />
-          {howTo}
+          <Header title={questionLabel} subtitle={`Enter today's value${unitSuffix}`} action={howTo} />
           <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 flex flex-col justify-center gap-3 py-4">
             {sides.map(s => {
               const key = checkinRefOf(cfg, s);
