@@ -186,6 +186,9 @@ export default function AthleticismDatabaseV2() {
     isBiometric?: boolean;
     measures?: ParameterMeasure[];
     perSide?: boolean;
+    /** How to perform the test and a demo video — shown to athletes ("Test details") */
+    testInstructions?: string;
+    testVideoUrl?: string;
     interactions: { targetParameterId: string; direction: InteractionDirection; strength: InteractionStrength }[];
     methods: { methodId: string; rationale?: string }[];
   }) => {
@@ -198,6 +201,8 @@ export default function AthleticismDatabaseV2() {
       isBiometric: parameterData.isBiometric,
       measures: parameterData.measures,
       perSide: parameterData.perSide,
+      testInstructions: parameterData.testInstructions,
+      testVideoUrl: parameterData.testVideoUrl,
       createdAt: new Date().toISOString(),
     };
 

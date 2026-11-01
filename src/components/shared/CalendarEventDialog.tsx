@@ -166,6 +166,9 @@ export function CalendarEventDialog({
     category?: string;
     measures?: ParameterMeasure[];
     perSide?: boolean;
+    /** How to perform the test and a demo video — shown to athletes ("Test details") */
+    testInstructions?: string;
+    testVideoUrl?: string;
     interactions: unknown[];
     methods: unknown[];
   }) => {
@@ -175,6 +178,8 @@ export function CalendarEventDialog({
       category: paramData.category,
       measures: paramData.measures,
       perSide: paramData.perSide,
+      testInstructions: paramData.testInstructions,
+      testVideoUrl: paramData.testVideoUrl,
     });
     setCreateParamDialogOpen(false);
     // Auto-select the newly created parameter

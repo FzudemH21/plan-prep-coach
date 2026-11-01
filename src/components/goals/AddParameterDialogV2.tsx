@@ -68,6 +68,9 @@ interface AddParameterDialogV2Props {
     measures?: ParameterMeasure[];
     /** Recorded per side (left / right) */
     perSide?: boolean;
+    /** How to perform the test and a demo video — shown to athletes ("Test details") */
+    testInstructions?: string;
+    testVideoUrl?: string;
     interactions: PendingInteraction[];
     methods: PendingMethod[];
   }) => void;
@@ -89,6 +92,8 @@ export function AddParameterDialogV2({
   const [isBiometric, setIsBiometric] = useState(false);
   const [measures, setMeasures] = useState<ParameterMeasure[]>(() => parameterMeasures({}));
   const [perSide, setPerSide] = useState(false);
+  const [testInstructions, setTestInstructions] = useState('');
+  const [testVideoUrl, setTestVideoUrl] = useState('');
   
   // Separate pending interactions for each section
   const [pendingContributesTo, setPendingContributesTo] = useState<PendingInteraction[]>([]);
@@ -232,6 +237,8 @@ export function AddParameterDialogV2({
       isBiometric: isBiometric || undefined,
       measures: measuresToStore(measures),
       perSide: perSide || undefined,
+      testInstructions: testInstructions.trim() || undefined,
+      testVideoUrl: testVideoUrl.trim() || undefined,
       interactions: allInteractions,
       methods: pendingMethods,
     });
@@ -246,6 +253,8 @@ export function AddParameterDialogV2({
     setCategory('');
     setMeasures(parameterMeasures({}));
     setPerSide(false);
+    setTestInstructions('');
+    setTestVideoUrl('');
     setPendingContributesTo([]);
     setPendingImprovedBy([]);
     setPendingMethods([]);
@@ -443,6 +452,30 @@ export function AddParameterDialogV2({
               </div>
               <p className="text-xs text-muted-foreground">
                 Biometrics (e.g. waist circumference, body fat) are listed under Body Metrics in the athlete profile and in the goal and test pickers.
+              </p>
+            </div>
+
+            {/* Test details for athletes (as in "Edit parameter") */}
+            <div className="space-y-2">
+              <Label htmlFor="add-test-instructions">Test instructions</Label>
+              <Textarea
+                id="add-test-instructions"
+                value={testInstructions}
+                onChange={(e) => setTestInstructions(e.target.value)}
+                placeholder="How to perform the test: warm-up, setup, execution, number of attempts, what counts…"
+                rows={4}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="add-test-video">Test video</Label>
+              <Input
+                id="add-test-video"
+                value={testVideoUrl}
+                onChange={(e) => setTestVideoUrl(e.target.value)}
+                placeholder="YouTube or other video link"
+              />
+              <p className="text-xs text-muted-foreground">
+                Athletes see the instructions and video under "Test details" when this parameter is tested in their app.
               </p>
             </div>
 

@@ -3808,6 +3808,11 @@ export function WorkoutSessionSheet({
             name: param.name,
             unit: param.unit,
             category: param.category,
+            isBiometric: param.isBiometric,
+            measures: param.measures,
+            perSide: param.perSide,
+            testInstructions: param.testInstructions,
+            testVideoUrl: param.testVideoUrl,
           });
         }}
         selectedAthleteId={selectedAthleteId}

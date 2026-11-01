@@ -19,7 +19,7 @@ import { Plus, Trophy, Calendar, X, ChevronDown, Check } from 'lucide-react';
 import { SubGoal, Event } from '@/types/training';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ParameterV2 } from '@/types/parametersV2';
+import { ParameterV2, type ParameterMeasure } from '@/types/parametersV2';
 import { ToolboxEntry } from '@/types/toolbox';
 import { AddParameterDialogV2 } from '@/components/goals/AddParameterDialogV2';
 import { AthletePerformanceParameter, BiometricDefinition, AthleteBiometric } from '@/types/athlete';
@@ -65,6 +65,12 @@ interface CombinedTestEventDialogProps {
     name: string;
     unit?: string;
     category?: string;
+    isBiometric?: boolean;
+    measures?: ParameterMeasure[];
+    perSide?: boolean;
+    /** How to perform the test and a demo video — shown to athletes ("Test details") */
+    testInstructions?: string;
+    testVideoUrl?: string;
     interactions: { targetParameterId: string; direction: string; strength: string }[];
     methods: { methodId: string; rationale?: string }[];
   }) => void;
@@ -198,6 +204,12 @@ export function CombinedTestEventDialog({
     name: string;
     unit?: string;
     category?: string;
+    isBiometric?: boolean;
+    measures?: ParameterMeasure[];
+    perSide?: boolean;
+    /** How to perform the test and a demo video — shown to athletes ("Test details") */
+    testInstructions?: string;
+    testVideoUrl?: string;
     interactions: any[];
     methods: any[];
   }) => {

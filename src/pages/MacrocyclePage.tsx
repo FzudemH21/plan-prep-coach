@@ -880,6 +880,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     isBiometric?: boolean;
     measures?: ParameterMeasure[];
     perSide?: boolean;
+    /** How to perform the test and a demo video — shown to athletes ("Test details") */
+    testInstructions?: string;
+    testVideoUrl?: string;
     interactions: any[];
     methods: any[];
   }) => {
@@ -891,6 +894,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       isBiometric: paramData.isBiometric,
       measures: paramData.measures,
       perSide: paramData.perSide,
+      testInstructions: paramData.testInstructions,
+      testVideoUrl: paramData.testVideoUrl,
     });
     const newParamId = newParam?.id;
     
@@ -1036,6 +1041,10 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     category?: string;
     measures?: ParameterMeasure[];
     perSide?: boolean;
+    isBiometric?: boolean;
+    /** How to perform the test and a demo video — shown to athletes ("Test details") */
+    testInstructions?: string;
+    testVideoUrl?: string;
     contributesTo?: Array<{ parameterId: string; strength?: 'strong' | 'moderate' | 'weak' }>;
     improvedBy?: Array<{ parameterId: string; strength?: 'strong' | 'moderate' | 'weak' }>;
     methods?: Array<{ methodId: string; rationale?: string }>;
@@ -1047,6 +1056,9 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
       category: paramData.category,
       measures: paramData.measures,
       perSide: paramData.perSide,
+      isBiometric: paramData.isBiometric,
+      testInstructions: paramData.testInstructions,
+      testVideoUrl: paramData.testVideoUrl,
     });
     
     // If there's a parent goal and it's linked to a parameter, create an interaction
