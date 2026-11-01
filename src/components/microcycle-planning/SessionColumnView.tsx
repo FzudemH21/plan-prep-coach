@@ -921,7 +921,7 @@ export function SessionColumnView({
                     {!collapsedSections[section.id] && (
                       <div className="p-3 space-y-2">
                         {/* Section Comments */}
-                        {!editingSectionId && onSectionCommentsChange && (
+                        {onSectionCommentsChange && (
                           <div className="pb-2">
                             <label className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
                               <MessageSquare className="h-3 w-3" />
