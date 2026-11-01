@@ -10,7 +10,7 @@
  */
 import { supabase } from '@/lib/supabase';
 import type { AthleteProfileData } from '@/hooks/useAthleteConnections';
-import type { Athlete, MonitoringBlock, MonitoringConfig } from '@/types/athlete';
+import type { Athlete, CustomMetricBlockConfig, MonitoringBlock, MonitoringConfig } from '@/types/athlete';
 
 type AthleteUpdates = Partial<Omit<Athlete, 'id' | 'createdAt'>>;
 
@@ -56,24 +56,43 @@ export async function patchConnectionProfileData(
   return profileData;
 }
 
-/** A check-in question whose per-side mark differs from its parameter's (parameter id → per side) */
-function sidesOutOfSync(block: MonitoringBlock, perSideById: Map<string, boolean>): boolean {
-  const cfg = block.config;
-  if (block.type !== 'custom_metric' || !cfg || cfg.parameterSource !== 'performance') return false;
-  const perSide = perSideById.get(cfg.parameterId);
-  return perSide !== undefined && perSide !== !!cfg.perSide;
+/** What a check-in question takes over from its parameter in the parameter database */
+export interface MonitoringParamInfo {
+  perSide: boolean;
+  instructions?: string;
+  videoUrl?: string;
 }
 
-export function monitoringSidesOutOfSync(config: MonitoringConfig | null | undefined, perSideById: Map<string, boolean>): boolean {
-  return (config?.blocks ?? []).some(b => sidesOutOfSync(b, perSideById));
+/** The question's settings with its parameter's per side / instructions / video — null when they
+ *  already match or the parameter isn't in the database */
+function syncedBlockConfig(block: MonitoringBlock, infoById: Map<string, MonitoringParamInfo>): CustomMetricBlockConfig | null {
+  const cfg = block.config;
+  if (block.type !== 'custom_metric' || !cfg) return null;
+  const info = infoById.get(cfg.parameterId);
+  if (!info) return null;
+  const instructions = info.instructions?.trim() || undefined;
+  const videoUrl = info.videoUrl?.trim() || undefined;
+  if (info.perSide === !!cfg.perSide && instructions === cfg.instructions && videoUrl === cfg.videoUrl) return null;
+  const { perSide: _perSide, instructions: _instructions, videoUrl: _videoUrl, ...rest } = cfg;
+  return {
+    ...rest,
+    ...(info.perSide ? { perSide: true } : {}),
+    ...(instructions ? { instructions } : {}),
+    ...(videoUrl ? { videoUrl } : {}),
+  };
+}
+
+export function monitoringOutOfSync(config: MonitoringConfig | null | undefined, infoById: Map<string, MonitoringParamInfo>): boolean {
+  return (config?.blocks ?? []).some(b => syncedBlockConfig(b, infoById) !== null);
 }
 
 /**
- * Sets "recorded per side" on an athlete's check-in questions from the parameter database. Built
- * on the current server copy; only that mark changes (questions whose parameter isn't in the
- * database are left alone). Returns whether anything was written.
+ * Takes "recorded per side", the test instructions and the demo video of an athlete's check-in
+ * questions over from the parameter database. Built on the current server copy; only those fields
+ * change (questions whose parameter isn't in the database are left alone). Returns whether anything
+ * was written.
  */
-export async function syncMonitoringSides(connectionId: string, perSideById: Map<string, boolean>): Promise<boolean> {
+export async function syncMonitoringFromParameters(connectionId: string, infoById: Map<string, MonitoringParamInfo>): Promise<boolean> {
   const { data: row, error } = await supabase
     .from('athlete_connections')
     .select('profile_data')
@@ -82,11 +101,10 @@ export async function syncMonitoringSides(connectionId: string, perSideById: Map
   if (error) throw error;
   const profileData = (row.profile_data as AthleteProfileData | null) ?? {};
   const config = profileData.monitoringConfig;
-  if (!config || !monitoringSidesOutOfSync(config, perSideById)) return false;
+  if (!config || !monitoringOutOfSync(config, infoById)) return false;
   const blocks = config.blocks.map(b => {
-    if (!sidesOutOfSync(b, perSideById) || !b.config) return b;
-    const { perSide: _old, ...rest } = b.config;
-    return { ...b, config: perSideById.get(b.config.parameterId) ? { ...rest, perSide: true } : rest };
+    const synced = syncedBlockConfig(b, infoById);
+    return synced ? { ...b, config: synced } : b;
   });
   const { error: upErr } = await supabase
     .from('athlete_connections')

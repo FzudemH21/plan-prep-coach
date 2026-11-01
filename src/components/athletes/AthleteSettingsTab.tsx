@@ -627,6 +627,8 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
       inputType,
       ...(mId ? { measureId: mId } : {}),
       ...(selectedParamDef?.perSide ? { perSide: true } : {}),
+      ...(selectedParamDef?.testInstructions?.trim() ? { instructions: selectedParamDef.testInstructions.trim() } : {}),
+      ...(selectedParamDef?.testVideoUrl?.trim() ? { videoUrl: selectedParamDef.testVideoUrl.trim() } : {}),
       // A block of a merged parameter keeps its old storage while it monitors the same measure
       ...(editingBlock?.config?.storageRef && editingBlock.config.parameterId === selectedParam.id && editingBlock.config.measureId === mId
         ? { storageRef: editingBlock.config.storageRef } : {}),

@@ -155,6 +155,9 @@ export interface CustomMetricBlockConfig {
   storageRef?: string;
   /** The parameter is recorded per side: the check-in asks left and right (cached from the parameter) */
   perSide?: boolean;
+  /** How to do it — the parameter's test instructions and demo video (cached from the parameter) */
+  instructions?: string;
+  videoUrl?: string;
   /** Cached unit (e.g. "bpm", "kg") or null */
   parameterUnit: string | null;
   /** How the athlete inputs the value */

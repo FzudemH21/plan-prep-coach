@@ -3,7 +3,8 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { ChevronRight, ChevronLeft, CheckCircle2, X } from 'lucide-react';
+import { ChevronRight, ChevronLeft, CheckCircle2, X, Info } from 'lucide-react';
+import { TestDetailsDialog } from '@/components/athlete-app/TestDetailsDialog';
 import {
   FRONT_REGIONS,
   BACK_REGIONS,
@@ -445,6 +446,8 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
   const [customMetricValues, setCustomMetricValues] = useState<Record<string, number>>({});
   // A question on a parameter recorded per side: the side being answered
   const [metricSide, setMetricSide] = useState<'L' | 'R'>('L');
+  // "How to do it" (the parameter's test instructions / video) of the question shown
+  const [howToBlockId, setHowToBlockId] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
@@ -1035,6 +1038,17 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
       };
       const goNext = () => { setMetricSide('L'); setStep(nextMainStep(step, monitoringConfig)); };
 
+      // The parameter's test instructions / demo video, like a scheduled test's "Test details"
+      const howTo = (cfg.instructions || cfg.videoUrl) && (
+        <button
+          type="button"
+          onClick={() => setHowToBlockId(blockId)}
+          className="shrink-0 -mt-1 mb-2 min-h-[44px] w-full flex items-center justify-center gap-1.5 rounded-xl border text-sm font-medium text-muted-foreground active:bg-muted"
+        >
+          <Info className="h-4 w-4" /> How to do it
+        </button>
+      );
+
       // Left / Right with the value picked for each
       const sideSwitch = sided && (
         <div className="shrink-0 grid grid-cols-2 gap-2 pb-2">
@@ -1064,6 +1078,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
         return (
           <>
             <Header title={questionLabel} subtitle="Pick what applies today" />
+            {howTo}
             {sideSwitch}
             <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 py-0.5 space-y-1.5">
               {levels.map((level, i) => {
@@ -1101,6 +1116,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
         return (
           <>
             <Header title={questionLabel} subtitle={`${max} = highest · ${min} = lowest${unitSuffix}`} />
+            {howTo}
             {sideSwitch}
             {/* The options share the screen height (no scrolling); scrolls only below a usable size */}
             <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 py-0.5 flex flex-col gap-1">
@@ -1152,6 +1168,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
       return (
         <>
           <Header title={questionLabel} subtitle={`Enter today's value${unitSuffix}`} />
+          {howTo}
           <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 flex flex-col justify-center gap-3 py-4">
             {sides.map(s => {
               const key = checkinRefOf(cfg, s);
@@ -1266,6 +1283,14 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
           {renderContent()}
         </div>
       </DialogContent>
+      {/* "How to do it" of a question — the test details dialog of scheduled tests */}
+      <TestDetailsDialog
+        event={(() => {
+          const cfg = monitoringConfig?.blocks.find(b => b.id === howToBlockId)?.config;
+          return cfg ? { id: `howto-${howToBlockId}`, type: 'test' as const, title: cfg.label || cfg.parameterName, instructions: cfg.instructions, videoUrl: cfg.videoUrl } : null;
+        })()}
+        onClose={() => setHowToBlockId(null)}
+      />
     </Dialog>
   );
 }
