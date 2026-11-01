@@ -8,7 +8,7 @@
 import type { TestMeasureSpec } from '@/utils/parameterMeasures';
 import { intervalSpecFor, type IntervalSpec } from '@/types/toolbox';
 import { supabase } from '@/lib/supabase';
-import { getExerciseVisibility, hasParamValue, sessionMetaKey, visibleByDefault, type SessionVisibilityData } from '@/utils/parameterVisibility';
+import { getExerciseVisibility, sessionMetaKey, type SessionVisibilityData } from '@/utils/parameterVisibility';
 import { AthleteCalendarAssignment } from '@/types/athlete';
 import type { ToolboxEntry } from '@/types/toolbox';
 import { eventDateList, eventEndDate, isMultiDayEvent, type CalendarEvent } from '@/hooks/useCalendarEvents';
@@ -696,9 +696,7 @@ export async function syncAthleteSchedule(
       const ownNames = Object.keys(storedParams)
         .filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k));
       const calcNames = methodEntries.filter(te => te.isCalculated && te.formula).map(te => te.parameterName);
-      // The method's other toolbox parameters too — shown without a value when "show in grid by default"
-      const otherNames = methodEntries.filter(te => !te.isCalculated).map(te => te.parameterName);
-      const candidates = [...new Set([...ownNames, ...calcNames, ...otherNames])].filter(n => !isStructural(n));
+      const candidates = [...new Set([...ownNames, ...calcNames])].filter(n => !isStructural(n));
 
       // The coach's choices: this calendar's setting for the exercise (assignment-scoped key,
       // then the unscoped one from before scoping), else the choices copied from the program
@@ -723,9 +721,7 @@ export async function syncAthleteSchedule(
         return i === -1 ? Number.MAX_SAFE_INTEGER : i;
       };
       const visible = candidates
-        .filter(name => overrides[name] ?? (entryFor(name)?.isCalculated
-          ? (entryFor(name)?.showInGridByDefault ?? true)
-          : visibleByDefault(hasParamValue(storedParams, name), entryFor(name))))
+        .filter(name => overrides[name] ?? (entryFor(name)?.showInGridByDefault ?? true))
         .map((name, i) => ({ name, i }))
         .sort((a, b) => (order(a.name) - order(b.name)) || (a.i - b.i))
         .map(({ name }) => name);

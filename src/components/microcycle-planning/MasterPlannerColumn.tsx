@@ -23,7 +23,7 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import { useExerciseMetrics } from '@/hooks/useExerciseMetrics';
 import { evaluateFormula, parseNumeric } from '@/utils/formulaEvaluator';
 import { isParameterVisible, ParameterVisibilityPopover, type ParameterVisibilityOverrides } from './ParameterVisibilityPopover';
-import { hasParamValue, placementVisibility, readSessionMeta, updateExerciseVisibility, visibleByDefault, writeSessionMeta } from '@/utils/parameterVisibility';
+import { placementVisibility, readSessionMeta, updateExerciseVisibility, writeSessionMeta } from '@/utils/parameterVisibility';
 import { AthletePerformanceParameter } from '@/types/athlete';
 import {
   Table,
@@ -815,7 +815,7 @@ export function MasterPlannerColumn({
         options: (isQualitative && hasOptions) ? toolboxEntry.options : undefined,
         isSetParameter: toolboxEntry?.isSetParameter || /^sets?$/i.test(paramName) || /ground contacts/i.test(paramName),
         isFrequencyParameter: toolboxEntry?.isFrequencyParameter || false,
-        showInGridByDefault: visibleByDefault(hasParamValue(storedParams, paramName), toolboxEntry),
+        showInGridByDefault: toolboxEntry?.showInGridByDefault ?? true,
         unit,
       };
     });
@@ -832,8 +832,7 @@ export function MasterPlannerColumn({
         options: (isQualitative && hasOptions) ? entry.options : undefined,
         isSetParameter: false,
         isFrequencyParameter: !!entry.isFrequencyParameter || /^frequency/i.test(entry.parameterName),
-        // No value: shown when the toolbox says "show in grid by default"
-        showInGridByDefault: visibleByDefault(false, entry),
+        showInGridByDefault: false,
         unit: entry.parameterType === 'quantitative' && entry.options?.[0] ? entry.options[0] : undefined,
       });
     });

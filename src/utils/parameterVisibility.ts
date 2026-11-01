@@ -78,27 +78,23 @@ export function withExerciseVisibility<T extends PlacedExercise>(entries: T[], e
   return entries.map(e => ((e.id || e.exerciseId) === exerciseKey ? { ...e, parameterVisibility: overrides } : e));
 }
 
-/** The parameter has a (non-empty) value — for all sets or per set ("Reps_set2") */
-export function hasParamValue(params: Record<string, unknown> | undefined, name: string): boolean {
+/** The exercise has the parameter (Periodization Table / its own) — for all sets or per set ("Reps_set2") */
+export function hasParam(params: Record<string, unknown> | undefined, name: string): boolean {
   if (!params) return false;
-  const filled = (v: unknown) => v !== undefined && v !== null && String(v).trim() !== '';
-  if (filled(params[name])) return true;
+  if (name in params) return true;
   const perSet = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_set\\d+$`, 'i');
-  return Object.keys(params).some(k => perSet.test(k) && filled(params[k]));
+  return Object.keys(params).some(k => perSet.test(k));
 }
 
-/**
- * Whether a parameter is shown when the coach hasn't chosen: it has a value for this exercise
- * (Periodization Table or the exercise's own), or its Training Toolbox entry says "Show in parameter
- * grid by default" — then also without a value. The one rule for the exercise distribution step,
- * the Master Planner, the session sheet, print and the athlete app.
- */
+/** Whether a parameter is shown when the coach hasn't chosen — the same rule as the session sheet and
+ *  the Master Planner: a parameter the exercise has is shown when its Training Toolbox entry says
+ *  "show in grid by default" (unset = yes); parameters it doesn't have are hidden */
 export function visibleByDefault(hasValue: boolean, toolboxEntry?: { showInGridByDefault?: boolean }): boolean {
-  return hasValue || (!!toolboxEntry && toolboxEntry.showInGridByDefault !== false);
+  return hasValue && (toolboxEntry?.showInGridByDefault ?? true);
 }
 
 /** The parameters an exercise of this method can show (Training Toolbox), for the visibility picker;
- *  `hasValue`: whether the exercise has a value for a parameter (decides the default with the toolbox) */
+ *  `hasValue`: whether the exercise has the parameter (decides the default with the toolbox) */
 export function methodVisibilityParams(
   entries: Array<{ category: string; subCategory?: string; parameterName: string; showInGridByDefault?: boolean; isSetParameter?: boolean; isFrequencyParameter?: boolean }>,
   methodId: string,

@@ -38,7 +38,7 @@ import { cn } from '@/lib/utils';
 import { cleanupSupersetsOnExerciseDelete, toggleSuperset } from '@/utils/supersetUtils';
 import { getBorgBg, getBorgFg, getBorgLabelFull, getBorgStyleLight, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { CircuitBuilderDialog } from '@/components/templates/CircuitBuilderDialog';
-import { hasParamValue, methodVisibilityParams, notifySessionMetaChanged, placementVisibility, readSessionMeta, updateExerciseVisibility, withExerciseVisibility, writeSessionMeta } from '@/utils/parameterVisibility';
+import { hasParam, methodVisibilityParams, notifySessionMetaChanged, placementVisibility, readSessionMeta, updateExerciseVisibility, withExerciseVisibility, writeSessionMeta } from '@/utils/parameterVisibility';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { fitExercisesToMesocycleMethods, describeMethodFit } from '@/utils/exerciseMethodRemap';
 import { applyLibraryCircuit, findLibraryCircuit, isCircuitLibraryUpdateAvailable } from '@/utils/circuitLibrarySync';
@@ -1637,7 +1637,7 @@ export function EnhancedExerciseDistribution({
   const visibilityParamsFor = useCallback((exercise: ExerciseDistribution) => {
     if (exercise.isCircuit) return [];
     const planned = plannedParamsOf(exercise);
-    return methodVisibilityParams(toolboxForVisibility?.entries ?? [], exercise.methodId, name => hasParamValue(planned, name));
+    return methodVisibilityParams(toolboxForVisibility?.entries ?? [], exercise.methodId, name => hasParam(planned, name));
   }, [toolboxForVisibility, plannedParamsOf]);
   const visibilityOf = useCallback((exercise: ExerciseDistribution) =>
     placementVisibility(readSessionMeta(mesocycle.id, exercise.dayDate, exercise.sessionIndex), exercise),
