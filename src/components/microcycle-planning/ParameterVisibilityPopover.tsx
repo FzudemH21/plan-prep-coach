@@ -22,6 +22,8 @@ interface ParameterVisibilityPopoverProps {
   onResetToDefaults: () => void;
   /** Footer hint (defaults to the session sheet's "saved when you save the session") */
   note?: string;
+  /** Only the eye icon (no "2/3"), for tight rows like the exercise distribution cards */
+  compact?: boolean;
 }
 
 export function ParameterVisibilityPopover({
@@ -31,6 +33,7 @@ export function ParameterVisibilityPopover({
   onShowAll,
   onResetToDefaults,
   note = 'Visibility is saved when you save the session',
+  compact = false,
 }: ParameterVisibilityPopoverProps) {
   // Count how many parameters are currently visible
   const visibleCount = parameters.filter(p => {
@@ -44,6 +47,16 @@ export function ParameterVisibilityPopover({
   return (
     <Popover>
       <PopoverTrigger asChild>
+        {compact ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 text-muted-foreground"
+            title={`Parameter visibility (${visibleCount}/${parameters.length} shown)`}
+          >
+            {someHidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+          </Button>
+        ) : (
         <Button 
           variant="outline" 
           size="sm" 
@@ -58,6 +71,7 @@ export function ParameterVisibilityPopover({
             {visibleCount}/{parameters.length}
           </span>
         </Button>
+        )}
       </PopoverTrigger>
       <PopoverContent 
         className="w-64 p-3 z-[120] bg-popover" 

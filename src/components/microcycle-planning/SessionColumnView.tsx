@@ -446,6 +446,7 @@ export function SessionColumnView({
                       <ParameterVisibilityPopover
                         parameters={params}
                         note="Applies to this exercise and is copied with it"
+                        compact
                         visibilityOverrides={current}
                         onVisibilityChange={(name, visible) => onExerciseVisibilityChange!(exercise, { ...current, [name]: visible })}
                         onShowAll={() => onExerciseVisibilityChange!(exercise, { ...current, ...Object.fromEntries(params.map(p => [p.name, true])) })}
