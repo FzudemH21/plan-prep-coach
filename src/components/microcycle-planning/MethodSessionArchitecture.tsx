@@ -267,27 +267,31 @@ export function MethodSessionArchitecture({
     const [selectedMicroId, { days }] = selectedEntry;
     days.filter(d => d.microcycleId === selectedMicroId && migrateLegacyIntensity(d.intensity) !== '0').forEach(day => {
       const seen = new Set<string>();
-      for (let si = 0; si < 4; si++) {
+      for (let si = 0; si < (daySplitStates[day.date] ?? 1); si++) {
         (dayMethodAssignments[`${day.date}_${si}`] ?? []).forEach(m => seen.add(m));
       }
       seen.forEach(m => { counts[m] = (counts[m] ?? 0) + 1; });
     });
     return counts;
-  }, [selectedEntry, dayMethodAssignments]);
+  }, [selectedEntry, dayMethodAssignments, daySplitStates]);
 
-  const wholeMethodFrequency = useMemo(() => {
-    const counts: Record<string, number> = {};
-    if (!selectedEntry) return counts;
+  // Days with the method (any of its categories) — the count, and the day names for the tooltip
+  const wholeMethodDays = useMemo(() => {
+    const result: Record<string, string[]> = {};
+    if (!selectedEntry) return result;
     const [selectedMicroId, { days }] = selectedEntry;
     days.filter(d => d.microcycleId === selectedMicroId && migrateLegacyIntensity(d.intensity) !== '0').forEach(day => {
       const seen = new Set<string>();
-      for (let si = 0; si < 4; si++) {
+      for (let si = 0; si < (daySplitStates[day.date] ?? 1); si++) {
         (dayMethodAssignments[`${day.date}_${si}`] ?? []).forEach(m => seen.add(m.split('::')[0]));
       }
-      seen.forEach(m => { counts[m] = (counts[m] ?? 0) + 1; });
+      seen.forEach(m => { (result[m] ??= []).push(format(new Date(`${day.date}T12:00:00`), 'EEE')); });
     });
-    return counts;
-  }, [selectedEntry, dayMethodAssignments]);
+    return result;
+  }, [selectedEntry, dayMethodAssignments, daySplitStates]);
+  const wholeMethodFrequency = useMemo(() => Object.fromEntries(
+    Object.entries(wholeMethodDays).map(([m, dayNames]) => [m, dayNames.length])
+  ) as Record<string, number>, [wholeMethodDays]);
 
   // ── derived: periodization target frequency per draggable key ────────────────
   const methodTargetFrequency = useMemo(() => {
@@ -479,10 +483,18 @@ export function MethodSessionArchitecture({
       const targetDays = trainingDays.filter(d => d.microcycleId === targetMicrocycleId);
       const skipped = new Set<string>();
       const dayPairs: Array<{ sourceDate: string; targetDate: string }> = [];
-      const placed: Record<string, number> = {};
+      // Frequency = training DAYS with the method (as the indicator counts). A category without a
+      // frequency of its own shares the method's: before, each category got the whole method's
+      // frequency and sessions were counted, so a copy could place the method on more days than
+      // planned (e.g. Vertical Push on 2 days and Horizontal Pull on 2 others for a frequency of 2).
+      const placedDays: Record<string, Set<string>> = {};
       const caps: Record<string, number> = {};
+      const capKeyOf = (method: string) =>
+        method.includes('::') && hasCategoryFrequency && !hasCategoryFrequency(method, targetMicrocycleId)
+          ? method.split('::')[0]
+          : method;
 
-      const isAllowed = (method: string): boolean => {
+      const isAllowed = (method: string, targetDate: string): boolean => {
         if (!methodAllocations[method.split('::')[0]]?.includes(targetMesocycleId)) {
           skipped.add(method);
           return false;
@@ -492,9 +504,13 @@ export function MethodSessionArchitecture({
           return false;
         }
         if (getMethodFrequencyTarget) {
-          if (!(method in caps)) caps[method] = getMethodFrequencyTarget(method, targetMicrocycleId);
-          if (caps[method] === 0) return false;                // not assigned in target microcycle
-          if ((placed[method] ?? 0) >= caps[method]) return false; // frequency cap reached
+          const capKey = capKeyOf(method);
+          if (!(capKey in caps)) caps[capKey] = getMethodFrequencyTarget(capKey, targetMicrocycleId);
+          if (caps[capKey] === 0) return false;                  // not assigned in target microcycle
+          const days = placedDays[capKey] ?? (placedDays[capKey] = new Set());
+          if (days.has(targetDate)) return true;                  // the day already counts
+          if (days.size >= caps[capKey]) return false;            // frequency reached
+          days.add(targetDate);
         }
         return true;
       };
@@ -512,8 +528,7 @@ export function MethodSessionArchitecture({
 
         for (let si = 0; si < sourceSessionCount; si++) {
           const targetKey = `${targetDate}_${si}`;
-          const filteredMethods = (dayMethodAssignments[`${sourceDate}_${si}`] ?? []).filter(isAllowed);
-          filteredMethods.forEach(method => { placed[method] = (placed[method] ?? 0) + 1; });
+          const filteredMethods = (dayMethodAssignments[`${sourceDate}_${si}`] ?? []).filter(method => isAllowed(method, targetDate));
 
           if (filteredMethods.length > 0) {
             assignments[targetKey] = filteredMethods;
@@ -533,7 +548,7 @@ export function MethodSessionArchitecture({
       }
       return { skipped, dayPairs };
     },
-    [trainingDays, dayMethodAssignments, daySplitStates, getMethodFrequencyTarget, isMethodCharacterizedInMesocycle, methodAllocations]
+    [trainingDays, dayMethodAssignments, daySplitStates, getMethodFrequencyTarget, isMethodCharacterizedInMesocycle, methodAllocations, hasCategoryFrequency]
   );
 
   const describeCopyResult = (base: string, skipped: Set<string>, targetName: string) =>
@@ -944,7 +959,7 @@ export function MethodSessionArchitecture({
                                           )}
                                           title={splitTargets
                                             ? `${placedSum} of ${targetSum} sessions placed across ${keys.length} categories`
-                                            : `${placedSum} of ${targetSum} sessions with this method (any category)`}
+                                            : `On ${placedSum} of ${targetSum} planned days${placedSum > 0 ? ` (${(wholeMethodDays[methodId] ?? []).join(', ')})` : ''} — any of its categories counts once per day`}
                                         >
                                           {placedSum}/{targetSum}
                                         </span>
