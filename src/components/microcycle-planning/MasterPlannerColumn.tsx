@@ -457,11 +457,6 @@ const EditableComment = memo(({
           placeholder={placeholder}
           className="text-xs min-h-[40px] resize-none"
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              handleSave();
-              setIsExpanded(false);
-            }
             if (e.key === 'Escape') {
               setLocalComment(comment);
               setIsExpanded(false);

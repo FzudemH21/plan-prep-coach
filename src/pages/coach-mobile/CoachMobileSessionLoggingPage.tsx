@@ -1133,7 +1133,7 @@ export default function CoachMobileSessionLoggingPage() {
             <ScrollArea className="flex-1">
               <div className="px-4 py-4 space-y-3">
                 {session.notes && (
-                  <p className="text-sm text-muted-foreground leading-relaxed pb-1">{session.notes}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed pb-1 whitespace-pre-line">{session.notes}</p>
                 )}
                 {sections.map(sec => {
                   const isOpen = expandedSections.has(sec.id);
@@ -1352,7 +1352,7 @@ export default function CoachMobileSessionLoggingPage() {
             </p>
           )}
           {introSection?.notes && (
-            <p className="text-sm text-muted-foreground text-center leading-relaxed max-w-xs">{introSection.notes}</p>
+            <p className="text-sm text-muted-foreground text-center leading-relaxed max-w-xs whitespace-pre-line">{introSection.notes}</p>
           )}
         </div>
         <div className="px-6 py-6 shrink-0">

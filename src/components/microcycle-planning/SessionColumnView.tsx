@@ -467,12 +467,6 @@ export function SessionColumnView({
                       onChange={(e) => onExerciseNotesChange?.(exercise.id, e.target.value)}
                       placeholder="Add exercise notes..."
                       className="text-xs min-h-[60px] resize-none"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          setExpandedNoteId(null);
-                        }
-                      }}
                     />
                   </div>
                 )}
@@ -718,12 +712,6 @@ export function SessionColumnView({
             <Textarea
               value={sessionComments || ''}
               onChange={(e) => onSessionCommentsChange(day.date, sessionIndex, e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  e.currentTarget.blur();
-                }
-              }}
               placeholder="Add notes or guidelines for this session..."
               className="min-h-[60px] text-xs resize-none"
             />
@@ -923,12 +911,6 @@ export function SessionColumnView({
                             <Textarea
                               value={section.comments || ''}
                               onChange={(e) => onSectionCommentsChange(section.id, e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                  e.preventDefault();
-                                  e.currentTarget.blur();
-                                }
-                              }}
                               placeholder="Add notes for this section..."
                               className="min-h-[50px] text-xs resize-none"
                             />

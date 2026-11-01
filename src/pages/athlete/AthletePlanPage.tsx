@@ -242,7 +242,7 @@ function DaySection({
             ) : null;
           })()}
           {ev.notes && (
-            <p className="text-muted-foreground mt-0.5 leading-relaxed">{ev.notes}</p>
+            <p className="text-muted-foreground mt-0.5 leading-relaxed whitespace-pre-line">{ev.notes}</p>
           )}
         </div>
       </div>

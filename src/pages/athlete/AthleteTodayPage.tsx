@@ -190,7 +190,7 @@ function TestCard({
             </p>
           )}
           {ev.notes && (
-            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{ev.notes}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed whitespace-pre-line">{ev.notes}</p>
           )}
         </div>
       </div>
@@ -243,7 +243,7 @@ function EventCard({ ev }: { ev: AthleteCalendarEvent }) {
           <p className="font-medium text-sm text-blue-900">{ev.title}</p>
           {eventRangeLabel(ev) && <p className="text-xs text-blue-700 mt-0.5">{eventRangeLabel(ev)}</p>}
           {ev.notes && (
-            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{ev.notes}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed whitespace-pre-line">{ev.notes}</p>
           )}
         </div>
       </CardContent>

@@ -1353,7 +1353,7 @@ export default function AthleteSessionPage() {
 
                 {/* Session notes */}
                 {session.notes && (
-                  <p className="text-sm text-muted-foreground leading-relaxed pb-1">
+                  <p className="text-sm text-muted-foreground leading-relaxed pb-1 whitespace-pre-line">
                     {session.notes}
                   </p>
                 )}
@@ -1640,7 +1640,7 @@ export default function AthleteSessionPage() {
             </p>
           )}
           {introSection?.notes && (
-            <p className="text-sm text-muted-foreground text-center leading-relaxed max-w-xs">
+            <p className="text-sm text-muted-foreground text-center leading-relaxed max-w-xs whitespace-pre-line">
               {introSection.notes}
             </p>
           )}
@@ -1955,7 +1955,7 @@ export default function AthleteSessionPage() {
                             Perform on each side
                           </span>
                         )}
-                        {ex.notes && <p className="text-xs text-muted-foreground mt-0.5">{ex.notes}</p>}
+                        {ex.notes && <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-line">{ex.notes}</p>}
                         {/* Adjust button — only for exercises with a library ID and no active swap */}
                         {!ex.isCircuit && ex.exerciseLibraryId && !swappedExercises[ex.id] && (
                           <button

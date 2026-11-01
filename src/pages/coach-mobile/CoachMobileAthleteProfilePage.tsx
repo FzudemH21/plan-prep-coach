@@ -1161,7 +1161,7 @@ export default function CoachMobileAthleteProfilePage() {
                           );
                         })}
                         {todayCheckin.notes && (
-                          <p className="text-xs text-muted-foreground italic border-t pt-2">"{todayCheckin.notes}"</p>
+                          <p className="text-xs text-muted-foreground italic border-t pt-2 whitespace-pre-line">"{todayCheckin.notes}"</p>
                         )}
                         <div className="border-t pt-3 space-y-2">
                           <div className="flex items-center justify-between">

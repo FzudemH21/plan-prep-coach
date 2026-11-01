@@ -341,10 +341,6 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
             onChange={(e) => setEditingCell({ ...editingCell, value: e.target.value })}
             onBlur={() => handleCellEdit(exercise.id, column.id, editingCell.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleCellEdit(exercise.id, column.id, editingCell.value);
-              }
               if (e.key === 'Escape') {
                 setEditingCell(null);
               }

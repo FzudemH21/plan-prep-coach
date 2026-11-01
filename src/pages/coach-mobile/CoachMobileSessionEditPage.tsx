@@ -1736,7 +1736,7 @@ export default function CoachMobileSessionEditPage() {
                   />
                 )}
 
-                {session.notes && <p className="text-sm text-muted-foreground leading-relaxed pb-1">{session.notes}</p>}
+                {session.notes && <p className="text-sm text-muted-foreground leading-relaxed pb-1 whitespace-pre-line">{session.notes}</p>}
 
                 {/* Section cards */}
                 {sections.map(sec => {
@@ -1787,7 +1787,7 @@ export default function CoachMobileSessionEditPage() {
                                 </div>
                                 {/* Exercise notes in view mode */}
                                 {ex.notes && (
-                                  <p className="text-xs text-muted-foreground mt-1 ml-7 leading-snug">{ex.notes}</p>
+                                  <p className="text-xs text-muted-foreground mt-1 ml-7 leading-snug whitespace-pre-line">{ex.notes}</p>
                                 )}
                               </div>
                               {/* Logged session: what was done (coloured status) + the logged sets on tap */}
