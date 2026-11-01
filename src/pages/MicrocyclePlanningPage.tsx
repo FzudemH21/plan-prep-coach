@@ -1888,6 +1888,13 @@ export default function MicrocyclePlanningPage() {
   const handleDayIntensityChange = (dayDate: string, intensity: IntensityLevel) => {
     if (!currentMesocycle) return;
     const mesocycleId = currentMesocycle.id;
+
+    // A rest day given a training intensity gets its session slot back right away (before, it kept
+    // 0 sessions in method distribution until the page was reloaded)
+    const dayBefore = trainingDays.find(d => d.date === dayDate);
+    if (migrateLegacyIntensity(dayBefore?.intensity) === '0' && migrateLegacyIntensity(intensity) !== '0') {
+      setDaySplitStates(prev => ({ ...prev, [dayDate]: Math.max(prev[dayDate] ?? 0, 1) }));
+    }
     
     // Update day intensity in trainingDays (syncs with calendar view)
     setTrainingDays(prev => 
