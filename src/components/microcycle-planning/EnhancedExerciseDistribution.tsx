@@ -1717,6 +1717,36 @@ export function EnhancedExerciseDistribution({
     }
   }, [supersets, onSupersetsChange, toast]);
 
+  // Session intensity and session note of each session go with a copy. A target session the source
+  // has no value for loses its old one, so the copy mirrors the source. Returns the copied notes
+  // (internal key → note) for the notes shown here.
+  const copySessionMeta = (
+    sourceMesoId: string, sourceDay: TrainingDay, targetMesoId: string, targetDay: TrainingDay,
+  ): Record<string, string> => {
+    const countOf = (day: TrainingDay) => Math.max(day.sessions ?? 0, day.sessionNames?.length ?? 0, 1);
+    const notes: Record<string, string> = {};
+    for (let i = 0; i < Math.max(countOf(sourceDay), countOf(targetDay)); i++) {
+      const intensity = localStorage.getItem(`sessionIntensity_${sourceMesoId}_${sourceDay.date}_${i}`);
+      const intensityKey = `sessionIntensity_${targetMesoId}_${targetDay.date}_${i}`;
+      if (intensity) localStorage.setItem(intensityKey, intensity);
+      else localStorage.removeItem(intensityKey);
+
+      let note = '';
+      try {
+        note = (JSON.parse(localStorage.getItem(`workoutSessions_${sourceMesoId}_${sourceDay.date}_${i}`) ?? '{}') as { comments?: string }).comments ?? '';
+      } catch { /* ignore */ }
+      const noteKey = `workoutSessions_${targetMesoId}_${targetDay.date}_${i}`;
+      let target: Record<string, unknown> = {};
+      try { target = JSON.parse(localStorage.getItem(noteKey) ?? '{}') as Record<string, unknown>; } catch { /* ignore */ }
+      if (note) target.comments = note;
+      else delete target.comments;
+      if (Object.keys(target).length > 0) localStorage.setItem(noteKey, JSON.stringify(target));
+      else localStorage.removeItem(noteKey);
+      notes[`sessionComments_${targetMesoId}_${targetDay.date}_${i}`] = note;
+    }
+    return notes;
+  };
+
   const handleCopyFromPreviousMicrocycle = (targetMicrocycleId: string) => {
     setCopyingMicrocycleId(targetMicrocycleId);
     
@@ -1917,6 +1947,7 @@ export function EnhancedExerciseDistribution({
       });
       
       // Copy day intensities and session structure
+      const copiedNotes: Record<string, string> = {};
       sourceDays.forEach((sourceDay, dayIndex) => {
         if (dayIndex >= minDays) return;
         const targetDate = dayMapping[dayIndex];
@@ -1934,18 +1965,11 @@ export function EnhancedExerciseDistribution({
           });
         }
         
-        // Copy session intensities from localStorage
-        const sessionsCount = sourceDay.sessions || 1;
-        for (let i = 0; i < sessionsCount; i++) {
-          const sourceKey = `sessionIntensity_${sourceMesocycle!.id}_${sourceDay.date}_${i}`;
-          const sourceIntensity = localStorage.getItem(sourceKey);
-          
-          if (sourceIntensity) {
-            const targetKey = `sessionIntensity_${targetMesocycle!.id}_${targetDate}_${i}`;
-            localStorage.setItem(targetKey, sourceIntensity);
-          }
-        }
+        // Session intensities and session notes
+        Object.assign(copiedNotes, copySessionMeta(sourceMesocycle!.id, sourceDay, targetMesocycle!.id, targetDays[dayIndex]));
       });
+      setSessionCommentsMap(prev => ({ ...prev, ...copiedNotes }));
+      notifySessionMetaChanged();
       
       // Remove existing exercises and sections for target days
       // (supersets were already cleared before copying above)
@@ -2166,8 +2190,17 @@ export function EnhancedExerciseDistribution({
             });
           }
         });
+
+        // STEP 4: Session intensities and session notes
+        const copiedNotes: Record<string, string> = {};
+        sourceDays.forEach((sourceDay, dayIndex) => {
+          if (dayIndex >= minDays) return;
+          Object.assign(copiedNotes, copySessionMeta(sourceMesocycle.id, sourceDay, mesocycle.id, targetDays[dayIndex]));
+        });
+        setSessionCommentsMap(prev => ({ ...prev, ...copiedNotes }));
       });
-      
+      notifySessionMetaChanged();
+
       // Clear target mesocycle's existing exercises and sections
       // (supersets were already cleared before copying above)
       const filteredExercises = exerciseDistribution.filter(
@@ -2228,6 +2261,7 @@ export function EnhancedExerciseDistribution({
       for (let i = 0; i < sessionsCount; i++) {
         const key = `sessionComments_${mesocycle.id}_${day.date}_${i}`;
         localStorage.removeItem(key);
+        localStorage.removeItem(`workoutSessions_${mesocycle.id}_${day.date}_${i}`);
         
         // Also remove from state
         setSessionCommentsMap(prev => {
@@ -2293,6 +2327,7 @@ export function EnhancedExerciseDistribution({
       for (let i = 0; i < sessionsCount; i++) {
         const key = `sessionComments_${mesocycleId}_${day.date}_${i}`;
         localStorage.removeItem(key);
+        localStorage.removeItem(`workoutSessions_${mesocycleId}_${day.date}_${i}`);
         
         // Also remove from state
         setSessionCommentsMap(prev => {

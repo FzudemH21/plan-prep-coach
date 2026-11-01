@@ -130,6 +130,7 @@ These features extend the existing Athlete Profile page in the coach web app.
 
 | Feature | Notes |
 |---|---|
+| Copying microcycles/mesocycles carries session notes | ✅ Done — in exercise distribution, "copy from previous microcycle" and "copy previous mesocycle" now copy each session's note and session intensity; a target session the source has none for loses its old one (the copy mirrors the source). Clearing a microcycle/mesocycle now really removes the session notes (before, only the shown copy was cleared and the stored notes came back) |
 | Superset label right after the method tag | ✅ Done — on exercise cards in exercise distribution the superset/circuit label (A1, C2 …) always sits on the same line right after the method tag; a long method name is shortened ("…", full name on hover) instead of pushing the label to the next line |
 | Section notes stay visible while renaming a section | ✅ Done — renaming a section in exercise distribution no longer hides the section notes fields (of all sections) until the name is confirmed |
 | Paste section keeps supersets | ✅ Done — pasting a copied section (exercise distribution) brings its supersets along, linking the pasted exercises (numbered superset-1, -2 … in the new section); before, the exercises were pasted without their superset links |
