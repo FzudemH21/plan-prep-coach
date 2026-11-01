@@ -7,6 +7,9 @@ const Popover = PopoverPrimitive.Root
 
 const PopoverTrigger = PopoverPrimitive.Trigger
 
+/** Positions the popover at an element without making it the trigger (e.g. opened from a menu) */
+const PopoverAnchor = PopoverPrimitive.Anchor
+
 /**
  * A popover opened from inside a Dialog renders in a portal outside the dialog, and the
  * dialog's scroll lock (react-remove-scroll) then swallows wheel events over it — lists in
@@ -69,4 +72,4 @@ const PopoverContent = React.forwardRef<
 })
 PopoverContent.displayName = PopoverPrimitive.Content.displayName
 
-export { Popover, PopoverTrigger, PopoverContent }
+export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor }

@@ -1,5 +1,5 @@
-import { ParameterVisibilityPopover } from './ParameterVisibilityPopover';
-import React, { useState, useMemo } from 'react';
+import { ParameterVisibilityPanel, visibleParameterCount } from './ParameterVisibilityPopover';
+import React, { useState, useMemo, useRef } from 'react';
 import { BorgLevel, BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabel, getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { CardContent, CardHeader } from '@/components/ui/card';
@@ -7,11 +7,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -25,7 +27,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useTranslation } from 'react-i18next';
-import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp, ChevronDown, ChevronRight, MessageSquare, Copy, ArrowUp, ArrowDown, StickyNote, Recycle, BookmarkPlus } from 'lucide-react';
+import { GripVertical, MoreVertical, Trash2, Plus, Link2, Edit2, Pencil, Check, X, ChevronUp, ChevronDown, ChevronRight, MessageSquare, Copy, ArrowUp, ArrowDown, StickyNote, Recycle, BookmarkPlus, Eye, EyeOff } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { TrainingDay } from '@/types/daily-intensity';
 import { IntensityLevel } from '@/types/training';
@@ -161,6 +163,11 @@ export function SessionColumnView({
   const [editingSessionNameValue, setEditingSessionNameValue] = useState('');
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
+  // The exercise whose parameter visibility checklist is open (opened from its ⋮ menu)
+  const [visibilityOpenId, setVisibilityOpenId] = useState<string | null>(null);
+  // Set while the menu closes to open the checklist: the menu must not hand focus back to its button
+  // (the checklist would take that as a click outside and close again)
+  const openingVisibility = useRef(false);
   const [deleteSessionDialogOpen, setDeleteSessionDialogOpen] = useState(false);
   const [collapsedSections, setCollapsedSections] = usePersistentFlags('fold:micro:sections');
 
@@ -371,7 +378,7 @@ export function SessionColumnView({
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate" title={exercise.exerciseName}>{exercise.exerciseName}</div>
+                    <div className="font-medium line-clamp-2 break-words" title={exercise.exerciseName}>{exercise.exerciseName}</div>
                     {/* Method tag — its periodization values are the ones this exercise uses.
                         Exercises that belong to several methods can be switched here. The superset
                         label sits right after it on the same line (the tag shortens if needed). */}
@@ -434,42 +441,14 @@ export function SessionColumnView({
                         {getSupersetLabel(exercise.id)}
                       </Badge>
                     )}
+                    {/* Each side (set in the ⋮ menu) */}
+                    {exercise.eachSide && (
+                      <span className="mt-0.5 shrink-0 rounded bg-primary/10 px-1 text-[10px] font-semibold text-primary" title="Each side — reps per side">
+                        L/R
+                      </span>
+                    )}
                     </div>
                   </div>
-
-                  {/* Which parameters this exercise shows (copied when the exercise is copied) */}
-                  {(() => {
-                    const params = onExerciseVisibilityChange && visibilityParamsFor ? visibilityParamsFor(exercise) : [];
-                    if (params.length === 0) return null;
-                    const current = visibilityOf?.(exercise) ?? {};
-                    return (
-                      <ParameterVisibilityPopover
-                        parameters={params}
-                        note="Applies to this exercise and is copied with it"
-                        compact
-                        visibilityOverrides={current}
-                        onVisibilityChange={(name, visible) => onExerciseVisibilityChange!(exercise, { ...current, [name]: visible })}
-                        onShowAll={() => onExerciseVisibilityChange!(exercise, { ...current, ...Object.fromEntries(params.map(p => [p.name, true])) })}
-                        onResetToDefaults={() => onExerciseVisibilityChange!(exercise, {})}
-                      />
-                    );
-                  })()}
-
-                  {/* Each side (unilateral) toggle */}
-                  {onExerciseEachSideChange && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className={cn(
-                        "h-6 px-1 text-[10px] font-semibold",
-                        exercise.eachSide ? "text-primary bg-primary/10" : "text-muted-foreground"
-                      )}
-                      onClick={() => onExerciseEachSideChange(exercise.id, !exercise.eachSide)}
-                      title={exercise.eachSide ? "Each side — click to turn off" : "Mark as each side (reps per side)"}
-                    >
-                      L/R
-                    </Button>
-                  )}
 
                   {/* Notes button */}
                   <Button
@@ -482,26 +461,72 @@ export function SessionColumnView({
                     <StickyNote className={cn("h-3 w-3", exercise.notes ? "text-primary" : "text-muted-foreground")} />
                   </Button>
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <MoreVertical className="h-3 w-3" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => onDeleteExercise(exercise.id)}
-                        className="text-destructive"
-                      >
-                        <Trash2 className="mr-2 h-3 w-3" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  {/* ⋮ — each side, parameter visibility (copied with the exercise), delete. The
+                      visibility checklist opens as a popover at the menu button. */}
+                  {(() => {
+                    const params = onExerciseVisibilityChange && visibilityParamsFor ? visibilityParamsFor(exercise) : [];
+                    const current = visibilityOf?.(exercise) ?? {};
+                    const shown = visibleParameterCount(params, current);
+                    return (
+                      <Popover open={visibilityOpenId === exercise.id} onOpenChange={open => { if (!open) setVisibilityOpenId(null); }}>
+                        {/* Not modal: a modal menu keeps focus while it closes and would close the checklist again */}
+                        <DropdownMenu modal={false}>
+                          <PopoverAnchor asChild>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0" title="More">
+                                <MoreVertical className="h-3 w-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                          </PopoverAnchor>
+                          <DropdownMenuContent align="end" onCloseAutoFocus={e => { if (openingVisibility.current) { e.preventDefault(); openingVisibility.current = false; } }}>
+                            {onExerciseEachSideChange && (
+                              <DropdownMenuCheckboxItem
+                                checked={!!exercise.eachSide}
+                                onCheckedChange={v => onExerciseEachSideChange(exercise.id, !!v)}
+                              >
+                                Each side (L/R)
+                              </DropdownMenuCheckboxItem>
+                            )}
+                            {params.length > 0 && (
+                              <DropdownMenuItem onSelect={() => {
+                                openingVisibility.current = true;
+                                setTimeout(() => setVisibilityOpenId(exercise.id), 0);
+                              }}>
+                                {shown < params.length ? <EyeOff className="mr-2 h-3 w-3" /> : <Eye className="mr-2 h-3 w-3" />}
+                                Parameter visibility ({shown}/{params.length})
+                              </DropdownMenuItem>
+                            )}
+                            {(onExerciseEachSideChange || params.length > 0) && <DropdownMenuSeparator />}
+                            <DropdownMenuItem
+                              onClick={() => onDeleteExercise(exercise.id)}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="mr-2 h-3 w-3" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        {params.length > 0 && (
+                          <PopoverContent
+                            className="w-64 p-3 z-[120] bg-popover"
+                            align="end"
+                            onClick={e => e.stopPropagation()}
+                            // The closing menu moves focus away — only a click outside or Escape closes it
+                            onFocusOutside={e => e.preventDefault()}
+                          >
+                            <ParameterVisibilityPanel
+                              parameters={params}
+                              note="Applies to this exercise and is copied with it"
+                              visibilityOverrides={current}
+                              onVisibilityChange={(name, visible) => onExerciseVisibilityChange!(exercise, { ...current, [name]: visible })}
+                              onShowAll={() => onExerciseVisibilityChange!(exercise, { ...current, ...Object.fromEntries(params.map(p => [p.name, true])) })}
+                              onResetToDefaults={() => onExerciseVisibilityChange!(exercise, {})}
+                            />
+                          </PopoverContent>
+                        )}
+                      </Popover>
+                    );
+                  })()}
                 </div>
 
                 {/* Expandable notes textarea */}
