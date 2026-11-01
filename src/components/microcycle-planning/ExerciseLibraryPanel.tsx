@@ -128,7 +128,12 @@ export function ExerciseLibraryPanel({
       grouped[topCategory].push({ methodId, subCategory, categories });
     });
 
-    return grouped;
+    // Alphabetical by main method, then by method (same order as method distribution)
+    const sorted: typeof grouped = {};
+    Object.keys(grouped).sort((a, b) => a.localeCompare(b)).forEach(top => {
+      sorted[top] = grouped[top].sort((a, b) => a.subCategory.localeCompare(b.subCategory));
+    });
+    return sorted;
   }, [filteredExercises]);
 
   // Top categories start open; methods (and their exercise lists) start collapsed for a better
