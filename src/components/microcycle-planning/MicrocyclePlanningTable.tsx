@@ -388,15 +388,7 @@ export const MicrocyclePlanningTable = forwardRef<MicrocyclePlanningTableHandle,
     return sortedCategories;
   }, [toolboxData, selectedMethods, methodOrder]);
 
-  // Categories start expanded. Only categories that newly appear get expanded — the method list is
-  // recomputed on every store refresh (auto-save), which must not reopen what the coach collapsed.
-  const seenCategoriesRef = React.useRef<Set<string>>(new Set());
-  React.useEffect(() => {
-    const added = hierarchicalMethods.map(cat => cat.categoryName).filter(name => !seenCategoriesRef.current.has(name));
-    if (added.length === 0) return;
-    added.forEach(name => seenCategoriesRef.current.add(name));
-    setExpandedCategories(prev => new Set([...prev, ...added]));
-  }, [hierarchicalMethods]);
+  // Categories start collapsed for a better overview; the coach opens the ones to work on.
 
   const toggleCategoryExpansion = (categoryName: string) => {
     setExpandedCategories(prev => {

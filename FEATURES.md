@@ -130,6 +130,7 @@ These features extend the existing Athlete Profile page in the coach web app.
 
 | Feature | Notes |
 |---|---|
+| Exercise selection: categories start collapsed | ✅ Done — in Mesocycle step 5 the method categories (Agility, Sprinting, …) start collapsed for a better overview; the coach opens the ones to work on, and they stay as set |
 | Exercise distribution panel sorted alphabetically | ✅ Done — the Methods & Exercises panel lists main methods alphabetically, then their methods (e.g. Lower Body Resistance Training › Accessories, Hypertrophy, Strength) — same order as method distribution; exercise categories keep their toolbox order |
 | Line breaks in notes and descriptions | ✅ Done — Enter makes a new line in session, section and exercise notes (exercise distribution), training-calendar comments and library description cells (before, Enter closed the field; only Shift+Enter made a line break). Saved as before when clicking outside. Chats keep Enter = send. Line breaks are shown in the athlete app (session/section/exercise notes, event notes) and the coach mobile views |
 | Circuit builder: stacked dialogs dim the circuit dialog | ✅ Done — "Choose a Library" (Save & Add to Library) and the name-conflict dialog now have their own backdrop above the circuit dialog, so the circuit dialog behind them is darkened (before, their backdrop sat below it) |
