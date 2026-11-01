@@ -142,7 +142,7 @@ export function AthleteProfileView({
   }, [navRequest?.key]);
 
   // Chat
-  const { connections, loading: connectionsLoading } = useAthleteConnections();
+  const { connections, loading: connectionsLoading, refresh: refreshConnections } = useAthleteConnections();
   const { user: authUser } = useAuth();
   const athleteConnectionName = [athlete.firstName, athlete.lastName].filter(Boolean).join(' ');
   const athleteConnection = connections.find((c) => c.athleteLocalId === athlete.id)
@@ -784,7 +784,7 @@ export function AthleteProfileView({
         </TabsContent>
 
         <TabsContent value="monitoring" forceMount className="flex-1 mt-0 min-h-0 data-[state=inactive]:hidden">
-          <AthleteMonitoringTab athlete={athlete} connectionsLoading={connectionsLoading} connection={athleteConnection} />
+          <AthleteMonitoringTab athlete={athlete} connectionsLoading={connectionsLoading} connection={athleteConnection} onSetupChanged={refreshConnections} />
         </TabsContent>
 
         <TabsContent value="performance" forceMount className="flex-1 mt-0 min-h-0 flex flex-col data-[state=inactive]:hidden">

@@ -95,9 +95,10 @@ export function useAthleteConnections() {
   const [connections, setConnections] = useState<AthleteConnection[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  // `silent`: refresh without the loading state (the page stays as it is meanwhile)
+  const load = useCallback(async (silent = false) => {
     if (!user) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     const { data, error } = await supabase
       .from('athlete_connections')
       .select('*')
@@ -110,6 +111,7 @@ export function useAthleteConnections() {
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
+  const refresh = useCallback(() => load(true), [load]);
 
   /** Create a connection for an athlete and return the new row (with invite code). */
   const createConnection = useCallback(async (
@@ -272,5 +274,6 @@ export function useAthleteConnections() {
     updateMetricsSnapshot,
     getConnectionForAthlete,
     reload: load,
+    refresh,
   };
 }

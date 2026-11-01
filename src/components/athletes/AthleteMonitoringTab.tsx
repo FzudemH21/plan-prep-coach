@@ -8,7 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, AlertTriangle, Smile, Activity, CalendarDays, CalendarIcon, X, MessageSquare, CheckCircle, Download } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, AlertTriangle, Smile, Activity, CalendarDays, CalendarIcon, X, MessageSquare, CheckCircle, Download, Settings2 } from 'lucide-react';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { MonitoringSetup } from '@/components/athletes/MonitoringSetup';
 import { exportMonitoringXLSX, type CustomBlockExport } from '@/utils/xlsxExport';
 import {
   LineChart, Line, ResponsiveContainer, XAxis, YAxis,
@@ -734,10 +736,35 @@ function CustomMetricCard({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-interface Props { athlete: Athlete; connectionsLoading?: boolean; connection?: AthleteConnection }
+interface Props {
+  athlete: Athlete;
+  connectionsLoading?: boolean;
+  connection?: AthleteConnection;
+  /** The check-in setup saved a change — the connection (on / off, questions) is loaded again */
+  onSetupChanged?: () => void;
+}
 
-export function AthleteMonitoringTab({ athlete, connectionsLoading = false, connection }: Props) {
+export function AthleteMonitoringTab({ athlete, connectionsLoading = false, connection, onSetupChanged }: Props) {
   const athleteId  = connection?.id ?? null;
+  // "Check-in setup": on / off, questions, templates — a side panel over the data
+  const [setupOpen, setSetupOpen] = useState(false);
+  const setupPanel = (
+    <Sheet open={setupOpen} onOpenChange={setSetupOpen}>
+      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto" overlayClassName="bg-black/20">
+        <SheetHeader className="mb-4">
+          <SheetTitle>Check-in setup</SheetTitle>
+          <SheetDescription>What {athlete.firstName} is asked in the daily check-in. Drag to reorder.</SheetDescription>
+        </SheetHeader>
+        <MonitoringSetup athlete={athlete} onChanged={onSetupChanged} />
+      </SheetContent>
+    </Sheet>
+  );
+  const setupButton = (
+    <Button variant="outline" size="sm" onClick={() => setSetupOpen(true)} className="gap-1.5 text-xs h-8">
+      <Settings2 className="h-3.5 w-3.5" />
+      Check-in setup
+    </Button>
+  );
 
   const { checkins, loading } = useAthleteCheckins(athleteId);
   const [wellnessExpanded, setWellnessExpanded] = useState(false);
@@ -900,14 +927,19 @@ export function AthleteMonitoringTab({ athlete, connectionsLoading = false, conn
 
   // ── Not enabled ──
   if (!connection.monitoringEnabled) {
+    // The panel sits first in every view, so it stays open when the check-in is turned on
     return (
+      <>
+      {setupPanel}
       <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground py-20">
         <Activity className="h-10 w-10 opacity-30" />
-        <p className="text-sm font-medium">Daily monitoring is disabled</p>
-        <p className="text-xs opacity-70 text-center max-w-xs">
-          Enable it in Settings → Daily Monitoring.
-        </p>
+        <p className="text-sm font-medium">Daily check-in is off</p>
+        <Button size="sm" onClick={() => setSetupOpen(true)} className="gap-1.5">
+          <Settings2 className="h-3.5 w-3.5" />
+          Turn on daily check-in
+        </Button>
       </div>
+      </>
     );
   }
 
@@ -926,22 +958,29 @@ export function AthleteMonitoringTab({ athlete, connectionsLoading = false, conn
   // ── No data yet ──
   if (!selected) {
     return (
+      <>
+      {setupPanel}
       <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground py-20">
         <Smile className="h-10 w-10 opacity-30" />
         <p className="text-sm font-medium">No check-ins yet</p>
         <p className="text-xs opacity-70 text-center max-w-xs">
           {athlete.firstName} hasn't completed a daily check-in yet.
         </p>
+        {setupButton}
       </div>
+      </>
     );
   }
 
   return (
+    <>
+    {setupPanel}
     <ScrollArea className="h-full">
       <div className="p-4 space-y-4">
 
-        {/* ── Export button ── */}
-        <div className="flex justify-end">
+        {/* ── Check-in setup + export ── */}
+        <div className="flex justify-end gap-2">
+          {setupButton}
           <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting} className="gap-1.5 text-xs h-8">
             <Download className="h-3.5 w-3.5" />
             {exporting ? 'Exporting…' : 'Export XLSX'}
@@ -1272,5 +1311,6 @@ export function AthleteMonitoringTab({ athlete, connectionsLoading = false, conn
 
       </div>
     </ScrollArea>
+    </>
   );
 }
