@@ -126,6 +126,12 @@ interface UseSupabaseStoreOptions<T> {
    * already existed in the hook. If omitted, data is used as-is.
    */
   migrate?: (raw: unknown) => T;
+  /**
+   * Loading: what this browser's copy has that the server lost is put back (returns the merged
+   * data, or null when nothing is missing). Saving: what the latest data has that a save would
+   * drop unintentionally is kept (same function: (base, next) → next plus what it lacks, or null).
+   */
+  keepMissing?: (base: T, next: T) => T | null;
 }
 
 export function useSupabaseStore<T>({
@@ -133,6 +139,7 @@ export function useSupabaseStore<T>({
   legacyKey,
   defaultValue,
   migrate,
+  keepMissing,
 }: UseSupabaseStoreOptions<T>): [T, (newData: T) => Promise<void>, boolean] {
   const { user, loading: authLoading } = useAuth();
 
@@ -143,6 +150,8 @@ export function useSupabaseStore<T>({
   const [data, setData] = useState<T>(() => readCache<T>(cacheKey) ?? defaultValue);
   const [isLoading, setIsLoading] = useState(true);
   const defaultRef = useRef(defaultValue);
+  const keepMissingRef = useRef(keepMissing);
+  keepMissingRef.current = keepMissing;
 
   // Receive saves made by other instances of the same table
   const receiveRef = useRef<(incoming: unknown) => void>((incoming) => setData(incoming as T));
@@ -216,7 +225,20 @@ export function useSupabaseStore<T>({
 
         if (row) {
           // Supabase row exists — it is the source of truth
-          const loadedData = row.data as T;
+          let loadedData = row.data as T;
+          // …except for what the server lost and this browser still has (e.g. programs dropped by
+          // a save built on an incomplete list): that is put back before the copy is replaced
+          const browserCopy = readCache<T>(cacheKey);
+          const restored = browserCopy !== null && keepMissingRef.current ? keepMissingRef.current(browserCopy, loadedData) : null;
+          if (restored !== null) {
+            try {
+              await upsertRow(tableName, user.id, restored);
+              loadedData = restored;
+              toast({ title: 'Restored missing data', description: 'Data the server was missing was put back from the copy in this browser.', duration: 10000 });
+            } catch (err) {
+              console.error(`[useSupabaseStore:${tableName}] restore error:`, err);
+            }
+          }
           setData(loadedData);
           writeCache(cacheKey, loadedData);
           resolvedData = loadedData;
@@ -290,6 +312,13 @@ export function useSupabaseStore<T>({
         if (!_loadedKeys.has(key)) {
           warnNotLoaded();
           throw new StoreNotLoadedError(tableName);
+        }
+        // Never drop what the latest data has unless the change says so (see keepMissing)
+        const latest = _latest.get(key) as T | undefined;
+        const kept = latest !== undefined && keepMissingRef.current ? keepMissingRef.current(latest, newData) : null;
+        if (kept !== null) {
+          console.warn(`[useSupabaseStore:${tableName}] a save would have dropped data — kept it`);
+          newData = kept;
         }
         _latest.set(key, newData);
       } else if (authLoading) {

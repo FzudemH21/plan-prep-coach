@@ -148,9 +148,37 @@ const readChatsFromLS = (): ChatMap => {
 const filterChats = (chats: ChatMap | null | undefined, keepProgramChats: boolean): ChatMap =>
   Object.fromEntries(Object.entries(chats ?? {}).filter(([id]) => isProgramChatId(id) === keepProgramChats));
 
-interface TrainingProgramsData {
+export interface TrainingProgramsData {
   version: number;
   programs: TrainingProgram[];
+  /** Ids of programs deleted on purpose — the only way a program may leave the list */
+  deletedProgramIds?: string[];
+}
+
+/**
+ * All programs share one stored row, so a save built on an incomplete or outdated list (e.g. a
+ * page that started before the list had loaded) used to overwrite — and lose — every other
+ * program. Merging `base` into `next`: programs `next` lacks come back (unless deleted on purpose),
+ * and of a program in both, the newer version (lastModifiedAt) wins.
+ * Used when saving (base = latest list), when loading (base = this browser's copy, which restores
+ * what the server lost) and by the program restore. Returns null when nothing changes.
+ */
+export function mergePrograms(base: TrainingProgramsData, next: TrainingProgramsData): TrainingProgramsData | null {
+  const basePrograms = Array.isArray(base?.programs) ? base.programs : [];
+  if (basePrograms.length === 0 || !Array.isArray(next?.programs)) return null;
+  const deleted = new Set([...(next.deletedProgramIds ?? []), ...(base.deletedProgramIds ?? [])]);
+  const baseById = new Map(basePrograms.filter(p => p?.id).map(p => [p.id, p]));
+  let changed = false;
+  const programs = next.programs.map(p => {
+    const other = baseById.get(p.id);
+    if (other && (other.lastModifiedAt ?? '') > (p.lastModifiedAt ?? '')) { changed = true; return other; }
+    return p;
+  });
+  const present = new Set(programs.map(p => p.id));
+  basePrograms.forEach(p => {
+    if (p?.id && !present.has(p.id) && !deleted.has(p.id)) { programs.push(p); present.add(p.id); changed = true; }
+  });
+  return changed ? { ...next, programs } : null;
 }
 
 const CURRENT_VERSION = 1;
@@ -164,6 +192,7 @@ export function useTrainingPrograms() {
     tableName: 'training_programs',
     legacyKey: 'trainingPrograms',
     defaultValue: DEFAULT_DATA,
+    keepMissing: mergePrograms,
   });
 
   // Internal save helper
@@ -257,7 +286,7 @@ export function useTrainingPrograms() {
     if (index < 0) return false;
 
     const newPrograms = data.programs.filter(p => p.id !== id);
-    await saveData({ ...data, programs: newPrograms });
+    await saveData({ ...data, programs: newPrograms, deletedProgramIds: [...(data.deletedProgramIds ?? []), id] });
     return true;
   }, [data, saveData]);
 
@@ -449,6 +478,17 @@ export function useTrainingPrograms() {
     await saveData({ ...data, programs: merged });
   }, [data, saveData]);
 
+  /** Restore programs from a saved/recovered program list: missing ones are added, and of a
+   *  program in both, the newer version wins (see mergePrograms). Returns how many changed. */
+  const restorePrograms = useCallback(async (recovered: TrainingProgramsData): Promise<number> => {
+    const merged = mergePrograms(recovered, data);
+    if (!merged) return 0;
+    const before = new Map(data.programs.map(p => [p.id, p]));
+    const changedCount = merged.programs.filter(p => before.get(p.id) !== p).length;
+    await saveData(merged);
+    return changedCount;
+  }, [data, saveData]);
+
   // Get programs sorted by last modified
   const getRecentPrograms = useCallback((limit?: number) => {
     const sorted = [...data.programs].sort((a, b) =>
@@ -465,6 +505,7 @@ export function useTrainingPrograms() {
     saveProgram,
     copyProgram,
     deleteProgram,
+    restorePrograms,
     loadProgramIntoSession,
     collectSessionData,
     saveCurrentSession,
