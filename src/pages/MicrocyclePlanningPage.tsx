@@ -3643,124 +3643,13 @@ export default function MicrocyclePlanningPage() {
   };
 
   // Reorder sessions within the same day - comprehensive update
-  const handleReorderSessionsInDay = (
-    dayDate: string, 
-    fromIndex: number, 
-    toIndex: number
-  ) => {
-    // Get session count from trainingDays, not exerciseDistribution
-    const day = trainingDays.find(d => d.date === dayDate);
-    const sessionsCount = day?.sessions ?? 1;
-    
-    // Guard: clamp indices and early return if no-op
-    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || 
-        fromIndex >= sessionsCount || toIndex >= sessionsCount) {
-      return;
-    }
-    
-    // Build positions array and reorder to create index mapping
-    const positions = Array.from({ length: sessionsCount }, (_, i) => i);
-    const [moved] = positions.splice(fromIndex, 1);
-    positions.splice(toIndex, 0, moved);
-    
-    // Create oldIndex -> newIndex map
-    const indexMap = new Map<number, number>();
-    positions.forEach((oldIdx, newIdx) => {
-      indexMap.set(oldIdx, newIdx);
-    });
-    
-    // 1. Update exerciseDistribution
-    setExerciseDistribution(prev => 
-      prev.map(ex => 
-        ex.dayDate === dayDate && indexMap.has(ex.sessionIndex)
-          ? { ...ex, sessionIndex: indexMap.get(ex.sessionIndex)! }
-          : ex
-      )
-    );
-    
-    // 2. Update sessionSections
-    setSessionSections(prev => 
-      prev.map(s => 
-        s.dayDate === dayDate && indexMap.has(s.sessionIndex)
-          ? { ...s, sessionIndex: indexMap.get(s.sessionIndex)! }
-          : s
-      )
-    );
-    
-    // 3. Update supersets
-    setSupersets(prev => {
-      const copy = { ...prev };
-      const dayMap = prev[dayDate];
-      if (!dayMap) return copy;
-      
-      const remapped: Record<number, Record<string, Record<string, string[]>>> = {};
-      Object.entries(dayMap).forEach(([sessionIdxStr, sectionMap]) => {
-        const oldIdx = Number(sessionIdxStr);
-        const newIdx = indexMap.get(oldIdx);
-        if (newIdx !== undefined) {
-          remapped[newIdx] = sectionMap as Record<string, Record<string, string[]>>;
-        }
-      });
-      copy[dayDate] = remapped as any;
-      return copy;
-    });
-    
-    // 4. Update trainingDays.sessionNames
-    setTrainingDays(prev => 
-      prev.map(day => {
-        if (day.date !== dayDate) return day;
-        
-        // Ensure sessionNames array exists and has correct length
-        const names = [...(day.sessionNames ?? Array.from({ length: sessionsCount }, (_, i) => `Session ${i + 1}`))];
-        while (names.length < sessionsCount) {
-          names.push(`Session ${names.length + 1}`);
-        }
-        
-        // Reorder based on positions mapping
-        const reorderedNames = positions.map(oldIdx => names[oldIdx] ?? `Session ${positions.indexOf(oldIdx) + 1}`);
-        
-        return { ...day, sessionNames: reorderedNames };
-      })
-    );
-    
-    // 5. Remap localStorage keys for intensity and comments
-    if (currentMesocycle?.id) {
-      const mesoId = currentMesocycle.id;
-      
-      // Read all old values
-      const oldIntensities: Record<number, string> = {};
-      const oldComments: Record<number, string> = {};
-      
-      for (let i = 0; i < sessionsCount; i++) {
-        const iKey = `sessionIntensity_${mesoId}_${dayDate}_${i}`;
-        const cKey = `sessionComments_${mesoId}_${dayDate}_${i}`;
-        
-        const iVal = localStorage.getItem(iKey);
-        if (iVal !== null) oldIntensities[i] = iVal;
-        
-        const cVal = localStorage.getItem(cKey);
-        if (cVal !== null) oldComments[i] = cVal;
-        
-        // Remove old keys to prevent collisions
-        localStorage.removeItem(iKey);
-        localStorage.removeItem(cKey);
-      }
-      
-      // Write new keys based on index mapping
-      positions.forEach((oldIdx, newIdx) => {
-        const iVal = oldIntensities[oldIdx];
-        if (iVal !== undefined) {
-          localStorage.setItem(`sessionIntensity_${mesoId}_${dayDate}_${newIdx}`, iVal);
-          notifySessionMetaChanged();
-        }
-        
-        const cVal = oldComments[oldIdx];
-        if (cVal !== undefined) {
-          localStorage.setItem(`sessionComments_${mesoId}_${dayDate}_${newIdx}`, cVal);
-        }
-      });
-    }
-    
+  // Reorder the sessions of one day (move up / down, drag within the day). Everything of a session
+  // moves with it — methods, exercises, sections, supersets, name, intensity and notes — through the
+  // same move as dragging a session to another day. (Before, notes and methods stayed in the old
+  // slot, so a moved session showed the notes of the session that was there before.)
+  const handleReorderSessionsInDay = (dayDate: string, fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    handleMoveSessionAcrossDays(dayDate, fromIndex, dayDate, toIndex);
     toast({
       title: "Session reordered",
       description: "Session order updated successfully",
