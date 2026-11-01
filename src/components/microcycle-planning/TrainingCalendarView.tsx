@@ -793,12 +793,15 @@ export function TrainingCalendarView({
                 ));
               } : undefined}
               onExerciseEachSideChange={(exerciseId, eachSide) => {
-                // Sync eachSide toggle to parent's exerciseDistribution
+                // This placement and every later placement of the same exercise (the following weeks);
+                // earlier weeks keep theirs
                 if (onDistributionChange) {
-                  const updated = exerciseDistribution.map(ex =>
-                    (ex.id || ex.exerciseId) === exerciseId ? { ...ex, eachSide } : ex
-                  );
-                  onDistributionChange(updated);
+                  const source = exerciseDistribution.find(ex => (ex.id || ex.exerciseId) === exerciseId);
+                  if (!source) return;
+                  onDistributionChange(exerciseDistribution.map(ex =>
+                    ex === source || (ex.exerciseId === source.exerciseId && ex.dayDate > source.dayDate)
+                      ? { ...ex, eachSide } : ex
+                  ));
                 }
               }}
               // Phase 4: Pass intensity editing props

@@ -1276,7 +1276,7 @@ export function MasterPlannerColumn({
                             <button
                               type="button"
                               title={`Delete set ${setNumber}`}
-                              className="rounded p-0.5 text-muted-foreground opacity-0 group-hover/set:opacity-100 focus:opacity-100 hover:text-destructive hover:bg-destructive/10"
+                              className="rounded p-0.5 text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10"
                               onClick={(e) => { e.stopPropagation(); deleteSet(setNumber); }}
                             >
                               <Trash2 className="h-3 w-3" />

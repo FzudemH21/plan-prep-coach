@@ -1937,10 +1937,16 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     );
   }, []);
 
+  /** This placement and every later placement of the same exercise (the following weeks) */
   const handleExerciseEachSideChange = useCallback((exerciseId: string, eachSide: boolean) => {
-    setExerciseDistribution(prev =>
-      prev.map(ex => ex.id === exerciseId ? { ...ex, eachSide } : ex)
-    );
+    setExerciseDistribution(prev => {
+      const source = prev.find(ex => ex.id === exerciseId);
+      if (!source) return prev;
+      return prev.map(ex =>
+        ex === source || (ex.exerciseId === source.exerciseId && ex.dayDate > source.dayDate)
+          ? { ...ex, eachSide } : ex
+      );
+    });
   }, []);
 
   const handleExerciseChange = useCallback((
