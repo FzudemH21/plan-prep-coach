@@ -3,14 +3,8 @@
  * coach's parameter database) and the athlete's last value for it.
  */
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ExternalLink, Play } from 'lucide-react';
+import { InlineVideo } from '@/components/athlete-app/InlineVideo';
 import type { AthleteCalendarEvent } from '@/hooks/useAthleteApp';
-
-/** YouTube video id from watch / youtu.be / embed / shorts / live links */
-function youTubeId(url: string): string | null {
-  const m = url.match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:[^#\s]*&)?v=|embed\/|shorts\/|live\/|v\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
-  return m ? m[1] : null;
-}
 
 export function TestDetailsDialog({
   event,
@@ -23,7 +17,6 @@ export function TestDetailsDialog({
   onClose: () => void;
 }) {
   const videoUrl = event?.videoUrl?.trim();
-  const ytId = videoUrl ? youTubeId(videoUrl) : null;
 
   return (
     <Dialog open={!!event} onOpenChange={open => { if (!open) onClose(); }}>
@@ -40,43 +33,7 @@ export function TestDetailsDialog({
           )}
         </DialogHeader>
 
-        {videoUrl && (
-          ytId ? (
-            // Preview that opens the video on YouTube (the YouTube app on a phone). Not embedded:
-            // many channels (e.g. World Athletics) block playback inside other apps/websites.
-            <a
-              href={`https://www.youtube.com/watch?v=${ytId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block relative rounded-lg overflow-hidden border bg-black aspect-video active:opacity-90"
-              aria-label="Watch the video on YouTube"
-            >
-              <img
-                src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`}
-                alt=""
-                className="w-full h-full object-cover opacity-90"
-              />
-              <span className="absolute inset-0 flex items-center justify-center">
-                <span className="w-14 h-14 rounded-full bg-black/70 flex items-center justify-center">
-                  <Play className="h-7 w-7 text-white ml-0.5" fill="currentColor" />
-                </span>
-              </span>
-              <span className="absolute bottom-2 right-2 text-[11px] font-medium text-white bg-black/70 rounded px-1.5 py-0.5">
-                Opens YouTube
-              </span>
-            </a>
-          ) : (
-            <a
-              href={videoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="min-h-[44px] flex items-center justify-center gap-2 rounded-lg border text-sm font-medium hover:bg-muted active:bg-muted/80"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Watch video
-            </a>
-          )
-        )}
+        {videoUrl && <InlineVideo url={videoUrl} title={event?.title} />}
 
         {event?.instructions ? (
           <p className="text-sm leading-relaxed whitespace-pre-line">{event.instructions}</p>

@@ -1,3 +1,4 @@
+import { InlineVideo } from '@/components/athlete-app/InlineVideo';
 import { IntervalLauncher } from '@/components/workout/IntervalTimer';
 import { RestPrescription, SwipeHint, setTableLayout } from '@/components/workout/SetTableParts';
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -527,45 +528,14 @@ interface ExerciseDetailSheetProps {
   onClose: () => void;
 }
 
-/** Ensure a non-YouTube URL has a protocol so browsers don't treat it as relative. */
-function normalizeUrl(url: string): string {
-  if (!url) return url;
-  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
-}
-
-/**
- * Extract YouTube video ID from any of:
- *  • Full URL:   https://www.youtube.com/watch?v=VIDEO_ID
- *  • Short URL:  https://youtu.be/VIDEO_ID
- *  • Embed URL:  https://youtube.com/embed/VIDEO_ID
- *  • Bare ID:    VIDEO_ID  (exactly 11 alphanumeric / - / _ chars, no slashes)
- */
-function getYouTubeVideoId(raw: string): string | null {
-  const s = raw.trim();
-  // Full / protocol-less URL patterns
-  const m = s.match(
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-  );
-  if (m) return m[1];
-  // Bare video ID — exactly 11 chars, no path separators or spaces
-  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
-  return null;
-}
-
 /** Reads video URL and description from the pre-embedded schedule snapshot only — the
  *  athlete's Supabase session has no read access to the coach's exercise library (by
  *  design, same boundary the snapshot-at-sync pattern exists to work around), so there is
  *  no live fallback to fall back to here. CoachMobileSessionEditPage now refreshes this
  *  snapshot from the live library on every save, which is what keeps it accurate. */
 function ExerciseDetailSheet({ target, onClose }: ExerciseDetailSheetProps) {
-  const rawUrl   = target?.videoUrl ?? null;
-  const videoId  = rawUrl ? getYouTubeVideoId(rawUrl) : null;
-  // Build a guaranteed-valid URL: YouTube canonical form or normalised arbitrary URL
-  const safeUrl  = videoId
-    ? `https://www.youtube.com/watch?v=${videoId}`
-    : (rawUrl ? normalizeUrl(rawUrl) : null);
-  const thumbnailUrl = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
-  const hasContent   = !!(safeUrl || target?.description);
+  const rawUrl     = target?.videoUrl?.trim() || null;
+  const hasContent = !!(rawUrl || target?.description);
 
   return (
     <Dialog open={target !== null} onOpenChange={o => { if (!o) onClose(); }}>
@@ -583,52 +553,7 @@ function ExerciseDetailSheet({ target, onClose }: ExerciseDetailSheetProps) {
 
           {hasContent && (
             <>
-              {/* YouTube thumbnail → opens video in new tab */}
-              {thumbnailUrl && safeUrl && (
-                <a
-                  href={safeUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block rounded-xl overflow-hidden relative group"
-                >
-                  <img
-                    src={thumbnailUrl}
-                    alt={`${target!.name} video`}
-                    className="w-full object-cover aspect-video bg-muted"
-                    onError={e => {
-                      // hqdefault can be a black placeholder for some videos — fall back progressively
-                      const img = e.currentTarget;
-                      if (img.src.includes('hqdefault')) {
-                        img.src = img.src.replace('hqdefault', 'mqdefault');
-                      } else if (img.src.includes('mqdefault')) {
-                        img.src = img.src.replace('mqdefault', 'sddefault');
-                      }
-                    }}
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-active:bg-black/30 transition-colors">
-                    <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-                      <svg className="w-5 h-5 text-red-600 ml-0.5" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
-                    </div>
-                  </div>
-                </a>
-              )}
-
-              {/* Non-YouTube URL — styled button link */}
-              {safeUrl && !thumbnailUrl && (
-                <a
-                  href={safeUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full rounded-xl border py-2.5 text-sm font-medium text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                  Watch video
-                </a>
-              )}
+              {rawUrl && <InlineVideo url={rawUrl} title={target?.name} />}
 
               {target?.description && (
                 <div className="space-y-1">
