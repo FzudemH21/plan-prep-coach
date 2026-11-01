@@ -1408,7 +1408,9 @@ export default function MicrocyclePlanningPage() {
     const day = trainingDays.find(d => d.date === dayDate);
     if (day && migrateLegacyIntensity(day.intensity) === '0') {
       // "Start Training Day" on a rest day: it becomes a training day at the microcycle's intensity
-      // with one session (a rest day shows no sessions, so only adding one did nothing)
+      // with one session (a rest day shows no sessions, so only adding one did nothing) — without
+      // what it had before it became a rest day
+      clearRestDayLeftovers([dayDate]);
       const micro = mesocycles.flatMap(m => m.microcycles).find(mc => mc.id === day.microcycleId);
       const microIntensity = migrateLegacyIntensity(micro?.intensity);
       setDayIntensities(new Map([[dayDate, microIntensity && microIntensity !== '0' ? microIntensity : '5']]));
@@ -1641,6 +1643,44 @@ export default function MicrocyclePlanningPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialDataLoaded, trainingDays, daySplitStates, effectiveDaySplitStates]);
 
+  // A rest day keeps what it had stored, hidden — an accidental "rest" doesn't lose anything. When
+  // it gets a session again (paste, add, move, copy), that old content must not come back next to
+  // (or mixed into) the new session: it is removed first. `keepMethodsBelow`: method slots a copy
+  // just wrote (they stay).
+  const clearRestDayLeftovers = (dates: string[], keepMethodsBelow?: Map<string, number>) => {
+    const restDates = new Set(dates.filter(date =>
+      migrateLegacyIntensity(trainingDays.find(d => d.date === date)?.intensity) === '0'));
+    if (restDates.size === 0) return restDates;
+    setExerciseDistribution(prev => prev.filter(ex => !restDates.has(ex.dayDate)));
+    setSessionSections(prev => prev.filter(section => !restDates.has(section.dayDate)));
+    setSupersets(prev => {
+      const next = { ...prev };
+      restDates.forEach(date => { delete next[date]; });
+      return next;
+    });
+    setDayMethodAssignments(prev => {
+      const next = { ...prev };
+      Object.keys(next).forEach(key => {
+        const sep = key.lastIndexOf('_');
+        const date = key.slice(0, sep);
+        if (restDates.has(date) && Number(key.slice(sep + 1)) >= (keepMethodsBelow?.get(date) ?? 0)) delete next[key];
+      });
+      return next;
+    });
+    const prefixes = ['sessionIntensity_', 'workoutSessions_', 'workoutSections_', 'sessionComments_'];
+    const stale: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      const prefix = key && prefixes.find(pre => key.startsWith(pre));
+      if (!key || !prefix) continue;
+      const date = key.slice(prefix.length).match(/_(\d{4}-\d{2}-\d{2})_\d+$/)?.[1];
+      if (date && restDates.has(date)) stale.push(key);
+    }
+    stale.forEach(key => localStorage.removeItem(key));
+    setTrainingDays(prev => prev.map(day => (restDates.has(day.date) ? { ...day, sessionNames: [] } : day)));
+    return restDates;
+  };
+
   /** Sets day intensities (calendar days and the stored daily intensities) */
   const setDayIntensities = (intensities: Map<string, IntensityLevel>) => {
     if (intensities.size === 0) return;
@@ -1679,6 +1719,11 @@ export default function MicrocyclePlanningPage() {
     const sessionCount = (date: string) =>
       migrateLegacyIntensity(dayByDate.get(date)?.intensity) === '0' ? 0 : (daySplitStates[date] ?? 1);
     const counts = new Map(pairs.map(({ sourceDate, targetDate }) => [targetDate, Math.max(1, sessionCount(sourceDate))]));
+    // Rest days that get sessions: their old hidden content goes (the copied method slots stay)
+    clearRestDayLeftovers(
+      pairs.filter(({ sourceDate }) => sessionCount(sourceDate) > 0).map(p => p.targetDate),
+      new Map(pairs.map(({ sourceDate, targetDate }) => [targetDate, sessionCount(sourceDate)])),
+    );
 
     // A rest day that gets sessions becomes a training day with the source day's intensity.
     // Days that already have an intensity keep theirs.
@@ -1755,6 +1800,8 @@ export default function MicrocyclePlanningPage() {
     }
     const moveOf = (date: string, index: number): [string, number] | undefined => moves.get(`${date}|${index}`);
     const dates = sameDay ? [fromDate] : [fromDate, toDate];
+    // Onto a rest day: its old hidden content goes first (it would sit in the moved session's slot)
+    if (!sameDay && toCount === 0) clearRestDayLeftovers([toDate]);
 
     // Methods
     setDayMethodAssignments(prev => {
@@ -2295,6 +2342,8 @@ export default function MicrocyclePlanningPage() {
     const newSessionIndex = targetIsRest ? 0 : (effectiveDaySplitStates[targetDate] ?? 0);
     const targetMesoId = targetDay?.mesocycleId ?? currentMesocycle?.id;
 
+    // A rest day: its old hidden content goes first (it would reappear next to the pasted session)
+    if (targetIsRest) clearRestDayLeftovers([targetDate]);
     setDaySplitStates(prev => ({ ...prev, [targetDate]: newSessionIndex + 1 }));
     // A rest day becomes a training day with the session's intensity
     if (targetIsRest) {
@@ -2353,6 +2402,7 @@ export default function MicrocyclePlanningPage() {
     const sourceSuperset = supersets[copiedSession.sourceDate]?.[copiedSession.sessionIndex];
     if (sourceSuperset) {
       const newSupersets = { ...supersets };
+      if (targetIsRest) delete newSupersets[targetDate];
       if (!newSupersets[targetDate]) {
         newSupersets[targetDate] = {};
       }
@@ -2384,9 +2434,13 @@ export default function MicrocyclePlanningPage() {
       localStorage.setItem('supersets', JSON.stringify(newSupersets));
     }
     
-    // Update exercise distribution and session sections
-    const updatedExerciseDistribution = [...exerciseDistribution, ...pastedExercises];
-    const updatedSessionSections = [...sessionSections, ...pastedSections];
+    // Update exercise distribution and session sections (a rest day's old content left out)
+    const updatedExerciseDistribution = [
+      ...exerciseDistribution.filter(ex => !targetIsRest || ex.dayDate !== targetDate), ...pastedExercises,
+    ];
+    const updatedSessionSections = [
+      ...sessionSections.filter(section => !targetIsRest || section.dayDate !== targetDate), ...pastedSections,
+    ];
     
     setExerciseDistribution(updatedExerciseDistribution);
     setSessionSections(updatedSessionSections);
