@@ -1,3 +1,4 @@
+import { hasParamValue, visibleByDefault } from '@/utils/parameterVisibility';
 import '@/styles/print-session.css';
 import { WorkoutSection, WorkoutExercise } from '@/types/workout';
 import { ToolboxDatabase, ToolboxEntry } from '@/types/toolbox';
@@ -72,7 +73,7 @@ function buildParamMeta(
         isRestParameter:
           toolboxEntry ? !!toolboxEntry.isRestParameter : /rest|pause|recovery/i.test(name),
         isFrequencyParameter: toolboxEntry?.isFrequencyParameter || false,
-        showInGridByDefault: toolboxEntry?.showInGridByDefault ?? true,
+        showInGridByDefault: visibleByDefault(hasParamValue(exercise.parameters, name), toolboxEntry),
         isCalculated: toolboxEntry?.isCalculated ?? false, // mirrors WorkoutExerciseCard
       };
     });
@@ -105,6 +106,21 @@ function buildParamMeta(
         isCalculated: true,
       });
     }
+  }
+
+  // The method's other toolbox parameters (no value) — shown when "show in grid by default" (mirrors
+  // WorkoutExerciseCard)
+  for (const tp of toolboxParams) {
+    if (tp.isCalculated || tp.isSetParameter || params.some(p => p.name === tp.parameterName)) continue;
+    params.push({
+      name: tp.parameterName,
+      unit: tp.parameterType === 'quantitative' && tp.options.length > 0 ? tp.options[0] : undefined,
+      isSetParameter: false,
+      isRestParameter: !!tp.isRestParameter,
+      isFrequencyParameter: !!tp.isFrequencyParameter || /^frequency/i.test(tp.parameterName),
+      showInGridByDefault: visibleByDefault(false, tp),
+      isCalculated: false,
+    });
   }
 
   const setParam = params.find(p => p.isSetParameter && !p.isRestParameter);

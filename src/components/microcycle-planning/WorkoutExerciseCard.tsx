@@ -1,3 +1,4 @@
+import { hasParamValue, visibleByDefault } from '@/utils/parameterVisibility';
 import React, { useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -240,7 +241,7 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
           isRestParameter: toolboxEntry ? !!toolboxEntry.isRestParameter : /rest|pause|recovery/i.test(name),
           isFrequencyParameter: toolboxEntry?.isFrequencyParameter || false,
           defaultValue: undefined,
-          showInGridByDefault: toolboxEntry?.showInGridByDefault ?? true,
+          showInGridByDefault: visibleByDefault(hasParamValue(exercise.parameters, name), toolboxEntry),
           isCalculated: toolboxEntry?.isCalculated ?? false,
         };
       });
@@ -288,7 +289,8 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
           isRestParameter: !!tp.isRestParameter,
           isFrequencyParameter: !!tp.isFrequencyParameter || /^frequency/i.test(tp.parameterName),
           defaultValue: undefined,
-          showInGridByDefault: false,
+          // No value: shown when the toolbox says "show in grid by default"
+          showInGridByDefault: visibleByDefault(false, tp),
           isCalculated: false,
         });
       }

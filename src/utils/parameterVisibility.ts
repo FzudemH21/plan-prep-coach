@@ -78,10 +78,31 @@ export function withExerciseVisibility<T extends PlacedExercise>(entries: T[], e
   return entries.map(e => ((e.id || e.exerciseId) === exerciseKey ? { ...e, parameterVisibility: overrides } : e));
 }
 
-/** The parameters an exercise of this method can show (Training Toolbox), for the visibility picker */
+/** The parameter has a (non-empty) value — for all sets or per set ("Reps_set2") */
+export function hasParamValue(params: Record<string, unknown> | undefined, name: string): boolean {
+  if (!params) return false;
+  const filled = (v: unknown) => v !== undefined && v !== null && String(v).trim() !== '';
+  if (filled(params[name])) return true;
+  const perSet = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_set\\d+$`, 'i');
+  return Object.keys(params).some(k => perSet.test(k) && filled(params[k]));
+}
+
+/**
+ * Whether a parameter is shown when the coach hasn't chosen: it has a value for this exercise
+ * (Periodization Table or the exercise's own), or its Training Toolbox entry says "Show in parameter
+ * grid by default" — then also without a value. The one rule for the exercise distribution step,
+ * the Master Planner, the session sheet, print and the athlete app.
+ */
+export function visibleByDefault(hasValue: boolean, toolboxEntry?: { showInGridByDefault?: boolean }): boolean {
+  return hasValue || (!!toolboxEntry && toolboxEntry.showInGridByDefault !== false);
+}
+
+/** The parameters an exercise of this method can show (Training Toolbox), for the visibility picker;
+ *  `hasValue`: whether the exercise has a value for a parameter (decides the default with the toolbox) */
 export function methodVisibilityParams(
   entries: Array<{ category: string; subCategory?: string; parameterName: string; showInGridByDefault?: boolean; isSetParameter?: boolean; isFrequencyParameter?: boolean }>,
   methodId: string,
+  hasValue: (name: string) => boolean = () => false,
 ): Array<{ name: string; showInGridByDefault: boolean }> {
   const [main = '', sub = ''] = methodId.split('::')[0].split(' - ');
   const seen = new Set<string>();
@@ -89,7 +110,7 @@ export function methodVisibilityParams(
     .filter(e => e.category === main && (sub ? e.subCategory === sub : !e.subCategory))
     .filter(e => !e.isSetParameter && !e.isFrequencyParameter && e.parameterName !== 'frequency_per_week' && e.parameterName !== 'Frequency')
     .filter(e => !seen.has(e.parameterName) && !!seen.add(e.parameterName))
-    .map(e => ({ name: e.parameterName, showInGridByDefault: e.showInGridByDefault ?? true }));
+    .map(e => ({ name: e.parameterName, showInGridByDefault: visibleByDefault(hasValue(e.parameterName), e) }));
 }
 
 /** Effective overrides for one exercise. */

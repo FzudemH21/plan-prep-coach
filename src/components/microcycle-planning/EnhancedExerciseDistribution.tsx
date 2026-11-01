@@ -38,7 +38,7 @@ import { cn } from '@/lib/utils';
 import { cleanupSupersetsOnExerciseDelete, toggleSuperset } from '@/utils/supersetUtils';
 import { getBorgBg, getBorgFg, getBorgLabelFull, getBorgStyleLight, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { CircuitBuilderDialog } from '@/components/templates/CircuitBuilderDialog';
-import { methodVisibilityParams, notifySessionMetaChanged, placementVisibility, readSessionMeta, updateExerciseVisibility, withExerciseVisibility, writeSessionMeta } from '@/utils/parameterVisibility';
+import { hasParamValue, methodVisibilityParams, notifySessionMetaChanged, placementVisibility, readSessionMeta, updateExerciseVisibility, withExerciseVisibility, writeSessionMeta } from '@/utils/parameterVisibility';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { fitExercisesToMesocycleMethods, describeMethodFit } from '@/utils/exerciseMethodRemap';
 import { applyLibraryCircuit, findLibraryCircuit, isCircuitLibraryUpdateAvailable } from '@/utils/circuitLibrarySync';
@@ -47,6 +47,8 @@ interface EnhancedExerciseDistributionProps {
   mesocycle: ExtendedMesocycle;
   allMesocycles: ExtendedMesocycle[];
   trainingDays: TrainingDay[];
+  /** Periodization Table values — which parameters an exercise has a value for (visibility defaults) */
+  parameterValues?: Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>;
   exerciseSelectionData: Record<string, CellData>;
   exerciseDistribution: ExerciseDistribution[];
   sessionSections: SessionSection[];
@@ -99,6 +101,7 @@ export function EnhancedExerciseDistribution({
   mesocycle,
   allMesocycles,
   trainingDays,
+  parameterValues,
   exerciseSelectionData,
   exerciseDistribution,
   sessionSections,
@@ -1616,9 +1619,26 @@ export function EnhancedExerciseDistribution({
   // Which parameters an exercise shows later on — chosen here, kept on the exercise (copied with it)
   // and in its session's settings (where the session sheet and the Master Planner read it)
   const { data: toolboxForVisibility } = useToolboxData();
-  const visibilityParamsFor = useCallback((exercise: ExerciseDistribution) =>
-    exercise.isCircuit ? [] : methodVisibilityParams(toolboxForVisibility?.entries ?? [], exercise.methodId),
-  [toolboxForVisibility]);
+  // The values an exercise gets in its microcycle: the Periodization Table (any session of its method
+  // — split methods under "Method::Category") and its own edits
+  const plannedParamsOf = useCallback((exercise: ExerciseDistribution): Record<string, string | number> => {
+    const microcycleId = trainingDays.find(d => d.date === exercise.dayDate)?.microcycleId;
+    const microcycleIndex = Math.max(0, mesocycle.microcycles.findIndex(m => m.id === microcycleId));
+    const byMethod = parameterValues?.[mesocycle.id]?.[microcycleIndex] ?? {};
+    const keys = [exercise.methodId, ...(exercise.categoryName ? [`${exercise.methodId}::${exercise.categoryName}`] : [])];
+    const merged: Record<string, string | number> = {};
+    for (const key of keys) {
+      for (const variant of [key, key.replace(/ Tier/g, '-Tier').replace(/ tier/g, '-tier')]) {
+        Object.values(byMethod[variant] ?? {}).forEach(session => Object.assign(merged, session));
+      }
+    }
+    return { ...merged, ...(exercise.adhocPlannedParams ?? {}), ...(exercise.parameterOverrides ?? {}) };
+  }, [trainingDays, mesocycle, parameterValues]);
+  const visibilityParamsFor = useCallback((exercise: ExerciseDistribution) => {
+    if (exercise.isCircuit) return [];
+    const planned = plannedParamsOf(exercise);
+    return methodVisibilityParams(toolboxForVisibility?.entries ?? [], exercise.methodId, name => hasParamValue(planned, name));
+  }, [toolboxForVisibility, plannedParamsOf]);
   const visibilityOf = useCallback((exercise: ExerciseDistribution) =>
     placementVisibility(readSessionMeta(mesocycle.id, exercise.dayDate, exercise.sessionIndex), exercise),
   [mesocycle.id]);

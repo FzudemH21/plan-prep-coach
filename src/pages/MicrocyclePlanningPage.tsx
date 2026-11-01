@@ -4053,6 +4053,7 @@ export default function MicrocyclePlanningPage() {
           mesocycle={currentMesocycle}
           allMesocycles={mesocycles}
           trainingDays={trainingDays}
+          parameterValues={parameterValues}
           exerciseSelectionData={exerciseSelectionData}
           exerciseDistribution={exerciseDistribution}
           sessionSections={sessionSections}
