@@ -1436,142 +1436,87 @@ export default function MicrocyclePlanningPage() {
     setDaySplitStates(prev => ({ ...prev, [dayDate]: Math.max(prev[dayDate] ?? 0, 1) }));
   };
 
-  // Handle removing a session from a day
+  // Handle removing a session from a day (method distribution and exercise distribution).
+  // Everything that belongs to the session goes with it — methods, exercises, sections, supersets,
+  // name, session intensity, notes — and the day's later sessions move up one place with all of
+  // theirs. (Before, only exercises and sections moved up: the remaining session showed the deleted
+  // one's name, methods, intensity and notes, and its supersets were merged into the previous one.)
   const handleRemoveSession = (dayDate: string, sessionIndex: number) => {
-    const currentSessions = daySplitStates[dayDate] ?? 1;
-    
-    // Check if this is the last session
+    const day = trainingDays.find(d => d.date === dayDate);
+    const currentSessions = migrateLegacyIntensity(day?.intensity) === '0'
+      ? 0
+      : Math.max(daySplitStates[dayDate] ?? 1, effectiveDaySplitStates[dayDate] ?? 0);
     const isLastSession = currentSessions <= 1;
-    
-    if (isLastSession) {
-      // Remove all exercises from this day
-      setExerciseDistribution(prev => prev.filter(ex => ex.dayDate !== dayDate));
-      
-      // Remove all sections from this day
-      setSessionSections(prev => prev.filter(section => section.dayDate !== dayDate));
-      
-      // Remove all supersets from this day
-      setSupersets(prev => {
-        const newSupersets = { ...prev };
-        delete newSupersets[dayDate];
-        return newSupersets;
-      });
-      
-      // Set day intensity to "0" (rest)
-      setDailyIntensityData(prev => {
-        const updated = prev.map(di => {
-          if (di.date === dayDate) {
-            return { ...di, intensity: '0' as IntensityLevel };
-          }
-          return di;
-        });
-        localStorage.setItem('dailyIntensityData', JSON.stringify(updated));
-        return updated;
-      });
-      
-      // Update trainingDays
-      setTrainingDays(prev => 
-        prev.map(day => {
-          if (day.date === dayDate) {
-            return { 
-              ...day, 
-              intensity: '0' as IntensityLevel,
-              sessions: 0,
-              sessionNames: []
-            };
-          }
-          return day;
-        })
-      );
-      
-      // Remove session intensity from localStorage
-      const mesocycleId = currentMesocycle?.id;
-      if (mesocycleId) {
-        const sessionIntensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
-        localStorage.removeItem(sessionIntensityKey);
-      }
+    // New index of each session of the day (null = removed); removing the last session clears the day
+    const newIndexOf = (idx: number): number | null =>
+      isLastSession || idx === sessionIndex ? null : idx > sessionIndex ? idx - 1 : idx;
 
-      // Update split state to 0
-      setDaySplitStates(prev => ({
-        ...prev,
-        [dayDate]: 0
-      }));
-      
+    setDayMethodAssignments(prev => {
+      const next: Record<string, string[]> = {};
+      Object.entries(prev).forEach(([key, methods]) => {
+        const sep = key.lastIndexOf('_');
+        if (key.slice(0, sep) !== dayDate) { next[key] = methods; return; }
+        const to = newIndexOf(Number(key.slice(sep + 1)));
+        if (to !== null) next[`${dayDate}_${to}`] = methods;
+      });
+      return next;
+    });
+    setExerciseDistribution(prev => prev.flatMap(ex => {
+      if (ex.dayDate !== dayDate) return [ex];
+      const to = newIndexOf(ex.sessionIndex ?? 0);
+      return to === null ? [] : [{ ...ex, sessionIndex: to }];
+    }));
+    setSessionSections(prev => prev.flatMap(section => {
+      if (section.dayDate !== dayDate) return [section];
+      const to = newIndexOf(section.sessionIndex ?? 0);
+      return to === null ? [] : [{ ...section, sessionIndex: to }];
+    }));
+    setSupersets(prev => {
+      if (!prev[dayDate]) return prev;
+      const daySupersets: SupersetMapping[string] = {};
+      Object.entries(prev[dayDate]).forEach(([idx, value]) => {
+        const to = newIndexOf(Number(idx));
+        if (to !== null) daySupersets[to] = value;
+      });
+      return { ...prev, [dayDate]: daySupersets };
+    });
+
+    // Stored per-session data (session intensity, notes, session sheet)
+    const prefixes = ['sessionIntensity_', 'workoutSessions_', 'workoutSections_', 'sessionComments_'];
+    const stored: Array<{ key: string; prefix: string; meso: string; to: number | null; value: string }> = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      const prefix = key && prefixes.find(pre => key.startsWith(pre));
+      if (!key || !prefix) continue;
+      const m = key.slice(prefix.length).match(/^(.+)_(\d{4}-\d{2}-\d{2})_(\d+)$/);
+      if (!m || m[2] !== dayDate) continue;
+      stored.push({ key, prefix, meso: m[1], to: newIndexOf(Number(m[3])), value: localStorage.getItem(key) ?? '' });
+    }
+    stored.forEach(({ key }) => localStorage.removeItem(key));
+    stored.forEach(({ prefix, meso, to, value }) => {
+      if (to !== null) localStorage.setItem(`${prefix}${meso}_${dayDate}_${to}`, value);
+    });
+    notifySessionMetaChanged();
+    setSessionCommentsRefreshKey(k => k + 1);
+
+    if (isLastSession) {
+      // The day becomes a rest day
+      setDayIntensities(new Map([[dayDate, '0' as IntensityLevel]]));
+      setDaySplitStates(prev => ({ ...prev, [dayDate]: 0 }));
+      setTrainingDays(prev => prev.map(d => d.date === dayDate ? { ...d, sessions: 0, sessionNames: [] } : d));
       toast({
         title: "Last session deleted",
         description: "Day intensity set to 'off'. You can add a new session anytime.",
       });
-      
       return;
     }
-    
-    // Not the last session - DELETE exercises from the removed session, shift higher sessions down
-    setExerciseDistribution(prev => 
-      prev.filter(ex => !(ex.dayDate === dayDate && ex.sessionIndex === sessionIndex))
-        .map(ex => {
-          if (ex.dayDate === dayDate && ex.sessionIndex > sessionIndex) {
-            return { ...ex, sessionIndex: ex.sessionIndex - 1 };
-          }
-          return ex;
-        })
-    );
-    
-    // DELETE sections from removed session, shift higher sessions down
-    setSessionSections(prev =>
-      prev.filter(section => !(section.dayDate === dayDate && section.sessionIndex === sessionIndex))
-        .map(section => {
-          if (section.dayDate === dayDate && section.sessionIndex > sessionIndex) {
-            return { ...section, sessionIndex: section.sessionIndex - 1 };
-          }
-          return section;
-        })
-    );
-    
-    // Update supersets
-    setSupersets(prev => {
-      const newSupersets = { ...prev };
-      if (newSupersets[dayDate]) {
-        const daySupersets = { ...newSupersets[dayDate] };
-        
-        // Move supersets from removed session to previous session
-        if (daySupersets[sessionIndex]) {
-          const targetSession = Math.max(0, sessionIndex - 1);
-          daySupersets[targetSession] = {
-            ...daySupersets[targetSession],
-            ...daySupersets[sessionIndex]
-          };
-          delete daySupersets[sessionIndex];
-        }
-        
-        // Shift down all supersets after the removed session
-        const updatedSupersets: Record<number, Record<string, Record<string, string[]>>> = {};
-        Object.entries(daySupersets).forEach(([idx, value]) => {
-          const numIdx = Number(idx);
-          if (numIdx > sessionIndex) {
-            updatedSupersets[numIdx - 1] = value;
-          } else {
-            updatedSupersets[numIdx] = value;
-          }
-        });
-        
-        newSupersets[dayDate] = updatedSupersets;
-      }
-      return newSupersets;
-    });
-    
-    // Update split state
-    setDaySplitStates(prev => ({
-      ...prev,
-      [dayDate]: currentSessions - 1
-    }));
-    
-    // Clean up session intensity from localStorage
-    const mesocycleId = currentMesocycle?.id;
-    if (mesocycleId) {
-      const sessionIntensityKey = `sessionIntensity_${mesocycleId}_${dayDate}_${sessionIndex}`;
-      localStorage.removeItem(sessionIntensityKey);
-    }
 
+    setDaySplitStates(prev => ({ ...prev, [dayDate]: currentSessions - 1 }));
+    setTrainingDays(prev => prev.map(d => {
+      if (d.date !== dayDate) return d;
+      const names = Array.from({ length: currentSessions }, (_, i) => d.sessionNames?.[i] ?? `Session ${i + 1}`);
+      return { ...d, sessionNames: names.filter((_, i) => i !== sessionIndex) };
+    }));
     toast({
       title: "Session deleted",
       description: "The session has been removed successfully",
@@ -2282,18 +2227,34 @@ export default function MicrocyclePlanningPage() {
       return;
     }
 
-    // Determine the next session index for this day
-    const targetDayExercises = exerciseDistribution.filter(ex => ex.dayDate === targetDate);
-    const maxSessionIndex = targetDayExercises.length > 0
-      ? Math.max(...targetDayExercises.map(ex => ex.sessionIndex))
-      : -1;
-    const newSessionIndex = maxSessionIndex + 1;
-    
-    // Update daySplitStates to ensure the new session is rendered
-    setDaySplitStates(prev => {
-      const current = prev[targetDate] ?? 1;
-      const needed = newSessionIndex + 1;
-      return { ...prev, [targetDate]: Math.max(current, needed) };
+    // The pasted session is added after the sessions the day shows — never into one of them.
+    // (Before, only exercises counted: a session without exercises yet, e.g. only methods or a
+    // name, was taken over — the paste looked like it replaced it, and deleting one deleted both.)
+    const targetDay = trainingDays.find(d => d.date === targetDate);
+    const targetIsRest = migrateLegacyIntensity(targetDay?.intensity) === '0';
+    const newSessionIndex = targetIsRest ? 0 : (effectiveDaySplitStates[targetDate] ?? 0);
+    const targetMesoId = targetDay?.mesocycleId ?? currentMesocycle?.id;
+
+    setDaySplitStates(prev => ({ ...prev, [targetDate]: newSessionIndex + 1 }));
+    // A rest day becomes a training day with the session's intensity
+    if (targetIsRest) {
+      const intensity = migrateLegacyIntensity(copiedSession.intensity);
+      setDayIntensities(new Map([[targetDate, (intensity && intensity !== '0' ? intensity : '5') as IntensityLevel]]));
+    }
+    // Nothing left over at the new place (e.g. from a session deleted earlier)
+    if (targetMesoId) {
+      ['sessionIntensity_', 'workoutSessions_', 'workoutSections_', 'sessionComments_'].forEach(prefix =>
+        localStorage.removeItem(`${prefix}${targetMesoId}_${targetDate}_${newSessionIndex}`));
+    }
+    // The session's methods come along (those planned in the target mesocycle)
+    const sourceMethods = dayMethodAssignments[`${copiedSession.sourceDate}_${copiedSession.sessionIndex}`] ?? [];
+    const pastedMethods = sourceMethods.filter(m =>
+      !targetMesoId || resolvedMethodAllocations[m.split('::')[0]]?.includes(targetMesoId));
+    setDayMethodAssignments(prev => {
+      const next = { ...prev };
+      if (pastedMethods.length > 0) next[`${targetDate}_${newSessionIndex}`] = pastedMethods;
+      else delete next[`${targetDate}_${newSessionIndex}`];
+      return next;
     });
     
     // Create mapping from old section IDs to new section IDs
@@ -2375,7 +2336,6 @@ export default function MicrocyclePlanningPage() {
     localStorage.setItem('sessionSections', JSON.stringify(updatedSessionSections));
     
     // Session intensity and session note travel with the session
-    const targetMesoId = trainingDays.find(d => d.date === targetDate)?.mesocycleId ?? currentMesocycle?.id;
     if (targetMesoId) {
       if (copiedSession.intensity) {
         localStorage.setItem(`sessionIntensity_${targetMesoId}_${targetDate}_${newSessionIndex}`, copiedSession.intensity);
