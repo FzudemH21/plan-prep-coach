@@ -8,6 +8,7 @@ import { ChevronDown, ChevronRight, GripVertical, Search } from 'lucide-react';
 import { ExtendedMesocycle } from '@/features/planner/types';
 import { cn } from '@/lib/utils';
 import { ExerciseDistribution } from '@/types/microcycle-planning';
+import { usePersistentSet } from '@/hooks/usePersistentState';
 
 interface ExerciseLibraryPanelProps {
   exercisesByMethod: Record<string, Record<string, Array<{
@@ -38,9 +39,10 @@ export function ExerciseLibraryPanel({
   methodExerciseCategories,
   currentMicrocycleDates,
 }: ExerciseLibraryPanelProps) {
-  const [expandedTopCategories, setExpandedTopCategories] = useState<Set<string>>(new Set());
-  const [expandedMethods, setExpandedMethods] = useState<Set<string>>(new Set());
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  // What is open is remembered in this browser
+  const [expandedTopCategories, setExpandedTopCategories] = usePersistentSet('fold:micro:exercisePanelTop');
+  const [expandedMethods, setExpandedMethods] = usePersistentSet('fold:micro:exercisePanelMethods');
+  const [expandedCategories, setExpandedCategories] = usePersistentSet('fold:micro:exercisePanelCategories');
   const [searchQuery, setSearchQuery] = useState('');
 
   const toggle = (set: Set<string>, setFn: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) => {
@@ -139,13 +141,14 @@ export function ExerciseLibraryPanel({
   // Top categories start open; methods (and their exercise lists) start collapsed for a better
   // overview. Only categories appearing for the first time are opened, so data updates (e.g.
   // placing an exercise) don't re-open what the coach collapsed.
-  const seenTopCategories = useRef<Set<string>>(new Set());
+  // ("Seen" is remembered too, so reopening the page doesn't open them again)
+  const [seenTopCategories, setSeenTopCategories] = usePersistentSet('fold:micro:exercisePanelSeen');
   useEffect(() => {
-    const newOnes = Object.keys(groupedByTopCategory).filter(c => !seenTopCategories.current.has(c));
+    const newOnes = Object.keys(groupedByTopCategory).filter(c => !seenTopCategories.has(c));
     if (newOnes.length === 0) return;
-    newOnes.forEach(c => seenTopCategories.current.add(c));
+    setSeenTopCategories(prev => new Set([...prev, ...newOnes]));
     setExpandedTopCategories(prev => new Set([...prev, ...newOnes]));
-  }, [groupedByTopCategory]);
+  }, [groupedByTopCategory, seenTopCategories, setSeenTopCategories, setExpandedTopCategories]);
 
   // While searching, show every match without having to open things
   const isSearching = searchQuery.trim().length > 0;

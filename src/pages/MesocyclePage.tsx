@@ -72,6 +72,7 @@ import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
 import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
 import { useCoachMemory } from '@/hooks/useCoachMemory';
 import { useAnamnesisAIContext } from '@/hooks/useAnamnesisAIContext';
+import { usePersistentSet } from '@/hooks/usePersistentState';
 
 // Helper function for string normalization - robust canonicalization
 const normalizeForComparison = (str: unknown): string => {
@@ -129,7 +130,7 @@ export default function MesocyclePage() {
   const [uniformLength, setUniformLength] = useState(true);
   const [parameterValues, setParameterValues] = useState<Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>>({});
   const [expandedSubGoals, setExpandedSubGoals] = useState<Record<string, Set<string>>>({});
-  const [expandedMesocycles, setExpandedMesocycles] = useState<Set<string>>(new Set());
+  const [expandedMesocycles, setExpandedMesocycles] = usePersistentSet('fold:meso:mesocycles');
   const [globalMicrocycleSplitStates, setGlobalMicrocycleSplitStates] = useState<Record<string, boolean>>({});
   const [manuallyAddedMethods, setManuallyAddedMethods] = useState<string[]>([]);
   const [methodToDelete, setMethodToDelete] = useState<string | null>(null);
@@ -184,9 +185,9 @@ export default function MesocyclePage() {
   });
   
   // Collapse/expand state for Step 4 (Method Periodization)
-  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
-  // Methods are collapsed until opened — the step starts with all of them closed (it is a lot otherwise)
-  const [expandedMethods, setExpandedMethods] = useState<Set<string>>(new Set());
+  const [collapsedCategories, setCollapsedCategories] = usePersistentSet('fold:meso:periodizationCategories');
+  // Methods are collapsed until opened (it is a lot otherwise); what is open is remembered
+  const [expandedMethods, setExpandedMethods] = usePersistentSet('fold:meso:periodizationMethods');
   const isMethodCollapsed = (fullMethodName: string) => !expandedMethods.has(fullMethodName);
   
   // Method parameter visibility overrides for Step 4
@@ -219,10 +220,6 @@ export default function MesocyclePage() {
     });
   };
   
-  // Entering step 4: all methods closed again
-  useEffect(() => {
-    if (currentStep === 4) setExpandedMethods(new Set());
-  }, [currentStep]);
 
   const { data: toolboxData } = useToolboxData();
   const { data: parametersDataV2 } = useParametersDataV2();

@@ -62,6 +62,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { usePersistentFlags } from '@/hooks/usePersistentState';
 
 interface TrainingDay {
   date: string;
@@ -537,7 +538,7 @@ export function MasterPlannerColumn({
   const [dayIntensityPopoverOpen, setDayIntensityPopoverOpen] = useState(false);
   const [sessionIntensityPopovers, setSessionIntensityPopovers] = useState<Record<number, boolean>>({});
   // Default all exercises to collapsed (true = collapsed)
-  const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
+  const [expandedExercises, setExpandedExercises] = usePersistentFlags('fold:calendar:exercises');
   const [combinedDialogOpen, setCombinedDialogOpen] = useState(false);
   // State for Change Exercise via full library popup
   const [changeExerciseTarget, setChangeExerciseTarget] = useState<{

@@ -9,6 +9,7 @@ import { WorkoutExerciseCard } from './WorkoutExerciseCard';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
 import { ToolboxEntry } from '@/types/toolbox';
 import { useWorkoutSession } from './WorkoutSessionContext';
+import { usePersistentFlags } from '@/hooks/usePersistentState';
 
 interface WorkoutSectionCardProps {
   // Section-specific data (different per instance)
@@ -76,7 +77,7 @@ export function WorkoutSectionCard({
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(section.name);
   // Track collapsed exercises
-  const [collapsedExercises, setCollapsedExercises] = useState<Record<string, boolean>>({});
+  const [collapsedExercises, setCollapsedExercises] = usePersistentFlags('fold:sheet:exercises');
 
   const toggleExerciseCollapse = (exerciseId: string) => {
     setCollapsedExercises(prev => ({

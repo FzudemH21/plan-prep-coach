@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { ExerciseDistribution, SessionSection } from '@/types/microcycle-planning';
 import { displayMethodLabel, methodColorClasses } from './methodLabelUtils';
 import { sessionSupersetLabels } from '@/utils/supersetUtils';
+import { usePersistentSet, usePersistentFlags } from '@/hooks/usePersistentState';
 
 /** A method (+ exercise category) of the current mesocycle that contains a given exercise */
 export interface ExerciseMethodOption {
@@ -141,24 +142,18 @@ export function SessionColumnView({
   const [isEditingSessionName, setIsEditingSessionName] = useState(false);
   // Folded sessions show only their header; remembered per session in this browser
   const collapseKey = `${day?.date}_${sessionIndex}`;
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    try { return (JSON.parse(localStorage.getItem('collapsedSessions') ?? '[]') as string[]).includes(collapseKey); }
-    catch { return false; }
+  const [collapsedSessions, setCollapsedSessions] = usePersistentSet('collapsedSessions');
+  const collapsed = collapsedSessions.has(collapseKey);
+  const toggleCollapsed = () => setCollapsedSessions(prev => {
+    const next = new Set(prev);
+    if (next.has(collapseKey)) next.delete(collapseKey); else next.add(collapseKey);
+    return next;
   });
-  const toggleCollapsed = () => {
-    const next = !collapsed;
-    setCollapsed(next);
-    try {
-      const stored = new Set(JSON.parse(localStorage.getItem('collapsedSessions') ?? '[]') as string[]);
-      if (next) stored.add(collapseKey); else stored.delete(collapseKey);
-      localStorage.setItem('collapsedSessions', JSON.stringify([...stored]));
-    } catch { /* ignore */ }
-  };
   const [editingSessionNameValue, setEditingSessionNameValue] = useState('');
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
   const [deleteSessionDialogOpen, setDeleteSessionDialogOpen] = useState(false);
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [collapsedSections, setCollapsedSections] = usePersistentFlags('fold:micro:sections');
 
   const toggleSectionCollapse = (sectionId: string) => {
     setCollapsedSections(prev => ({

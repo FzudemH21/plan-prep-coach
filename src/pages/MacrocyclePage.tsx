@@ -59,6 +59,7 @@ import { appliesToMeasure, hasCustomMeasures, measureById, parameterMeasures } f
 import { isDatabaseAction, useDatabaseAIActions } from "@/hooks/useDatabaseAIActions";
 import { applyNotesAction, readNotesHistory, restoreNotesVersion, strategyContext, WRITE_UP_PROMPT, type PlanNotesVersion } from "@/utils/planStrategy";
 import { useWizardData } from "@/contexts/WizardDataContext";
+import { usePersistentSet } from '@/hooks/usePersistentState';
 
 // Type for manually added methods with rationale
 interface ManuallyAddedMethod {
@@ -150,8 +151,8 @@ export default function MacrocyclePage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedTest, setSelectedTest] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
-  const [expandedSubGoals, setExpandedSubGoals] = useState<Set<string>>(new Set());
-  const [expandedPrimaryGoals, setExpandedPrimaryGoals] = useState<Set<string>>(new Set());
+  const [expandedSubGoals, setExpandedSubGoals] = usePersistentSet('fold:macro:subGoals');
+  const [expandedPrimaryGoals, setExpandedPrimaryGoals] = usePersistentSet('fold:macro:primaryGoals');
   const [addSubGoalForParent, setAddSubGoalForParent] = useState<string | undefined>(undefined);
   const [editingGoal, setEditingGoal] = useState<SmartGoal | null>(null);
 const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
@@ -197,8 +198,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   const [showMissingRationaleWarning, setShowMissingRationaleWarning] = useState(false);
   // Hierarchical method selector (Step 3): which categories/methods are expanded to
   // progressively reveal rationale/goals/evidence instead of showing everything at once.
-  const [expandedMethodCategories, setExpandedMethodCategories] = useState<Set<string>>(new Set());
-  const [expandedMethodDetails, setExpandedMethodDetails] = useState<Set<string>>(new Set());
+  const [expandedMethodCategories, setExpandedMethodCategories] = usePersistentSet('fold:macro:methodCategories');
+  const [expandedMethodDetails, setExpandedMethodDetails] = usePersistentSet('fold:macro:methodDetails');
 
   // Derive sub-goals from SMART goal parameter relationships
   const derivedSubGoals = useMemo(() => {

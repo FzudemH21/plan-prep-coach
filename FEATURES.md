@@ -130,6 +130,7 @@ These features extend the existing Athlete Profile page in the coach web app.
 
 | Feature | Notes |
 |---|---|
+| Wizard fold states are remembered | ✅ Done — what is folded / expanded stays the same after leaving and reopening a page (stored in this browser, shared hook `usePersistentSet` / `usePersistentFlags` in `src/hooks/usePersistentState.ts`): Macrocycle goals and method categories/details, Mesocycle mesocycles, periodization categories and method rows (no longer all closed again on entering step 4), exercise selection categories, method distribution panel, exercise distribution panel, sessions and sections, training calendar exercises, session sheet exercises |
 | Exercise distribution: fold sessions | ✅ Done — an arrow left of the session name folds a session to its header (name, intensity, exercise/method counts, actions), like sections; folded sessions are remembered in this browser |
 | Exercise selection: categories start collapsed | ✅ Done — in Mesocycle step 5 the method categories (Agility, Sprinting, …) start collapsed for a better overview; the coach opens the ones to work on, and they stay as set |
 | Exercise distribution panel sorted alphabetically | ✅ Done — the Methods & Exercises panel lists main methods alphabetically, then their methods (e.g. Lower Body Resistance Training › Accessories, Hypertrophy, Strength) — same order as method distribution; exercise categories keep their toolbox order |

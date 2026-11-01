@@ -46,6 +46,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { notifySessionMetaChanged } from '@/utils/parameterVisibility';
+import { usePersistentSet } from '@/hooks/usePersistentState';
 
 export interface MethodSessionArchitectureProps {
   mesocycle: ExtendedMesocycle;
@@ -174,9 +175,9 @@ export function MethodSessionArchitecture({
   const [clearingMicrocycleId, setClearingMicrocycleId] = useState<string | null>(null);
   const [clearingMesocycleId, setClearingMesocycleId] = useState<string | null>(null);
   const [confirmCopyMesocycle, setConfirmCopyMesocycle] = useState(false);
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [expandedCategories, setExpandedCategories] = usePersistentSet('fold:micro:methodPanelCategories');
   /** Methods with exercise-category cards — collapsed unless listed here */
-  const [expandedMethods, setExpandedMethods] = useState<Set<string>>(new Set());
+  const [expandedMethods, setExpandedMethods] = usePersistentSet('fold:micro:methodPanelMethods');
   // ── selected microcycle: controlled by parent when prop provided, else local ──
   const [selectedMicrocycleIndexLocal, setSelectedMicrocycleIndexLocal] = useState(0);
   const selectedMicrocycleIndex = selectedMicrocycleIndexProp ?? selectedMicrocycleIndexLocal;
@@ -316,13 +317,14 @@ export function MethodSessionArchitecture({
 
   // ── init: categories start expanded — only newly appearing ones, so a category the coach
   // collapsed stays collapsed when the list is rebuilt (every store refresh / auto-save) ─────
-  const seenCategoriesRef = useRef<Set<string>>(new Set());
+  // ("Seen" is remembered too, so reopening the page doesn't open them again)
+  const [seenCategories, setSeenCategories] = usePersistentSet('fold:micro:methodPanelSeen');
   useEffect(() => {
-    const added = Object.keys(methodsByCategory).filter(cat => !seenCategoriesRef.current.has(cat));
+    const added = Object.keys(methodsByCategory).filter(cat => !seenCategories.has(cat));
     if (added.length === 0) return;
-    added.forEach(cat => seenCategoriesRef.current.add(cat));
+    setSeenCategories(prev => new Set([...prev, ...added]));
     setExpandedCategories(prev => new Set([...prev, ...added]));
-  }, [methodsByCategory]);
+  }, [methodsByCategory, seenCategories, setSeenCategories, setExpandedCategories]);
 
   // Session cards: alphabetical by main method, then method; a method's exercise categories
   // follow in the panel's order, so they can sit grouped below the method name.

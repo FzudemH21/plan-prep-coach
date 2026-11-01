@@ -28,6 +28,7 @@ import {
 import { cn } from '@/lib/utils';
 import { getParametersForMethod, MethodParameter } from '@/data/methodParameters';
 import { getBorgBg, getBorgFg, getBorgLabelFull, getBorgStyleLight, migrateLegacyIntensity } from '@/utils/intensityScale';
+import { usePersistentSet } from '@/hooks/usePersistentState';
 
 export interface MicrocyclePlanningTableHandle {
   mergeCellData: (newCellData: Record<string, CellData>) => void;
@@ -110,7 +111,7 @@ export const MicrocyclePlanningTable = forwardRef<MicrocyclePlanningTableHandle,
     },
   }));
 
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [expandedCategories, setExpandedCategories] = usePersistentSet('fold:meso:exerciseSelectionCategories');
   
   // Mesocycle navigation state for single + comparison view
   
