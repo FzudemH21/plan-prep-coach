@@ -1,3 +1,4 @@
+import { withExerciseVisibility } from '@/utils/parameterVisibility';
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { persistAssignmentPlan } from '@/utils/assignmentPlanStore';
 import { isRestIntensity } from '@/utils/intensityScale';
@@ -1937,6 +1938,11 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     );
   }, []);
 
+  /** An exercise's parameter visibility, kept on the exercise too (copied with it) */
+  const handleExerciseVisibilityChange = useCallback((exerciseId: string, overrides: Record<string, boolean>) => {
+    setExerciseDistribution(prev => withExerciseVisibility(prev, exerciseId, overrides));
+  }, []);
+
   /** This placement and every later placement of the same exercise (the following weeks) */
   const handleExerciseEachSideChange = useCallback((exerciseId: string, eachSide: boolean) => {
     setExerciseDistribution(prev => {
@@ -2399,6 +2405,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     handleExerciseDelete,
     handleExerciseNotesChange,
     handleExerciseEachSideChange,
+    handleExerciseVisibilityChange,
     handleExerciseChange,
     
     // Intensity handlers

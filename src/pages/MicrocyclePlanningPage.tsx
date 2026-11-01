@@ -40,7 +40,7 @@ import { WIZARD_CHAT_ID } from '@/contexts/AIChatContext';
 import { isDatabaseAction, useDatabaseAIActions } from '@/hooks/useDatabaseAIActions';
 import { applyNotesAction, readNotesHistory, restoreNotesVersion, strategyContext, WRITE_UP_PROMPT } from '@/utils/planStrategy';
 import { onExerciseRenamed, renameExerciseInValue } from '@/utils/exerciseRename';
-import { notifySessionMetaChanged, SESSION_META_CHANGED_EVENT } from '@/utils/parameterVisibility';
+import { notifySessionMetaChanged, readSessionMeta, SESSION_META_CHANGED_EVENT } from '@/utils/parameterVisibility';
 import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
 import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
 import { useCoachMemory } from '@/hooks/useCoachMemory';
@@ -571,6 +571,27 @@ export default function MicrocyclePlanningPage() {
   // written to localStorage by their own setters/handlers — also save them to the program, or e.g.
   // an inline session rename in the Master Planner never reaches the saved plan.
   useEffect(() => { markDirty(); }, [trainingDays, dailyIntensityData, parameterValues]);
+
+  // Parameter visibility chosen in the session sheet / Master Planner before it was also kept on the
+  // exercise: put onto the exercise once (only adds the field), so copying the exercise carries it
+  const visibilityCarriedOver = useRef(false);
+  useEffect(() => {
+    if (visibilityCarriedOver.current || !initialDataLoaded || exerciseDistribution.length === 0 || trainingDays.length === 0) return;
+    visibilityCarriedOver.current = true;
+    const mesocycleByDate = new Map(trainingDays.map(td => [td.date, td.mesocycleId]));
+    const ownOf = (ex: ExerciseDistribution) => {
+      const mesocycleId = mesocycleByDate.get(ex.dayDate);
+      return mesocycleId
+        ? readSessionMeta(mesocycleId, ex.dayDate, ex.sessionIndex).parameterVisibilityByExercise?.[ex.id || ex.exerciseId]
+        : undefined;
+    };
+    if (!exerciseDistribution.some(ex => !ex.parameterVisibility && ownOf(ex))) return;
+    setExerciseDistribution(prev => prev.map(ex => {
+      if (ex.parameterVisibility) return ex;
+      const own = ownOf(ex);
+      return own ? { ...ex, parameterVisibility: own } : ex;
+    }));
+  }, [initialDataLoaded, exerciseDistribution, trainingDays]);
 
   // Per-session data kept in its own storage keys (comments, parameter visibility, session
   // intensities, the session sheet's sections) — save it with the program when it changes

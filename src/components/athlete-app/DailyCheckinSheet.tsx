@@ -1271,8 +1271,9 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
         // Remove the default close button — we handle navigation ourselves
         onInteractOutside={(e) => e.preventDefault()}
       >
-        {/* Progress bar — ends before the close button (top right) */}
-        <div className="pl-5 pr-12 pt-5 pb-1 shrink-0">
+        {/* Progress bar — ends before the close button (top right, 16 px icon at 16 px: centre 24 px),
+            its 4 px line centred on the same height */}
+        <div className="pl-5 pr-12 pt-[22px] pb-1 shrink-0">
           <ProgressBar value={progressValue()} />
           {athleteName && step !== 'done' && (
             <p className="text-xs text-muted-foreground mt-2">

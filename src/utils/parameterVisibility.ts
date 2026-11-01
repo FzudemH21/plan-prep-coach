@@ -58,6 +58,40 @@ export function writeSessionMeta(mesocycleId: string, dayDate: string, sessionIn
   } catch { /* ignore */ }
 }
 
+type PlacedExercise = { id?: string; exerciseId: string; parameterVisibility?: VisibilityOverrides };
+
+/**
+ * An exercise's overrides in its session: the session's own entry for it (session sheet / Master
+ * Planner), else the exercise's own setting (`parameterVisibility` on its distribution entry — set in
+ * the exercise distribution step and copied with the exercise), else the legacy session-wide ones.
+ * Every place that changes them writes both, so they agree.
+ */
+export function placementVisibility(data: SessionVisibilityData | undefined, exercise: PlacedExercise): VisibilityOverrides {
+  return data?.parameterVisibilityByExercise?.[exercise.id || exercise.exerciseId]
+    ?? exercise.parameterVisibility
+    ?? data?.parameterVisibility
+    ?? {};
+}
+
+/** Distribution entries with one exercise's overrides set on it (they travel with copies of it) */
+export function withExerciseVisibility<T extends PlacedExercise>(entries: T[], exerciseKey: string, overrides: VisibilityOverrides): T[] {
+  return entries.map(e => ((e.id || e.exerciseId) === exerciseKey ? { ...e, parameterVisibility: overrides } : e));
+}
+
+/** The parameters an exercise of this method can show (Training Toolbox), for the visibility picker */
+export function methodVisibilityParams(
+  entries: Array<{ category: string; subCategory?: string; parameterName: string; showInGridByDefault?: boolean; isSetParameter?: boolean; isFrequencyParameter?: boolean }>,
+  methodId: string,
+): Array<{ name: string; showInGridByDefault: boolean }> {
+  const [main = '', sub = ''] = methodId.split('::')[0].split(' - ');
+  const seen = new Set<string>();
+  return entries
+    .filter(e => e.category === main && (sub ? e.subCategory === sub : !e.subCategory))
+    .filter(e => !e.isSetParameter && !e.isFrequencyParameter && e.parameterName !== 'frequency_per_week' && e.parameterName !== 'Frequency')
+    .filter(e => !seen.has(e.parameterName) && !!seen.add(e.parameterName))
+    .map(e => ({ name: e.parameterName, showInGridByDefault: e.showInGridByDefault ?? true }));
+}
+
 /** Effective overrides for one exercise. */
 export function getExerciseVisibility(data: SessionVisibilityData | undefined, exerciseId: string): VisibilityOverrides {
   const own = data?.parameterVisibilityByExercise?.[exerciseId];

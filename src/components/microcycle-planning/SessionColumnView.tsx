@@ -1,3 +1,4 @@
+import { ParameterVisibilityPopover } from './ParameterVisibilityPopover';
 import React, { useState, useMemo } from 'react';
 import { BorgLevel, BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabel, getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { Droppable, Draggable } from '@hello-pangea/dnd';
@@ -72,6 +73,11 @@ interface SessionColumnViewProps {
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
   /** Toggle "each side" (unilateral: the reps count per side) */
   onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
+  /** Which parameters an exercise shows later (calendar, session sheet, athlete app): the method's
+   *  parameters, the exercise's current choice, and the change (kept on the exercise, copied with it) */
+  visibilityParamsFor?: (exercise: ExerciseDistribution) => Array<{ name: string; showInGridByDefault: boolean }>;
+  visibilityOf?: (exercise: ExerciseDistribution) => Record<string, boolean>;
+  onExerciseVisibilityChange?: (exercise: ExerciseDistribution, overrides: Record<string, boolean>) => void;
   onReorderSection?: (sectionId: string, direction: 'up' | 'down') => void;
   /** Visual hint during drag: 'match' = valid drop, 'no-match' = dim, 'neutral' = no drag active */
   methodMatchState?: 'match' | 'no-match' | 'neutral';
@@ -122,6 +128,9 @@ export function SessionColumnView({
   onMoveSessionDown,
   onExerciseNotesChange,
   onExerciseEachSideChange,
+  visibilityParamsFor,
+  visibilityOf,
+  onExerciseVisibilityChange,
   onReorderSection,
   methodMatchState = 'neutral',
   assignedMethods,
@@ -427,6 +436,23 @@ export function SessionColumnView({
                     )}
                     </div>
                   </div>
+
+                  {/* Which parameters this exercise shows (copied when the exercise is copied) */}
+                  {(() => {
+                    const params = onExerciseVisibilityChange && visibilityParamsFor ? visibilityParamsFor(exercise) : [];
+                    if (params.length === 0) return null;
+                    const current = visibilityOf?.(exercise) ?? {};
+                    return (
+                      <ParameterVisibilityPopover
+                        parameters={params}
+                        note="Applies to this exercise and is copied with it"
+                        visibilityOverrides={current}
+                        onVisibilityChange={(name, visible) => onExerciseVisibilityChange!(exercise, { ...current, [name]: visible })}
+                        onShowAll={() => onExerciseVisibilityChange!(exercise, { ...current, ...Object.fromEntries(params.map(p => [p.name, true])) })}
+                        onResetToDefaults={() => onExerciseVisibilityChange!(exercise, {})}
+                      />
+                    );
+                  })()}
 
                   {/* Each side (unilateral) toggle */}
                   {onExerciseEachSideChange && (

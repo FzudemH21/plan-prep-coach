@@ -23,7 +23,7 @@ import { useToolboxData } from '@/hooks/useToolboxData';
 import { useExerciseMetrics } from '@/hooks/useExerciseMetrics';
 import { evaluateFormula, parseNumeric } from '@/utils/formulaEvaluator';
 import { isParameterVisible, ParameterVisibilityPopover, type ParameterVisibilityOverrides } from './ParameterVisibilityPopover';
-import { getExerciseVisibility, readSessionMeta, updateExerciseVisibility, writeSessionMeta } from '@/utils/parameterVisibility';
+import { placementVisibility, readSessionMeta, updateExerciseVisibility, writeSessionMeta } from '@/utils/parameterVisibility';
 import { AthletePerformanceParameter } from '@/types/athlete';
 import {
   Table,
@@ -147,6 +147,8 @@ interface MasterPlannerColumnProps {
   // New props for Phase 2 - editable notes and eachSide
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
   onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
+  /** An exercise's parameter visibility changed — kept on its distribution entry (copied with it) */
+  onExerciseVisibilityChange?: (exerciseId: string, overrides: Record<string, boolean>) => void;
   /** Drop this placement's own parameter edits (session sheet / Master Planner) → Periodization Table values again */
   onExerciseOverridesReset?: (exerciseDistributionId: string) => void;
   // New props for Phase 4 - intensity editing
@@ -508,6 +510,7 @@ export function MasterPlannerColumn({
   totalWeeks = 6,
   onExerciseNotesChange,
   onExerciseEachSideChange,
+  onExerciseVisibilityChange,
   onExerciseOverridesReset,
   onDayIntensityChange,
   onSessionIntensityChange,
@@ -585,20 +588,24 @@ export function MasterPlannerColumn({
 
   // Parameter show/hide choices per exercise — shared with the Workout Session Sheet (same storage)
   const [, setVisibilityVersion] = useState(0);
-  const getExerciseParamVisibility = useCallback((sessionIndex: number, exerciseId: string): ParameterVisibilityOverrides => {
-    if (!currentMesocycle) return {};
-    return getExerciseVisibility(readSessionMeta(currentMesocycle.id, day.dateString, sessionIndex, sessionMetaScope), exerciseId);
+  const getExerciseParamVisibility = useCallback((exercise: ExerciseDistribution): ParameterVisibilityOverrides => {
+    if (!currentMesocycle) return exercise.parameterVisibility ?? {};
+    return placementVisibility(readSessionMeta(currentMesocycle.id, day.dateString, exercise.sessionIndex, sessionMetaScope), exercise);
   }, [currentMesocycle, day.dateString, sessionMetaScope]);
   const updateExerciseParamVisibility = useCallback((
-    sessionIndex: number,
-    exerciseId: string,
+    exercise: ExerciseDistribution,
     update: (prev: ParameterVisibilityOverrides) => ParameterVisibilityOverrides,
   ) => {
-    if (!currentMesocycle) return;
-    const meta = readSessionMeta(currentMesocycle.id, day.dateString, sessionIndex, sessionMetaScope);
-    writeSessionMeta(currentMesocycle.id, day.dateString, sessionIndex, updateExerciseVisibility(meta, exerciseId, update), sessionMetaScope);
+    const exerciseKey = exercise.id || exercise.exerciseId;
+    const next = update(getExerciseParamVisibility(exercise));
+    if (currentMesocycle) {
+      const meta = readSessionMeta(currentMesocycle.id, day.dateString, exercise.sessionIndex, sessionMetaScope);
+      writeSessionMeta(currentMesocycle.id, day.dateString, exercise.sessionIndex, updateExerciseVisibility(meta, exerciseKey, () => next), sessionMetaScope);
+    }
+    // Also on the exercise itself, so copying it carries the choice
+    onExerciseVisibilityChange?.(exerciseKey, next);
     setVisibilityVersion(v => v + 1);
-  }, [currentMesocycle, day.dateString, sessionMetaScope]);
+  }, [currentMesocycle, day.dateString, sessionMetaScope, getExerciseParamVisibility, onExerciseVisibilityChange]);
 
   const currentIntensity: IntensityLevel = migrateLegacyIntensity(dailyIntensityData?.find(di => di.date === day.dateString)?.intensity || '5') as IntensityLevel;
 
@@ -916,7 +923,7 @@ export function MasterPlannerColumn({
     // Split params into visible (grid) and hidden (badges) — same rules as the Workout Session
     // Sheet: toolbox "show in grid" default + the session's show/hide choices
     const visibilityExerciseId = exercise.id || exercise.exerciseId;
-    const visibility = getExerciseParamVisibility(exercise.sessionIndex, visibilityExerciseId);
+    const visibility = getExerciseParamVisibility(exercise);
     const displayableParams = methodParams.filter(p =>
       !p.isSetParameter &&
       !p.isFrequencyParameter &&
@@ -1183,14 +1190,14 @@ export function MasterPlannerColumn({
               note="Applies to this exercise, here and in the session sheet"
               visibilityOverrides={visibility}
               onVisibilityChange={(name, visible) =>
-                updateExerciseParamVisibility(exercise.sessionIndex, visibilityExerciseId, prev => ({ ...prev, [name]: visible }))}
+                updateExerciseParamVisibility(exercise, prev => ({ ...prev, [name]: visible }))}
               onShowAll={() =>
-                updateExerciseParamVisibility(exercise.sessionIndex, visibilityExerciseId, prev => ({
+                updateExerciseParamVisibility(exercise, prev => ({
                   ...prev,
                   ...Object.fromEntries(pickerParams.map(p => [p.name, true])),
                 }))}
               onResetToDefaults={() =>
-                updateExerciseParamVisibility(exercise.sessionIndex, visibilityExerciseId, () => ({}))}
+                updateExerciseParamVisibility(exercise, () => ({}))}
             />
           </div>
         )}

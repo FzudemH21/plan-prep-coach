@@ -38,7 +38,8 @@ import { cn } from '@/lib/utils';
 import { cleanupSupersetsOnExerciseDelete, toggleSuperset } from '@/utils/supersetUtils';
 import { getBorgBg, getBorgFg, getBorgLabelFull, getBorgStyleLight, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { CircuitBuilderDialog } from '@/components/templates/CircuitBuilderDialog';
-import { notifySessionMetaChanged } from '@/utils/parameterVisibility';
+import { methodVisibilityParams, notifySessionMetaChanged, placementVisibility, readSessionMeta, updateExerciseVisibility, withExerciseVisibility, writeSessionMeta } from '@/utils/parameterVisibility';
+import { useToolboxData } from '@/hooks/useToolboxData';
 import { fitExercisesToMesocycleMethods, describeMethodFit } from '@/utils/exerciseMethodRemap';
 import { applyLibraryCircuit, findLibraryCircuit, isCircuitLibraryUpdateAvailable } from '@/utils/circuitLibrarySync';
 
@@ -1612,6 +1613,22 @@ export function EnhancedExerciseDistribution({
     toast({ title: 'Circuit updated', description: `"${found.circuit.name}" now matches the library version` });
   }, [exerciseDistribution, libraries, onDistributionChange, toast]);
 
+  // Which parameters an exercise shows later on — chosen here, kept on the exercise (copied with it)
+  // and in its session's settings (where the session sheet and the Master Planner read it)
+  const { data: toolboxForVisibility } = useToolboxData();
+  const visibilityParamsFor = useCallback((exercise: ExerciseDistribution) =>
+    exercise.isCircuit ? [] : methodVisibilityParams(toolboxForVisibility?.entries ?? [], exercise.methodId),
+  [toolboxForVisibility]);
+  const visibilityOf = useCallback((exercise: ExerciseDistribution) =>
+    placementVisibility(readSessionMeta(mesocycle.id, exercise.dayDate, exercise.sessionIndex), exercise),
+  [mesocycle.id]);
+  const handleExerciseVisibilityChange = useCallback((exercise: ExerciseDistribution, overrides: Record<string, boolean>) => {
+    const exerciseKey = exercise.id || exercise.exerciseId;
+    const meta = readSessionMeta(mesocycle.id, exercise.dayDate, exercise.sessionIndex);
+    writeSessionMeta(mesocycle.id, exercise.dayDate, exercise.sessionIndex, updateExerciseVisibility(meta, exerciseKey, () => overrides));
+    onDistributionChange(withExerciseVisibility(exerciseDistribution, exerciseKey, overrides));
+  }, [mesocycle.id, exerciseDistribution, onDistributionChange]);
+
   const handleExerciseEachSideChange = useCallback((exerciseId: string, eachSide: boolean) => {
     onDistributionChange(exerciseDistribution.map(ex => ex.id === exerciseId ? { ...ex, eachSide } : ex));
   }, [exerciseDistribution, onDistributionChange]);
@@ -2714,6 +2731,9 @@ export function EnhancedExerciseDistribution({
                                     onMoveSessionDown={handleMoveSessionDownLocal}
                                     onExerciseNotesChange={handleExerciseNotesChange}
                                     onExerciseEachSideChange={handleExerciseEachSideChange}
+                                    visibilityParamsFor={visibilityParamsFor}
+                                    visibilityOf={visibilityOf}
+                                    onExerciseVisibilityChange={handleExerciseVisibilityChange}
                                     circuitUpdateIds={circuitUpdateIds}
                                     onUpdateCircuitFromLibrary={handleUpdateCircuitFromLibrary}
                                     onReorderSection={handleSectionReorder}

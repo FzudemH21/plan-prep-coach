@@ -10,7 +10,7 @@ import { MasterPlannerGrid } from './MasterPlannerGrid';
 import { cn } from '@/lib/utils';
 import { TrainingDay } from '@/types/daily-intensity';
 import { ExtendedMesocycle } from '@/features/planner/types';
-import { notifySessionMetaChanged } from '@/utils/parameterVisibility';
+import { notifySessionMetaChanged, withExerciseVisibility } from '@/utils/parameterVisibility';
 import { IntensityLevel } from '@/types/training';
 import { TrainingDayCell } from './TrainingDayCell';
 import { WeekRow } from './WeekRow';
@@ -792,6 +792,9 @@ export function TrainingCalendarView({
                   (ex.id || ex.exerciseId) === distributionId ? { ...ex, parameterOverrides: undefined } : ex
                 ));
               } : undefined}
+              onExerciseVisibilityChange={onDistributionChange
+                ? (exerciseId, overrides) => onDistributionChange(withExerciseVisibility(exerciseDistribution, exerciseId, overrides))
+                : undefined}
               onExerciseEachSideChange={(exerciseId, eachSide) => {
                 // This placement and every later placement of the same exercise (the following weeks);
                 // earlier weeks keep theirs

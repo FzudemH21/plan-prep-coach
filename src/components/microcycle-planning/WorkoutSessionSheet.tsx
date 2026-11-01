@@ -2039,6 +2039,11 @@ export function WorkoutSessionSheet({
         if (updated.sectionId !== info.sectionId) {
           updated = { ...updated, sectionId: info.sectionId };
         }
+        // Parameter visibility chosen here also on the exercise itself (copied with it)
+        const visibility = exerciseVisibilityOverrides[exId];
+        if (visibility && JSON.stringify(visibility) !== JSON.stringify(updated.parameterVisibility ?? null)) {
+          updated = { ...updated, parameterVisibility: visibility };
+        }
         // For toolbox exercises, sync adhocPlannedParams from the current workoutSections
         // parameters so that any edits the coach made inside the dialog are persisted
         // and flow through to the athlete app via athleteScheduleSync.
