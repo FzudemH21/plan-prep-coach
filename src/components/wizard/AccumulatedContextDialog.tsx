@@ -10,7 +10,7 @@
  *   confirm → generating → questions → saving → done
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +42,8 @@ export interface AccumulatedContextDialogProps {
   programId: string;
   /** Authenticated user ID */
   userId: string;
+  /** Resolves once the plan's memory row is saved (the answers are added to it) */
+  planMemorySaved?: Promise<void>;
   /** Called when the coach chooses "No, just save" — no AI interaction */
   onJustSave: () => void;
   /** Called when the full flow completes (either path) */
@@ -100,6 +102,7 @@ export function AccumulatedContextDialog({
   planSummary,
   programId,
   userId,
+  planMemorySaved,
   onJustSave,
   onDone,
 }: AccumulatedContextDialogProps) {
@@ -107,6 +110,16 @@ export function AccumulatedContextDialog({
   const [questions, setQuestions] = useState<string[]>([]);
   const [answers, setAnswers] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // The questions are prepared as soon as the dialog opens, so "Yes" rarely has to wait for the AI
+  const pendingQuestions = useRef<Promise<string[]> | null>(null);
+  useEffect(() => {
+    if (!open || !planSummary) return;
+    const request = generateQuestions(planSummary);
+    request.catch(() => { /* handled when the coach says yes */ });
+    pendingQuestions.current = request;
+    return () => { if (pendingQuestions.current === request) pendingQuestions.current = null; };
+  }, [open, planSummary]);
 
   const reset = () => {
     setStep("confirm");
@@ -119,7 +132,7 @@ export function AccumulatedContextDialog({
     setStep("generating");
     setError(null);
     try {
-      const qs = await generateQuestions(planSummary);
+      const qs = await (pendingQuestions.current ?? generateQuestions(planSummary));
       if (qs.length === 0) {
         // No meaningful questions generated — treat as done
         onDone();
@@ -130,6 +143,7 @@ export function AccumulatedContextDialog({
       setAnswers(qs.map(() => ""));
       setStep("questions");
     } catch {
+      pendingQuestions.current = null; // trying again asks the AI again
       setError("Could not generate questions. You can skip for now.");
       setStep("confirm");
     }
@@ -141,6 +155,7 @@ export function AccumulatedContextDialog({
       const qAndA: Array<{ question: string; answer: string }> = questions.map(
         (q, i) => ({ question: q, answer: answers[i] ?? "" })
       );
+      await planMemorySaved; // the answers are added to the plan's memory row
       await saveRationaleNotes(programId, userId, qAndA);
       setStep("done");
     } catch {

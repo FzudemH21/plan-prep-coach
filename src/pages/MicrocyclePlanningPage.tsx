@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy, ChevronDown, Columns, ChevronRight, X, Trash2, Trophy, Calendar, Check, FileText } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Target, AlertTriangle, Info, Copy, ChevronDown, Columns, ChevronRight, X, Trash2, Trophy, Calendar, Check, FileText, Loader2 } from 'lucide-react';
 import { ResourcesButton } from '@/components/programs/ResourcesButton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
@@ -112,6 +112,9 @@ export default function MicrocyclePlanningPage() {
   const anamnesisAIContext = useAnamnesisAIContext(selectedAthleteId ?? null);
   const { user } = useAuth();
   const [accumulatedDialogOpen, setAccumulatedDialogOpen] = useState(false);
+  // Save & Finish: busy while the program saves; the plan memory (AI context) saves in the background
+  const [finishing, setFinishing] = useState(false);
+  const planMemorySaved = useRef<Promise<void>>(Promise.resolve());
   const [accumulatedProgramId, setAccumulatedProgramId] = useState('');
   const [accumulatedPlanSummary, setAccumulatedPlanSummary] = useState('');
   const [aiOpenTrigger, setAiOpenTrigger] = useState(0);
@@ -3880,29 +3883,40 @@ export default function MicrocyclePlanningPage() {
                 Export PDF
               </Button>
               <Button
+                disabled={finishing}
                 onClick={async () => {
-                  const program = await saveCurrentSession();
-                  if (program && user) {
-                    await saveToMemory(program);
-                    const alreadyDone = localStorage.getItem(`rationale_done_${program.id}`) === '1';
-                    if (alreadyDone) {
+                  if (finishing) return;
+                  setFinishing(true);
+                  try {
+                    const program = await saveCurrentSession();
+                    if (program && user) {
+                      // In the background: the dialog doesn't need it (before, it waited several
+                      // Supabase round trips — the dialog came up only after ~20 s)
+                      planMemorySaved.current = saveToMemory(program).catch(err => {
+                        console.error('[planMemory] save failed:', err);
+                      });
+                      const alreadyDone = localStorage.getItem(`rationale_done_${program.id}`) === '1';
+                      if (alreadyDone) {
+                        toast({ title: "Program saved", description: "Your training program has been saved." });
+                        navigate("/templates/programs");
+                        return;
+                      }
+                      const summary = extractPlanSummary(program, user.id);
+                      setAccumulatedProgramId(program.id);
+                      setAccumulatedPlanSummary(summary.summary_text);
+                      setAccumulatedDialogOpen(true);
+                    } else {
                       toast({ title: "Program saved", description: "Your training program has been saved." });
                       navigate("/templates/programs");
-                      return;
                     }
-                    const summary = extractPlanSummary(program, user.id);
-                    setAccumulatedProgramId(program.id);
-                    setAccumulatedPlanSummary(summary.summary_text);
-                    setAccumulatedDialogOpen(true);
-                  } else {
-                    toast({ title: "Program saved", description: "Your training program has been saved." });
-                    navigate("/templates/programs");
+                  } finally {
+                    setFinishing(false);
                   }
                 }}
                 className="w-full md:w-auto"
               >
-                <Check className="mr-2 h-4 w-4" />
-                Save & Finish
+                {finishing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                {finishing ? 'Saving…' : 'Save & Finish'}
               </Button>
             </div>
           ) : (
@@ -5625,6 +5639,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
         planSummary={accumulatedPlanSummary}
         programId={accumulatedProgramId}
         userId={user?.id ?? ''}
+        planMemorySaved={planMemorySaved.current}
         onJustSave={() => {
           if (accumulatedProgramId) localStorage.setItem(`rationale_done_${accumulatedProgramId}`, '1');
           setAccumulatedDialogOpen(false);
