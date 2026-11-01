@@ -252,8 +252,15 @@ export function TrainingCalendarView({
   };
 
   // Get the currently viewed mesocycle (for Master Planner view)
+  // "Jump to": only choosing a mesocycle (or the page's mesocycle changing) moves the Master Planner;
+  // scrolling with the arrows just updates the selector to the mesocycle shown
+  const [jumpRequest, setJumpRequest] = useState({ mesocycleId: currentMesocycle.id, nonce: 0 });
+  const jumpToMesocycle = (id: string) => {
+    setViewedMesocycleId(id);
+    setJumpRequest(prev => ({ mesocycleId: id, nonce: prev.nonce + 1 }));
+  };
   // Follow the page's mesocycle when it changes
-  React.useEffect(() => { setViewedMesocycleId(currentMesocycle.id); }, [currentMesocycle.id]);
+  React.useEffect(() => { jumpToMesocycle(currentMesocycle.id); }, [currentMesocycle.id]);
   const viewedMesocycle = useMemo(() => {
     return mesocycles.find(m => m.id === viewedMesocycleId) || currentMesocycle;
   }, [mesocycles, viewedMesocycleId, currentMesocycle]);
@@ -612,12 +619,14 @@ export function TrainingCalendarView({
 
               {/* Mesocycle selector - only show in Master Planner mode when multiple mesocycles exist */}
               {viewMode === 'master' && mesocycles.length > 1 && (
+                <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">Jump to</span>
                 <Select
                   value={viewedMesocycleId}
-                  onValueChange={(id) => setViewedMesocycleId(id)}
+                  onValueChange={jumpToMesocycle}
                 >
                   <SelectTrigger className="w-40 h-8">
-                    <SelectValue placeholder="Select Mesocycle" />
+                    <SelectValue placeholder="Mesocycle" />
                   </SelectTrigger>
                   <SelectContent className="z-[200] bg-background border">
                     {mesocycles.map((meso, idx) => (
@@ -627,6 +636,7 @@ export function TrainingCalendarView({
                     ))}
                   </SelectContent>
                 </Select>
+                </div>
               )}
 
               {/* Day selector - only show in Master Planner mode */}
@@ -711,6 +721,8 @@ export function TrainingCalendarView({
               toolboxData={toolboxData}
               weeksToDisplay={masterWeeksToDisplay}
               onWeeksToDisplayChange={setMasterWeeksToDisplay}
+              jumpRequest={jumpRequest}
+              onVisibleMesocycleChange={setViewedMesocycleId}
               onParameterChange={(onSaveParameters || onDistributionChange) ? (dayDate, sessionIndex, methodId, categoryName, paramName, value, exerciseId) => {
                 // An edit here belongs to this exercise on this day only → per-exercise override
                 // (the Periodization Table stays the source for everything else)

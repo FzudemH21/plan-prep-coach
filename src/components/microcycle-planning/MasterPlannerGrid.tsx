@@ -130,6 +130,11 @@ interface MasterPlannerGridProps {
   athleteBiometrics?: AthleteBiometric[];
   weeksToDisplay?: number;
   onWeeksToDisplayChange?: (n: number) => void;
+  /** "Jump to" a mesocycle: the view moves to its first week whenever the nonce changes. Without
+   *  it, the view moves whenever currentMesocycle changes. */
+  jumpRequest?: { mesocycleId: string; nonce: number };
+  /** The mesocycle of the first week shown — keeps a "Jump to" selector in sync while scrolling */
+  onVisibleMesocycleChange?: (mesocycleId: string) => void;
 }
 
 const DEFAULT_WEEKS_DISPLAY = 4;
@@ -191,6 +196,8 @@ export function MasterPlannerGrid({
   athleteBiometrics,
   weeksToDisplay: weeksToDisplayProp,
   onWeeksToDisplayChange,
+  jumpRequest,
+  onVisibleMesocycleChange,
 }: MasterPlannerGridProps) {
   const [startWeekOffset, setStartWeekOffset] = useState(0);
   const weeksToDisplay = weeksToDisplayProp ?? DEFAULT_WEEKS_DISPLAY;
@@ -217,16 +224,35 @@ export function MasterPlannerGrid({
 
   // The grid spans the whole plan; when a mesocycle is selected, jump to its first week
   // (first matching day on/after its start date)
-  const mesoStartKey = currentMesocycle?.startDate
-    ? format(new Date(currentMesocycle.startDate), 'yyyy-MM-dd')
+  const jumpMesocycle = jumpRequest
+    ? mesocycles?.find(m => m.id === jumpRequest.mesocycleId) ?? currentMesocycle
+    : currentMesocycle;
+  const mesoStartKey = jumpMesocycle?.startDate
+    ? format(new Date(jumpMesocycle.startDate), 'yyyy-MM-dd')
     : undefined;
   useEffect(() => {
     if (!mesoStartKey || allMatchingDays.length <= weeksToDisplay) { setStartWeekOffset(0); return; }
     const idx = allMatchingDays.findIndex(d => d.dateString >= mesoStartKey);
     setStartWeekOffset(idx > 0 ? idx : 0);
-  // Only on mesocycle / weeks-per-view change — not when the day of week or data changes
+  // Only on a jump / weeks-per-view change — not when the day of week, the data or the scroll changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMesocycle?.id, mesoStartKey, weeksToDisplay]);
+  }, [jumpRequest ? jumpRequest.nonce : currentMesocycle?.id, mesoStartKey, weeksToDisplay]);
+
+  // Report the mesocycle of the first week shown (scrolling with the arrows keeps "Jump to" in sync)
+  const firstShownDate = filteredDays[0]?.dateString;
+  useEffect(() => {
+    if (!onVisibleMesocycleChange || !firstShownDate) return;
+    const microcycleId = trainingDays?.find(td => td.date === firstShownDate)?.microcycleId;
+    const meso = microcycleId
+      ? mesocycles?.find(m => m.microcycles?.some(mc => mc.id === microcycleId))
+      : mesocycles?.find(m => {
+          const start = format(new Date(m.startDate), 'yyyy-MM-dd');
+          const end = format(new Date(m.endDate), 'yyyy-MM-dd');
+          return firstShownDate >= start && firstShownDate <= end;
+        });
+    if (meso) onVisibleMesocycleChange(meso.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firstShownDate]);
 
   if (filteredDays.length === 0) {
     return (

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil, StickyNote, Calculator, ArrowUp, ArrowDown, Copy, Trash2, MoreVertical, Link2, ClipboardPaste, RefreshCw } from 'lucide-react';
+import { Dumbbell, Plus, Trophy, Calendar, ChevronDown, ChevronRight, MessageSquare, Pencil, StickyNote, Calculator, ArrowUp, ArrowDown, Copy, Trash2, MoreVertical, Link2, ClipboardPaste, RefreshCw, Maximize2 } from 'lucide-react';
 import { ExerciseLibraryPopup } from './ExerciseLibraryPopup';
 import { SubGoal, Event } from '@/types/training';
 import { CombinedTestEventDialog } from './CombinedTestEventDialog';
@@ -1277,7 +1277,14 @@ export function MasterPlannerColumn({
       <div className="space-y-2">
         {/* Session Header */}
         <div className="flex items-center gap-2 mb-2">
-          <Dumbbell className="h-4 w-4 text-primary" />
+          <button
+            type="button"
+            className="shrink-0 rounded p-0.5 hover:bg-primary/10"
+            title="Open the workout session"
+            onClick={(e) => { e.stopPropagation(); onSessionClick?.(day.dateString, session.sessionIndex, session.exercises); }}
+          >
+            <Dumbbell className="h-4 w-4 text-primary" />
+          </button>
           <EditableSessionName
             sessionName={session.sessionName || `Session ${session.sessionIndex + 1}`}
             onSave={(name) => onSessionNameChange?.(day.dateString, session.sessionIndex, name)}
@@ -1328,6 +1335,20 @@ export function MasterPlannerColumn({
               title={`Session intensity: ${getBorgLabelFull(migrateLegacyIntensity(session.sessionIntensity))}`}
             />
           ) : null}
+
+          {/* Opens the Workout Session Sheet — only from here (and the dumbbell): clicks while
+              editing the session in place used to open it by accident */}
+          {onSessionClick && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 shrink-0 ml-1"
+              title="Open the workout session"
+              onClick={(e) => { e.stopPropagation(); onSessionClick(day.dateString, session.sessionIndex, session.exercises); }}
+            >
+              <Maximize2 className="h-3.5 w-3.5 text-muted-foreground" />
+            </Button>
+          )}
 
           {/* Session 3-dot menu for copy/delete */}
           {(onCopySession || onDeleteSession) && (
@@ -2126,8 +2147,7 @@ export function MasterPlannerColumn({
             {day.sessions.map((session) => (
               <div
                 key={session.id}
-                onClick={() => onSessionClick?.(day.dateString, session.sessionIndex, session.exercises)}
-                className="p-3 rounded-lg border bg-primary/5 hover:bg-primary/10 cursor-pointer transition-colors"
+                className="p-3 rounded-lg border bg-primary/5"
               >
                 {renderSessionContent(session)}
               </div>
