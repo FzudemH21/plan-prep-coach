@@ -548,6 +548,9 @@ export function MasterPlannerColumn({
   const [sessionIntensityPopovers, setSessionIntensityPopovers] = useState<Record<number, boolean>>({});
   // Default all exercises to collapsed (true = collapsed)
   const [expandedExercises, setExpandedExercises] = usePersistentFlags('fold:calendar:exercises');
+  // Open sections (collapsed by default), kept in this browser — before, they were only in the
+  // column's own state and all closed again whenever the column was redrawn (e.g. after a delete)
+  const [expandedSections, setExpandedSections] = usePersistentFlags('fold:calendar:sections');
   const [combinedDialogOpen, setCombinedDialogOpen] = useState(false);
   // State for Change Exercise via full library popup
   const [changeExerciseTarget, setChangeExerciseTarget] = useState<{
@@ -1464,7 +1467,11 @@ export function MasterPlannerColumn({
               const isLastSection = sectionIdx === sections.length - 1;
               
               return (
-                <Collapsible key={section.id} defaultOpen={false}>
+                <Collapsible
+                  key={section.id}
+                  open={!!expandedSections[section.id]}
+                  onOpenChange={(open) => setExpandedSections(prev => ({ ...prev, [section.id]: open }))}
+                >
                   <div className="border rounded-lg bg-card shadow-sm">
                     <div className="flex items-center gap-1 w-full px-3 py-2 hover:bg-muted/30 border-b bg-muted/20">
                       <CollapsibleTrigger 

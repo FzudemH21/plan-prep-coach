@@ -130,6 +130,7 @@ These features extend the existing Athlete Profile page in the coach web app.
 
 | Feature | Notes |
 |---|---|
+| Master Planner: open sections stay open | ✅ Done — section fold state is kept in the browser (`fold:calendar:sections`) like the other folds; before, all sections closed again whenever a column was redrawn (e.g. after deleting an exercise) |
 | Master Planner: same exercise twice in a session handled separately | ✅ Done — delete, duplicate and move up/down act on the clicked placement only (they used the library exercise id, so deleting one of two "Bounding for distance" placements deleted both); also makes these actions work in the athlete calendar Master Planner; each-side labels unique per placement |
 | Master Planner: "each side" carries forward; set delete always visible | ✅ Done — ticking "each side" sets that placement and every later placement of the same exercise (earlier weeks keep theirs), in the wizard and the athlete calendar Master Planner; the delete-set icon shows on every set row when there are several sets |
 | Assigning a program keeps session intensities | ✅ Done — assigning a program to an athlete's calendar carries each session's own intensity (read under the program's dates, moved with the selected microcycles and the date shift; also when merging into an existing assignment, at the merged sessions' places) and sends it to the athlete app. Before, every session took its day's intensity |
