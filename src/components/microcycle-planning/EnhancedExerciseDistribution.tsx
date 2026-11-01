@@ -1932,8 +1932,10 @@ export function EnhancedExerciseDistribution({
         if (dayIndex >= minDays) return;
         const targetDate = dayMapping[dayIndex];
         
-        // Copy day intensity
-        if (onDayIntensityChange && sourceDay.intensity) {
+        // Day intensity: only an empty target day (no session yet) takes the copied one — a day
+        // that already has sessions keeps its own intensity
+        const targetDayBefore = targetDays[dayIndex];
+        if (onDayIntensityChange && sourceDay.intensity && (targetDayBefore?.sessions ?? 0) === 0) {
           onDayIntensityChange(targetDate, sourceDay.intensity);
         }
         
