@@ -4096,6 +4096,7 @@ export default function MicrocyclePlanningPage() {
           onMoveSessionUp={handleMoveSessionUp}
           onMoveSessionDown={handleMoveSessionDown}
           onUpdateTrainingDay={handleUpdateTrainingDay}
+          onDayMethodAssignmentsChange={setDayMethodAssignments}
           dayMethodAssignments={dayMethodAssignments}
           onExerciseSelectionDataChange={(data) => {
             setExerciseSelectionData(data);

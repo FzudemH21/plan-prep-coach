@@ -69,6 +69,8 @@ interface EnhancedExerciseDistributionProps {
   onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
   onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
   onUpdateTrainingDay?: (dayDate: string, updates: Partial<TrainingDay>) => void;
+  /** Method distribution (step 1) assignments — copies mirror them, see mirrorDayStructure */
+  onDayMethodAssignmentsChange?: (assignments: Record<string, string[]>) => void;
   /** From Step 1: key = "${dayDate}_${sessionIndex}" → assigned methodIds */
   dayMethodAssignments?: Record<string, string[]>;
   /** Bidirectional sync: called when an exercise is added inline and needs to be written back */
@@ -120,6 +122,7 @@ export function EnhancedExerciseDistribution({
   onMoveSessionDown,
   onUpdateTrainingDay,
   dayMethodAssignments,
+  onDayMethodAssignmentsChange,
   onExerciseSelectionDataChange,
   selectedMicrocycleIndex: selectedMicrocycleIndexProp,
   onSelectedMicrocycleIndexChange,
@@ -1727,6 +1730,30 @@ export function EnhancedExerciseDistribution({
     return notes;
   };
 
+  // A copied day mirrors the source day's session structure: session count, names and the methods
+  // of each session (those allocated to the target mesocycle). Before, a target day kept its own
+  // names, count and methods when the source day had no session — they showed up as empty "ghost"
+  // sessions at the target's day intensity. A day without sessions keeps one empty default slot
+  // (method distribution shows it to drop methods onto; exercise distribution hides it).
+  const mirrorDayStructure = (
+    sourceDay: TrainingDay, targetDate: string, targetMesoId: string, assignments: Record<string, string[]>,
+  ) => {
+    const count = sourceDay.sessions ?? 0;
+    onUpdateTrainingDay?.(targetDate, {
+      sessions: Math.max(count, 1),
+      sessionNames: count > 0 ? (sourceDay.sessionNames ?? []).slice(0, count) : [],
+    });
+    Object.keys(assignments).forEach(key => {
+      if (key.slice(0, key.lastIndexOf('_')) === targetDate) delete assignments[key];
+    });
+    const hasAllocations = Object.keys(methodAllocations).length > 0;
+    for (let i = 0; i < count; i++) {
+      const methods = (dayMethodAssignments?.[`${sourceDay.date}_${i}`] ?? []).filter(m =>
+        !hasAllocations || (methodAllocations[m.split('::')[0]] ?? []).includes(targetMesoId));
+      if (methods.length > 0) assignments[`${targetDate}_${i}`] = methods;
+    }
+  };
+
   const handleCopyFromPreviousMicrocycle = (targetMicrocycleId: string) => {
     setCopyingMicrocycleId(targetMicrocycleId);
     
@@ -1928,6 +1955,7 @@ export function EnhancedExerciseDistribution({
       
       // Copy day intensities and session structure
       const copiedNotes: Record<string, string> = {};
+      const newAssignments: Record<string, string[]> = { ...(dayMethodAssignments ?? {}) };
       sourceDays.forEach((sourceDay, dayIndex) => {
         if (dayIndex >= minDays) return;
         const targetDate = dayMapping[dayIndex];
@@ -1939,18 +1967,14 @@ export function EnhancedExerciseDistribution({
           onDayIntensityChange(targetDate, sourceDay.intensity);
         }
         
-        // Copy session structure (sessions count and names) - only if source has sessions
-        if (onUpdateTrainingDay && sourceDay.sessions && sourceDay.sessions > 0) {
-          onUpdateTrainingDay(targetDate, {
-            sessions: sourceDay.sessions,
-            sessionNames: sourceDay.sessionNames ? [...sourceDay.sessionNames] : undefined,
-          });
-        }
+        // Session structure: count, names and methods mirror the source day
+        mirrorDayStructure(sourceDay, targetDate, targetMesocycle!.id, newAssignments);
         
         // Session intensities and session notes
         Object.assign(copiedNotes, copySessionMeta(sourceMesocycle!.id, sourceDay, targetMesocycle!.id, targetDays[dayIndex]));
       });
       setSessionCommentsMap(prev => ({ ...prev, ...copiedNotes }));
+      onDayMethodAssignmentsChange?.(newAssignments);
       notifySessionMetaChanged();
       
       // Remove existing exercises and sections for target days
@@ -2044,6 +2068,7 @@ export function EnhancedExerciseDistribution({
       const oldToNewExerciseIds: Record<string, string> = {};
       const oldToNewSectionIds: Record<string, string> = {};
       const fitNotes = { remapped: 0, dropped: [] as string[] };
+      const mesoAssignments: Record<string, string[]> = { ...(dayMethodAssignments ?? {}) };
       
       // Clear target mesocycle's supersets BEFORE copying
       const currentMesocycleDays = trainingDays.filter(day => {
@@ -2173,14 +2198,16 @@ export function EnhancedExerciseDistribution({
           }
         });
 
-        // STEP 4: Session intensities and session notes
+        // STEP 4: Session structure (count, names, methods), session intensities and session notes
         const copiedNotes: Record<string, string> = {};
         sourceDays.forEach((sourceDay, dayIndex) => {
           if (dayIndex >= minDays) return;
+          mirrorDayStructure(sourceDay, targetDays[dayIndex].date, mesocycle.id, mesoAssignments);
           Object.assign(copiedNotes, copySessionMeta(sourceMesocycle.id, sourceDay, mesocycle.id, targetDays[dayIndex]));
         });
         setSessionCommentsMap(prev => ({ ...prev, ...copiedNotes }));
       });
+      onDayMethodAssignmentsChange?.(mesoAssignments);
       notifySessionMetaChanged();
 
       // Clear target mesocycle's existing exercises and sections
