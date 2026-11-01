@@ -337,31 +337,11 @@ export function EnhancedExerciseDistribution({
       });
     });
 
-    // Build set of valid exercise IDs from Step 5 selection
-    const validExerciseIds = new Set<string>();
-    Object.values(exerciseSelectionData).forEach(cellData => {
-      if (cellData.mesocycleId !== mesocycle.id) return;
-      cellData.exercises.forEach(ex => validExerciseIds.add(ex.exerciseId));
-    });
-
-    // 2. Also add exercises from exerciseDistribution (captures exercises added inline in the calendar)
-    // BUT only if: (a) the exercise is in Step 5 selection, AND (b) the method already has a Step 5
-    // selection entry for this mesocycle — we never introduce a method solely from distribution.
-    exerciseDistribution.forEach(ex => {
-      if (!validExerciseIds.has(ex.exerciseId)) return;
-      const methodId = ex.methodId;
-      // Only add to an already-known method (one that has a Step 5 selection entry)
-      if (!grouped[methodId]) return;
-      const categoryName = isValidCategoryName(ex.categoryName) ? ex.categoryName : '';
-      addExercise(methodId, categoryName, {
-        exerciseId: ex.exerciseId,
-        exerciseName: ex.exerciseName,
-        subCategory: ex.subCategory,
-      });
-    });
-
+    // Only the Exercise Selection — placed exercises don't add entries. (They used to: an exercise
+    // placed under Hypertrophy in mesocycle 1 and selected under Strength in mesocycle 2 still
+    // showed up under Hypertrophy in mesocycle 2, because placements of every mesocycle counted.)
     return grouped;
-  }, [exerciseSelectionData, exerciseDistribution, mesocycle.id, methodAllocations]);
+  }, [exerciseSelectionData, mesocycle.id, methodAllocations]);
 
   // exerciseId → every method (+ category) of this mesocycle that contains it. Exercises in two or
   // more (e.g. squats as Strength bleed-in within Hypertrophy) get a method switch on their card.

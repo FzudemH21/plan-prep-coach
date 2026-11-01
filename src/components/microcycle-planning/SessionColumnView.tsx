@@ -369,7 +369,12 @@ export function SessionColumnView({
                     <div className="flex items-center gap-1 min-w-0">
                     {(() => {
                       const options = methodOptionsByExercise?.[exercise.exerciseId] ?? [];
-                      const canSwitch = options.length > 1 && !!onChangeExerciseMethod;
+                      // Switchable when the exercise is in several methods — or when its method is no
+                      // longer one it is selected under (e.g. moved from Hypertrophy to Strength)
+                      const [placedBase, placedCatFromId = ''] = (exercise.methodId ?? '').split('::');
+                      const placedCat = exercise.categoryName || placedCatFromId;
+                      const isListed = options.some(o => o.methodId === placedBase && (o.categoryName ?? '') === placedCat);
+                      const canSwitch = !!onChangeExerciseMethod && (options.length > 1 || (options.length === 1 && !isListed));
                       const tag = (
                         <span
                           className={cn(
