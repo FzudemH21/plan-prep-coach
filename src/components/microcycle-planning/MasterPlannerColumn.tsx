@@ -1618,7 +1618,7 @@ export function MasterPlannerColumn({
                                                 className="h-4 w-4 p-0"
                                                 onClick={(e) => {
                                                   e.stopPropagation();
-                                                  onExerciseReorder?.(day.dateString, session.sessionIndex, section.id, exercise.exerciseId, 'up');
+                                                  onExerciseReorder?.(day.dateString, session.sessionIndex, section.id, exercise.id || exercise.exerciseId, 'up');
                                                 }}
                                                 title="Move exercise up"
                                               >
@@ -1633,7 +1633,7 @@ export function MasterPlannerColumn({
                                                 className="h-4 w-4 p-0"
                                                 onClick={(e) => {
                                                   e.stopPropagation();
-                                                  onExerciseReorder?.(day.dateString, session.sessionIndex, section.id, exercise.exerciseId, 'down');
+                                                  onExerciseReorder?.(day.dateString, session.sessionIndex, section.id, exercise.id || exercise.exerciseId, 'down');
                                                 }}
                                                 title="Move exercise down"
                                               >
@@ -1667,7 +1667,7 @@ export function MasterPlannerColumn({
                                             <DropdownMenuItem
                                               onClick={(e) => {
                                                 e.stopPropagation();
-                                                onExerciseDuplicate?.(day.dateString, session.sessionIndex, section.id, exercise.exerciseId);
+                                                onExerciseDuplicate?.(day.dateString, session.sessionIndex, section.id, exercise.id || exercise.exerciseId);
                                               }}
                                             >
                                               <Copy className="h-3.5 w-3.5 mr-2" />
@@ -1676,7 +1676,7 @@ export function MasterPlannerColumn({
                                             <DropdownMenuItem
                                               onClick={(e) => {
                                                 e.stopPropagation();
-                                                onExerciseDelete?.(day.dateString, session.sessionIndex, section.id, exercise.exerciseId);
+                                                onExerciseDelete?.(day.dateString, session.sessionIndex, section.id, exercise.id || exercise.exerciseId);
                                               }}
                                               className="text-destructive focus:text-destructive"
                                             >
@@ -1698,14 +1698,14 @@ export function MasterPlannerColumn({
                                           {/* Editable Each Side Toggle - below parameter grid */}
                                           <div className={cn("flex items-center gap-1.5 mt-1.5", exercise.isCircuit && "hidden")} onClick={(e) => e.stopPropagation()}>
                                             <Checkbox
-                                              id={`each-side-section-${exercise.exerciseId}`}
+                                              id={`each-side-section-${exercise.id || exercise.exerciseId}`}
                                               checked={exercise.eachSide || false}
                                               onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.id || exercise.exerciseId, !!checked)}
                                               onClick={(e) => e.stopPropagation()}
                                               className="h-3.5 w-3.5"
                                             />
                                             <label
-                                              htmlFor={`each-side-section-${exercise.exerciseId}`}
+                                              htmlFor={`each-side-section-${exercise.id || exercise.exerciseId}`}
                                               className="text-xs text-muted-foreground cursor-pointer"
                                               onClick={(e) => e.stopPropagation()}
                                             >
@@ -1875,7 +1875,7 @@ export function MasterPlannerColumn({
                                   <DropdownMenuItem
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      onExerciseDuplicate?.(day.dateString, session.sessionIndex, '', exercise.exerciseId);
+                                      onExerciseDuplicate?.(day.dateString, session.sessionIndex, '', exercise.id || exercise.exerciseId);
                                     }}
                                   >
                                     <Copy className="h-3.5 w-3.5 mr-2" />
@@ -1884,7 +1884,7 @@ export function MasterPlannerColumn({
                                   <DropdownMenuItem
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      onExerciseDelete?.(day.dateString, session.sessionIndex, '', exercise.exerciseId);
+                                      onExerciseDelete?.(day.dateString, session.sessionIndex, '', exercise.id || exercise.exerciseId);
                                     }}
                                     className="text-destructive focus:text-destructive"
                                   >
@@ -1906,14 +1906,14 @@ export function MasterPlannerColumn({
                                 {/* Editable Each Side Toggle - below parameter grid */}
                                 <div className={cn("flex items-center gap-1.5 mt-1.5", exercise.isCircuit && "hidden")} onClick={(e) => e.stopPropagation()}>
                                   <Checkbox
-                                    id={`each-side-unsectioned-${exercise.exerciseId}`}
+                                    id={`each-side-unsectioned-${exercise.id || exercise.exerciseId}`}
                                     checked={exercise.eachSide || false}
                                     onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.id || exercise.exerciseId, !!checked)}
                                     onClick={(e) => e.stopPropagation()}
                                     className="h-3.5 w-3.5"
                                   />
                                   <label
-                                    htmlFor={`each-side-unsectioned-${exercise.exerciseId}`}
+                                    htmlFor={`each-side-unsectioned-${exercise.id || exercise.exerciseId}`}
                                     className="text-xs text-muted-foreground cursor-pointer"
                                     onClick={(e) => e.stopPropagation()}
                                   >
@@ -2006,14 +2006,14 @@ export function MasterPlannerColumn({
                       {/* Editable Each Side Toggle - below parameter grid */}
                       <div className={cn("flex items-center gap-1.5 mt-1.5", exercise.isCircuit && "hidden")} onClick={(e) => e.stopPropagation()}>
                         <Checkbox
-                          id={`each-side-flat-${exercise.exerciseId}`}
+                          id={`each-side-flat-${exercise.id || exercise.exerciseId}`}
                           checked={exercise.eachSide || false}
                           onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.id || exercise.exerciseId, !!checked)}
                           onClick={(e) => e.stopPropagation()}
                           className="h-3.5 w-3.5"
                         />
                         <label
-                          htmlFor={`each-side-flat-${exercise.exerciseId}`}
+                          htmlFor={`each-side-flat-${exercise.id || exercise.exerciseId}`}
                           className="text-xs text-muted-foreground cursor-pointer"
                           onClick={(e) => e.stopPropagation()}
                         >

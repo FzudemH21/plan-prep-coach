@@ -848,7 +848,7 @@ export function TrainingCalendarView({
                   .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
                 
                 // Find current exercise index
-                const currentIndex = sectionExercises.findIndex(e => e.exerciseId === exerciseId || e.id === exerciseId);
+                const currentIndex = sectionExercises.findIndex(e => (e.id || e.exerciseId) === exerciseId);
                 if (currentIndex < 0) return;
                 
                 // Calculate new index
@@ -905,7 +905,7 @@ export function TrainingCalendarView({
                 
                 // Find the exercise to duplicate
                 const exerciseToDuplicate = exerciseDistribution.find(
-                  e => (e.id === exerciseId || e.exerciseId === exerciseId) && 
+                  e => (e.id || e.exerciseId) === exerciseId && 
                        e.dayDate === dayDate && 
                        e.sessionIndex === sessionIndex &&
                        (sectionId === '' || e.sectionId === sectionId)
@@ -944,9 +944,9 @@ export function TrainingCalendarView({
               onExerciseDelete={(dayDate, sessionIndex, sectionId, exerciseId) => {
                 if (!onDistributionChange) return;
                 
-                // Remove the exercise
+                // Remove this placement only (the same exercise can be in the session twice, e.g. once per method)
                 const updatedDistribution = exerciseDistribution.filter(
-                  e => !((e.id === exerciseId || e.exerciseId === exerciseId) && 
+                  e => !((e.id || e.exerciseId) === exerciseId && 
                          e.dayDate === dayDate && 
                          e.sessionIndex === sessionIndex &&
                          (sectionId === '' || e.sectionId === sectionId))
