@@ -129,6 +129,14 @@ interface MasterPlannerColumnProps {
     /** Distribution id of the exercise (edits are stored as its per-exercise overrides) */
     exerciseId?: string
   ) => void;
+  /** Several parameter changes of one exercise at once (e.g. deleting a set shifts the later sets'
+   *  values) — `undefined` removes the exercise's own value (back to the planned one) */
+  onParameterChanges?: (
+    dayDate: string,
+    sessionIndex: number,
+    changes: Record<string, string | number | undefined>,
+    exerciseId: string
+  ) => void;
   // New props for Phase 1
   sessionSections?: SessionSection[];
   supersets?: SupersetMapping;
@@ -491,6 +499,7 @@ export function MasterPlannerColumn({
   trainingDays,
   toolboxData,
   onParameterChange,
+  onParameterChanges,
   sessionSections,
   supersets,
   onSessionNameChange,
@@ -917,6 +926,33 @@ export function MasterPlannerColumn({
 
     const rowCount = Math.max(setCount, 1);
 
+    // Delete / add a set right here (like in the Workout Session Sheet): the later sets move up,
+    // a new set copies the last one. One change for all values (they must not overwrite each other).
+    const perSetNames = new Set(
+      Object.keys(storedParams).map(key => key.match(/^(.+)_set\d+$/)?.[1]).filter((n): n is string => !!n),
+    );
+    const exerciseKey = exercise.id || exercise.exerciseId;
+    const canEditSets = !!setParam && !!onParameterChanges && !!exerciseKey;
+    const deleteSet = (setNumber: number) => {
+      if (!canEditSets || setCount <= 1) return;
+      const changes: Record<string, string | number | undefined> = { [setParam!.name]: setCount - 1 };
+      perSetNames.forEach(name => {
+        for (let i = setNumber; i < setCount; i++) changes[`${name}_set${i}`] = storedParams[`${name}_set${i + 1}`];
+        changes[`${name}_set${setCount}`] = undefined;
+      });
+      onParameterChanges!(day.dateString, exercise.sessionIndex, changes, exerciseKey);
+    };
+    const addSet = () => {
+      if (!canEditSets) return;
+      const count = Math.max(setCount, 1);
+      const changes: Record<string, string | number | undefined> = { [setParam!.name]: count + 1 };
+      perSetNames.forEach(name => {
+        const last = storedParams[`${name}_set${count}`];
+        if (last !== undefined && last !== '') changes[`${name}_set${count + 1}`] = last;
+      });
+      onParameterChanges!(day.dateString, exercise.sessionIndex, changes, exerciseKey);
+    };
+
     // Generic isCalculated entries from toolbox for this method
     const methodParts2 = (exercise.methodId || '').split(' - ');
     const methodMain2 = methodParts2[0] || '';
@@ -1201,13 +1237,14 @@ export function MasterPlannerColumn({
                       </TableHead>
                     );
                   })}
+                  {canEditSets && <TableHead className="h-6 w-6 p-0" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {Array.from({ length: rowCount }, (_, idx) => {
                   const setNumber = idx + 1;
                   return (
-                    <TableRow key={idx} className="h-7 border-0">
+                    <TableRow key={idx} className="group/set h-7 border-0">
                       <TableCell className="py-0 px-1 text-center text-muted-foreground min-w-[40px] w-[40px]">{setNumber}</TableCell>
                       {gridColumns.map(col => {
                         if (col.kind === 'calc') return renderCalcCell(col.entry, setNumber);
@@ -1230,11 +1267,34 @@ export function MasterPlannerColumn({
                           </TableCell>
                         );
                       })}
+                      {canEditSets && (
+                        <TableCell className="py-0 px-0 w-6">
+                          {setCount > 1 && (
+                            <button
+                              type="button"
+                              title={`Delete set ${setNumber}`}
+                              className="rounded p-0.5 text-muted-foreground opacity-0 group-hover/set:opacity-100 focus:opacity-100 hover:text-destructive hover:bg-destructive/10"
+                              onClick={(e) => { e.stopPropagation(); deleteSet(setNumber); }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          )}
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })}
               </TableBody>
             </Table>
+            {canEditSets && (
+              <button
+                type="button"
+                className="mt-0.5 inline-flex items-center gap-0.5 rounded px-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted"
+                onClick={(e) => { e.stopPropagation(); addSet(); }}
+              >
+                <Plus className="h-2.5 w-2.5" /> Set
+              </button>
+            )}
           </div>
         )}
       </>

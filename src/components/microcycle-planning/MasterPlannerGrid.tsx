@@ -64,6 +64,13 @@ interface MasterPlannerGridProps {
     /** Distribution id of the exercise (edits are stored as its per-exercise overrides) */
     exerciseId?: string
   ) => void;
+  /** Several parameter changes of one exercise at once (see MasterPlannerColumn) */
+  onParameterChanges?: (
+    dayDate: string,
+    sessionIndex: number,
+    changes: Record<string, string | number | undefined>,
+    exerciseId: string
+  ) => void;
   // New props for Phase 1
   sessionSections?: SessionSection[];
   supersets?: SupersetMapping;
@@ -152,6 +159,7 @@ export function MasterPlannerGrid({
   trainingDays,
   toolboxData,
   onParameterChange,
+  onParameterChanges,
   sessionSections,
   supersets,
   onSessionNameChange,
@@ -321,6 +329,7 @@ export function MasterPlannerGrid({
               trainingDays={trainingDays}
               toolboxData={toolboxData}
               onParameterChange={onParameterChange}
+              onParameterChanges={onParameterChanges}
               sessionSections={sessionSections}
               supersets={supersets}
               onSessionNameChange={onSessionNameChange}

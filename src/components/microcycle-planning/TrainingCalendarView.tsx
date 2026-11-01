@@ -743,6 +743,18 @@ export function TrainingCalendarView({
                 const fullMethodKey = categoryName ? `${methodId}::${categoryName}` : methodId;
                 onSaveParameters(dayMeso.id, microcycleIndex, fullMethodKey, sessionIndex, '', { [paramName]: value });
               } : undefined}
+              onParameterChanges={onDistributionChange ? (dayDate, sessionIndex, changes, exerciseId) => {
+                // Several values of one exercise in one change (deleting / adding a set)
+                onDistributionChange(exerciseDistribution.map(ex => {
+                  if (ex.dayDate !== dayDate || ex.sessionIndex !== sessionIndex || (ex.id || ex.exerciseId) !== exerciseId) return ex;
+                  const overrides: Record<string, string | number> = { ...(ex.parameterOverrides ?? {}) };
+                  Object.entries(changes).forEach(([key, value]) => {
+                    if (value === undefined) delete overrides[key];
+                    else overrides[key] = value;
+                  });
+                  return { ...ex, parameterOverrides: overrides };
+                }));
+              } : undefined}
               sessionSections={sessionSections}
               supersets={supersets}
               onSessionNameChange={onRenameSession}
