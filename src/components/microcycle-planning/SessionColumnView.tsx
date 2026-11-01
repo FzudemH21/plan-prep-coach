@@ -139,6 +139,21 @@ export function SessionColumnView({
   const [deleteSectionDialogOpen, setDeleteSectionDialogOpen] = useState(false);
   const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
   const [isEditingSessionName, setIsEditingSessionName] = useState(false);
+  // Folded sessions show only their header; remembered per session in this browser
+  const collapseKey = `${day?.date}_${sessionIndex}`;
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try { return (JSON.parse(localStorage.getItem('collapsedSessions') ?? '[]') as string[]).includes(collapseKey); }
+    catch { return false; }
+  });
+  const toggleCollapsed = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    try {
+      const stored = new Set(JSON.parse(localStorage.getItem('collapsedSessions') ?? '[]') as string[]);
+      if (next) stored.add(collapseKey); else stored.delete(collapseKey);
+      localStorage.setItem('collapsedSessions', JSON.stringify([...stored]));
+    } catch { /* ignore */ }
+  };
   const [editingSessionNameValue, setEditingSessionNameValue] = useState('');
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
@@ -509,8 +524,16 @@ export function SessionColumnView({
           <div className="space-y-2">
             {/* Session Name and Actions */}
             <div className="flex items-center justify-between gap-2">
-              {/* Left side: Editable Session Name */}
+              {/* Left side: fold toggle + editable session name */}
               <div className="flex items-center gap-1 flex-1">
+                <button
+                  type="button"
+                  onClick={toggleCollapsed}
+                  className="-ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-accent"
+                  title={collapsed ? 'Unfold session' : 'Fold session'}
+                >
+                  {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
                 {isEditingSessionName ? (
                   <>
                     <Input
@@ -703,7 +726,7 @@ export function SessionColumnView({
         </CardHeader>
 
         {/* Session Comments */}
-        {onSessionCommentsChange && (
+        {!collapsed && onSessionCommentsChange && (
           <div className="px-3 pt-2 pb-2 border-b">
             <label className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
               <MessageSquare className="h-3 w-3" />
@@ -718,6 +741,7 @@ export function SessionColumnView({
           </div>
         )}
 
+        {!collapsed && (
         <CardContent className="p-3 pt-0">
           <div>
             <div className="space-y-3">
@@ -997,6 +1021,7 @@ export function SessionColumnView({
             </div>
           </div>
         </CardContent>
+        )}
       </div>
 
       <AlertDialog open={deleteSectionDialogOpen} onOpenChange={setDeleteSectionDialogOpen}>
