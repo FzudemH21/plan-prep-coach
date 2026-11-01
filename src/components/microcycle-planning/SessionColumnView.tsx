@@ -364,14 +364,16 @@ export function SessionColumnView({
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{exercise.exerciseName}</div>
                     {/* Method tag — its periodization values are the ones this exercise uses.
-                        Exercises that belong to several methods can be switched here. */}
+                        Exercises that belong to several methods can be switched here. The superset
+                        label sits right after it on the same line (the tag shortens if needed). */}
+                    <div className="flex items-center gap-1 min-w-0">
                     {(() => {
                       const options = methodOptionsByExercise?.[exercise.exerciseId] ?? [];
                       const canSwitch = options.length > 1 && !!onChangeExerciseMethod;
                       const tag = (
                         <span
                           className={cn(
-                            'mt-0.5 inline-flex max-w-full items-center gap-0.5 rounded border px-1.5 text-[10px] font-medium',
+                            'mt-0.5 inline-flex min-w-0 max-w-full items-center gap-0.5 rounded border px-1.5 text-[10px] font-medium',
                             methodColorClasses(exercise.methodId),
                             canSwitch && 'cursor-pointer hover:opacity-80'
                           )}
@@ -389,7 +391,7 @@ export function SessionColumnView({
                       return (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <button type="button" className="max-w-full text-left">{tag}</button>
+                            <button type="button" className="min-w-0 max-w-full text-left">{tag}</button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="start" className="text-xs">
                             <div className="px-2 py-1 text-[10px] text-muted-foreground">Use periodization values of</div>
@@ -414,10 +416,11 @@ export function SessionColumnView({
                       );
                     })()}
                     {supersetId && (
-                      <Badge variant="default" className="text-[10px] mt-1 px-1.5 font-semibold">
+                      <Badge variant="default" className="text-[10px] mt-0.5 px-1.5 font-semibold shrink-0">
                         {getSupersetLabel(exercise.id)}
                       </Badge>
                     )}
+                    </div>
                   </div>
 
                   {/* Each side (unilateral) toggle */}

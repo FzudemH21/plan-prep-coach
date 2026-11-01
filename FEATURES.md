@@ -130,6 +130,7 @@ These features extend the existing Athlete Profile page in the coach web app.
 
 | Feature | Notes |
 |---|---|
+| Superset label right after the method tag | ✅ Done — on exercise cards in exercise distribution the superset/circuit label (A1, C2 …) always sits on the same line right after the method tag; a long method name is shortened ("…", full name on hover) instead of pushing the label to the next line |
 | Section notes stay visible while renaming a section | ✅ Done — renaming a section in exercise distribution no longer hides the section notes fields (of all sections) until the name is confirmed |
 | Paste section keeps supersets | ✅ Done — pasting a copied section (exercise distribution) brings its supersets along, linking the pasted exercises (numbered superset-1, -2 … in the new section); before, the exercises were pasted without their superset links |
 | Wizard fold states are remembered | ✅ Done — what is folded / expanded stays the same after leaving and reopening a page (stored in this browser, shared hook `usePersistentSet` / `usePersistentFlags` in `src/hooks/usePersistentState.ts`): Macrocycle goals and method categories/details, Mesocycle mesocycles, periodization categories and method rows (no longer all closed again on entering step 4), exercise selection categories, method distribution panel, exercise distribution panel, sessions and sections, training calendar exercises, session sheet exercises |
