@@ -1,4 +1,7 @@
-import { metricRefOf } from '@/utils/parameterMeasures';
+import { metricRefOf, monitoringRefsOf, monitoringSideOf } from '@/utils/parameterMeasures';
+
+/** A monitoring question's series: without a side under its reference, per side "<ref>::L" / "::R" */
+const metricSeriesKey = (ref: string, side?: 'L' | 'R') => (side ? `${ref}::${side}` : ref);
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, BookOpen, Check, GripVertical, Trash2, MessageCircle, Trophy, Calendar, ClipboardCheck, Loader2 } from 'lucide-react';
@@ -617,7 +620,7 @@ export default function CoachMobileAthleteProfilePage() {
   const enabledCustomBlocks = enabledBlocks.filter(
     (b): b is typeof b & { config: NonNullable<typeof b.config> } => b.type === 'custom_metric' && !!b.config
   );
-  const customBlockParamIds = enabledCustomBlocks.map(b => metricRefOf(b.config)).join(',');
+  const customBlockParamIds = enabledCustomBlocks.map(b => `${metricRefOf(b.config)}${b.config.perSide ? ':sides' : ''}`).join(',');
 
   const { checkins, loading: checkinsLoading } = useAthleteCheckins(connection?.id ?? null, 90);
   const todayCheckin   = checkins.find(c => c.date === today) ?? null;
@@ -642,15 +645,17 @@ export default function CoachMobileAthleteProfilePage() {
     let cancelled = false;
     Promise.all(
       enabledCustomBlocks.map(async (block) => {
+        // The check-in answers (per side) and the older ones saved before the check-in tag
         const { data } = await supabase
           .from('athlete_test_results')
-          .select('value, recorded_at')
+          .select('parameter_id, value, recorded_at')
           .eq('athlete_connection_id', connection.id)
-          .eq('parameter_id', metricRefOf(block.config))
+          .in('parameter_id', monitoringRefsOf(block.config))
           .order('recorded_at', { ascending: true });
-        const rows = (data ?? []).map((r: { value: string; recorded_at: string }) => ({
+        const rows = (data ?? []).map((r: { parameter_id: string; value: string; recorded_at: string }) => ({
           date: (r.recorded_at as string).slice(0, 10),
           value: parseFloat(String(r.value)),
+          side: monitoringSideOf(r.parameter_id),
         }));
         return { parameterId: metricRefOf(block.config), rows };
       })
@@ -659,10 +664,13 @@ export default function CoachMobileAthleteProfilePage() {
       const valMap = new Map<string, { value: string; recordedAt: string }>();
       const histMap = new Map<string, Array<{ date: string; value: number }>>();
       results.forEach(({ parameterId, rows }) => {
-        histMap.set(parameterId, rows);
-        if (rows.length > 0) {
-          const last = rows[rows.length - 1];
-          valMap.set(parameterId, { value: String(last.value), recordedAt: last.date });
+        for (const side of [undefined, 'L', 'R'] as const) {
+          const series = rows.filter(r => r.side === side).map(({ date, value }) => ({ date, value }));
+          if (series.length === 0) continue;
+          const key = metricSeriesKey(parameterId, side);
+          histMap.set(key, series);
+          const last = series[series.length - 1];
+          valMap.set(key, { value: String(last.value), recordedAt: last.date });
         }
       });
       setCustomMetricValues(valMap);
@@ -1232,14 +1240,20 @@ export default function CoachMobileAthleteProfilePage() {
                 {/* Custom metric cards — tap to expand chart */}
                 {enabledCustomBlocks.map(block => {
                   const pid = metricRefOf(block.config);
-                  const metric = customMetricValues.get(pid);
+                  const sides = block.config.perSide ? (['L', 'R'] as const) : null;
+                  // Per side: the latest of each ("L 3 · R 5"), dated by the newer one
+                  const sideMetrics = sides?.map(s => customMetricValues.get(metricSeriesKey(pid, s)));
+                  const metric = sideMetrics
+                    ? sideMetrics.filter(m => !!m).sort((a, b) => b!.recordedAt.localeCompare(a!.recordedAt))[0]
+                    : customMetricValues.get(pid);
                   const history = customMetricHistory.get(pid) ?? [];
                   const isExpanded = expandedMetricId === pid;
                   const isToday = metric?.recordedAt === today;
                   const isScale = block.config.scaleMin !== undefined && block.config.scaleMax !== undefined;
-                  const displayValue = metric
-                    ? (isScale ? `${metric.value}/${block.config.scaleMax}` : metric.value)
-                    : '—';
+                  const shownValue = (v: string) => (isScale ? `${v}/${block.config.scaleMax}` : v);
+                  const displayValue = sides && sideMetrics
+                    ? (metric ? sides.map((s, i) => `${s} ${sideMetrics[i] ? shownValue(sideMetrics[i]!.value) : '–'}`).join(' · ') : '—')
+                    : metric ? shownValue(metric.value) : '—';
 
                   return (
                     <div
@@ -1280,12 +1294,24 @@ export default function CoachMobileAthleteProfilePage() {
                             <span className="text-xs text-muted-foreground font-medium">{t('coachMobile.athleteProfile.history')}</span>
                             <DaysSelector selected={metricDays} onChange={setMetricDays} />
                           </div>
-                          <CustomMetricMiniChart
-                            history={history}
-                            days={metricDays}
-                            unit={!isScale ? (block.config.parameterUnit ?? undefined) : undefined}
-                            scaleMax={isScale ? block.config.scaleMax : undefined}
-                          />
+                          {sides ? sides.map(s => (
+                            <div key={s} className="space-y-1">
+                              <p className="text-xs text-muted-foreground">{s === 'L' ? 'Left' : 'Right'}</p>
+                              <CustomMetricMiniChart
+                                history={customMetricHistory.get(metricSeriesKey(pid, s)) ?? []}
+                                days={metricDays}
+                                unit={!isScale ? (block.config.parameterUnit ?? undefined) : undefined}
+                                scaleMax={isScale ? block.config.scaleMax : undefined}
+                              />
+                            </div>
+                          )) : (
+                            <CustomMetricMiniChart
+                              history={history}
+                              days={metricDays}
+                              unit={!isScale ? (block.config.parameterUnit ?? undefined) : undefined}
+                              scaleMax={isScale ? block.config.scaleMax : undefined}
+                            />
+                          )}
                         </div>
                       )}
                     </div>

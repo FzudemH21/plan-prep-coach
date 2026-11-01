@@ -153,6 +153,8 @@ export interface CustomMetricBlockConfig {
   /** Where the values are stored when it isn't measureRef(parameterId, measureId): the block of a
    *  parameter that was merged into another one keeps its old reference, so its history continues */
   storageRef?: string;
+  /** The parameter is recorded per side: the check-in asks left and right (cached from the parameter) */
+  perSide?: boolean;
   /** Cached unit (e.g. "bpm", "kg") or null */
   parameterUnit: string | null;
   /** How the athlete inputs the value */

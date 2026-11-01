@@ -194,6 +194,7 @@ async function fetchAndBuildContext(
   const srByParamId = new Map<string, ParameterValue[]>();
   for (const r of testResults as Array<{ parameter_id: string; value: string; recorded_at: string }>) {
     const ref = parseMeasureRef(r.parameter_id);
+    if (ref.checkin) continue; // daily check-in answers belong to monitoring
     const bucket = srByParamId.get(ref.parameterId) ?? [];
     bucket.push({
       id: `${r.parameter_id}-${r.recorded_at}`, value: r.value, recordedAt: r.recorded_at, selfReported: true,

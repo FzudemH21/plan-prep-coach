@@ -106,7 +106,7 @@ export function useDailyCheckin(connectionId: string | null) {
   // Custom-metric values saved today (parameter_id → latest value). Kept separate from
   // DailyCheckin.customMetricValues (always null there — those live in athlete_test_results,
   // not the checkin row) so the check-in sheet can prefill on re-open/edit.
-  const [todayCustomMetricValues, setTodayCustomMetricValues] = useState<Record<string, number>>({});
+  const [todayCustomMetricValues, setTodayCustomMetricValues] = useState<Record<string, number | string>>({});
   const [loading, setLoading] = useState(true);
 
   const _todayD = new Date();
@@ -137,11 +137,12 @@ export function useDailyCheckin(connectionId: string | null) {
         .lt('recorded_at', dayEnd.toISOString())
         .order('recorded_at', { ascending: false });
 
-      const latestByParam: Record<string, number> = {};
+      // Numbers as numbers; a level is stored by its name
+      const latestByParam: Record<string, number | string> = {};
       for (const row of (todayResults ?? []) as { parameter_id: string; value: string }[]) {
         if (!(row.parameter_id in latestByParam)) {
           const n = Number(row.value);
-          if (!Number.isNaN(n)) latestByParam[row.parameter_id] = n;
+          latestByParam[row.parameter_id] = Number.isNaN(n) ? row.value : n;
         }
       }
       setTodayCustomMetricValues(latestByParam);

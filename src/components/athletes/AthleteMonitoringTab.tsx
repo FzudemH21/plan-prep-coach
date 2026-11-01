@@ -1,4 +1,4 @@
-import { metricRefOf } from '@/utils/parameterMeasures';
+import { limbSymmetryIndex, monitoringRefsOf, monitoringSideOf } from '@/utils/parameterMeasures';
 import { useState, useMemo, useEffect } from 'react';
 import { format, isWithinInterval } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -515,6 +515,13 @@ function checkinDateLabel(date: string): string {
 
 type BlockWithConfig = MonitoringBlock & { config: NonNullable<MonitoringBlock['config']> };
 
+/** One day of a monitoring question: `value` without a side, L / R per side */
+type MetricPoint = { date: string; value?: number; L?: number; R?: number };
+const SIDE_LINES = [
+  { key: 'L', name: 'Left', color: '#6366f1' },
+  { key: 'R', name: 'Right', color: '#f59e0b' },
+] as const;
+
 function CustomMetricCard({
   block,
   connectionId,
@@ -523,7 +530,7 @@ function CustomMetricCard({
   connectionId: string;
 }) {
   const cfg = block.config;
-  const [data, setData] = useState<{ date: string; value: number }[]>([]);
+  const [data, setData] = useState<MetricPoint[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [rangeKey, setRangeKey] = useState<7 | 14 | 28 | 90>(28);
 
@@ -533,37 +540,43 @@ function CustomMetricCard({
       setLoadingData(true);
       const from = new Date();
       from.setDate(from.getDate() - rangeKey);
+      // The check-in answers (per side) and the older ones saved before the check-in tag
       const { data: rows, error } = await supabase
         .from('athlete_test_results')
-        .select('value, recorded_at')
+        .select('parameter_id, value, recorded_at')
         .eq('athlete_connection_id', connectionId)
-        .eq('parameter_id', metricRefOf(cfg))
+        .in('parameter_id', monitoringRefsOf(cfg))
         .gte('recorded_at', from.toISOString())
         .order('recorded_at', { ascending: true });
 
       if (cancelled) return;
       if (!error && rows) {
-        // Group by date, keep last value per day
-        const byDate = new Map<string, number>();
+        // Group by date (and side), keep last value per day
+        const byDate = new Map<string, MetricPoint>();
         for (const r of rows) {
           const date = (r.recorded_at as string).slice(0, 10);
           // Levels are stored by name — charted as their position (0 = worst)
           const val = cfg.inputType === 'levels' ? (cfg.levels ?? []).indexOf(String(r.value)) : parseFloat(r.value as string);
-          if (!isNaN(val) && val >= 0) byDate.set(date, val);
+          if (isNaN(val) || val < 0) continue;
+          const point = byDate.get(date) ?? { date };
+          point[monitoringSideOf(r.parameter_id as string) ?? 'value'] = val;
+          byDate.set(date, point);
         }
-        setData(
-          Array.from(byDate.entries())
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([date, value]) => ({ date, value }))
-        );
+        setData(Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date)));
       }
       setLoadingData(false);
     }
     load();
     return () => { cancelled = true; };
-  }, [connectionId, cfg.parameterId, cfg.measureId, rangeKey]);
+  }, [connectionId, cfg.parameterId, cfg.measureId, cfg.storageRef, cfg.perSide, rangeKey]);
 
-  const currentEntry = data.length > 0 ? data[data.length - 1] : null;
+  const currentEntry = [...data].reverse().find(p => p.value !== undefined) ?? null;
+  const sided = !!cfg.perSide;
+  const latestSide = (side: 'L' | 'R') => [...data].reverse().find(p => p[side] !== undefined);
+  // LSI of the latest day with both sides (numbers only)
+  const lsiDay = sided && cfg.inputType === 'number' ? [...data].reverse().find(p => p.L !== undefined && p.R !== undefined) : undefined;
+  const lsi = lsiDay ? limbSymmetryIndex(lsiDay.L, lsiDay.R) : null;
+  const hasUnsided = data.some(p => p.value !== undefined);
   const unit = cfg.parameterUnit ?? '';
   const isScale = cfg.inputType === 'scale';
   const yMin = isScale ? (cfg.scaleMin ?? 0) : undefined;
@@ -571,7 +584,7 @@ function CustomMetricCard({
 
   const MetricTooltip = ({ active, payload, label }: {
     active?: boolean;
-    payload?: { value: number }[];
+    payload?: { value: number; name?: string }[];
     label?: string;
   }) => {
     if (!active || !payload?.length) return null;
@@ -580,10 +593,12 @@ function CustomMetricCard({
         <p className="font-semibold">
           {label ? new Date(label + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
         </p>
-        <p>
-          {cfg.parameterName}:{' '}
-          <span className="font-medium">{payload[0].value}{unit ? ` ${unit}` : ''}</span>
-        </p>
+        {payload.map((entry, i) => (
+          <p key={i}>
+            {entry.name ?? cfg.parameterName}:{' '}
+            <span className="font-medium">{entry.value}{unit ? ` ${unit}` : ''}</span>
+          </p>
+        ))}
       </div>
     );
   };
@@ -625,14 +640,30 @@ function CustomMetricCard({
           <p className="text-xs text-muted-foreground text-center py-4">No data yet.</p>
         ) : (
           <div className="flex items-start gap-6">
-            {/* Current value */}
-            <div className="shrink-0 text-center min-w-[4rem]">
-              <p className="text-4xl font-bold tabular-nums">{currentEntry!.value}</p>
-              {unit && <p className="text-xs text-muted-foreground mt-0.5">{unit}</p>}
-              <p className="text-[10px] text-muted-foreground mt-1">
-                {new Date(currentEntry!.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-              </p>
-            </div>
+            {/* Current value (per side: the latest of each, and the LSI) */}
+            {sided ? (
+              <div className="shrink-0 min-w-[5rem] space-y-1">
+                {SIDE_LINES.map(line => {
+                  const day = latestSide(line.key);
+                  return (
+                    <div key={line.key} className="flex items-baseline justify-between gap-2">
+                      <span className="text-xs text-muted-foreground">{line.name}</span>
+                      <span className="text-2xl font-bold tabular-nums" style={{ color: line.color }}>{day?.[line.key] ?? '–'}</span>
+                    </div>
+                  );
+                })}
+                {unit && <p className="text-xs text-muted-foreground text-right">{unit}</p>}
+                {lsi !== null && <p className="text-xs text-muted-foreground text-right">LSI {lsi} %</p>}
+              </div>
+            ) : currentEntry && (
+              <div className="shrink-0 text-center min-w-[4rem]">
+                <p className="text-4xl font-bold tabular-nums">{currentEntry.value}</p>
+                {unit && <p className="text-xs text-muted-foreground mt-0.5">{unit}</p>}
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {new Date(currentEntry.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </p>
+              </div>
+            )}
             {/* Trend chart */}
             <div className="flex-1 min-w-0">
               {data.length < 2 ? (
@@ -665,15 +696,31 @@ function CustomMetricCard({
                       tickLine={false}
                     />
                     <Tooltip content={<MetricTooltip />} />
-                    <Line
-                      type="monotone"
-                      dataKey="value"
-                      stroke="#6366f1"
-                      strokeWidth={2}
-                      dot={{ r: 3, fill: '#6366f1', stroke: 'white', strokeWidth: 1 }}
-                      activeDot={{ r: 5 }}
-                      connectNulls={false}
-                    />
+                    {sided && SIDE_LINES.map(line => (
+                      <Line
+                        key={line.key}
+                        type="monotone"
+                        dataKey={line.key}
+                        name={line.name}
+                        stroke={line.color}
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: line.color, stroke: 'white', strokeWidth: 1 }}
+                        activeDot={{ r: 5 }}
+                        connectNulls={false}
+                      />
+                    ))}
+                    {(!sided || hasUnsided) && (
+                      <Line
+                        type="monotone"
+                        dataKey="value"
+                        name={sided ? 'No side' : cfg.parameterName}
+                        stroke={sided ? '#94a3b8' : '#6366f1'}
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: sided ? '#94a3b8' : '#6366f1', stroke: 'white', strokeWidth: 1 }}
+                        activeDot={{ r: 5 }}
+                        connectNulls={false}
+                      />
+                    )}
                   </LineChart>
                 </ResponsiveContainer>
               )}
@@ -782,16 +829,18 @@ export function AthleteMonitoringTab({ athlete, connectionsLoading = false, conn
         const cfg = block.config;
         const { data: rows } = await supabase
           .from('athlete_test_results')
-          .select('value, recorded_at')
+          .select('parameter_id, value, recorded_at')
           .eq('athlete_connection_id', athleteId)
-          .eq('parameter_id', metricRefOf(cfg))
+          .in('parameter_id', monitoringRefsOf(cfg))
           .order('recorded_at', { ascending: true });
         customBlocks.push({
           name: cfg.parameterName,
           unit: cfg.parameterUnit ?? null,
-          rows: (rows ?? []).map((r: { value: string; recorded_at: string }) => ({
+          withLsi: !!cfg.perSide && cfg.inputType === 'number',
+          rows: (rows ?? []).map((r: { parameter_id: string; value: string; recorded_at: string }) => ({
             date:  (r.recorded_at as string).slice(0, 10),
             value: String(r.value),
+            side:  monitoringSideOf(r.parameter_id),
           })),
         });
       }

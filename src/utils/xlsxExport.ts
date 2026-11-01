@@ -17,6 +17,7 @@ import {
 } from '@/hooks/useAthleteCheckins';
 import type { AthleteBiometric, AthletePerformanceParameter, BiometricDefinition } from '@/types/athlete';
 import type { ParameterV2 } from '@/types/parametersV2';
+import { limbSymmetryIndex } from '@/utils/parameterMeasures';
 import { allValuesOf, seriesOfValues } from '@/utils/goalMeasures';
 import { epley1RM, type ExerciseEntry, type ExerciseSession, type ParamTags } from '@/hooks/useExerciseMetrics';
 
@@ -45,7 +46,10 @@ export interface CustomBlockExport {
   /** Display name shown as the sheet tab, e.g. "HRV", "Jump Height" */
   name: string;
   unit: string | null;
-  rows: Array<{ date: string; value: string }>;
+  /** A value per side (L / R) — one row per day with Left and Right */
+  rows: Array<{ date: string; value: string; side?: 'L' | 'R' }>;
+  /** Per side, numbers: an LSI column */
+  withLsi?: boolean;
 }
 
 export function exportMonitoringXLSX(
@@ -121,13 +125,30 @@ export function exportMonitoringXLSX(
 
   // Sheets 4+ — One sheet per custom metric block added by coach
   for (const block of customBlocks) {
-    const blockRows = [...block.rows]
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .map(r => ({
-        'Date':  r.date,
-        'Value': r.value,
-        ...(block.unit ? { 'Unit': block.unit } : {}),
-      }));
+    const sorted = [...block.rows].sort((a, b) => a.date.localeCompare(b.date));
+    // Per side: one row per day with Left / Right (latest of the day) and the LSI
+    const perSide = sorted.some(r => r.side);
+    const blockRows = !perSide
+      ? sorted.map(r => ({
+          'Date':  r.date,
+          'Value': r.value,
+          ...(block.unit ? { 'Unit': block.unit } : {}),
+        }))
+      : [...sorted.reduce((days, r) => {
+          const day = days.get(r.date) ?? { date: r.date } as { date: string; L?: string; R?: string; value?: string };
+          day[r.side ?? 'value'] = r.value;
+          return days.set(r.date, day);
+        }, new Map<string, { date: string; L?: string; R?: string; value?: string }>()).values()].map(day => {
+          const lsi = block.withLsi ? limbSymmetryIndex(day.L, day.R) : null;
+          return {
+            'Date':  day.date,
+            'Left':  day.L ?? '',
+            'Right': day.R ?? '',
+            ...(block.withLsi ? { 'LSI (%)': lsi ?? '' } : {}),
+            ...(sorted.some(r => !r.side) ? { 'No side': day.value ?? '' } : {}),
+            ...(block.unit ? { 'Unit': block.unit } : {}),
+          };
+        });
     XLSX.utils.book_append_sheet(
       wb,
       XLSX.utils.json_to_sheet(blockRows.length ? blockRows : [{ Note: 'No data recorded for this metric' }]),

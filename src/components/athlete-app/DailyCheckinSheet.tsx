@@ -1,4 +1,4 @@
-import { metricRefOf } from '@/utils/parameterMeasures';
+import { checkinRefOf, checkinSides } from '@/utils/parameterMeasures';
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -344,8 +344,8 @@ interface Props {
   monitoringConfig?: MonitoringConfig;
   /** Today's already-saved check-in, if any — prefills the sheet on re-open/edit instead of starting blank. */
   existingCheckin?: DailyCheckin | null;
-  /** Today's already-saved custom metric values (parameterId → value), fetched separately from athlete_test_results. */
-  existingCustomMetricValues?: Record<string, number>;
+  /** Today's already-saved custom metric values (stored reference → value), fetched separately from athlete_test_results. */
+  existingCustomMetricValues?: Record<string, number | string>;
 }
 
 // ── Navigation helpers (config-aware) ─────────────────────────────────────────
@@ -389,8 +389,27 @@ function storedMetricValues(values: Record<string, number>, config: MonitoringCo
   const out: Record<string, number | string> = { ...values };
   for (const b of config?.blocks ?? []) {
     if (b.type !== 'custom_metric' || b.config?.inputType !== 'levels') continue;
-    const key = metricRefOf(b.config);
-    if (typeof values[key] === 'number') out[key] = b.config.levels?.[values[key]] ?? String(values[key]);
+    for (const side of checkinSides(b.config)) {
+      const key = checkinRefOf(b.config, side);
+      if (typeof values[key] === 'number') out[key] = b.config.levels?.[values[key]] ?? String(values[key]);
+    }
+  }
+  return out;
+}
+
+/** Today's saved answers as the sheet's values (a level back to its position) */
+function seedMetricValues(existing: Record<string, number | string> | undefined, config: MonitoringConfig | null | undefined): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!existing) return out;
+  for (const b of config?.blocks ?? []) {
+    if (b.type !== 'custom_metric' || !b.config) continue;
+    for (const side of checkinSides(b.config)) {
+      const key = checkinRefOf(b.config, side);
+      const raw = existing[key];
+      if (raw === undefined) continue;
+      const n = b.config.inputType === 'levels' && typeof raw === 'string' ? (b.config.levels ?? []).indexOf(raw) : Number(raw);
+      if (!Number.isNaN(n) && n >= 0) out[key] = n;
+    }
   }
   return out;
 }
@@ -424,6 +443,8 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
   const [notes, setNotes]             = useState('');
   // Custom metric block values: blockId → numeric value entered by athlete
   const [customMetricValues, setCustomMetricValues] = useState<Record<string, number>>({});
+  // A question on a parameter recorded per side: the side being answered
+  const [metricSide, setMetricSide] = useState<'L' | 'R'>('L');
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
@@ -452,7 +473,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
       setIllnessOther(existingCheckin.illnessSymptomOther ?? '');
       setIllnessNrs(existingCheckin.illnessNrs ?? 0);
       setNotes(existingCheckin.notes ?? '');
-      setCustomMetricValues(existingCustomMetricValues ?? {});
+      setCustomMetricValues(seedMetricValues(existingCustomMetricValues, monitoringConfig));
     } else {
       setWellness({ fatigue: null, sleep: null, soreness: null, stress: null, mood: null });
       setHasPain(null);
@@ -993,31 +1014,64 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
       const cfg = block?.config;
       if (!cfg) return null;
 
-      // Key by the block's reference (the parameter id; a measure: "<id>::m:<measure>") so the
-      // athlete_test_results rows match what the coach views query
-      const metricKey = metricRefOf(cfg);
+      // Key by the stored reference (block reference + side + check-in tag) so the
+      // athlete_test_results rows match what the coach's monitoring views query
+      const sides = checkinSides(cfg);
+      const sided = sides.length > 1;
+      const metricKey = checkinRefOf(cfg, sided ? metricSide : undefined);
       const currentVal = customMetricValues[metricKey] ?? null;
+      const allAnswered = sides.every(s => customMetricValues[checkinRefOf(cfg, s)] !== undefined);
       const questionLabel = cfg.label || cfg.parameterName;
       const unitSuffix = cfg.parameterUnit ? ` (${cfg.parameterUnit})` : '';
+      // Picking a value for the left side moves on to the right
+      const pick = (value: number) => {
+        setCustomMetricValues(prev => ({ ...prev, [metricKey]: value }));
+        if (sided && metricSide === 'L') setMetricSide('R');
+      };
 
       const goBack = () => {
         const prev = prevOfMainStep(step, monitoringConfig);
-        if (prev) setStep(prev);
+        if (prev) { setMetricSide('L'); setStep(prev); }
       };
-      const goNext = () => setStep(nextMainStep(step, monitoringConfig));
+      const goNext = () => { setMetricSide('L'); setStep(nextMainStep(step, monitoringConfig)); };
+
+      // Left / Right with the value picked for each
+      const sideSwitch = sided && (
+        <div className="shrink-0 grid grid-cols-2 gap-2 pb-2">
+          {(['L', 'R'] as const).map(s => {
+            const v = customMetricValues[checkinRefOf(cfg, s)];
+            const shown = v === undefined ? '–' : cfg.inputType === 'levels' ? (cfg.levels?.[v] ?? String(v)) : String(v);
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setMetricSide(s)}
+                className={cn(
+                  'min-h-[44px] flex items-center justify-between gap-2 px-3 rounded-xl border text-sm transition-all active:scale-[0.98]',
+                  metricSide === s ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-background text-muted-foreground'
+                )}
+              >
+                <span className="font-medium">{s === 'L' ? 'Left' : 'Right'}</span>
+                <span className="font-semibold truncate">{shown}</span>
+              </button>
+            );
+          })}
+        </div>
+      );
 
       if (cfg.inputType === 'levels') {
         const levels = cfg.levels ?? [];
         return (
           <>
             <Header title={questionLabel} subtitle="Pick what applies today" />
+            {sideSwitch}
             <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 py-0.5 space-y-1.5">
               {levels.map((level, i) => {
                 const isSelected = currentVal === i;
                 return (
                   <button
                     key={`${metricKey}-${i}`}
-                    onClick={() => setCustomMetricValues(prev => ({ ...prev, [metricKey]: i }))}
+                    onClick={() => pick(i)}
                     className={cn(
                       'w-full min-h-[48px] flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all active:scale-[0.98]',
                       isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-border bg-background [@media(hover:hover)]:hover:border-primary/30'
@@ -1032,7 +1086,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
               <Button variant="outline" className="flex-1" onClick={goBack}>
                 <ChevronLeft className="h-4 w-4 mr-1" /> Back
               </Button>
-              <Button className="flex-1" disabled={currentVal === null || saving} onClick={goNext}>
+              <Button className="flex-1" disabled={!allAnswered || saving} onClick={goNext}>
                 Continue <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
@@ -1047,6 +1101,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
         return (
           <>
             <Header title={questionLabel} subtitle={`${max} = highest · ${min} = lowest${unitSuffix}`} />
+            {sideSwitch}
             {/* The options share the screen height (no scrolling); scrolls only below a usable size */}
             <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 py-0.5 flex flex-col gap-1">
               {Array.from({ length: count }, (_, i) => max - i).map((n) => {
@@ -1055,7 +1110,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
                 return (
                   <button
                     key={`${metricKey}-${n}`}
-                    onClick={() => setCustomMetricValues(prev => ({ ...prev, [metricKey]: n }))}
+                    onClick={() => pick(n)}
                     className={cn(
                       'w-full flex-1 min-h-[32px] max-h-[60px] flex items-center gap-3 px-4 py-1 rounded-xl border text-left transition-all active:scale-[0.98]',
                       isSelected
@@ -1097,23 +1152,29 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
       return (
         <>
           <Header title={questionLabel} subtitle={`Enter today's value${unitSuffix}`} />
-          <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 flex flex-col justify-center py-4">
-            <div className="flex items-center gap-2 w-full">
-              <input
-                type="number"
-                inputMode="decimal"
-                className="min-w-0 flex-1 h-11 text-base font-semibold text-center rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="–"
-                value={currentVal ?? ''}
-                onChange={e => {
-                  const v = parseFloat(e.target.value);
-                  setCustomMetricValues(prev => isNaN(v) ? (({ [metricKey]: _, ...rest }) => rest)(prev) : { ...prev, [metricKey]: v });
-                }}
-              />
-              {cfg.parameterUnit && (
-                <span className="text-muted-foreground text-sm font-medium shrink-0">{cfg.parameterUnit}</span>
-              )}
-            </div>
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 flex flex-col justify-center gap-3 py-4">
+            {sides.map(s => {
+              const key = checkinRefOf(cfg, s);
+              return (
+                <div key={s ?? 'value'} className="flex items-center gap-2 w-full">
+                  {s && <span className="w-12 shrink-0 text-sm font-medium">{s === 'L' ? 'Left' : 'Right'}</span>}
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    className="min-w-0 flex-1 h-11 text-base font-semibold text-center rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    placeholder="–"
+                    value={customMetricValues[key] ?? ''}
+                    onChange={e => {
+                      const v = parseFloat(e.target.value);
+                      setCustomMetricValues(prev => isNaN(v) ? (({ [key]: _, ...rest }) => rest)(prev) : { ...prev, [key]: v });
+                    }}
+                  />
+                  {cfg.parameterUnit && (
+                    <span className="text-muted-foreground text-sm font-medium shrink-0">{cfg.parameterUnit}</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <div className="shrink-0 flex gap-3 pt-4">
             <Button variant="outline" className="flex-1" onClick={goBack}>

@@ -125,20 +125,56 @@ export function measureRef(parameterId: string, measureId?: string, side?: 'L' |
     + (side ? `::s:${side}` : '');
 }
 
-/** "<parameter>::m:pain::s:L" → its parts (a plain id → the main measure) */
-export function parseMeasureRef(ref: string): { parameterId: string; measureId?: string; side?: 'L' | 'R' } {
+/** "<parameter>::m:pain::s:L" → its parts (a plain id → the main measure); `checkin`: a daily
+ *  check-in answer (monitoring only — performance views skip it) */
+export function parseMeasureRef(ref: string): { parameterId: string; measureId?: string; side?: 'L' | 'R'; checkin?: boolean } {
   const [parameterId, ...rest] = ref.split('::');
-  const out: { parameterId: string; measureId?: string; side?: 'L' | 'R' } = { parameterId };
+  const out: { parameterId: string; measureId?: string; side?: 'L' | 'R'; checkin?: boolean } = { parameterId };
   for (const part of rest) {
     if (part.startsWith('m:')) out.measureId = part.slice(2);
     else if (part === 's:L' || part === 's:R') out.side = part.slice(2) as 'L' | 'R';
+    else if (part === CHECKIN_PART) out.checkin = true;
   }
   return out;
 }
 
-/** The stored reference of a monitoring block's values */
-export function metricRefOf(cfg: { parameterId: string; measureId?: string; storageRef?: string }): string {
+type MonitoringRefConfig = { parameterId: string; measureId?: string; storageRef?: string; perSide?: boolean };
+
+/** The stored reference of a monitoring block's values (before the check-in tag) */
+export function metricRefOf(cfg: MonitoringRefConfig): string {
   return cfg.storageRef ?? measureRef(cfg.parameterId, cfg.measureId);
+}
+
+// Daily check-in answers end in "::src:checkin" — they are monitoring only: the Monitoring tab,
+// the coach mobile app and the squad overview read them; the Performance tab, goal baselines and
+// tests don't (readers by exact id never match it, the reference parsers skip it). Answers saved
+// before the tag have none and stay where they were.
+const CHECKIN_PART = 'src:checkin';
+
+/** The sides a monitoring block asks for — [undefined] = one value */
+export function checkinSides(cfg: { perSide?: boolean }): Array<'L' | 'R' | undefined> {
+  return cfg.perSide ? ['L', 'R'] : [undefined];
+}
+
+/** Where a check-in answer of a monitoring block (and side) is stored */
+export function checkinRefOf(cfg: MonitoringRefConfig, side?: 'L' | 'R'): string {
+  return metricRefOf(cfg) + (side ? `::s:${side}` : '') + `::${CHECKIN_PART}`;
+}
+
+/** Every reference a monitoring block's values are read from: its check-in answers (without a side
+ *  — also from before the parameter was recorded per side — and per side) and the older untagged ones */
+export function monitoringRefsOf(cfg: MonitoringRefConfig): string[] {
+  return [metricRefOf(cfg), checkinRefOf(cfg), ...(cfg.perSide ? [checkinRefOf(cfg, 'L'), checkinRefOf(cfg, 'R')] : [])];
+}
+
+/** A stored reference without the check-in tag (the block's reference, with its side) */
+export function withoutCheckinTag(ref: string): string {
+  return ref.endsWith(`::${CHECKIN_PART}`) ? ref.slice(0, -(CHECKIN_PART.length + 2)) : ref;
+}
+
+/** The side of a stored monitoring value (undefined: no side) */
+export function monitoringSideOf(ref: string): 'L' | 'R' | undefined {
+  return parseMeasureRef(ref).side;
 }
 
 /** A test of a measure / side in the athlete app: how to ask the value (stored with the test entry) */

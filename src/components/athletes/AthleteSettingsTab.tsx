@@ -626,6 +626,7 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
       parameterUnit: withMeasures ? (selectedMeasure?.kind === 'number' ? (selectedMeasure.unit ?? null) : null) : (selectedParam.unit ?? null),
       inputType,
       ...(mId ? { measureId: mId } : {}),
+      ...(selectedParamDef?.perSide ? { perSide: true } : {}),
       // A block of a merged parameter keeps its old storage while it monitors the same measure
       ...(editingBlock?.config?.storageRef && editingBlock.config.parameterId === selectedParam.id && editingBlock.config.measureId === mId
         ? { storageRef: editingBlock.config.storageRef } : {}),
@@ -1004,7 +1005,6 @@ function MonitoringCard({ athlete }: { athlete: Athlete }) {
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Input from the measure: {selectedMeasure ? `${MEASURE_KIND_LABELS[selectedMeasure.kind]}${measureSummary(selectedMeasure) ? ` (${measureSummary(selectedMeasure)})` : ''}` : '—'}
-                    {' '}— the values count for this measure (e.g. its goals and charts).
                   </p>
                 </div>
               )}

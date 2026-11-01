@@ -14,7 +14,7 @@
  * Load/AU shows the totals for the ISO week that contains selectedDate.
  */
 
-import { metricRefOf } from '@/utils/parameterMeasures';
+import { checkinRefOf, metricRefOf, withoutCheckinTag } from '@/utils/parameterMeasures';
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { startOfISOWeek, subDays, format } from 'date-fns';
@@ -184,7 +184,8 @@ export function useSquadOverview(
       setLoading(true);
 
       const connectionIds  = connections.map(c => c.id);
-      const customParamIds = customColumns.map(c => c.parameterId);
+      // The check-in answers (no side) and the older ones saved before the check-in tag
+      const customParamIds = customColumns.flatMap(c => [c.parameterId, checkinRefOf({ parameterId: c.parameterId })]);
 
       // All date arithmetic anchored on selectedDate
       const today        = selectedDate;
@@ -258,7 +259,7 @@ export function useSquadOverview(
       // Latest test result per (connectionId, parameterId)
       const latestTestResult = new Map<string, { value: string; date: string }>();
       for (const row of testResults) {
-        const key = `${row.athlete_connection_id}::${row.parameter_id}`;
+        const key = `${row.athlete_connection_id}::${withoutCheckinTag(row.parameter_id)}`;
         if (!latestTestResult.has(key)) {
           latestTestResult.set(key, { value: String(row.value), date: row.recorded_at.slice(0, 10) });
         }

@@ -35,6 +35,7 @@ export function useSelfReportedResults(athleteId: string | null | undefined): Se
         for (const row of data as Array<{ id: string; parameter_id: string; value: string; recorded_at: string; note: string | null }>) {
           // "<id>::m:<measure>" = a value of another measure / a side of that parameter
           const ref = parseMeasureRef(row.parameter_id);
+          if (ref.checkin) continue; // daily check-in answers belong to monitoring
           const list = next.get(ref.parameterId) ?? [];
           list.push({
             id: row.id, value: row.value, recordedAt: row.recorded_at, selfReported: true, note: row.note ?? undefined,
