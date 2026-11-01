@@ -4,6 +4,8 @@ import { useTrainingPrograms } from './useTrainingPrograms';
 export type AutoSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 const DEBOUNCE_MS = 3000;
+/** While the saved programs are still loading, the save waits (it would otherwise be refused) */
+const LOADING_RETRY_MS = 1000;
 const SAVED_DISPLAY_MS = 3000;
 const ERROR_DISPLAY_MS = 5000;
 
@@ -19,7 +21,7 @@ function hasSaveableContent(): boolean {
 }
 
 export function useWizardAutoSave() {
-  const { saveCurrentSession } = useTrainingPrograms();
+  const { saveCurrentSession, isLoading } = useTrainingPrograms();
   const [status, setStatus] = useState<AutoSaveStatus>('idle');
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -27,8 +29,15 @@ export function useWizardAutoSave() {
   // Always the latest save (it closes over the current programs list)
   const saveRef = useRef(saveCurrentSession);
   saveRef.current = saveCurrentSession;
+  const loadingRef = useRef(isLoading);
+  loadingRef.current = isLoading;
 
   const runSave = useCallback(async () => {
+    // Programs not loaded yet: wait and try again (a save now would be refused)
+    if (loadingRef.current) {
+      timerRef.current = setTimeout(runSave, LOADING_RETRY_MS);
+      return;
+    }
     timerRef.current = null;
     setStatus('saving');
     try {
@@ -55,7 +64,7 @@ export function useWizardAutoSave() {
   // version, and the late save then stored that old version again.
   useEffect(() => {
     const flush = () => {
-      if (!timerRef.current) return;
+      if (!timerRef.current || loadingRef.current) return;
       clearTimeout(timerRef.current);
       timerRef.current = null;
       void saveRef.current().catch(() => {});
