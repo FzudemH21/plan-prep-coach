@@ -40,9 +40,12 @@ import {
   Calendar,
   User,
   Target,
-  FileText
+  FileText,
+  History,
+  ShieldCheck
 } from "lucide-react";
 import { ExportPDFButton } from "@/components/pdf/ExportPDFButton";
+import { ProgramVersionsDialog } from "@/components/programs/ProgramVersionsDialog";
 import { useTrainingPrograms, TrainingProgram } from "@/hooks/useTrainingPrograms";
 import { getAthleteDisplayName } from "@/types/athlete";
 import { useAthletes } from "@/hooks/useAthletes";
@@ -63,6 +66,7 @@ export default function TrainingProgramsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [programToDelete, setProgramToDelete] = useState<TrainingProgram | null>(null);
   const [pdfExportProgram, setPdfExportProgram] = useState<TrainingProgram | null>(null);
+  const [versionsProgram, setVersionsProgram] = useState<TrainingProgram | null>(null);
   const [pdfExportOpen, setPdfExportOpen] = useState(false);
 
   // Get athlete name by ID
@@ -203,10 +207,16 @@ const formatDuration = (program: TrainingProgram) => {
             <p className="text-muted-foreground">Manage your saved training plans</p>
           </div>
         </div>
-        <Button onClick={handleCreateNew}>
-          <Plus className="h-4 w-4 mr-2" />
-          Create New Program
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => navigate('/restore-programs')}>
+            <ShieldCheck className="h-4 w-4 mr-2" />
+            Backup & restore
+          </Button>
+          <Button onClick={handleCreateNew}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create New Program
+          </Button>
+        </div>
       </div>
 
       {/* Search and Stats */}
@@ -286,6 +296,10 @@ const formatDuration = (program: TrainingProgram) => {
                           <FileText className="h-4 w-4 mr-2" />
                           Export PDF
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setVersionsProgram(program); }}>
+                          <History className="h-4 w-4 mr-2" />
+                          Version history
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={(e) => { e.stopPropagation(); handleDeleteClick(program); }}
@@ -334,13 +348,15 @@ const formatDuration = (program: TrainingProgram) => {
         />
       )}
 
+      <ProgramVersionsDialog program={versionsProgram} onOpenChange={(open) => { if (!open) setVersionsProgram(null); }} />
+
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Training Program</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{programToDelete?.name}"? This action cannot be undone.
+              Are you sure you want to delete "{programToDelete?.name}"? It can be brought back under Backup & restore.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

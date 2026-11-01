@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useSupabaseStore } from './useSupabaseStore';
 import { useAuth } from './useAuth';
 import { savePlanMemory } from '@/lib/planMemory';
+import { snapshotProgram } from '@/lib/programVersions';
 import { isProgramChatId } from '@/contexts/AIChatContext';
 import { PlanDuration, SmartGoal, SubGoal, Event, TrainableQuality, IntensityLevel } from '@/types/training';
 
@@ -227,6 +228,8 @@ export function useTrainingPrograms() {
         await saveData({ ...data, programs: newPrograms });
         // Persist summary to plan_memory in the background (non-blocking)
         if (user) savePlanMemory(updated, user.id).catch(() => {});
+        // Version history in the background (at most one version per hour; never blocks the save)
+        if (user) void snapshotProgram(updated, user.id);
         return updated;
       }
     }
@@ -258,6 +261,7 @@ export function useTrainingPrograms() {
     await saveData({ ...data, programs: [...data.programs, newProgram] });
     // Persist summary to plan_memory in the background (non-blocking)
     if (user) savePlanMemory(newProgram, user.id).catch(() => {});
+    if (user) void snapshotProgram(newProgram, user.id);
     return newProgram;
   }, [data, saveData, user]);
 
@@ -285,10 +289,31 @@ export function useTrainingPrograms() {
     const index = data.programs.findIndex(p => p.id === id);
     if (index < 0) return false;
 
+    // Its last state stays in the version history, so a deleted program can be brought back
+    if (user) void snapshotProgram(data.programs[index], user.id, 'deleted');
     const newPrograms = data.programs.filter(p => p.id !== id);
     await saveData({ ...data, programs: newPrograms, deletedProgramIds: [...(data.deletedProgramIds ?? []), id] });
     return true;
-  }, [data, saveData]);
+  }, [data, saveData, user]);
+
+  /**
+   * Puts a program back to an earlier version (also a deleted one). The state it has now is kept
+   * in the version history first, so the restore itself can be undone.
+   */
+  const restoreProgramVersion = useCallback(async (version: TrainingProgram): Promise<TrainingProgram> => {
+    const current = data.programs.find(p => p.id === version.id);
+    if (current && user) await snapshotProgram(current, user.id, 'before-restore');
+    const restored: TrainingProgram = { ...version, lastModifiedAt: new Date().toISOString() };
+    const programs = current
+      ? data.programs.map(p => (p.id === version.id ? restored : p))
+      : [...data.programs, restored];
+    await saveData({
+      ...data,
+      programs,
+      deletedProgramIds: (data.deletedProgramIds ?? []).filter(id => id !== version.id),
+    });
+    return restored;
+  }, [data, saveData, user]);
 
   /**
    * Before the session is replaced, write the open program's extra wizard state into it.
@@ -307,12 +332,14 @@ export function useTrainingPrograms() {
   }, [data.programs, saveProgram]);
 
   // Load program data into the active session (localStorage keys used by wizard)
-  const loadProgramIntoSession = useCallback((id: string): boolean => {
-    const program = data.programs.find(p => p.id === id);
+  // `programOverride`: load this version instead of the stored one (a just-restored version — the
+  // list in this render doesn't have it yet). It replaces the open plan, so nothing is flushed.
+  const loadProgramIntoSession = useCallback((id: string, programOverride?: TrainingProgram): boolean => {
+    const program = programOverride ?? data.programs.find(p => p.id === id);
     if (!program) return false;
 
     const reopeningActiveProgram = localStorage.getItem('activeProgramId') === id;
-    flushExtraStateToActiveProgram(id);
+    if (!programOverride) flushExtraStateToActiveProgram(id);
 
     const keysToCheck = [
       'macrocycleData', 'mesocycleData', 'trainingDays', 'exerciseDistribution',
@@ -333,8 +360,9 @@ export function useTrainingPrograms() {
     if (program.methodAllocations) localStorage.setItem('methodAllocations', JSON.stringify(program.methodAllocations));
 
     // Extra wizard state: restore this program's own copy. When reopening the program that
-    // is already open, localStorage is the live (newest) state, so leave it untouched.
-    if (!reopeningActiveProgram) {
+    // is already open, localStorage is the live (newest) state, so leave it untouched — unless a
+    // restored version replaces it.
+    if (!reopeningActiveProgram || programOverride) {
       const hasSavedSessionKeys = Object.keys(program.extraSessionState ?? {}).some(isSessionKey);
       if (hasSavedSessionKeys) {
         removeExtraSessionKeys();
@@ -506,6 +534,7 @@ export function useTrainingPrograms() {
     copyProgram,
     deleteProgram,
     restorePrograms,
+    restoreProgramVersion,
     loadProgramIntoSession,
     collectSessionData,
     saveCurrentSession,
