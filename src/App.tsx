@@ -52,6 +52,7 @@ import { useAuth } from "./hooks/useAuth";
 import { useEffect, useState } from "react";
 import { LanguagePickerModal } from "./components/LanguagePickerModal";
 import { isFirstOpen } from "./i18n";
+import { ErrorBoundary, RouteErrorBoundary } from './components/ErrorBoundary';
 
 const queryClient = new QueryClient();
 
@@ -109,6 +110,7 @@ function PhoneAppBodyClass() {
 
 function AppRoutes() {
   return (
+    <ErrorBoundary>
     <BrowserRouter>
       <PhoneAppBodyClass />
       {/* Public + standalone routes live outside AppLayout and AuthGuard */}
@@ -177,6 +179,7 @@ function AppRoutes() {
           element={
             <AuthGuard>
               <AppLayout>
+                <RouteErrorBoundary>
                 <Routes>
                   <Route path="/" element={<HomeGuard />} />
                   <Route path="/macrocycle" element={<MacrocyclePage />} />
@@ -199,12 +202,14 @@ function AppRoutes() {
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
+                </RouteErrorBoundary>
               </AppLayout>
             </AuthGuard>
           }
         />
       </Routes>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 
