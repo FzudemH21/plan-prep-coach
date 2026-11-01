@@ -2,6 +2,10 @@ import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 import './i18n' // must be imported before App so i18n is initialised first
+import { installStorageGuard } from './utils/storageGuard'
+
+// A full browser storage must never crash the app (see storageGuard.ts)
+installStorageGuard();
 
 // Disable the browser's native "scroll wheel changes a focused number input's
 // value" behavior app-wide. Without this, scrolling the page while the cursor
