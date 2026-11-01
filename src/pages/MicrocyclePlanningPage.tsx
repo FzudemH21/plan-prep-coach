@@ -91,6 +91,8 @@ export default function MicrocyclePlanningPage() {
   const [exerciseDistribution, setExerciseDistribution] = useState<ExerciseDistribution[]>([]);
   const [parameterValues, setParameterValues] = useState<Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>>({});
   const [daySplitStates, setDaySplitStates] = useState<Record<string, number>>({});
+  /** Everything stored was read (the mount effect ran) — checks over all days wait for it */
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   const [splitStates, setSplitStates] = useState<Record<string, boolean>>({});
   const { data: toolboxData } = useToolboxData();
   const { athletes, athletePerformanceParameters, biometricDefinitions, athleteBiometrics } = useAthletes();
@@ -438,6 +440,7 @@ export default function MicrocyclePlanningPage() {
         setExerciseSelectionData(JSON.parse(savedExerciseSelection));
       }
     }
+    setInitialDataLoaded(true);
   }, []);
 
   // Sync dailyIntensityData into trainingDays on load
@@ -652,6 +655,15 @@ export default function MicrocyclePlanningPage() {
       return changed ? next : prev;
     });
   }, [trainingDays, dayContentMaxIndex]);
+
+  // Sessions a day shows in method distribution — the count the single-session rule uses (session
+  // and day intensity are one value). Exercise distribution's count can be lower (it hides an empty
+  // default session), which used to skip the sync for such days.
+  const sessionCountOf = (date: string): number => {
+    const day = trainingDays.find(d => d.date === date);
+    if (migrateLegacyIntensity(day?.intensity) === '0') return 0;
+    return Math.max(daySplitStates[date] ?? 1, effectiveDaySplitStates[date] ?? 0);
+  };
 
   // Sync effective session counts to trainingDays (returns the same array when nothing changed,
   // so effects watching trainingDays don't re-run needlessly)
@@ -1511,6 +1523,14 @@ export default function MicrocyclePlanningPage() {
       return;
     }
 
+    // One session left: the day takes that session's own intensity (session and day are one value)
+    const remainingIntensity = currentSessions - 1 === 1
+      ? stored.find(entry => entry.prefix === 'sessionIntensity_' && entry.to === 0)?.value
+      : undefined;
+    if (remainingIntensity && migrateLegacyIntensity(remainingIntensity) !== migrateLegacyIntensity(day?.intensity)) {
+      setDayIntensities(new Map([[dayDate, migrateLegacyIntensity(remainingIntensity)]]));
+    }
+
     setDaySplitStates(prev => ({ ...prev, [dayDate]: currentSessions - 1 }));
     setTrainingDays(prev => prev.map(d => {
       if (d.date !== dayDate) return d;
@@ -1583,6 +1603,43 @@ export default function MicrocyclePlanningPage() {
       })
     );
   };
+
+  // Single-session days: session and day intensity are one value. A mismatch in the stored data is
+  // resolved here: once per plan the session's intensity wins (mismatches left by deleting sessions,
+  // before deleting down to one adopted it), afterwards the day's (changed elsewhere, e.g. in Daily
+  // Intensity Planning, which doesn't touch session intensities).
+  useEffect(() => {
+    if (!initialDataLoaded || trainingDays.length === 0) return;
+    const repairKey = `sessionDayIntensityRepair_v1_${localStorage.getItem('activeProgramId') ?? 'draft'}`;
+    const sessionWins = localStorage.getItem(repairKey) === null;
+    const dayUpdates = new Map<string, IntensityLevel>();
+    let sessionsUpdated = false;
+    trainingDays.forEach(day => {
+      const dayIntensity = migrateLegacyIntensity(day.intensity);
+      if (dayIntensity === '0' || sessionCountOf(day.date) !== 1) return;
+      const meso = day.mesocycleId ?? mesocycleIdOfDay(day.date);
+      if (!meso) return;
+      const key = `sessionIntensity_${meso}_${day.date}_0`;
+      const stored = localStorage.getItem(key);
+      if (!stored || migrateLegacyIntensity(stored) === dayIntensity) return;
+      if (sessionWins) {
+        dayUpdates.set(day.date, migrateLegacyIntensity(stored));
+      } else {
+        localStorage.setItem(key, dayIntensity);
+        sessionsUpdated = true;
+      }
+    });
+    localStorage.setItem(repairKey, '1');
+    if (dayUpdates.size > 0) {
+      setDayIntensities(dayUpdates);
+      toast({
+        title: 'Day intensities aligned',
+        description: `${dayUpdates.size} day${dayUpdates.size === 1 ? '' : 's'} with a single session now use${dayUpdates.size === 1 ? 's' : ''} that session's intensity.`,
+      });
+    }
+    if (sessionsUpdated) notifySessionMetaChanged();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDataLoaded, trainingDays, daySplitStates, effectiveDaySplitStates]);
 
   /** Sets day intensities (calendar days and the stored daily intensities) */
   const setDayIntensities = (intensities: Map<string, IntensityLevel>) => {
@@ -1851,9 +1908,7 @@ export default function MicrocyclePlanningPage() {
     localStorage.setItem(sessionIntensityKey, intensity);
     notifySessionMetaChanged();
     
-    // Count total sessions for this day from trainingDays (source of truth)
-    const day = trainingDays.find(d => d.date === dayDate);
-    const sessionCount = day?.sessions ?? 1;
+    const sessionCount = sessionCountOf(dayDate);
     const isSingleSession = sessionCount === 1;
     
     // If single session day, bidirectionally sync with day intensity
@@ -1921,9 +1976,7 @@ export default function MicrocyclePlanningPage() {
       return updated;
     });
     
-    // Count sessions for this day from trainingDays (source of truth)
-    const day = trainingDays.find(d => d.date === dayDate);
-    const sessionCount = day?.sessions ?? 1;
+    const sessionCount = sessionCountOf(dayDate);
     
     // For single-session days, also sync the session intensity
     if (sessionCount === 1) {

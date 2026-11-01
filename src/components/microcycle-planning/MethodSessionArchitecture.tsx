@@ -45,7 +45,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { notifySessionMetaChanged } from '@/utils/parameterVisibility';
+import { notifySessionMetaChanged, SESSION_META_CHANGED_EVENT } from '@/utils/parameterVisibility';
 import { usePersistentSet } from '@/hooks/usePersistentState';
 
 export interface MethodSessionArchitectureProps {
@@ -349,7 +349,13 @@ export function MethodSessionArchitecture({
     });
   }, [methodExerciseCategories]);
 
-  // ── init: load session intensities from localStorage ─────────────────────────
+  // ── init: load session intensities from localStorage (again whenever they change in storage) ──
+  const [sessionMetaVersion, setSessionMetaVersion] = useState(0);
+  useEffect(() => {
+    const bump = () => setSessionMetaVersion(v => v + 1);
+    window.addEventListener(SESSION_META_CHANGED_EVENT, bump);
+    return () => window.removeEventListener(SESSION_META_CHANGED_EVENT, bump);
+  }, []);
   useEffect(() => {
     const map: Record<string, IntensityLevel> = {};
     mesocycleDays.forEach(day => {
@@ -362,7 +368,7 @@ export function MethodSessionArchitecture({
       }
     });
     setSessionIntensityMap(map);
-  }, [mesocycle.id, mesocycleDays, daySplitStates]);
+  }, [mesocycle.id, mesocycleDays, daySplitStates, sessionMetaVersion]);
 
   // ── init: load session comments from localStorage ────────────────────────────
   useEffect(() => {
