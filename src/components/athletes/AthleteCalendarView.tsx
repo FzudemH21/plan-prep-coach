@@ -2123,6 +2123,25 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           program = { ...sourceProgram, exerciseDistribution: exercisesWithVisibility };
         }
 
+        // Each session's own intensity: stored under the program's dates and mesocycle ids (or live
+        // when the program is open in the planner). Read here and moved with the dates below —
+        // before, assigning dropped them and every session took its day's intensity.
+        const programSessionIntensities = new Map<string, string>(); // "programDate|sessionIndex" → intensity
+        {
+          const sourceProgram = program;
+          const isOpenInPlanner = localStorage.getItem('activeProgramId') === sourceProgram.id;
+          const read = (key: string) =>
+            (isOpenInPlanner ? localStorage.getItem(key) : null) ?? sourceProgram.extraSessionState?.[key] ?? null;
+          (sourceProgram.trainingDays ?? []).forEach((td: { date?: string; mesocycleId?: string; sessions?: number; sessionNames?: string[] }) => {
+            if (!td.date || !td.mesocycleId) return;
+            const count = Math.max(sourceProgram.daySplitStates?.[td.date] ?? 0, td.sessions ?? 0, td.sessionNames?.length ?? 0, 1);
+            for (let si = 0; si < count; si++) {
+              const value = read(`sessionIntensity_${td.mesocycleId}_${td.date}_${si}`);
+              if (value) programSessionIntensities.set(`${td.date}|${si}`, value);
+            }
+          });
+        }
+
         // Selected microcycles are assigned back to back (e.g. weeks 2 + 4: week 2 starts on the
         // assignment date, week 4 right after it) - pack them on the program's timeline first
         // Always applied when microcycles are known: it also drops the unselected ones, so the plan
@@ -2176,6 +2195,17 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         ));
 
         const dayOffset = (normalizedNewStart.getTime() - normalizedOriginalStart.getTime()) / 86400000;
+
+        // Session intensities under the athlete's dates ("date-sessionIndex", as the calendar keeps
+        // them): same packing of the selected microcycles and the same shift as everything else
+        const assignedSessionIntensities: Record<string, IntensityLevel> = {};
+        programSessionIntensities.forEach((intensity, key) => {
+          const [programDate, sessionIndex] = key.split('|');
+          const packed = packedDateMap ? packedDateMap.get(programDate) : programDate;
+          if (!packed) return; // a microcycle that wasn't selected
+          const date = format(addDays(new Date(`${packed}T12:00:00`), Math.round(dayOffset)), 'yyyy-MM-dd');
+          assignedSessionIntensities[`${date}-${sessionIndex}`] = intensity as IntensityLevel;
+        });
 
         try {
           // Shift all program data to match the new start date using normalized dates
@@ -2570,6 +2600,14 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
               merged.dailyIntensity,
               merged.parameterValues,
             );
+            // Their own session intensities, at the merged sessions' places
+            editing.mergeSessionIntensities(Object.fromEntries(
+              Object.entries(assignedSessionIntensities).map(([key, intensity]) => {
+                const sep = key.lastIndexOf('-');
+                const date = key.slice(0, sep);
+                return [`${date}-${Number(key.slice(sep + 1)) + (mergeFromIndex[date] ?? 0)}`, intensity];
+              }),
+            ));
             // Record the merged mesocycles and widen the date range so the calendar renders them
             if (selectedAssignmentId) {
               const newStartIso = assignment.startDate;
@@ -2627,6 +2665,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
               dailyIntensity: filteredDailyIntensity,
               trainingDays: finalTrainingDays,
               daySplitStates: finalDaySplitStates,
+              sessionIntensities: assignedSessionIntensities,
               copiedFromProgram: program.id,
               copiedAt: new Date().toISOString(),
             };
@@ -2657,7 +2696,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 dataToSave.sessionSections,
                 toolboxData?.entries,
                 dataToSave.supersets,
-                undefined, // sessionIntensities not available at assign time
+                assignedSessionIntensities,
                 enrichEvents(athleteEventsForSync),
                 athleteFormulaData,
               )

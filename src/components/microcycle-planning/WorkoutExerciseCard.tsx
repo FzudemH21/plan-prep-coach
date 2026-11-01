@@ -205,7 +205,10 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
   const methodParams = (() => {
     // PRIMARY: Derive parameters from exercise.parameters (populated from method periodization grid)
     const keys = Object.keys(exercise.parameters || {});
-    const baseKeys = keys.filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k));
+    // A parameter counts as planned when the exercise has a value for it — also only per set (e.g.
+    // Duration entered in the Master Planner for a parameter without a value in the Periodization
+    // Table; before, it was treated as unplanned and hidden here)
+    const baseKeys = [...new Set(keys.filter(k => !k.endsWith('_unit')).map(k => k.replace(/_set\d+$/i, '')))];
 
     type ParamEntry = {
       name: string;
@@ -223,7 +226,7 @@ export const WorkoutExerciseCard = React.memo(function WorkoutExerciseCard({
 
     if (baseKeys.length > 0) {
       params = baseKeys.map(name => {
-        const raw = exercise.parameters[name];
+        const raw = exercise.parameters[name] ?? exercise.parameters[`${name}_set1`];
         const isNumeric = typeof raw === 'number' || (!isNaN(Number(raw)) && raw !== '');
         const toolboxEntry = toolboxParams?.find(tp => tp.parameterName === name);
         return {

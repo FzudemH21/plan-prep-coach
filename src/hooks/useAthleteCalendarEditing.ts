@@ -939,6 +939,12 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     toast({ title: "Session copied", description: `${sessionExercises.length} exercise(s) copied` });
   }, [exerciseDistribution, sessionSections, supersets, trainingDays, dailyIntensityData, toast]);
 
+  /** Adds session intensities ("date-sessionIndex" → intensity), e.g. those of a program merged in */
+  const mergeSessionIntensities = useCallback((intensities: Record<string, IntensityLevel>) => {
+    if (Object.keys(intensities).length === 0) return;
+    setSessionIntensities(prev => ({ ...prev, ...intensities }));
+  }, []);
+
   /** Puts a session (a copied one or one from the session library) on a day at newSessionIndex */
   const insertSession = useCallback((targetDate: string, copiedSession: CopiedSession, newSessionIndex: number) => {
     // Calculate initial splitState for target day
@@ -2411,5 +2417,6 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
 
     // Assign-program merge helper
     mergeSessionData,
+    mergeSessionIntensities,
   };
 }

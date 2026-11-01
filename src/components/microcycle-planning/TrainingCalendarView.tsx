@@ -782,7 +782,7 @@ export function TrainingCalendarView({
                 // Sync exercise notes to parent's exerciseDistribution
                 if (onDistributionChange) {
                   const updated = exerciseDistribution.map(ex =>
-                    (ex.id === exerciseId || ex.exerciseId === exerciseId) ? { ...ex, notes } : ex
+                    (ex.id || ex.exerciseId) === exerciseId ? { ...ex, notes } : ex
                   );
                   onDistributionChange(updated);
                 }
@@ -796,7 +796,7 @@ export function TrainingCalendarView({
                 // Sync eachSide toggle to parent's exerciseDistribution
                 if (onDistributionChange) {
                   const updated = exerciseDistribution.map(ex =>
-                    (ex.id === exerciseId || ex.exerciseId === exerciseId) ? { ...ex, eachSide } : ex
+                    (ex.id || ex.exerciseId) === exerciseId ? { ...ex, eachSide } : ex
                   );
                   onDistributionChange(updated);
                 }

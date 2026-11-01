@@ -307,7 +307,7 @@ const EditableParamInput = memo(({
     return (
       <Select value={String(localValue)} onValueChange={handleSelectChange}>
         <SelectTrigger 
-          className="h-6 w-full text-[10px] px-1 border-muted bg-background/50" 
+          className="h-6 w-full text-[10px] px-1 border-muted bg-background/50 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/60 focus-visible:ring-offset-0 focus:ring-1 focus:ring-inset focus:ring-primary/60 focus:ring-offset-0 focus-visible:outline-none focus:outline-none" 
           onClick={(e) => e.stopPropagation()}
         >
           <SelectValue placeholder="-" />
@@ -331,7 +331,7 @@ const EditableParamInput = memo(({
       onChange={(e) => setLocalValue(e.target.value)}
       onBlur={handleBlur}
       onClick={(e) => e.stopPropagation()}
-      className="h-6 w-full text-[10px] px-1 py-0 text-center border-muted bg-background/50 focus:bg-background"
+      className="h-6 w-full text-[10px] px-1 py-0 text-center border-muted bg-background/50 focus:bg-background focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/60 focus-visible:ring-offset-0 focus:ring-1 focus:ring-inset focus:ring-primary/60 focus:ring-offset-0 focus-visible:outline-none focus:outline-none"
     />
   );
 });
@@ -774,8 +774,11 @@ export function MasterPlannerColumn({
       const i = toolboxEntries.findIndex(entry => entry.parameterName === name);
       return i === -1 ? Number.MAX_SAFE_INTEGER : i;
     };
-    const storedParamKeys = Object.keys(storedParams)
-      .filter(k => !k.endsWith('_unit') && !/_set\d+$/i.test(k))
+    // A parameter counts as planned when the exercise has a value for it — also only per set (e.g.
+    // Duration entered here for a parameter without a value in the Periodization Table)
+    const storedParamKeys = [...new Set(Object.keys(storedParams)
+      .filter(k => !k.endsWith('_unit'))
+      .map(k => k.replace(/_set\d+$/i, '')))]
       .map((k, i) => ({ k, i }))
       .sort((a, b) => (tbIndex(a.k) - tbIndex(b.k)) || (a.i - b.i))
       .map(({ k }) => k);
@@ -1598,9 +1601,9 @@ export function MasterPlannerColumn({
                                           tabIndex={-1}
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            onOpenExerciseDetail?.(exercise);
+                                            if (!exercise.isCircuit) onOpenExerciseDetail?.(exercise);
                                           }}
-                                          className="font-semibold truncate flex-1 text-left hover:underline cursor-pointer"
+                                          className={cn('font-semibold truncate flex-1 text-left', !exercise.isCircuit && 'hover:underline cursor-pointer')}
                                         >
                                           {exercise.exerciseName}
                                         </button>
@@ -1697,7 +1700,7 @@ export function MasterPlannerColumn({
                                             <Checkbox
                                               id={`each-side-section-${exercise.exerciseId}`}
                                               checked={exercise.eachSide || false}
-                                              onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.exerciseId, !!checked)}
+                                              onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.id || exercise.exerciseId, !!checked)}
                                               onClick={(e) => e.stopPropagation()}
                                               className="h-3.5 w-3.5"
                                             />
@@ -1717,7 +1720,7 @@ export function MasterPlannerColumn({
                                             </div>
                                             <Textarea
                                               value={exercise.notes || ''}
-                                              onChange={(e) => onExerciseNotesChange?.(exercise.exerciseId, e.target.value)}
+                                              onChange={(e) => onExerciseNotesChange?.(exercise.id || exercise.exerciseId, e.target.value)}
                                               onClick={(e) => e.stopPropagation()}
                                               placeholder="Add notes..."
                                               className="text-xs min-h-[36px] resize-none p-1"
@@ -1841,9 +1844,9 @@ export function MasterPlannerColumn({
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onOpenExerciseDetail?.(exercise);
+                                  if (!exercise.isCircuit) onOpenExerciseDetail?.(exercise);
                                 }}
-                                className="font-semibold truncate flex-1 text-left hover:underline cursor-pointer"
+                                className={cn('font-semibold truncate flex-1 text-left', !exercise.isCircuit && 'hover:underline cursor-pointer')}
                               >
                                 {exercise.exerciseName}
                               </button>
@@ -1905,7 +1908,7 @@ export function MasterPlannerColumn({
                                   <Checkbox
                                     id={`each-side-unsectioned-${exercise.exerciseId}`}
                                     checked={exercise.eachSide || false}
-                                    onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.exerciseId, !!checked)}
+                                    onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.id || exercise.exerciseId, !!checked)}
                                     onClick={(e) => e.stopPropagation()}
                                     className="h-3.5 w-3.5"
                                   />
@@ -1925,7 +1928,7 @@ export function MasterPlannerColumn({
                                   </div>
                                   <Textarea
                                     value={exercise.notes || ''}
-                                    onChange={(e) => onExerciseNotesChange?.(exercise.exerciseId, e.target.value)}
+                                    onChange={(e) => onExerciseNotesChange?.(exercise.id || exercise.exerciseId, e.target.value)}
                                     onClick={(e) => e.stopPropagation()}
                                     placeholder="Add notes..."
                                     className="text-xs min-h-[36px] resize-none p-1"
@@ -2005,7 +2008,7 @@ export function MasterPlannerColumn({
                         <Checkbox
                           id={`each-side-flat-${exercise.exerciseId}`}
                           checked={exercise.eachSide || false}
-                          onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.exerciseId, !!checked)}
+                          onCheckedChange={(checked) => onExerciseEachSideChange?.(exercise.id || exercise.exerciseId, !!checked)}
                           onClick={(e) => e.stopPropagation()}
                           className="h-3.5 w-3.5"
                         />
@@ -2025,7 +2028,7 @@ export function MasterPlannerColumn({
                         </div>
                         <Textarea
                           value={exercise.notes || ''}
-                          onChange={(e) => onExerciseNotesChange?.(exercise.exerciseId, e.target.value)}
+                          onChange={(e) => onExerciseNotesChange?.(exercise.id || exercise.exerciseId, e.target.value)}
                           onClick={(e) => e.stopPropagation()}
                           placeholder="Add notes..."
                           className="text-xs min-h-[36px] resize-none p-1"
