@@ -1,5 +1,5 @@
 import { metricRefOf } from '@/utils/parameterMeasures';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -221,10 +221,25 @@ function BodyMap({
   const [side, setSide] = useState<BodySide>('front');
   const regions = side === 'front' ? FRONT_REGIONS : BACK_REGIONS;
   const imgSrc  = side === 'front' ? FRONT_IMG : BACK_IMG;
-  const viewBox = side === 'front' ? '0 0 193 306' : '0 0 211 317';
+  const [vbW, vbH] = side === 'front' ? [193, 306] : [211, 317];
+  const viewBox = `0 0 ${vbW} ${vbH}`;
+
+  // The figure fills the space it gets (width and height), so the map, the rating and
+  // "Confirm area" fit on one screen without scrolling
+  const areaRef = useRef<HTMLDivElement>(null);
+  const [area, setArea] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = areaRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) =>
+      setArea({ w: entry.contentRect.width, h: entry.contentRect.height }));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const figureW = Math.min(area.w, 300, area.h * vbW / vbH);
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-2 flex-1 min-h-0">
       {/* Front / Back tabs */}
       <div className="flex bg-muted rounded-lg p-1 gap-1">
         {(['front', 'back'] as BodySide[]).map((s) => (
@@ -242,12 +257,13 @@ function BodyMap({
       </div>
 
       {/* Body image + SVG overlay */}
-      <div className="flex justify-center">
-        <div className="relative" style={{ width: '100%', maxWidth: 260 }}>
+      <div ref={areaRef} className="flex-1 min-h-0 flex justify-center">
+        {figureW > 0 && (
+        <div className="relative" style={{ width: figureW, height: figureW * vbH / vbW }}>
           <img
             src={imgSrc}
             alt={`${side} body view`}
-            style={{ width: '100%', height: 'auto', display: 'block' }}
+            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
           />
           <svg
             style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
@@ -307,6 +323,7 @@ function BodyMap({
             )}
           </svg>
         </div>
+        )}
       </div>
     </div>
   );
@@ -601,16 +618,16 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
             title={item.label}
             subtitle={`Question ${wellnessIdx + 1} of ${WELLNESS_ITEMS.length}`}
           />
-          <div className="flex-1 overflow-y-auto space-y-2">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 py-0.5 space-y-2">
             {([5, 4, 3, 2, 1] as const).map((val) => (
               <button
-                key={val}
+                key={`${item.key}-${val}`} /* per question: no focus/tap state carried over from the previous one */
                 onClick={() => selectWellness(val)}
                 className={cn(
                   'w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border text-left transition-all active:scale-[0.98]',
                   current === val
                     ? WELLNESS_COLORS[val]
-                    : 'border-border bg-background hover:border-primary/30'
+                    : 'border-border bg-background [@media(hover:hover)]:hover:border-primary/30'
                 )}
               >
                 <span className={cn(
@@ -663,14 +680,14 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
       return (
         <>
           <Header title="Wellness summary" subtitle="Tap any answer to change it." />
-          <div className="flex-1 overflow-y-auto space-y-2">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 py-0.5 space-y-2">
             {WELLNESS_ITEMS.map((item, idx) => {
               const val = wellness[item.key];
               return (
                 <button
                   key={item.key}
                   onClick={() => { returnToConfirm.current = true; setWellnessIdx(idx); setStep('wellness'); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-background hover:border-primary/30 transition-all active:scale-[0.98] text-left"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-background [@media(hover:hover)]:hover:border-primary/30 transition-all active:scale-[0.98] text-left"
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-muted-foreground truncate">{item.label}</p>
@@ -705,7 +722,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
       return (
         <>
           <Header title="Any health issues today?" subtitle="Pain, illness, or neither." />
-          <div className="flex-1 overflow-y-auto space-y-5">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 py-0.5 space-y-5">
             <div>
               <p className="text-sm font-semibold mb-2">Do you have any pain or discomfort?</p>
               <div className="flex gap-3">
@@ -717,7 +734,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
                       'flex-1 py-3 rounded-xl border text-sm font-semibold transition-all active:scale-[0.98]',
                       hasPain === val
                         ? 'bg-primary text-primary-foreground border-primary'
-                        : 'border-border bg-background hover:border-primary/30'
+                        : 'border-border bg-background [@media(hover:hover)]:hover:border-primary/30'
                     )}
                   >
                     {val ? 'Yes' : 'No'}
@@ -736,7 +753,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
                       'flex-1 py-3 rounded-xl border text-sm font-semibold transition-all active:scale-[0.98]',
                       hasIllness === val
                         ? 'bg-primary text-primary-foreground border-primary'
-                        : 'border-border bg-background hover:border-primary/30'
+                        : 'border-border bg-background [@media(hover:hover)]:hover:border-primary/30'
                     )}
                   >
                     {val ? 'Yes' : 'No'}
@@ -784,7 +801,8 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
               ? `Rate ${getRegionKeyLabel(pendingKey)}`
               : 'Tap an area on the map.'}
           />
-          <div className="flex-1 overflow-y-auto space-y-3">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 py-0.5 flex flex-col gap-3">
+            <div className="flex-1 min-h-[220px] flex flex-col">
             <BodyMap
               painDots={painDots}
               pendingKey={pendingKey}
@@ -792,10 +810,11 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
               pendingNrs={pendingNrs}
               onSelect={handleMapSelect}
             />
+            </div>
 
             {/* Inline NRS for pending area */}
             {pendingKey && (
-              <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 space-y-3">
+              <div className="shrink-0 rounded-xl border border-indigo-200 bg-indigo-50/60 p-3 space-y-2.5">
                 <p className="text-sm font-semibold text-indigo-900">
                   {getRegionKeyLabel(pendingKey)}
                 </p>
@@ -813,10 +832,12 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
 
             {/* Confirmed areas list */}
             {painDots.size > 0 && !pendingKey && (
-              <div className="space-y-1.5">
+              <div className="shrink-0 space-y-1.5">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Confirmed ({painDots.size})
                 </p>
+                {/* Several areas: the list scrolls, the map keeps its space */}
+                <div className="max-h-[104px] overflow-y-auto space-y-1.5">
                 {Array.from(painDots.entries()).map(([key, dot]) => (
                   <div
                     key={key}
@@ -832,7 +853,8 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
                     </button>
                   </div>
                 ))}
-                <p className="text-center text-xs text-muted-foreground py-1">
+                </div>
+                <p className="text-center text-xs text-muted-foreground">
                   Tap the map to add more areas
                 </p>
               </div>
@@ -840,7 +862,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
 
             {/* No dots selected — show hint so athlete can still proceed */}
             {painDots.size === 0 && !pendingKey && (
-              <p className="text-center text-xs text-muted-foreground py-2 px-4">
+              <p className="shrink-0 text-center text-xs text-muted-foreground py-1 px-4">
                 No area selected. Tap the map to mark a pain location, or tap <strong>Continue</strong> to submit with no pain.
               </p>
             )}
@@ -876,7 +898,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
       return (
         <>
           <Header title="Which symptoms do you have?" subtitle="Select all that apply." />
-          <div className="flex-1 overflow-y-auto space-y-1.5">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 py-0.5 space-y-1.5">
             {ILLNESS_SYMPTOMS.map((sym) => (
               <div key={sym.id}>
                 <button
@@ -891,7 +913,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
                     'w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all active:scale-[0.98]',
                     illnessSymptoms.has(sym.id)
                       ? 'bg-primary text-primary-foreground border-primary'
-                      : 'border-border bg-background hover:border-primary/30'
+                      : 'border-border bg-background [@media(hover:hover)]:hover:border-primary/30'
                   )}
                 >
                   <div className={cn(
@@ -943,7 +965,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
       return (
         <>
           <Header title="Overall illness severity" subtitle="How bad are your symptoms right now?" />
-          <div className="flex-1 overflow-y-auto py-4">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 py-4">
             <NrsStrip value={illnessNrs} onChange={setIllnessNrs} label="Illness severity" />
           </div>
           {saveError && (
@@ -989,16 +1011,16 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
         return (
           <>
             <Header title={questionLabel} subtitle="Pick what applies today" />
-            <div className="flex-1 overflow-y-auto space-y-1.5">
+            <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 py-0.5 space-y-1.5">
               {levels.map((level, i) => {
                 const isSelected = currentVal === i;
                 return (
                   <button
-                    key={i}
+                    key={`${metricKey}-${i}`}
                     onClick={() => setCustomMetricValues(prev => ({ ...prev, [metricKey]: i }))}
                     className={cn(
                       'w-full min-h-[48px] flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all active:scale-[0.98]',
-                      isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-border bg-background hover:border-primary/30'
+                      isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-border bg-background [@media(hover:hover)]:hover:border-primary/30'
                     )}
                   >
                     <span className="text-sm font-medium leading-snug">{level}</span>
@@ -1025,19 +1047,20 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
         return (
           <>
             <Header title={questionLabel} subtitle={`${max} = highest · ${min} = lowest${unitSuffix}`} />
-            <div className="flex-1 overflow-y-auto space-y-1.5">
+            {/* The options share the screen height (no scrolling); scrolls only below a usable size */}
+            <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 py-0.5 flex flex-col gap-1">
               {Array.from({ length: count }, (_, i) => max - i).map((n) => {
                 const anchor = cfg.scaleAnchors?.find(a => a.value === n)?.label;
                 const isSelected = currentVal === n;
                 return (
                   <button
-                    key={n}
+                    key={`${metricKey}-${n}`}
                     onClick={() => setCustomMetricValues(prev => ({ ...prev, [metricKey]: n }))}
                     className={cn(
-                      'w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all active:scale-[0.98]',
+                      'w-full flex-1 min-h-[32px] max-h-[60px] flex items-center gap-3 px-4 py-1 rounded-xl border text-left transition-all active:scale-[0.98]',
                       isSelected
                         ? 'bg-primary border-primary text-primary-foreground'
-                        : 'border-border bg-background hover:border-primary/30'
+                        : 'border-border bg-background [@media(hover:hover)]:hover:border-primary/30'
                     )}
                   >
                     <span className={cn(
@@ -1074,7 +1097,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
       return (
         <>
           <Header title={questionLabel} subtitle={`Enter today's value${unitSuffix}`} />
-          <div className="flex-1 overflow-y-auto flex flex-col justify-center py-4">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 flex flex-col justify-center py-4">
             <div className="flex items-center gap-2 w-full">
               <input
                 type="number"
@@ -1112,7 +1135,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
             title="Any notes for your coach?"
             subtitle="Optional — leave blank if there's nothing to add."
           />
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1 py-0.5">
             <textarea
               className="w-full h-32 resize-none rounded-xl border border-border bg-background p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground"
               placeholder="How are you feeling overall? Anything your coach should know…"
@@ -1163,7 +1186,7 @@ export function DailyCheckinSheet({ open, onClose, onSave, athleteName, monitori
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent
-        className="sm:max-w-[440px] max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden"
+        className="sm:max-w-[440px] h-[94dvh] max-h-[860px] flex flex-col gap-0 p-0 overflow-hidden"
         // Remove the default close button — we handle navigation ourselves
         onInteractOutside={(e) => e.preventDefault()}
       >
