@@ -287,7 +287,7 @@ export function SessionColumnView({
                       <button
                         className="font-semibold truncate text-primary text-left w-full hover:underline cursor-pointer"
                         onClick={() => onEditCircuit?.(exercise.id)}
-                        title="Click to edit circuit"
+                        title={`${exercise.exerciseName} — click to edit circuit`}
                       >
                         {exercise.exerciseName}
                       </button>
@@ -362,7 +362,7 @@ export function SessionColumnView({
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{exercise.exerciseName}</div>
+                    <div className="font-medium truncate" title={exercise.exerciseName}>{exercise.exerciseName}</div>
                     {/* Method tag — its periodization values are the ones this exercise uses.
                         Exercises that belong to several methods can be switched here. The superset
                         label sits right after it on the same line (the tag shortens if needed). */}

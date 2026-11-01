@@ -172,7 +172,7 @@ export function ExerciseLibraryPanel({
             )}
           >
             <GripVertical className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-            <span className="flex-1 truncate">{exercise.exerciseName}</span>
+            <span className="flex-1 truncate" title={exercise.exerciseName}>{exercise.exerciseName}</span>
             {count > 0 && (
               <span className="flex items-center gap-0.5 ml-1 flex-shrink-0">
                 {Array.from({ length: Math.min(count, 5) }).map((_, i) => (
