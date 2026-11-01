@@ -2781,14 +2781,40 @@ export default function MicrocyclePlanningPage() {
     }
 
     // Create new exercises with updated IDs, date, session index, and section ID
-    const pastedExercises = sectionFit.exercises.map(ex => ({
-      ...ex,
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      dayDate: targetDayDate,
-      sessionIndex: targetSessionIndex,
-      sectionId: newSectionId
-    }));
-    
+    const newExerciseIdOf: Record<string, string> = {};
+    const pastedExercises = sectionFit.exercises.map(ex => {
+      const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      newExerciseIdOf[ex.id] = id;
+      return {
+        ...ex,
+        id,
+        dayDate: targetDayDate,
+        sessionIndex: targetSessionIndex,
+        sectionId: newSectionId
+      };
+    });
+
+    // The section's supersets come along, linking the pasted exercises (numbered per section, like
+    // everywhere — the pasted section is new, so it starts at superset-1)
+    const sourceGroups = supersets[copiedSection.sourceDayDate]?.[copiedSection.sourceSessionIndex]?.[copiedSection.sourceSectionId] ?? {};
+    const pastedGroups: Record<string, string[]> = {};
+    Object.values(sourceGroups).forEach(ids => {
+      const mapped = (ids as string[]).map(id => newExerciseIdOf[id]).filter(Boolean);
+      if (mapped.length >= 2) pastedGroups[`superset-${Object.keys(pastedGroups).length + 1}`] = mapped;
+    });
+    if (Object.keys(pastedGroups).length > 0) {
+      setSupersets(prev => ({
+        ...prev,
+        [targetDayDate]: {
+          ...(prev[targetDayDate] ?? {}),
+          [targetSessionIndex]: {
+            ...(prev[targetDayDate]?.[targetSessionIndex] ?? {}),
+            [newSectionId]: pastedGroups,
+          },
+        },
+      }));
+    }
+
     setSessionSections(prev => [...prev, pastedSection]);
     setExerciseDistribution(prev => [...prev, ...pastedExercises]);
     
