@@ -9,6 +9,7 @@ import { useUnreadCounts } from "@/hooks/useChat";
 import { useCoachProfile } from "@/hooks/useCoachProfile";
 import { CoachActivityBell } from "./CoachActivityBell";
 import { useBiometricsMigration } from "@/hooks/useBiometricsMigration";
+import { useMonitoringSideSync } from '@/hooks/useMonitoringSideSync';
 import { useEmbeddingUpgrade } from "@/hooks/useEmbeddingUpgrade";
 
 interface AppLayoutProps {
@@ -20,6 +21,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   // One-time move of body metrics into the parameter database
   useBiometricsMigration();
+  useMonitoringSideSync();
   useEmbeddingUpgrade();
 
   const { connections } = useAthleteConnections();

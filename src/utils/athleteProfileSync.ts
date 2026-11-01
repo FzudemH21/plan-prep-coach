@@ -10,7 +10,7 @@
  */
 import { supabase } from '@/lib/supabase';
 import type { AthleteProfileData } from '@/hooks/useAthleteConnections';
-import type { Athlete } from '@/types/athlete';
+import type { Athlete, MonitoringBlock, MonitoringConfig } from '@/types/athlete';
 
 type AthleteUpdates = Partial<Omit<Athlete, 'id' | 'createdAt'>>;
 
@@ -54,6 +54,46 @@ export async function patchConnectionProfileData(
     .eq('id', connectionId);
   if (upErr) throw upErr;
   return profileData;
+}
+
+/** A check-in question whose per-side mark differs from its parameter's (parameter id → per side) */
+function sidesOutOfSync(block: MonitoringBlock, perSideById: Map<string, boolean>): boolean {
+  const cfg = block.config;
+  if (block.type !== 'custom_metric' || !cfg || cfg.parameterSource !== 'performance') return false;
+  const perSide = perSideById.get(cfg.parameterId);
+  return perSide !== undefined && perSide !== !!cfg.perSide;
+}
+
+export function monitoringSidesOutOfSync(config: MonitoringConfig | null | undefined, perSideById: Map<string, boolean>): boolean {
+  return (config?.blocks ?? []).some(b => sidesOutOfSync(b, perSideById));
+}
+
+/**
+ * Sets "recorded per side" on an athlete's check-in questions from the parameter database. Built
+ * on the current server copy; only that mark changes (questions whose parameter isn't in the
+ * database are left alone). Returns whether anything was written.
+ */
+export async function syncMonitoringSides(connectionId: string, perSideById: Map<string, boolean>): Promise<boolean> {
+  const { data: row, error } = await supabase
+    .from('athlete_connections')
+    .select('profile_data')
+    .eq('id', connectionId)
+    .single();
+  if (error) throw error;
+  const profileData = (row.profile_data as AthleteProfileData | null) ?? {};
+  const config = profileData.monitoringConfig;
+  if (!config || !monitoringSidesOutOfSync(config, perSideById)) return false;
+  const blocks = config.blocks.map(b => {
+    if (!sidesOutOfSync(b, perSideById) || !b.config) return b;
+    const { perSide: _old, ...rest } = b.config;
+    return { ...b, config: perSideById.get(b.config.parameterId) ? { ...rest, perSide: true } : rest };
+  });
+  const { error: upErr } = await supabase
+    .from('athlete_connections')
+    .update({ profile_data: { ...profileData, monitoringConfig: { ...config, blocks } } })
+    .eq('id', connectionId);
+  if (upErr) throw upErr;
+  return true;
 }
 
 /**

@@ -9,6 +9,7 @@ import { CoachNotificationSheet } from '@/components/coach-mobile/CoachNotificat
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBiometricsMigration } from '@/hooks/useBiometricsMigration';
+import { useMonitoringSideSync } from '@/hooks/useMonitoringSideSync';
 
 export function CoachMobileLayout() {
   const { t } = useTranslation();
@@ -17,6 +18,7 @@ export function CoachMobileLayout() {
   const { profile } = useCoachProfile();
   // One-time move of body metrics into the parameter database
   useBiometricsMigration();
+  useMonitoringSideSync();
 
   const NAV = [
     { label: t('coachMobile.nav.athletes'), icon: Users, path: '/coach-mobile/athletes' },
