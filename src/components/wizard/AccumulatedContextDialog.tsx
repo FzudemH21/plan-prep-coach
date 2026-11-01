@@ -143,9 +143,11 @@ export function AccumulatedContextDialog({
       setQuestions(qs);
       setAnswers(qs.map(() => ""));
       setStep("questions");
-    } catch {
+    } catch (err) {
       pendingQuestions.current = null; // trying again asks the AI again
-      setError("Could not generate questions. You can skip for now.");
+      console.error('[AI feedback] could not generate questions:', err);
+      const reason = err instanceof Error ? err.message : String(err);
+      setError(`Could not generate questions (${reason.slice(0, 300)}). Try again, or skip for now.`);
       setStep("confirm");
     }
   };
