@@ -14,7 +14,7 @@ import { MonitoringSetup } from '@/components/athletes/MonitoringSetup';
 import { exportMonitoringXLSX, type CustomBlockExport } from '@/utils/xlsxExport';
 import {
   LineChart, Line, ResponsiveContainer, XAxis, YAxis,
-  Tooltip, ReferenceLine, ReferenceArea, CartesianGrid,
+  Tooltip, ReferenceLine, ReferenceArea, CartesianGrid, ComposedChart, Area,
 } from 'recharts';
 import {
   FRONT_REGIONS, BACK_REGIONS,
@@ -524,6 +524,125 @@ const SIDE_LINES = [
   { key: 'R', name: 'Right', color: '#f59e0b' },
 ] as const;
 
+// ── Number questions: values with the athlete's normal range ─────────────────
+
+/** The normal range of a day: average ± 1 SD of the previous 28 days (not the day itself), from 7 values on */
+const BASELINE_DAYS = 28;
+const BASELINE_MIN_VALUES = 7;
+
+type TrendPoint = { date: string; value: number; mean?: number; band?: [number, number]; z?: number };
+
+const daysBefore = (date: string, days: number) => {
+  const d = new Date(`${date}T12:00:00`);
+  d.setDate(d.getDate() - days);
+  return toLocalDateStr(d);
+};
+
+/** The series from `fromDate` on, each day with its normal range (from the days before it) */
+function withNormalRange(series: Array<{ date: string; value: number }>, fromDate: string): TrendPoint[] {
+  return series.filter(p => p.date >= fromDate).map(p => {
+    const start = daysBefore(p.date, BASELINE_DAYS);
+    const previous = series.filter(q => q.date >= start && q.date < p.date).map(q => q.value);
+    if (previous.length < BASELINE_MIN_VALUES) return { ...p };
+    const mean = previous.reduce((s, v) => s + v, 0) / previous.length;
+    const sd = Math.sqrt(previous.reduce((s, v) => s + (v - mean) ** 2, 0) / (previous.length - 1));
+    return { ...p, mean, band: [mean - sd, mean + sd], z: sd > 0 ? (p.value - mean) / sd : 0 };
+  });
+}
+
+const outsideRange = (p: TrendPoint) => !!p.band && (p.value < p.band[0] || p.value > p.band[1]);
+const round1 = (n: number) => Math.round(n * 10) / 10;
+const shortDate = (date: string) =>
+  new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+function NumberTrend({ points, unit, label, color }: {
+  points: TrendPoint[];
+  unit: string;
+  /** "Left" / "Right" for a question asked per side */
+  label?: string;
+  color: string;
+}) {
+  if (points.length === 0) {
+    return <p className="text-xs text-muted-foreground py-2">{label ? `${label}: ` : ''}No data yet.</p>;
+  }
+  const latest = points[points.length - 1];
+
+  const TrendTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: TrendPoint }[] }) => {
+    const p = active ? payload?.[0]?.payload : undefined;
+    if (!p) return null;
+    return (
+      <div className="bg-background border border-border rounded-lg shadow-lg px-3 py-2 text-xs space-y-0.5">
+        <p className="font-semibold">{shortDate(p.date)}{label ? ` · ${label}` : ''}</p>
+        <p><span className="font-medium">{p.value}{unit ? ` ${unit}` : ''}</span>
+          {p.z !== undefined && <span className="text-muted-foreground"> · {p.z >= 0 ? '+' : ''}{p.z.toFixed(1)} SD</span>}
+        </p>
+        {p.band && (
+          <p className="text-muted-foreground">Normal: {round1(p.band[0])}–{round1(p.band[1])}{unit ? ` ${unit}` : ''}</p>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex items-start gap-6">
+      <div className="shrink-0 min-w-[5rem]">
+        {label && <p className="text-xs text-muted-foreground">{label}</p>}
+        <p className="text-3xl font-bold tabular-nums leading-tight" style={{ color }}>{latest.value}</p>
+        <p className="text-[10px] text-muted-foreground">{unit ? `${unit} · ` : ''}{shortDate(latest.date)}</p>
+        {latest.z !== undefined && (
+          <p className={cn('text-xs mt-0.5', outsideRange(latest) ? 'text-amber-600 font-medium' : 'text-muted-foreground')}>
+            {latest.z >= 0 ? '+' : ''}{latest.z.toFixed(1)} SD
+          </p>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        {points.length < 2 ? (
+          <p className="text-xs text-muted-foreground py-8 text-center">Chart appears after 2+ entries.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={120}>
+            <ComposedChart data={points} margin={{ top: 4, right: 8, left: -28, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+              <XAxis
+                dataKey="date"
+                tickFormatter={shortDate}
+                tick={{ fontSize: 10, fill: '#94a3b8' }}
+                axisLine={false}
+                tickLine={false}
+                interval="preserveStartEnd"
+              />
+              <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <Tooltip content={<TrendTooltip />} />
+              {/* Normal range (± 1 SD) and the average */}
+              <Area type="monotone" dataKey="band" stroke="none" fill={color} fillOpacity={0.12} isAnimationActive={false} />
+              <Line type="monotone" dataKey="mean" stroke={color} strokeOpacity={0.5} strokeWidth={1} strokeDasharray="4 3" dot={false} activeDot={false} isAnimationActive={false} />
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke={color}
+                strokeWidth={2}
+                isAnimationActive={false}
+                activeDot={{ r: 5 }}
+                // Days outside the normal range: amber
+                dot={(props: { cx?: number; cy?: number; index?: number; payload?: TrendPoint }) => (
+                  <circle
+                    key={props.index}
+                    cx={props.cx}
+                    cy={props.cy}
+                    r={props.payload && outsideRange(props.payload) ? 4 : 3}
+                    fill={props.payload && outsideRange(props.payload) ? '#f59e0b' : color}
+                    stroke="white"
+                    strokeWidth={1}
+                  />
+                )}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CustomMetricCard({
   block,
   connectionId,
@@ -532,7 +651,7 @@ function CustomMetricCard({
   connectionId: string;
 }) {
   const cfg = block.config;
-  const [data, setData] = useState<MetricPoint[]>([]);
+  const [allData, setData] = useState<MetricPoint[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [rangeKey, setRangeKey] = useState<7 | 14 | 28 | 90>(28);
 
@@ -541,7 +660,7 @@ function CustomMetricCard({
     async function load() {
       setLoadingData(true);
       const from = new Date();
-      from.setDate(from.getDate() - rangeKey);
+      from.setDate(from.getDate() - rangeKey - (cfg.inputType === 'number' ? BASELINE_DAYS : 0));
       // The check-in answers (per side) and the older ones saved before the check-in tag
       const { data: rows, error } = await supabase
         .from('athlete_test_results')
@@ -570,7 +689,14 @@ function CustomMetricCard({
     }
     load();
     return () => { cancelled = true; };
-  }, [connectionId, cfg.parameterId, cfg.measureId, cfg.storageRef, cfg.perSide, rangeKey]);
+  }, [connectionId, cfg.parameterId, cfg.measureId, cfg.storageRef, cfg.perSide, cfg.inputType, rangeKey]);
+
+  // The days shown; a number question also loads the 28 days before (its normal range)
+  const fromDate = daysBefore(toLocalDateStr(new Date()), rangeKey);
+  const data = useMemo(() => allData.filter(p => p.date >= fromDate), [allData, fromDate]);
+  const isNumber = cfg.inputType === 'number';
+  const seriesOf = (key: 'value' | 'L' | 'R') =>
+    withNormalRange(allData.flatMap(p => (p[key] !== undefined ? [{ date: p.date, value: p[key]! }] : [])), fromDate);
 
   const currentEntry = [...data].reverse().find(p => p.value !== undefined) ?? null;
   const sided = !!cfg.perSide;
@@ -640,6 +766,22 @@ function CustomMetricCard({
           <p className="text-xs text-muted-foreground text-center py-4">Loading…</p>
         ) : data.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">No data yet.</p>
+        ) : isNumber ? (
+          // Number question: the values with the athlete's normal range; per side one chart each
+          <div className="space-y-3">
+            {sided ? (
+              <>
+                {SIDE_LINES.map(line => (
+                  <NumberTrend key={line.key} points={seriesOf(line.key)} unit={unit} label={line.name} color={line.color} />
+                ))}
+                {hasUnsided && <NumberTrend points={seriesOf('value')} unit={unit} label="No side" color="#94a3b8" />}
+                {lsi !== null && <p className="text-xs text-muted-foreground">LSI {lsi} %</p>}
+              </>
+            ) : (
+              <NumberTrend points={seriesOf('value')} unit={unit} color="#6366f1" />
+            )}
+            <p className="text-[10px] text-muted-foreground">Shaded: normal range — average ± 1 SD of the previous 28 days (from 7 entries on)</p>
+          </div>
         ) : (
           <div className="flex items-start gap-6">
             {/* Current value (per side: the latest of each, and the LSI) */}
