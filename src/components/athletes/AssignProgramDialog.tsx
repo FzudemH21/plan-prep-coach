@@ -17,13 +17,6 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -33,7 +26,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { AlertTriangle, CalendarIcon, ChevronDown, ChevronRight, Plus, Trash2, Trophy, X } from 'lucide-react';
+import { AlertTriangle, CalendarIcon, Check, ChevronDown, ChevronRight, ChevronsUpDown, Plus, Trash2, Trophy, X } from 'lucide-react';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { latestValueOf, useSelfReportedResults, withSelfReported } from '@/hooks/useSelfReportedResults';
 import { buildPackedDateMap, assignmentAnchorDay, firstSelectedMicrocycleDay, packedDateMapFromRanges, programMicrocycleRanges } from '@/utils/assignmentPacking';
 import { TrainingProgram } from '@/hooks/useTrainingPrograms';
@@ -69,6 +63,7 @@ export function AssignProgramDialog({
 
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [selectedProgramId, setSelectedProgramId] = useState<string>('');
+  const [programPickerOpen, setProgramPickerOpen] = useState(false);
   const [startDate, setStartDate] = useState<Date>(selectedDate);
   const [selectedMesocycleIds, setSelectedMesocycleIds] = useState<string[]>([]);
   const [selectedMicrocycleIds, setSelectedMicrocycleIds] = useState<string[]>([]);
@@ -492,7 +487,9 @@ export function AssignProgramDialog({
     const hasDailyIntensity = Array.isArray(p.dailyIntensityData) && p.dailyIntensityData.length > 0;
 
     return hasExercises || hasTrainingDays || hasDaySplitStates || hasDailyIntensity;
-  });
+  })
+    // Alphabetical (numbers in names in natural order: "Week 2" before "Week 10")
+    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base', numeric: true }));
 
   const STEPS = [
     { number: 1, label: 'Program & Date' },
@@ -550,31 +547,51 @@ export function AssignProgramDialog({
           <div className="space-y-5 py-2 min-h-[280px]">
             <div className="space-y-2">
               <Label className="text-sm font-medium">Program</Label>
-              <Select value={selectedProgramId} onValueChange={setSelectedProgramId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a training program..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {availablePrograms.length === 0 ? (
-                    <SelectItem value="none" disabled>
-                      No programs with sessions available
-                    </SelectItem>
-                  ) : (
-                    availablePrograms.map(program => (
-                      <SelectItem key={program.id} value={program.id}>
-                        <div className="flex flex-col">
-                          <span>{program.name}</span>
-                          {program.duration?.weeks && (
-                            <span className="text-xs text-muted-foreground">
-                              {program.duration.weeks} weeks
-                            </span>
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+              {/* Searchable, alphabetical — type to filter */}
+              <Popover open={programPickerOpen} onOpenChange={setProgramPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={programPickerOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className={cn('truncate', !selectedProgram && 'text-muted-foreground')}>
+                      {selectedProgram?.name ?? 'Choose a training program...'}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="z-[120] w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search programs..." />
+                    <CommandList>
+                      <CommandEmpty>
+                        {availablePrograms.length === 0 ? 'No programs with sessions available' : 'No program found'}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {availablePrograms.map(program => (
+                          <CommandItem
+                            key={program.id}
+                            value={`${program.name} ${program.id}`}
+                            onSelect={() => { setSelectedProgramId(program.id); setProgramPickerOpen(false); }}
+                          >
+                            <Check className={cn('mr-2 h-4 w-4 shrink-0', selectedProgramId === program.id ? 'opacity-100' : 'opacity-0')} />
+                            <div className="flex flex-col min-w-0">
+                              <span className="truncate">{program.name}</span>
+                              {program.duration?.weeks && (
+                                <span className="text-xs text-muted-foreground">
+                                  {program.duration.weeks} weeks
+                                </span>
+                              )}
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div className="space-y-2">
