@@ -2088,7 +2088,8 @@ export default function AthleteSessionPage() {
 
         {/* Exercise/Section comment dialog */}
         <Dialog open={!!commentTarget} onOpenChange={(o) => { if (!o) { setCommentTarget(null); setCommentText(''); } }}>
-          <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl">
+          {/* Near the top, not centred: with the keyboard open a centred dialog's top was off screen */}
+          <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl top-4 translate-y-0 data-[state=open]:slide-in-from-top-2 data-[state=closed]:slide-out-to-top-2">
             <DialogHeader>
               <DialogTitle className="text-base">Comment for your coach</DialogTitle>
               {commentTarget && (

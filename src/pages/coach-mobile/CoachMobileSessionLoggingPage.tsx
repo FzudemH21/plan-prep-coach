@@ -1130,7 +1130,7 @@ export default function CoachMobileSessionLoggingPage() {
           </div>
         ) : (
           <>
-            <ScrollArea className="flex-1">
+            <ScrollArea className="flex-1 [&>[data-radix-scroll-area-viewport]>div]:!block">
               <div className="px-4 py-4 space-y-3">
                 {session.notes && (
                   <p className="text-sm text-muted-foreground leading-relaxed pb-1 whitespace-pre-line">{session.notes}</p>
@@ -1628,7 +1628,9 @@ export default function CoachMobileSessionLoggingPage() {
           <p className="text-xs text-center text-muted-foreground">{t('coachMobile.sessionLogging.setsDoneProgress', { done: totalSetsDone, total: totalSetsPlanned })}</p>
         </div>
 
-        <ScrollArea className="flex-1">
+        {/* Content as wide as the phone (the scroll area's default lets it grow to the inputs' natural
+            width — a 4-column set table then scrolled sideways, the whole card with it) */}
+        <ScrollArea className="flex-1 [&>[data-radix-scroll-area-viewport]>div]:!block">
           <div className="px-4 py-3 space-y-4">
             {sectionExercises.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
@@ -1736,7 +1738,8 @@ export default function CoachMobileSessionLoggingPage() {
 
         {/* Exercise/Section comment dialog */}
         <Dialog open={!!commentTarget} onOpenChange={(o) => { if (!o) { setCommentTarget(null); setCommentText(''); } }}>
-          <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl">
+          {/* Near the top, not centred: with the keyboard open a centred dialog's top was off screen */}
+          <DialogContent className="w-[calc(100vw-32px)] max-w-[400px] rounded-2xl top-4 translate-y-0 data-[state=open]:slide-in-from-top-2 data-[state=closed]:slide-out-to-top-2">
             <DialogHeader>
               <DialogTitle className="text-base">{t('coachMobile.sessionLogging.addComment')}</DialogTitle>
               {commentTarget && (
