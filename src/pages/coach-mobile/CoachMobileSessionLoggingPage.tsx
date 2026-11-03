@@ -6,8 +6,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, Check, Dumbbell, RefreshCw,
   CheckCircle2, Timer, History, MessageSquare, ArrowUpDown,
-  TrendingUp, TrendingDown, Send, Loader2, Link2, Lock, Pause, Play, X,
-} from 'lucide-react';
+  TrendingUp, TrendingDown, Send, Loader2, Link2, Lock, Pause, Play, X, ChevronDown, Hourglass } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RestSoundToggle } from '@/components/workout/RestSoundToggle';
 import { useRestCountdown } from '@/hooks/useRestCountdown';
@@ -619,8 +618,14 @@ export default function CoachMobileSessionLoggingPage() {
   const [phase, setPhase] = useState<Phase>('overview');
   const [sectionIdx, setSectionIdx] = useState(0);
   const nextAfterRestRef = useRef<(() => void) | null>(null);
-  // Rest timer (timestamp-based, ticks + sound at the end) — when it runs out, on with the stored next step
-  const rest = useRestCountdown(phase === 'rest', () => {
+  // Rest timer (timestamp-based, ticks + sound at the end) — runs in the background: the exercises stay
+  // on screen, a countdown sits at the top right (tap = big timer). When it runs out, on with the
+  // stored next step.
+  const [restActive, setRestActive] = useState(false);
+  const [restOpen, setRestOpen] = useState(false);
+  const rest = useRestCountdown(restActive, () => {
+    setRestActive(false);
+    setRestOpen(false);
     const next = nextAfterRestRef.current;
     nextAfterRestRef.current = null;
     next?.();
@@ -797,6 +802,9 @@ export default function CoachMobileSessionLoggingPage() {
     pausedPhaseRef.current = resumePhase;
     workoutStartTimeRef.current = null;   // clock stops
     nextAfterRestRef.current = null;      // a running rest is dropped
+    rest.stop();
+    setRestActive(false);
+    setRestOpen(false);
     setWorkoutElapsed(elapsed);
     setAbandonWarning(false);
     setPhase('paused');
@@ -850,13 +858,15 @@ export default function CoachMobileSessionLoggingPage() {
     if (seconds <= 0) { nextAfterRestRef.current = null; next(); return; }
     nextAfterRestRef.current = next;
     rest.start(seconds);
-    setPhase('rest');
+    setRestActive(true);
   }
 
   function skipRest() {
     const next = nextAfterRestRef.current;
     nextAfterRestRef.current = null;
     rest.stop();
+    setRestActive(false);
+    setRestOpen(false);
     next?.();
   }
 
@@ -1376,41 +1386,57 @@ export default function CoachMobileSessionLoggingPage() {
 
   // ── Screen: Rest timer ─────────────────────────────────────────────────────
 
-  if (phase === 'rest') {
-    return (
-      <div className="relative flex flex-col h-full bg-background items-center justify-center gap-8 px-6">
-        <RestSoundToggle on={rest.soundOn} onToggle={rest.toggleSound}
-          labelOn={t('coachMobile.sessionLogging.soundOff')} labelOff={t('coachMobile.sessionLogging.soundOn')} />
-        {sessionLogId && (
-          <button onClick={() => setAbandonWarning('leave')}
-            className="absolute top-2 right-2 w-11 h-11 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors"
-            aria-label={t('coachMobile.sessionLogging.leaveWorkout')}>
-            <X className="h-5 w-5" />
-          </button>
-        )}
-        <div className="flex flex-col items-center gap-2">
-          <Timer className="h-8 w-8 text-primary opacity-70" />
-          <p className="text-lg font-semibold text-muted-foreground">{t('coachMobile.sessionLogging.rest')}</p>
-        </div>
-        <p className="text-[80px] font-bold tabular-nums leading-none">{formatTime(rest.secondsLeft)}</p>
-        <div className="flex gap-4">
-          <Button variant="outline" size="lg" className="w-24" onClick={() => rest.adjust(-30)}>−30s</Button>
-          <Button variant="outline" size="lg" className="w-24" onClick={() => rest.adjust(30)}>+30s</Button>
-        </div>
-        <button onClick={skipRest} className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors">
-          {t('coachMobile.sessionLogging.skipRest')}
-        </button>
-        {sessionLogId && (
-          <Button variant="ghost" className="min-h-[44px] text-muted-foreground" onClick={() => void pauseWorkout()}>
-            <Pause className="h-4 w-4 mr-2" />
-            {t('coachMobile.sessionLogging.pauseWorkout')}
-          </Button>
-        )}
+  // ── Rest: countdown at the top right; the big timer opens over the exercises ──
 
-        {abandonDialog}
-      </div>
+  function renderRestIndicator() {
+    if (!restActive) return null;
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => setRestOpen(true)}
+          className="flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2.5 min-h-[36px] text-xs font-semibold tabular-nums shrink-0 active:bg-primary/20"
+          aria-label="Rest — open the timer"
+        >
+          <Hourglass className="h-3.5 w-3.5" />
+          {formatTime(rest.secondsLeft)}
+        </button>
+        {restOpen && (
+        <div className="fixed inset-0 z-[60] flex flex-col bg-background items-center justify-center gap-8 px-6 max-w-[480px] mx-auto overflow-hidden">
+          <RestSoundToggle on={rest.soundOn} onToggle={rest.toggleSound}
+            labelOn={t('coachMobile.sessionLogging.soundOff')} labelOff={t('coachMobile.sessionLogging.soundOn')} />
+          {/* Back to the exercises — the rest keeps running (countdown at the top right) */}
+          <button
+            onClick={() => setRestOpen(false)}
+            className="absolute top-2 right-2 w-11 h-11 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors"
+            aria-label="Back to the exercises"
+          >
+            <ChevronDown className="h-5 w-5" />
+          </button>
+          <div className="flex flex-col items-center gap-2">
+            <Timer className="h-8 w-8 text-primary opacity-70" />
+            <p className="text-lg font-semibold text-muted-foreground">{t('coachMobile.sessionLogging.rest')}</p>
+          </div>
+          <p className="text-[80px] font-bold tabular-nums leading-none">{formatTime(rest.secondsLeft)}</p>
+          <div className="flex gap-4">
+            <Button variant="outline" size="lg" className="w-24" onClick={() => rest.adjust(-30)}>−30s</Button>
+            <Button variant="outline" size="lg" className="w-24" onClick={() => rest.adjust(30)}>+30s</Button>
+          </div>
+          <button onClick={skipRest} className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors">
+            {t('coachMobile.sessionLogging.skipRest')}
+          </button>
+          {sessionLogId && (
+            <Button variant="ghost" className="min-h-[44px] text-muted-foreground" onClick={() => void pauseWorkout()}>
+              <Pause className="h-4 w-4 mr-2" />
+              {t('coachMobile.sessionLogging.pauseWorkout')}
+            </Button>
+          )}
+        </div>
+        )}
+      </>
     );
   }
+
 
   // ── Screen: Paused ─────────────────────────────────────────────────────────
 
@@ -1613,6 +1639,7 @@ export default function CoachMobileSessionLoggingPage() {
             <p className="text-xs text-muted-foreground truncate">{session.name} · {sessionDateLabel(entry.date)}</p>
             <p className="text-sm font-semibold truncate">{currentSection?.name}</p>
           </div>
+          {renderRestIndicator()}
           <div className="flex items-center gap-1 text-xs text-muted-foreground tabular-nums shrink-0 w-10 justify-end">
             <Timer className="h-3 w-3 shrink-0" />
             <span>{formatTime(workoutElapsed)}</span>
