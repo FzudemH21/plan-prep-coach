@@ -1,3 +1,4 @@
+import { onExerciseRenamed, renameExerciseInValue } from '@/utils/exerciseRename';
 import { withExerciseVisibility } from '@/utils/parameterVisibility';
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { persistAssignmentPlan } from '@/utils/assignmentPlanStore';
@@ -70,6 +71,10 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
   
   // Editing state
   const [exerciseDistribution, setExerciseDistribution] = useState<ExerciseDistribution[]>([]);
+  // An exercise renamed in its library: the open plan takes the new name too (saved by the auto-save)
+  useEffect(() => onExerciseRenamed(({ exerciseId, newName }) => {
+    setExerciseDistribution(prev => renameExerciseInValue(prev, exerciseId, newName));
+  }), []);
   const [sessionSections, setSessionSections] = useState<SessionSection[]>([]);
   const [supersets, setSupersets] = useState<SupersetMapping>({});
   const [parameterValues, setParameterValues] = useState<Record<string, Record<number, Record<string, Record<number, Record<string, string | number>>>>>>({});
@@ -1938,6 +1943,26 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     );
   }, []);
 
+  /** Exercise names as they are in the libraries now (exerciseId → name) — e.g. an exercise renamed
+   *  before this plan was opened. Only names change; exercises not in a library keep theirs. */
+  const syncExerciseNames = useCallback((nameById: Map<string, string>) => {
+    if (nameById.size === 0) return;
+    setExerciseDistribution(prev => {
+      const renames = new Map<string, string>();
+      const collect = (exerciseId: string | undefined, name: string | undefined) => {
+        const current = exerciseId ? nameById.get(exerciseId) : undefined;
+        if (exerciseId && current && current !== name) renames.set(exerciseId, current);
+      };
+      prev.forEach(ex => {
+        collect(ex.exerciseId, ex.exerciseName);
+        ex.circuitExercises?.forEach(ce => collect(ce.exerciseId, ce.exerciseName));
+      });
+      let next = prev;
+      renames.forEach((name, exerciseId) => { next = renameExerciseInValue(next, exerciseId, name); });
+      return next;
+    });
+  }, []);
+
   /** An exercise's parameter visibility, kept on the exercise too (copied with it) */
   const handleExerciseVisibilityChange = useCallback((exerciseId: string, overrides: Record<string, boolean>) => {
     setExerciseDistribution(prev => withExerciseVisibility(prev, exerciseId, overrides));
@@ -2406,6 +2431,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     handleExerciseNotesChange,
     handleExerciseEachSideChange,
     handleExerciseVisibilityChange,
+    syncExerciseNames,
     handleExerciseChange,
     
     // Intensity handlers

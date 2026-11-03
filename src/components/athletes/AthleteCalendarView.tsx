@@ -1,3 +1,4 @@
+import { getNameColumnId, useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import { measureRef, parseMeasureRef, testMeasureSpec } from '@/utils/parameterMeasures';
 import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
@@ -534,6 +535,24 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   // The plans are loaded from Supabase first (assignmentPlanStore) — until then no assignment is
   // opened, so the calendar never starts from (or syncs) a stale or missing local copy
   const editing = useAthleteCalendarEditing(plansReady ? selectedAssignmentId : null, assignments);
+
+  // An exercise renamed in its library while this plan wasn't open: the plan takes the current name
+  // (the open plan follows renames directly). Waits for the libraries and the plan to be loaded.
+  const { libraries: exerciseLibraries, isLoading: librariesLoading } = useCustomLibraries();
+  const { syncExerciseNames } = editing;
+  useEffect(() => {
+    if (librariesLoading || editing.isInitializing || !selectedAssignmentId) return;
+    const nameById = new Map<string, string>();
+    exerciseLibraries.forEach(lib => {
+      const nameColumnId = getNameColumnId(lib);
+      if (!nameColumnId) return;
+      lib.exercises.forEach(ex => {
+        const name = ex.data?.[nameColumnId];
+        if (typeof name === 'string' && name.trim() !== '') nameById.set(ex.id, name);
+      });
+    });
+    syncExerciseNames(nameById);
+  }, [librariesLoading, editing.isInitializing, selectedAssignmentId, exerciseLibraries, syncExerciseNames]);
 
   // When the master planner is active, load the FULL assignment date range into
   // liveScheduleMap so mobile-created plans (whose editing state has no exercises)

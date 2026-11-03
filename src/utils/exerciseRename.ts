@@ -1,7 +1,8 @@
 /**
  * exerciseRename
  *
- * Programs, selections, placed exercises, templates, the session library and athlete schedules all
+ * Programs, selections, placed exercises, templates, the session library, the athlete calendar's
+ * assigned plans and athlete schedules all
  * keep their own copy of an exercise's name next to its library id. When an exercise is renamed in
  * a library, propagateExerciseRename() updates the name in every one of those copies — whether or
  * not the program is assigned to an athlete — and changes nothing else.
@@ -112,6 +113,55 @@ async function renameInAthleteSchedules(exerciseId: string, newName: string): Pr
 }
 
 /**
+ * The coach-side plans of assigned programs (athlete calendar — `athlete-assignment-<id>` in this
+ * browser and `athlete_assignment_plans` in Supabase). Each plan is renamed in its newer copy (an
+ * unsynced edit on either side is kept) and written to both, with a new lastModified.
+ */
+async function renameInAssignmentPlans(exerciseId: string, newName: string): Promise<void> {
+  const { data: authData } = await supabase.auth.getUser();
+  const uid = authData.user?.id;
+  if (!uid) return;
+  const PREFIX = 'athlete-assignment-';
+  type Plan = Record<string, unknown> & { lastModified?: string; copiedAt?: string };
+  const stampOf = (p: Plan | undefined) => (p?.lastModified ?? p?.copiedAt ?? '') as string;
+  const readLocal = (id: string): Plan | undefined => {
+    try { const raw = localStorage.getItem(PREFIX + id); return raw ? JSON.parse(raw) as Plan : undefined; } catch { return undefined; }
+  };
+
+  const ids = new Set<string>();
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(PREFIX) && key.length > PREFIX.length) ids.add(key.slice(PREFIX.length));
+  }
+  const { data: rows, error } = await supabase
+    .from('athlete_assignment_plans').select('assignment_id, data').eq('coach_user_id', uid);
+  const remoteAvailable = !error;
+  const remote = new Map<string, Plan>();
+  for (const row of (rows ?? []) as Array<{ assignment_id: string; data: Plan }>) {
+    remote.set(row.assignment_id, row.data);
+    ids.add(row.assignment_id);
+  }
+
+  for (const id of ids) {
+    const local = readLocal(id);
+    const server = remote.get(id);
+    const newest = !local ? server : !server ? local : (stampOf(server) > stampOf(local) ? server : local);
+    if (!newest) continue;
+    const renamed = renameExerciseInValue(newest, exerciseId, newName);
+    if (renamed === newest) continue;
+    const next = { ...renamed, lastModified: new Date().toISOString() };
+    try { localStorage.setItem(PREFIX + id, JSON.stringify(next)); } catch (err) { console.warn('[exerciseRename] assignment local:', err); }
+    if (remoteAvailable) {
+      const { error: upErr } = await supabase.from('athlete_assignment_plans').upsert(
+        { assignment_id: id, coach_user_id: uid, data: next, updated_at: new Date().toISOString() },
+        { onConflict: 'assignment_id' },
+      );
+      if (upErr) console.warn('[exerciseRename] assignment upsert error:', upErr.message);
+    }
+  }
+}
+
+/**
  * Propagate a library exercise rename everywhere its name is copied. Circuits inside the exercise
  * libraries are updated by the library save itself (same store). Fire-and-forget; failures are
  * logged and never block the library save.
@@ -129,6 +179,7 @@ export async function propagateExerciseRename(exerciseId: string, newName: strin
     updateSupabaseStoreData('session_library', 'ppc-session-library', rename).catch(err => console.warn('[exerciseRename] session library:', err)),
   ]);
 
-  // 3. Athlete schedules of assigned programs
+  // 3. Assigned programs: the athlete calendar's plans (coach side) and the athlete app's schedules
+  await renameInAssignmentPlans(exerciseId, newName).catch(err => console.warn('[exerciseRename] assignment plans:', err));
   await renameInAthleteSchedules(exerciseId, newName).catch(err => console.warn('[exerciseRename] schedules:', err));
 }
