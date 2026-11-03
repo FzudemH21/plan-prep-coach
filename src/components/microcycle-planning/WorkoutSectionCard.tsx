@@ -1,3 +1,4 @@
+import { SupersetRestControl } from './SupersetRestControl';
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronRight, Plus, GripVertical, MoreVertical, Pencil, Trash2, Link2, Copy, MessageSquare } from 'lucide-react';
@@ -41,6 +42,8 @@ export function WorkoutSectionCard({
     onDuplicateExercise,
     onDeleteExercise,
     getSupersetLabel,
+    getSupersetRest,
+    onSupersetRestChange,
     onExerciseNotesChange,
     onExerciseEachSideChange,
     onSectionCommentsChange,
@@ -299,6 +302,15 @@ export function WorkoutSectionCard({
                                       )}
                                     </Draggable>
 
+                                    {/* The superset's rest, under its last exercise */}
+                                    {exIndex === group.exercises.length - 1 && onSupersetRestChange && getSupersetRest && (
+                                      <div className="flex justify-end">
+                                        <SupersetRestControl
+                                          rest={getSupersetRest(group.exercises.map(e => e.id))}
+                                          onChange={rest => onSupersetRestChange(group.exercises.map(e => e.id), rest)}
+                                        />
+                                      </div>
+                                    )}
                                     {/* Chain icon between superset exercises */}
                                     {exIndex < group.exercises.length - 1 && (
                                       <div className="flex justify-center -my-1 relative z-10">

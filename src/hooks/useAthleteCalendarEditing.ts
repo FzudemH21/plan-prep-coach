@@ -1963,6 +1963,14 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     });
   }, []);
 
+  /** A superset's rest (after its round / between its exercises) — on all its exercises */
+  const handleSupersetRestChange = useCallback((exerciseIds: string[], rest: { after?: number; between?: number }) => {
+    const ids = new Set(exerciseIds);
+    setExerciseDistribution(prev => prev.map(ex => (ids.has(ex.id)
+      ? { ...ex, supersetRestAfter: rest.after, supersetRestBetween: rest.between }
+      : ex)));
+  }, []);
+
   /** An exercise's parameter visibility, kept on the exercise too (copied with it) */
   const handleExerciseVisibilityChange = useCallback((exerciseId: string, overrides: Record<string, boolean>) => {
     setExerciseDistribution(prev => withExerciseVisibility(prev, exerciseId, overrides));
@@ -2431,6 +2439,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     handleExerciseNotesChange,
     handleExerciseEachSideChange,
     handleExerciseVisibilityChange,
+    handleSupersetRestChange,
     syncExerciseNames,
     handleExerciseChange,
     

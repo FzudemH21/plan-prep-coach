@@ -22,6 +22,9 @@ export interface WorkoutSessionContextValue {
 
   // Superset helpers
   getSupersetLabel: (exerciseId: string) => string | undefined;
+  /** A superset's own rest (after its round / between its exercises) — kept until the session is saved */
+  getSupersetRest?: (exerciseIds: string[]) => { after?: number; between?: number };
+  onSupersetRestChange?: (exerciseIds: string[], rest: { after?: number; between?: number }) => void;
 
   // Exercise metadata handlers
   onExerciseNotesChange: (exerciseId: string, notes: string) => void;

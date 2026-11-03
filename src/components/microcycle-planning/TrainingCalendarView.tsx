@@ -795,6 +795,11 @@ export function TrainingCalendarView({
               onExerciseVisibilityChange={onDistributionChange
                 ? (exerciseId, overrides) => onDistributionChange(withExerciseVisibility(exerciseDistribution, exerciseId, overrides))
                 : undefined}
+              onSupersetRestChange={onDistributionChange
+                ? (exerciseIds, rest) => onDistributionChange(exerciseDistribution.map(ex => (exerciseIds.includes(ex.id || ex.exerciseId)
+                  ? { ...ex, supersetRestAfter: rest.after, supersetRestBetween: rest.between }
+                  : ex)))
+                : undefined}
               onExerciseEachSideChange={(exerciseId, eachSide) => {
                 // This placement and every later placement of the same exercise (the following weeks);
                 // earlier weeks keep theirs

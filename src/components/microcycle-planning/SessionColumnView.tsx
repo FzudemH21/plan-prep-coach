@@ -1,3 +1,4 @@
+import { SupersetRestPanel } from './SupersetRestControl';
 import { ParameterVisibilityPanel, visibleParameterCount } from './ParameterVisibilityPopover';
 import React, { useState, useMemo, useRef } from 'react';
 import { BorgLevel, BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabel, getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
@@ -483,7 +484,6 @@ export function SessionColumnView({
                     const restAfter = exercise.supersetRestAfter;
                     const restBetween = exercise.supersetRestBetween;
                     const setSupersetRest = (rest: { after?: number; between?: number }) => onSupersetRestChange!(supersetMembers, rest);
-                    const secondsFrom = (raw: string) => (raw.trim() === '' ? undefined : Math.max(0, Math.round(Number(raw)) || 0) || undefined);
                     return (
                       <Popover open={menuPanel?.exerciseId === exercise.id} onOpenChange={open => { if (!open) setMenuPanel(null); }}>
                         {/* Not modal: a modal menu keeps focus while it closes and would close the checklist again */}
@@ -557,30 +557,7 @@ export function SessionColumnView({
                           onClick={e => e.stopPropagation()}
                           onFocusOutside={e => e.preventDefault()}
                         >
-                          <div className="space-y-3">
-                            <p className="text-sm font-medium">Superset rest</p>
-                            <label className="flex items-center justify-between gap-2 text-xs">
-                              <span>After the last exercise</span>
-                              <span className="flex items-center gap-1">
-                                <Input type="number" min={0} inputMode="numeric" className="h-7 w-16 text-xs text-right"
-                                  value={restAfter ?? ''} placeholder="—"
-                                  onChange={e => setSupersetRest({ after: secondsFrom(e.target.value), between: restBetween })} />
-                                s
-                              </span>
-                            </label>
-                            <label className="flex items-center justify-between gap-2 text-xs">
-                              <span>Between exercises</span>
-                              <span className="flex items-center gap-1">
-                                <Input type="number" min={0} inputMode="numeric" className="h-7 w-16 text-xs text-right"
-                                  value={restBetween ?? ''} placeholder="—"
-                                  onChange={e => setSupersetRest({ after: restAfter, between: secondsFrom(e.target.value) })} />
-                                s
-                              </span>
-                            </label>
-                            <p className="text-[10px] text-muted-foreground">
-                              Empty: after the round the longest rest planned for its exercises, no rest between them. Copied with the exercises.
-                            </p>
-                          </div>
+                          <SupersetRestPanel rest={{ after: restAfter, between: restBetween }} onChange={setSupersetRest} />
                         </PopoverContent>
                       )}
                       </Popover>

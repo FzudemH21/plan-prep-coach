@@ -1,3 +1,4 @@
+import { SupersetRestControl } from './SupersetRestControl';
 import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import React, { useState, useCallback, useEffect, memo, useMemo, useRef } from 'react';
 import { format } from 'date-fns';
@@ -149,6 +150,8 @@ interface MasterPlannerColumnProps {
   onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
   /** An exercise's parameter visibility changed — kept on its distribution entry (copied with it) */
   onExerciseVisibilityChange?: (exerciseId: string, overrides: Record<string, boolean>) => void;
+  /** A superset's rest (after its round / between its exercises) — set on all its exercises */
+  onSupersetRestChange?: (exerciseIds: string[], rest: { after?: number; between?: number }) => void;
   /** Drop this placement's own parameter edits (session sheet / Master Planner) → Periodization Table values again */
   onExerciseOverridesReset?: (exerciseDistributionId: string) => void;
   // New props for Phase 4 - intensity editing
@@ -511,6 +514,7 @@ export function MasterPlannerColumn({
   onExerciseNotesChange,
   onExerciseEachSideChange,
   onExerciseVisibilityChange,
+  onSupersetRestChange,
   onExerciseOverridesReset,
   onDayIntensityChange,
   onSessionIntensityChange,
@@ -611,6 +615,13 @@ export function MasterPlannerColumn({
 
   // Helper: check if two exercises are linked in a superset
   // Uses distribution id (exercise.id) which is what Step 1 uses when creating supersets
+  /** The exercises of the superset an exercise is in (its own id alone when it isn't in one) */
+  const supersetMembersOf = (exercise: ExerciseDistribution, sessionIndex: number, sectionId?: string): string[] => {
+    const id = exercise.id || exercise.exerciseId;
+    const groups = supersets?.[day.dateString]?.[sessionIndex]?.[sectionId || '__unsectioned__'] ?? {};
+    return Object.values(groups).find(ids => ids.includes(id)) ?? [id];
+  };
+
   const areExercisesLinked = useCallback((id1: string, id2: string, sessionIndex: number, sectionId?: string): boolean => {
     const sectionKey = sectionId || '__unsectioned__';
     const daySupersets = supersets?.[day.dateString];
@@ -1746,6 +1757,19 @@ export function MasterPlannerColumn({
                                   </div>
                                 </div>
                                 
+                                {/* The superset's rest, after its last exercise */}
+                                {onSupersetRestChange && (() => {
+                                  const members = supersetMembersOf(exercise, session.sessionIndex, section.id);
+                                  if (members.length < 2 || isLinkedToNext) return null;
+                                  return (
+                                    <div className="flex justify-end" onClick={e => e.stopPropagation()}>
+                                      <SupersetRestControl
+                                        rest={{ after: exercise.supersetRestAfter, between: exercise.supersetRestBetween }}
+                                        onChange={rest => onSupersetRestChange(members, rest)}
+                                      />
+                                    </div>
+                                  );
+                                })()}
                                 {/* Chain icon between exercises - always visible */}
                                 {!isLastExercise && nextExercise && (
                                   <div className="flex justify-center py-0.5 relative z-10">
@@ -1954,6 +1978,19 @@ export function MasterPlannerColumn({
                         </div>
                       </div>
                       
+                      {/* The superset's rest, after its last exercise */}
+                      {onSupersetRestChange && (() => {
+                        const members = supersetMembersOf(exercise, session.sessionIndex, undefined);
+                        if (members.length < 2 || isLinkedToNext) return null;
+                        return (
+                          <div className="flex justify-end" onClick={e => e.stopPropagation()}>
+                            <SupersetRestControl
+                              rest={{ after: exercise.supersetRestAfter, between: exercise.supersetRestBetween }}
+                              onChange={rest => onSupersetRestChange(members, rest)}
+                            />
+                          </div>
+                        );
+                      })()}
                       {/* Chain icon between exercises - always visible */}
                       {!isLastExercise && nextExercise && (
                         <div className="flex justify-center py-0.5 relative z-10">

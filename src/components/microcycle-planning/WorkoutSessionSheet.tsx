@@ -2039,6 +2039,11 @@ export function WorkoutSessionSheet({
         if (updated.sectionId !== info.sectionId) {
           updated = { ...updated, sectionId: info.sectionId };
         }
+        // Superset rest changed here
+        const restEdit = supersetRestEdits[exId];
+        if (restEdit) {
+          updated = { ...updated, supersetRestAfter: restEdit.after, supersetRestBetween: restEdit.between };
+        }
         // Parameter visibility chosen here also on the exercise itself (copied with it)
         const visibility = exerciseVisibilityOverrides[exId];
         if (visibility && JSON.stringify(visibility) !== JSON.stringify(updated.parameterVisibility ?? null)) {
@@ -2714,6 +2719,19 @@ export function WorkoutSessionSheet({
     }
   };
 
+  // A superset's rest (after its round / between its exercises): changed here, written onto the
+  // superset's exercises when the session is saved (like the other edits in this window)
+  const [supersetRestEdits, setSupersetRestEdits] = useState<Record<string, { after?: number; between?: number }>>({});
+  const getSupersetRest = (exerciseIds: string[]) => {
+    const edited = exerciseIds.map(id => supersetRestEdits[id]).find(Boolean);
+    if (edited) return edited;
+    const entry = (allExerciseDistribution ?? []).find(e => exerciseIds.includes(e.id || e.exerciseId));
+    return { after: entry?.supersetRestAfter, between: entry?.supersetRestBetween };
+  };
+  const handleSupersetRestChange = (exerciseIds: string[], rest: { after?: number; between?: number }) => {
+    setSupersetRestEdits(prev => ({ ...prev, ...Object.fromEntries(exerciseIds.map(id => [id, rest])) }));
+  };
+
   const handleExerciseEachSideChange = (exerciseId: string, eachSide: boolean) => {
     setWorkoutSections(sections =>
       sections.map(section => ({
@@ -3254,6 +3272,8 @@ export function WorkoutSessionSheet({
     getSupersetLabel,
     onExerciseNotesChange: handleExerciseNotesChange,
     onExerciseEachSideChange: handleExerciseEachSideChange,
+    getSupersetRest,
+    onSupersetRestChange: allExerciseDistribution && onDistributionChange ? handleSupersetRestChange : undefined,
     onSectionCommentsChange: handleSectionCommentsChange,
     toolboxData: toolboxData,
     visibilityOverrides: parameterVisibilityOverrides,
