@@ -52,6 +52,10 @@ export interface ExerciseSummary {
   notes?: string;
   isCircuit?: boolean;
   supersetId?: string;   // shared key for all exercises in the same superset group
+  /** Superset rest set in the wizard (seconds; same on every exercise of the superset): after the
+   *  round's last exercise, and between its exercises. Unset = the exercises' own rest */
+  supersetRestAfter?: number;
+  supersetRestBetween?: number;
   /** Library exercise ID — kept for reference. */
   exerciseLibraryId?: string;
   /** Video URL snapshotted from the library at sync time. */

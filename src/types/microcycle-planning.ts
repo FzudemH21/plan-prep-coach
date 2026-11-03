@@ -98,6 +98,10 @@ export interface ExerciseDistribution {
   order: number;
   sectionId?: string;
   supersetId?: string;
+  /** Superset rest set in the wizard (seconds; same on every exercise of the superset): after the
+   *  round's last exercise, and between its exercises. Unset = the exercises' own rest */
+  supersetRestAfter?: number;
+  supersetRestBetween?: number;
   notes?: string;
   eachSide?: boolean; // Mark exercise as unilateral (perform reps on each side)
   // Source of parameter values: 'toolbox' = use blank grid, 'periodization' = use program method periodization

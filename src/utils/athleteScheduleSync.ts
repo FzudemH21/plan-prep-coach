@@ -906,6 +906,9 @@ export async function syncAthleteSchedule(
               notes: ex.notes,
               isCircuit: ex.isCircuit,
               supersetId,
+              // The superset's own rest (wizard) — only while the exercise is in a superset
+              ...(supersetId && Number(ex.supersetRestAfter) > 0 ? { supersetRestAfter: Number(ex.supersetRestAfter) } : {}),
+              ...(supersetId && Number(ex.supersetRestBetween) > 0 ? { supersetRestBetween: Number(ex.supersetRestBetween) } : {}),
               // Library ID + snapshotted detail (undefined for circuits)
               exerciseLibraryId: ex.isCircuit ? undefined : ex.exerciseId,
               exerciseVideoUrl: ex.isCircuit ? undefined : exerciseDetails.get(ex.exerciseId)?.videoUrl,

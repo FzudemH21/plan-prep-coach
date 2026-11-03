@@ -1649,6 +1649,14 @@ export function EnhancedExerciseDistribution({
     onDistributionChange(withExerciseVisibility(exerciseDistribution, exerciseKey, overrides));
   }, [mesocycle.id, exerciseDistribution, onDistributionChange]);
 
+  // A superset's rest (after its round / between its exercises) — on all its exercises
+  const handleSupersetRestChange = useCallback((exerciseIds: string[], rest: { after?: number; between?: number }) => {
+    const ids = new Set(exerciseIds);
+    onDistributionChange(exerciseDistribution.map(ex => (ids.has(ex.id)
+      ? { ...ex, supersetRestAfter: rest.after, supersetRestBetween: rest.between }
+      : ex)));
+  }, [exerciseDistribution, onDistributionChange]);
+
   const handleExerciseEachSideChange = useCallback((exerciseId: string, eachSide: boolean) => {
     onDistributionChange(exerciseDistribution.map(ex => ex.id === exerciseId ? { ...ex, eachSide } : ex));
   }, [exerciseDistribution, onDistributionChange]);
@@ -2754,6 +2762,7 @@ export function EnhancedExerciseDistribution({
                                     visibilityParamsFor={visibilityParamsFor}
                                     visibilityOf={visibilityOf}
                                     onExerciseVisibilityChange={handleExerciseVisibilityChange}
+                                    onSupersetRestChange={handleSupersetRestChange}
                                     circuitUpdateIds={circuitUpdateIds}
                                     onUpdateCircuitFromLibrary={handleUpdateCircuitFromLibrary}
                                     onReorderSection={handleSectionReorder}

@@ -12,6 +12,22 @@ export function restValueToSeconds(value: number, unit: unknown): number {
 }
 
 /**
+ * Rest after a superset round (all its exercises done for this set): the superset's own rest set in
+ * the wizard, else the longest planned rest of its exercises (before, the rest of whichever exercise
+ * was ticked last — e.g. a core exercise's short rest after a whole round).
+ */
+export function supersetRoundRestSeconds(members: ExerciseSummary[]): number {
+  const own = members.find(m => (m.supersetRestAfter ?? 0) > 0)?.supersetRestAfter;
+  if (own) return own;
+  return members.reduce((longest, m) => Math.max(longest, getRestSeconds(m)), 0);
+}
+
+/** Rest between the exercises of a superset round (wizard setting) — 0 = straight on to the next */
+export function supersetBetweenRestSeconds(members: ExerciseSummary[]): number {
+  return members.find(m => (m.supersetRestBetween ?? 0) > 0)?.supersetRestBetween ?? 0;
+}
+
+/**
  * Rest after a set (seconds). Regular exercises: the rest parameter flagged in the Training Toolbox
  * (per-set values first), in its unit. Circuits: the rest between rounds — 0 when none is set.
  */

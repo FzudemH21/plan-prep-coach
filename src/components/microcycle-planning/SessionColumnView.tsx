@@ -80,6 +80,9 @@ interface SessionColumnViewProps {
   visibilityParamsFor?: (exercise: ExerciseDistribution) => Array<{ name: string; showInGridByDefault: boolean }>;
   visibilityOf?: (exercise: ExerciseDistribution) => Record<string, boolean>;
   onExerciseVisibilityChange?: (exercise: ExerciseDistribution, overrides: Record<string, boolean>) => void;
+  /** A superset's rest (seconds, unset = the exercises' own): after its round and between its
+   *  exercises — set on all its exercises (copied with them) */
+  onSupersetRestChange?: (exerciseIds: string[], rest: { after?: number; between?: number }) => void;
   onReorderSection?: (sectionId: string, direction: 'up' | 'down') => void;
   /** Visual hint during drag: 'match' = valid drop, 'no-match' = dim, 'neutral' = no drag active */
   methodMatchState?: 'match' | 'no-match' | 'neutral';
@@ -133,6 +136,7 @@ export function SessionColumnView({
   visibilityParamsFor,
   visibilityOf,
   onExerciseVisibilityChange,
+  onSupersetRestChange,
   onReorderSection,
   methodMatchState = 'neutral',
   assignedMethods,
@@ -163,8 +167,8 @@ export function SessionColumnView({
   const [editingSessionNameValue, setEditingSessionNameValue] = useState('');
   const [intensityPopoverOpen, setIntensityPopoverOpen] = useState(false);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
-  // The exercise whose parameter visibility checklist is open (opened from its ⋮ menu)
-  const [visibilityOpenId, setVisibilityOpenId] = useState<string | null>(null);
+  // The panel opened from an exercise's ⋮ menu: its parameter visibility or its superset's rest
+  const [menuPanel, setMenuPanel] = useState<{ exerciseId: string; kind: 'visibility' | 'rest' } | null>(null);
   // Set while the menu closes to open the checklist: the menu must not hand focus back to its button
   // (the checklist would take that as a click outside and close again)
   const openingVisibility = useRef(false);
@@ -441,6 +445,12 @@ export function SessionColumnView({
                         {getSupersetLabel(exercise.id)}
                       </Badge>
                     )}
+                    {/* The superset's own rest after the round (⋮ → Superset rest), on its last exercise */}
+                    {supersetId && !hasLinkToNext && (exercise.supersetRestAfter ?? 0) > 0 && (
+                      <span className="mt-0.5 shrink-0 text-[10px] text-muted-foreground" title="Rest after the superset round">
+                        Rest {exercise.supersetRestAfter} s
+                      </span>
+                    )}
                     {/* Each side (set in the ⋮ menu) */}
                     {exercise.eachSide && (
                       <span className="mt-0.5 shrink-0 rounded bg-primary/10 px-1 text-[10px] font-semibold text-primary" title="Each side — reps per side">
@@ -467,8 +477,15 @@ export function SessionColumnView({
                     const params = onExerciseVisibilityChange && visibilityParamsFor ? visibilityParamsFor(exercise) : [];
                     const current = visibilityOf?.(exercise) ?? {};
                     const shown = visibleParameterCount(params, current);
+                    // The superset this exercise is in (its exercises share the rest setting)
+                    const supersetMembers = supersetId ? (supersets[sectionId || '__unsectioned__']?.[supersetId] ?? []) : [];
+                    const canSetSupersetRest = !!onSupersetRestChange && supersetMembers.length > 1;
+                    const restAfter = exercise.supersetRestAfter;
+                    const restBetween = exercise.supersetRestBetween;
+                    const setSupersetRest = (rest: { after?: number; between?: number }) => onSupersetRestChange!(supersetMembers, rest);
+                    const secondsFrom = (raw: string) => (raw.trim() === '' ? undefined : Math.max(0, Math.round(Number(raw)) || 0) || undefined);
                     return (
-                      <Popover open={visibilityOpenId === exercise.id} onOpenChange={open => { if (!open) setVisibilityOpenId(null); }}>
+                      <Popover open={menuPanel?.exerciseId === exercise.id} onOpenChange={open => { if (!open) setMenuPanel(null); }}>
                         {/* Not modal: a modal menu keeps focus while it closes and would close the checklist again */}
                         <DropdownMenu modal={false}>
                           <PopoverAnchor asChild>
@@ -490,13 +507,22 @@ export function SessionColumnView({
                             {params.length > 0 && (
                               <DropdownMenuItem onSelect={() => {
                                 openingVisibility.current = true;
-                                setTimeout(() => setVisibilityOpenId(exercise.id), 0);
+                                setTimeout(() => setMenuPanel({ exerciseId: exercise.id, kind: 'visibility' }), 0);
                               }}>
                                 {shown < params.length ? <EyeOff className="mr-2 h-3 w-3" /> : <Eye className="mr-2 h-3 w-3" />}
                                 Parameter visibility ({shown}/{params.length})
                               </DropdownMenuItem>
                             )}
-                            {(onExerciseEachSideChange || params.length > 0) && <DropdownMenuSeparator />}
+                            {canSetSupersetRest && (
+                              <DropdownMenuItem onSelect={() => {
+                                openingVisibility.current = true;
+                                setTimeout(() => setMenuPanel({ exerciseId: exercise.id, kind: 'rest' }), 0);
+                              }}>
+                                <Link2 className="mr-2 h-3 w-3" />
+                                Superset rest{restAfter || restBetween ? ` (${restAfter ?? '–'} s / ${restBetween ?? '–'} s)` : '…'}
+                              </DropdownMenuItem>
+                            )}
+                            {(onExerciseEachSideChange || params.length > 0 || canSetSupersetRest) && <DropdownMenuSeparator />}
                             <DropdownMenuItem
                               onClick={() => onDeleteExercise(exercise.id)}
                               className="text-destructive"
@@ -506,7 +532,7 @@ export function SessionColumnView({
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
-                        {params.length > 0 && (
+                        {menuPanel?.kind === 'visibility' && params.length > 0 && (
                           <PopoverContent
                             className="w-64 p-3 z-[120] bg-popover"
                             align="end"
@@ -524,6 +550,39 @@ export function SessionColumnView({
                             />
                           </PopoverContent>
                         )}
+                      {menuPanel?.kind === 'rest' && canSetSupersetRest && (
+                        <PopoverContent
+                          className="w-64 p-3 z-[120] bg-popover"
+                          align="end"
+                          onClick={e => e.stopPropagation()}
+                          onFocusOutside={e => e.preventDefault()}
+                        >
+                          <div className="space-y-3">
+                            <p className="text-sm font-medium">Superset rest</p>
+                            <label className="flex items-center justify-between gap-2 text-xs">
+                              <span>After the last exercise</span>
+                              <span className="flex items-center gap-1">
+                                <Input type="number" min={0} inputMode="numeric" className="h-7 w-16 text-xs text-right"
+                                  value={restAfter ?? ''} placeholder="—"
+                                  onChange={e => setSupersetRest({ after: secondsFrom(e.target.value), between: restBetween })} />
+                                s
+                              </span>
+                            </label>
+                            <label className="flex items-center justify-between gap-2 text-xs">
+                              <span>Between exercises</span>
+                              <span className="flex items-center gap-1">
+                                <Input type="number" min={0} inputMode="numeric" className="h-7 w-16 text-xs text-right"
+                                  value={restBetween ?? ''} placeholder="—"
+                                  onChange={e => setSupersetRest({ after: restAfter, between: secondsFrom(e.target.value) })} />
+                                s
+                              </span>
+                            </label>
+                            <p className="text-[10px] text-muted-foreground">
+                              Empty: after the round the longest rest planned for its exercises, no rest between them. Copied with the exercises.
+                            </p>
+                          </div>
+                        </PopoverContent>
+                      )}
                       </Popover>
                     );
                   })()}

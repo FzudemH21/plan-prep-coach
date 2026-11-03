@@ -39,7 +39,7 @@ import {
 } from '@/utils/workoutProgress';
 import { previousValueFor, usePreviousExerciseValues, type PreviousExerciseValues } from '@/hooks/usePreviousExerciseValues';
 import { SectionNavigator, nextUnfinishedSection } from '@/components/workout/SectionNavigator';
-import { getRestSeconds } from '@/utils/workoutRest';
+import { getRestSeconds, supersetBetweenRestSeconds, supersetRoundRestSeconds } from '@/utils/workoutRest';
 import { addCoachExerciseRemark, fetchCoachRemark, remarksAsText, removeCoachExerciseRemark, saveCoachRemark, type ExerciseComment } from '@/utils/sessionComments';
 import { supersetLettersForSections } from '@/utils/supersetUtils';
 import { getSetCount, getParamColumns, getPlannedValue, buildSetsLoggedPayload } from '@/utils/workoutLog';
@@ -960,11 +960,19 @@ export default function CoachMobileSessionLoggingPage() {
     const newCS = { ...completedSets, [exerciseId]: newDoneArr };
     setCompletedSets(newCS);
     // Rest only between sets — none after the last set of an exercise, a superset or a circuit's last round
-    const restSecs = isBlockFinished(ex, newCS, currentSection!) ? 0 : getRestSeconds(ex);
+    // A superset: the rest after its round (wizard setting, else its longest planned rest)
+    const supersetMembers = ex.supersetId ? currentSection!.exercises.filter(e => e.supersetId === ex.supersetId) : [];
+    const restSecs = isBlockFinished(ex, newCS, currentSection!) ? 0
+      : ex.supersetId ? supersetRoundRestSeconds(supersetMembers) : getRestSeconds(ex);
     if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
       continueAfterSection(newCS, restSecs);
     } else {
-      if (!isSupersetRoundComplete(exerciseId, setIdx, newCS, currentSection!)) { setPhase('active'); return; }
+      if (!isSupersetRoundComplete(exerciseId, setIdx, newCS, currentSection!)) {
+        // Between the exercises of a round: the superset's rest between exercises, if set
+        const between = supersetBetweenRestSeconds(supersetMembers);
+        if (between > 0) startRest(between, () => setPhase('active')); else setPhase('active');
+        return;
+      }
       startRest(restSecs, () => setPhase('active'));
     }
   }
