@@ -66,7 +66,9 @@ export function LoggedExerciseResult({ logged, isCircuit, plannedCount, units }:
 
   const sets = logged?.sets ?? [];
   const done = sets.filter(isSetDone).length;
-  const total = sets.length > 0 ? sets.length : plannedCount;
+  // Out of the planned sets — a set removed while logging (e.g. pain) still counts as not done (2/3);
+  // sets added beyond the plan raise the total
+  const total = Math.max(sets.length, plannedCount);
   const paramNames = Array.from(new Set([...(logged?.columns ?? []), ...sets.flatMap(s => Object.keys(s.values ?? {}))]));
   const hasTable = sets.length > 0 && paramNames.length > 0;
 

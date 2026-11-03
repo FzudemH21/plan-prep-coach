@@ -101,8 +101,12 @@ export interface ExerciseSummary {
   eachSide?: boolean;
   /** True when plannedParams were directly edited on the mobile coach app.
    *  Exercises with this flag have their plannedParams preserved across plan syncs
-   *  (syncAthleteSchedule will not overwrite them). */
+   *  (syncAthleteSchedule will not overwrite them) — unless the desktop plan of the exercise
+   *  changed after that edit (planSignature), then the newer desktop version wins. */
   mobileEdited?: boolean;
+  /** Fingerprint of the desktop plan the exercise was last synced from (its Periodization Table
+   *  values, own edits and notes — not calculated values) */
+  planSignature?: string;
   /** True when the exercise was added on the mobile coach app (not in the plan).
    *  Re-appended to the session after each plan sync so they survive desktop resyncs. */
   mobileAdded?: boolean;
@@ -585,6 +589,14 @@ export async function syncAthleteSchedule(
     return out;
   }
 
+  // A short fingerprint of the desktop's own values for an exercise (key order doesn't matter)
+  const fingerprint = (value: Record<string, unknown> | undefined, extra = ''): string => {
+    const text = JSON.stringify(Object.entries(value ?? {}).sort(([a], [b]) => a.localeCompare(b))) + '|' + extra;
+    let h = 5381;
+    for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36);
+  };
+
   // Helper: get planned params for an exercise
   function getPlannedParams(ex: ExerciseEntry): {
     plannedSets: number | undefined;
@@ -592,6 +604,8 @@ export async function syncAthleteSchedule(
     formulaComputedParams: Record<string, string | number> | undefined;
     visibleParams: string[] | undefined;
     restParamName: string | undefined;
+    /** The desktop's own values (before calculated ones) — see ExerciseSummary.planSignature */
+    planSource?: Record<string, unknown>;
   } {
     // Base method key without any ::ExerciseCategory split suffix
     const baseMethodKey = stripSplitSuffix(ex.methodId ?? '');
@@ -611,6 +625,7 @@ export async function syncAthleteSchedule(
           formulaComputedParams: undefined,
           visibleParams: visibleParams && visibleParams.length > 0 ? visibleParams : undefined,
           restParamName,
+          planSource: adhocParams,
         };
       }
 
@@ -663,6 +678,7 @@ export async function syncAthleteSchedule(
       ...((mcParams?.[methodKeyFull]?.[sessionIdx] as Record<string, string | number>) || {}),
       ...overrides,
     };
+    const planSource: Record<string, unknown> = { ...storedParams };
 
     if (Object.keys(storedParams).length === 0) {
       return { plannedSets: undefined, plannedParams: undefined, formulaComputedParams: undefined, visibleParams: undefined, restParamName: undefined };
@@ -832,6 +848,7 @@ export async function syncAthleteSchedule(
           formulaComputedParams: Object.keys(formulaComputedParams).length > 0 ? formulaComputedParams : undefined,
           visibleParams,
           restParamName,
+          planSource,
         };
       }
     }
@@ -842,6 +859,7 @@ export async function syncAthleteSchedule(
       formulaComputedParams: undefined,
       visibleParams,
       restParamName,
+      planSource,
     };
   }
 
@@ -935,6 +953,7 @@ export async function syncAthleteSchedule(
               // Interval timer in the athlete app (e.g. HIIT) — undefined for other methods / circuits
               interval: ex.isCircuit ? undefined : intervalForMethod(ex.methodId),
               eachSide: ex.eachSide ?? false,
+              planSignature: fingerprint(planned.planSource, String(ex.notes ?? '')),
             };
           });
 
@@ -1153,6 +1172,14 @@ export async function syncAthleteSchedule(
           const preserved = exMap.get(ex.id)
             ?? exMap.get((ex as ExerciseSummary).exerciseLibraryId ?? '');
           if (!preserved) return ex;
+          // The desktop plan of this exercise changed after the mobile edit (its fingerprint differs
+          // from the one the edited copy was synced from) → the newer desktop version wins. Older
+          // copies without a fingerprint keep the mobile edit, as before.
+          // (Only with real plan values — a sync without them must never discard a mobile edit.)
+          const hasPlanValues = !!ex.plannedParams && Object.keys(ex.plannedParams).length > 0;
+          if (hasPlanValues && preserved.planSignature && ex.planSignature && preserved.planSignature !== ex.planSignature) {
+            return ex;
+          }
           // Restore content fields edited on mobile while keeping structural fields
           // (sectionId, name, order, methodKey, etc.) from the freshly computed plan.
           return {

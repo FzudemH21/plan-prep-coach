@@ -77,8 +77,6 @@ export default function CoachMobileAthletesPage() {
     [connections],
   );
 
-  const connected = connections.filter(c => c.connectedAt).length;
-  const pending   = connections.filter(c => !c.connectedAt).length;
 
   // ── check-ins: today only for wellness dot + illness/pain flags ──────────
   // connectionId → today's checkin
@@ -141,23 +139,6 @@ export default function CoachMobileAthletesPage() {
           {t('coachMobile.athletes.todayDate', { date: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) })}
         </p>
         <h1 className="text-2xl font-bold">{t('coachMobile.athletes.heading')}</h1>
-      </div>
-
-      {/* Stats */}
-      <div className="px-4 pb-3 flex gap-2">
-        {[
-          { label: t('coachMobile.athletes.connected'), value: connected, emoji: '💪' },
-          { label: t('coachMobile.athletes.pending'),   value: pending,   emoji: '⏳' },
-          { label: t('coachMobile.athletes.total'),     value: active.length, emoji: '👥' },
-        ].map(({ label, value, emoji }) => (
-          <div
-            key={label}
-            className="shrink-0 flex-1 rounded-xl border bg-card px-3 py-2.5 text-center"
-          >
-            <div className="text-xl font-bold leading-none">{emoji} {value}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
-          </div>
-        ))}
       </div>
 
       {/* Group selector */}

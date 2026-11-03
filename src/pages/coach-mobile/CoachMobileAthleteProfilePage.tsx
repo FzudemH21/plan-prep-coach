@@ -1081,7 +1081,7 @@ export default function CoachMobileAthleteProfilePage() {
 
       {/* ── Overview tab ── */}
       {tab === 'overview' && (
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 [&>[data-radix-scroll-area-viewport]>div]:!block">
           <div className="px-4 py-4 space-y-4 pb-6">
 
             {/* Athlete app — only show when invite pending (connected shown in top badge) */}
@@ -1760,9 +1760,10 @@ export default function CoachMobileAthleteProfilePage() {
         </div>
       )}
 
-      {/* ── Progress tab ── */}
+      {/* ── Progress tab ── (scroll areas here: content as wide as the phone — by default it grows to its
+           widest row, e.g. a long exercise name, and the tab scrolled sideways) */}
       {tab === 'progress' && (
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 [&>[data-radix-scroll-area-viewport]>div]:!block">
           <div className="px-4 py-4 pb-6">
             <CoachAthleteProgressTab athleteId={athleteId!} connectionId={connection?.id ?? null} />
           </div>
@@ -1771,7 +1772,7 @@ export default function CoachMobileAthleteProfilePage() {
 
       {/* ── Settings tab ── */}
       {tab === 'settings' && connection && (
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 [&>[data-radix-scroll-area-viewport]>div]:!block">
           <div className="px-4 py-4 pb-6">
             <CoachAthleteSettingsTab athleteId={athleteId!} connection={connection} />
           </div>
