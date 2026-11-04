@@ -1,3 +1,4 @@
+import { SectionDescription } from '@/components/workout/SectionDescription';
 import { IntervalLauncher } from '@/components/workout/IntervalTimer';
 import { RestPrescription, SupersetRestSummary, SwipeHint, setTableLayout } from '@/components/workout/SetTableParts';
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -1710,11 +1711,7 @@ export default function CoachMobileSessionLoggingPage() {
           <div className="px-4 py-3 space-y-4">
             {/* The section's description — also when the section was reached with the arrows / dots
                 (the intro screen, where it shows first, is skipped then) */}
-            {currentSection?.notes && (
-              <p className="rounded-xl bg-muted/50 px-4 py-3 text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
-                {currentSection.notes}
-              </p>
-            )}
+            {currentSection?.notes && <SectionDescription key={currentSection.id} text={currentSection.notes} />}
             {sectionExercises.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
                 <Dumbbell className="h-8 w-8 opacity-30" />
