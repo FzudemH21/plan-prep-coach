@@ -12,6 +12,23 @@ import { cn } from '@/lib/utils';
 
 export interface SupersetRest { after?: number; between?: number }
 
+/** The rest set for a superset, from whichever of its exercises carries it (it is written onto all of
+ *  them, but older edits may have reached one exercise only) */
+export function supersetRestOf(
+  memberIds: string[],
+  entries: Array<{ id?: string; exerciseId: string; supersetRestAfter?: number; supersetRestBetween?: number }>,
+): SupersetRest {
+  const ids = new Set(memberIds);
+  const withValue = entries.find(e => ids.has(e.id || e.exerciseId)
+    && ((e.supersetRestAfter ?? 0) > 0 || (e.supersetRestBetween ?? 0) > 0));
+  return withValue ? { after: withValue.supersetRestAfter, between: withValue.supersetRestBetween } : {};
+}
+
+/** "A2" → "A": the exercises of one superset share the letter of their labels */
+export function supersetLetter(label: string): string {
+  return label.replace(/\d+$/, '');
+}
+
 /** "" → unset; otherwise whole seconds ≥ 1 */
 const secondsFrom = (raw: string): number | undefined =>
   (raw.trim() === '' ? undefined : Math.max(0, Math.round(Number(raw)) || 0) || undefined);

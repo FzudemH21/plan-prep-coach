@@ -1,4 +1,4 @@
-import { SupersetRestControl } from './SupersetRestControl';
+import { SupersetRestControl, supersetRestOf } from './SupersetRestControl';
 import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import React, { useState, useCallback, useEffect, memo, useMemo, useRef } from 'react';
 import { format } from 'date-fns';
@@ -1764,7 +1764,7 @@ export function MasterPlannerColumn({
                                   return (
                                     <div className="flex justify-end" onClick={e => e.stopPropagation()}>
                                       <SupersetRestControl
-                                        rest={{ after: exercise.supersetRestAfter, between: exercise.supersetRestBetween }}
+                                        rest={supersetRestOf(members, session.exercises)}
                                         onChange={rest => onSupersetRestChange(members, rest)}
                                       />
                                     </div>
@@ -1985,7 +1985,7 @@ export function MasterPlannerColumn({
                         return (
                           <div className="flex justify-end" onClick={e => e.stopPropagation()}>
                             <SupersetRestControl
-                              rest={{ after: exercise.supersetRestAfter, between: exercise.supersetRestBetween }}
+                              rest={supersetRestOf(members, session.exercises)}
                               onChange={rest => onSupersetRestChange(members, rest)}
                             />
                           </div>

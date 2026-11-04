@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { supersetRestOf } from './SupersetRestControl';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
@@ -2725,8 +2726,7 @@ export function WorkoutSessionSheet({
   const getSupersetRest = (exerciseIds: string[]) => {
     const edited = exerciseIds.map(id => supersetRestEdits[id]).find(Boolean);
     if (edited) return edited;
-    const entry = (allExerciseDistribution ?? []).find(e => exerciseIds.includes(e.id || e.exerciseId));
-    return { after: entry?.supersetRestAfter, between: entry?.supersetRestBetween };
+    return supersetRestOf(exerciseIds, allExerciseDistribution ?? []);
   };
   const handleSupersetRestChange = (exerciseIds: string[], rest: { after?: number; between?: number }) => {
     setSupersetRestEdits(prev => ({ ...prev, ...Object.fromEntries(exerciseIds.map(id => [id, rest])) }));

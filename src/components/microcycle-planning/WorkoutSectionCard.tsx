@@ -1,4 +1,4 @@
-import { SupersetRestControl } from './SupersetRestControl';
+import { SupersetRestControl, supersetLetter } from './SupersetRestControl';
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronRight, Plus, GripVertical, MoreVertical, Pencil, Trash2, Link2, Copy, MessageSquare } from 'lucide-react';
@@ -237,10 +237,12 @@ export function WorkoutSectionCard({
 
                       const supersetLabel = getSupersetLabel(exercise.id);
                       if (supersetLabel) {
-                        // Find all exercises with the same superset label
-                        const supersetExercises = section.exercises.filter(ex =>
-                          getSupersetLabel(ex.id) === supersetLabel
-                        );
+                        // All exercises of this superset (labels A1, A2, … share the letter)
+                        const letter = supersetLetter(supersetLabel);
+                        const supersetExercises = section.exercises.filter(ex => {
+                          const label = getSupersetLabel(ex.id);
+                          return !!label && supersetLetter(label) === letter;
+                        });
                         exerciseGroups.push({
                           exercises: supersetExercises,
                           supersetLabel

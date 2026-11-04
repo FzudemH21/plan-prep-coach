@@ -1,4 +1,4 @@
-import { SupersetRestPanel } from './SupersetRestControl';
+import { SupersetRestPanel, supersetRestOf } from './SupersetRestControl';
 import { ParameterVisibilityPanel, visibleParameterCount } from './ParameterVisibilityPopover';
 import React, { useState, useMemo, useRef } from 'react';
 import { BorgLevel, BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabel, getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
@@ -461,11 +461,14 @@ export function SessionColumnView({
                       )
                     )}
                     {/* The superset's own rest after the round (⋮ → Superset rest), on its last exercise */}
-                    {supersetId && !hasLinkToNext && (exercise.supersetRestAfter ?? 0) > 0 && (
-                      <span className="mt-0.5 shrink-0 text-[10px] text-muted-foreground" title="Rest after the superset round">
-                        Rest {exercise.supersetRestAfter} s
-                      </span>
-                    )}
+                    {supersetId && !hasLinkToNext && (() => {
+                      const after = supersetRestOf(supersets[sectionId || '__unsectioned__']?.[supersetId] ?? [], allExercises).after;
+                      return (after ?? 0) > 0 ? (
+                        <span className="mt-0.5 shrink-0 text-[10px] text-muted-foreground" title="Rest after the superset round">
+                          Rest {after} s
+                        </span>
+                      ) : null;
+                    })()}
                     {/* Each side (set in the ⋮ menu) */}
                     {exercise.eachSide && (
                       <span className="mt-0.5 shrink-0 rounded bg-primary/10 px-1 text-[10px] font-semibold text-primary" title="Each side — reps per side">
@@ -495,8 +498,7 @@ export function SessionColumnView({
                     // The superset this exercise is in (its exercises share the rest setting)
                     const supersetMembers = supersetId ? (supersets[sectionId || '__unsectioned__']?.[supersetId] ?? []) : [];
                     const canSetSupersetRest = !!onSupersetRestChange && supersetMembers.length > 1;
-                    const restAfter = exercise.supersetRestAfter;
-                    const restBetween = exercise.supersetRestBetween;
+                    const { after: restAfter, between: restBetween } = supersetRestOf(supersetMembers, allExercises);
                     const setSupersetRest = (rest: { after?: number; between?: number }) => onSupersetRestChange!(supersetMembers, rest);
                     return (
                       <Popover open={menuPanel?.exerciseId === exercise.id} onOpenChange={open => { if (!open) setMenuPanel(null); }}>

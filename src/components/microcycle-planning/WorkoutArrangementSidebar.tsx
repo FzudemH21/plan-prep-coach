@@ -1,4 +1,5 @@
 import React from 'react';
+import { supersetLetter } from './SupersetRestControl';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -83,9 +84,11 @@ export function WorkoutArrangementSidebar({
                                       const supersetLabel = getSupersetLabel(exercise.id);
                                       if (supersetLabel) {
                                         // Find all exercises in this superset
-                                        const supersetExercises = section.exercises.filter(ex => 
-                                          getSupersetLabel(ex.id) === supersetLabel
-                                        );
+                                        const letter = supersetLetter(supersetLabel);
+                                        const supersetExercises = section.exercises.filter(ex => {
+                                          const label = getSupersetLabel(ex.id);
+                                          return !!label && supersetLetter(label) === letter;
+                                        });
                                         exerciseGroups.push({
                                           exercises: supersetExercises,
                                           supersetLabel
