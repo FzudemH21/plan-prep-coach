@@ -6,7 +6,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, Check, Dumbbell, RefreshCw,
   CheckCircle2, Timer, History, MessageSquare, ArrowUpDown,
-  TrendingUp, TrendingDown, Send, Loader2, Link2, Lock, Pause, Play, X, ChevronDown, Hourglass } from 'lucide-react';
+  TrendingUp, TrendingDown, Send, Loader2, Link2, Lock, Pause, Play, X, ChevronDown, Hourglass, BellRing } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RestSoundToggle } from '@/components/workout/RestSoundToggle';
 import { useRestCountdown } from '@/hooks/useRestCountdown';
@@ -618,14 +618,23 @@ export default function CoachMobileSessionLoggingPage() {
   const [phase, setPhase] = useState<Phase>('overview');
   const [sectionIdx, setSectionIdx] = useState(0);
   const nextAfterRestRef = useRef<(() => void) | null>(null);
-  // Rest timer (timestamp-based, ticks + sound at the end) — runs in the background: the exercises stay
-  // on screen, a countdown sits at the top right (tap = big timer). When it runs out, on with the
-  // stored next step.
+  // Rest timer (timestamp-based, ticks + sound at the end) — the big timer opens when a rest starts;
+  // minimised, it runs in the background with a countdown at the top right (tap = big timer again).
+  // When it runs out: sound + vibration, a "Rest over" banner for a few seconds, on with the stored
+  // next step.
   const [restActive, setRestActive] = useState(false);
   const [restOpen, setRestOpen] = useState(false);
+  const [restOverFlash, setRestOverFlash] = useState(false);
+  // The "Rest over" banner goes away by itself
+  useEffect(() => {
+    if (!restOverFlash) return;
+    const id = setTimeout(() => setRestOverFlash(false), 5000);
+    return () => clearTimeout(id);
+  }, [restOverFlash]);
   const rest = useRestCountdown(restActive, () => {
     setRestActive(false);
     setRestOpen(false);
+    setRestOverFlash(true);
     const next = nextAfterRestRef.current;
     nextAfterRestRef.current = null;
     next?.();
@@ -859,6 +868,8 @@ export default function CoachMobileSessionLoggingPage() {
     nextAfterRestRef.current = next;
     rest.start(seconds);
     setRestActive(true);
+    setRestOpen(true);        // the big timer shows — minimise it to keep logging (it keeps running)
+    setRestOverFlash(false);
   }
 
   /** A set was just ticked: a rest that is still running is over (the athlete is training or
@@ -869,6 +880,7 @@ export default function CoachMobileSessionLoggingPage() {
     rest.stop();
     setRestActive(false);
     setRestOpen(false);
+    setRestOverFlash(false);
   }
 
   function skipRest() {
@@ -1402,7 +1414,20 @@ export default function CoachMobileSessionLoggingPage() {
   // ── Rest: countdown at the top right; the big timer opens over the exercises ──
 
   function renderRestIndicator() {
-    if (!restActive) return null;
+    if (!restActive) {
+      if (!restOverFlash) return null;
+      return (
+        <button
+          type="button"
+          onClick={() => setRestOverFlash(false)}
+          className="fixed top-3 inset-x-0 z-[60] mx-auto w-[calc(100%-2rem)] max-w-[448px] flex items-center justify-center gap-2 rounded-xl bg-green-600 text-white min-h-[48px] px-4 text-sm font-semibold shadow-lg animate-in fade-in slide-in-from-top-2 active:bg-green-700"
+          aria-label="Rest over — dismiss"
+        >
+          <BellRing className="h-4 w-4" />
+          Rest over — next set
+        </button>
+      );
+    }
     return (
       <>
         <button
