@@ -64,7 +64,8 @@ export function SupersetRestSummary({ members }: { members: ExerciseSummary[] })
     <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground text-right">
       <Timer className="h-3 w-3 shrink-0" />
       <span>
-        {between > 0 && <>{formatRestSeconds(between)} between</>}
+        Rest:{' '}
+        {between > 0 && <>{formatRestSeconds(between)} between exercises</>}
         {between > 0 && after > 0 && ' · '}
         {after > 0 && <>{formatRestSeconds(after)} after round</>}
       </span>
