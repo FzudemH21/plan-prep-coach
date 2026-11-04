@@ -9,16 +9,20 @@
  *   - Athlete comments, which stay with the session (no chat message): session feedback
  *     (athlete_session_logs.comment) and exercise comments (athlete_session_logs.exercise_comments)
  *
- * "Unread" state is tracked per-item via a localStorage set of read IDs.
- * Items are unread by default; clicking one or pressing "Mark all as read"
- * adds their IDs to the set.
+ * "Unread" state is tracked per-item via a set of read IDs: in this browser (localStorage) and,
+ * shared by the coach's devices, in coach_settings (`activityReadIds`) — "Mark all as read" on the
+ * desktop also clears the bell on the phone. Items are unread by default; clicking one or pressing
+ * "Mark all as read" adds their IDs. The sets only ever grow (a union of both), so no device can
+ * undo another's reads; the shared list keeps the items of the feed window only.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { AthleteConnection } from '@/hooks/useAthleteConnections';
 import { parseExerciseComments, selectWithOptionalColumns, shortQuote } from '@/utils/sessionComments';
+import { readCoachSetting, updateCoachSetting } from '@/lib/coachSettings';
 
 const READ_IDS_KEY = 'ppc-coach-activity-read-ids';
+const SHARED_READ_IDS = 'activityReadIds';
 const FEED_WINDOW_DAYS = 7;
 
 export type FeedItemType = 'session_complete' | 'checkin' | 'anamnesis_submitted' | 'session_feedback' | 'exercise_comment';
@@ -238,6 +242,44 @@ export function useCoachActivityFeed(connections: AthleteConnection[]) {
     load();
   }, [load]);
 
+  // Reads made on the coach's other devices (shared list) — on start and whenever this app comes
+  // back to the front
+  useEffect(() => {
+    let cancelled = false;
+    const pull = () => {
+      readCoachSetting<string[]>(SHARED_READ_IDS).then(shared => {
+        if (cancelled || !Array.isArray(shared) || shared.length === 0) return;
+        setReadIds(prev => {
+          if (shared.every(id => prev.has(id))) return prev;
+          const next = new Set([...prev, ...shared]);
+          saveReadIds(next);
+          return next;
+        });
+      }).catch(() => { /* stays as it is on this device */ });
+    };
+    pull();
+    const onVisible = () => { if (document.visibilityState === 'visible') pull(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', pull);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', pull);
+    };
+  }, []);
+
+  /** Adds read ids to the shared list (union with what is there; keeps only items still in the feed) */
+  const shareReads = useCallback((added: string[]) => {
+    if (added.length === 0) return;
+    const inFeed = new Set(items.map(item => item.id));
+    void updateCoachSetting<string[]>(SHARED_READ_IDS, current => {
+      const union = [...new Set([...(Array.isArray(current) ? current : []), ...added])];
+      // Older items are no longer shown — drop their ids (only when the feed is loaded)
+      const kept = inFeed.size > 0 ? union.filter(id => inFeed.has(id) || added.includes(id)) : union;
+      return kept.slice(-1000);
+    }).catch(() => { /* stays on this device */ });
+  }, [items]);
+
   const markItemRead = useCallback((id: string) => {
     setReadIds(prev => {
       const next = new Set(prev);
@@ -245,7 +287,8 @@ export function useCoachActivityFeed(connections: AthleteConnection[]) {
       saveReadIds(next);
       return next;
     });
-  }, []);
+    shareReads([id]);
+  }, [shareReads]);
 
   /** Mark every currently visible item as read (used by "Mark all as read" + onClose). */
   const markSeen = useCallback(() => {
@@ -255,7 +298,8 @@ export function useCoachActivityFeed(connections: AthleteConnection[]) {
       saveReadIds(next);
       return next;
     });
-  }, [items]);
+    shareReads(items.map(item => item.id));
+  }, [items, shareReads]);
 
   const unseenCount = items.filter(item => !readIds.has(item.id)).length;
 

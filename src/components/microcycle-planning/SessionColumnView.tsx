@@ -442,9 +442,23 @@ export function SessionColumnView({
                       );
                     })()}
                     {supersetId && (
-                      <Badge variant="default" className="text-[10px] mt-0.5 px-1.5 font-semibold shrink-0">
-                        {getSupersetLabel(exercise.id)}
-                      </Badge>
+                      // Click: the superset's rest (same panel as ⋮ → Superset rest)
+                      onSupersetRestChange && (supersets[sectionId || '__unsectioned__']?.[supersetId]?.length ?? 0) > 1 ? (
+                        <button
+                          type="button"
+                          onClick={() => setMenuPanel({ exerciseId: exercise.id, kind: 'rest' })}
+                          title="Superset rest"
+                          className="shrink-0 rounded active:scale-95"
+                        >
+                          <Badge variant="default" className="text-[10px] mt-0.5 px-1.5 font-semibold cursor-pointer hover:opacity-80">
+                            {getSupersetLabel(exercise.id)}
+                          </Badge>
+                        </button>
+                      ) : (
+                        <Badge variant="default" className="text-[10px] mt-0.5 px-1.5 font-semibold shrink-0">
+                          {getSupersetLabel(exercise.id)}
+                        </Badge>
+                      )
                     )}
                     {/* The superset's own rest after the round (⋮ → Superset rest), on its last exercise */}
                     {supersetId && !hasLinkToNext && (exercise.supersetRestAfter ?? 0) > 0 && (
