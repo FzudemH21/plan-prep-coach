@@ -61,7 +61,7 @@ export function SupersetRestSummary({ members }: { members: ExerciseSummary[] })
   const after = supersetRoundRestSeconds(members);
   if (between <= 0 && after <= 0) return null;
   return (
-    <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground text-right">
+    <span className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap">
       <Timer className="h-3 w-3 shrink-0" />
       <span>
         Rest:{' '}

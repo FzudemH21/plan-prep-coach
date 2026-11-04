@@ -1734,7 +1734,7 @@ export default function CoachMobileSessionLoggingPage() {
                   'rounded-xl border overflow-hidden transition-colors',
                   allDone ? 'border-primary/20' : 'border-primary/40',
                 )}>
-                  <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/5 border-b border-primary/20">
+                  <div className="flex flex-col items-start gap-0.5 px-4 py-1.5 bg-primary/5 border-b border-primary/20">
                     <span className="text-xs font-bold text-primary tracking-wider">{t('coachMobile.sessionLogging.superset', { label: group.label })}</span>
                     <SupersetRestSummary members={group.members.map(m => m.ex)} />
                   </div>
