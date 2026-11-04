@@ -1,5 +1,5 @@
 import { IntervalLauncher } from '@/components/workout/IntervalTimer';
-import { RestPrescription, SwipeHint, setTableLayout } from '@/components/workout/SetTableParts';
+import { RestPrescription, SupersetRestSummary, SwipeHint, setTableLayout } from '@/components/workout/SetTableParts';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -383,9 +383,11 @@ interface SetTableProps {
   onMarkAll: (exId: string) => void;
   /** Values logged the last time this exercise was done — hints in empty fields */
   previous?: PreviousExerciseValues;
+  /** In a superset: its rest shows in the superset header instead of the exercise's own rest */
+  hideRest?: boolean;
 }
 
-function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue, onCompleteSet, onCompleteSets, onMarkAll, previous }: SetTableProps) {
+function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue, onCompleteSet, onCompleteSets, onMarkAll, previous, hideRest }: SetTableProps) {
   const { t } = useTranslation();
   const columns = getParamColumns(exercise);
   const layout = setTableLayout(columns.length);
@@ -401,7 +403,7 @@ function SetTable({ exercise, setCount, loggedValues, completedSets, onLogValue,
   return (
     <div>
     {/* Fixed layout: parameter columns share the phone's width (no sideways scrolling); labels wrap */}
-    <RestPrescription exercise={exercise} />
+    {!hideRest && <RestPrescription exercise={exercise} />}
     <IntervalLauncher
       exercise={exercise}
       setCount={setCount}
@@ -1644,7 +1646,8 @@ export default function CoachMobileSessionLoggingPage() {
                     <SetTable exercise={ex} setCount={exSetCount}
                       loggedValues={loggedValues} completedSets={completedSets}
                       onLogValue={handleLogValue} onCompleteSet={handleCompleteSet} onCompleteSets={handleCompleteSets} onMarkAll={handleMarkAll}
-                      previous={previousValues.get(ex.name.toLowerCase())} />
+                      previous={previousValues.get(ex.name.toLowerCase())}
+                      hideRest={!!ssLabel} />
                     <div className="flex justify-end gap-2 mt-2">
                       <button onClick={() => {
                         const current = setCountOverrides[ex.id] ?? getSetCount(ex);
@@ -1733,6 +1736,7 @@ export default function CoachMobileSessionLoggingPage() {
                 )}>
                   <div className="flex items-center gap-2 px-4 py-1.5 bg-primary/5 border-b border-primary/20">
                     <span className="text-xs font-bold text-primary tracking-wider">{t('coachMobile.sessionLogging.superset', { label: group.label })}</span>
+                    <SupersetRestSummary members={group.members.map(m => m.ex)} />
                   </div>
                   {group.members.map(({ ex, n }, mi) => (
                     <div key={ex.id}>

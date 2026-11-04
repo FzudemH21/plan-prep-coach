@@ -12,6 +12,7 @@
 import { Timer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ExerciseSummary } from '@/hooks/useAthleteApp';
+import { supersetBetweenRestSeconds, supersetRoundRestSeconds } from '@/utils/workoutRest';
 
 function plannedValues(ex: ExerciseSummary, name: string): string[] {
   const p = ex.plannedParams ?? {};
@@ -40,6 +41,35 @@ export function restPrescriptions(ex: ExerciseSummary): Array<{ name: string; va
     out.push({ name, value: distinct.join(' / '), unit: unit ? String(unit) : undefined });
   }
   return out;
+}
+
+/** 45 → "45 s", 90 → "1:30 min", 120 → "2 min" */
+function formatRestSeconds(s: number): string {
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60);
+  const rest = s % 60;
+  return rest === 0 ? `${m} min` : `${m}:${String(rest).padStart(2, '0')} min`;
+}
+
+/**
+ * The rest of a superset, for its header — the same values the rest timer uses: between its
+ * exercises (wizard setting; none = straight on) and after each round (wizard setting, else the
+ * longest rest planned for its exercises). Replaces the exercises' own rest pills inside a superset.
+ */
+export function SupersetRestSummary({ members }: { members: ExerciseSummary[] }) {
+  const between = supersetBetweenRestSeconds(members);
+  const after = supersetRoundRestSeconds(members);
+  if (between <= 0 && after <= 0) return null;
+  return (
+    <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground text-right">
+      <Timer className="h-3 w-3 shrink-0" />
+      <span>
+        {between > 0 && <>{formatRestSeconds(between)} between</>}
+        {between > 0 && after > 0 && ' · '}
+        {after > 0 && <>{formatRestSeconds(after)} after round</>}
+      </span>
+    </span>
+  );
 }
 
 export function RestPrescription({ exercise }: { exercise: ExerciseSummary }) {
