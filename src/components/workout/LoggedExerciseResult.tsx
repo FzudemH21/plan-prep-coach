@@ -24,10 +24,10 @@ export interface LoggedEntry {
   totalRounds?: number;
 }
 
-const isSetDone = (s: LoggedSet) =>
+export const isSetDone = (s: LoggedSet) =>
   s.completed === true || (s.completed === undefined && Object.values(s.values ?? {}).some(v => String(v ?? '').trim() !== ''));
 
-function StatusChip({ done, total, unit }: { done: number; total: number; unit: 'sets' | 'rounds' }) {
+export function StatusChip({ done, total, unit }: { done: number; total: number; unit: 'sets' | 'rounds' }) {
   const all = total > 0 && done >= total;
   const none = done === 0;
   const label = unit === 'sets' ? (total === 1 ? 'set' : 'sets') : (total === 1 ? 'round' : 'rounds');

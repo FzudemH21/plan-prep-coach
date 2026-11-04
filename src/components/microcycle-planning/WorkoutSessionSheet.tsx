@@ -44,7 +44,7 @@ import { AthletePerformanceParameter } from '@/types/athlete';
 import { useAthletes } from '@/hooks/useAthletes';
 import { FocusedSessionContext } from '@/components/wizard/WizardAIAssistant';
 import { SaveToLibraryDialog } from '@/components/session-library/SaveToLibraryDialog';
-import { ExerciseHistorySheet, type HistoryEntry } from '@/components/shared/ExerciseHistorySheet';
+import { ExerciseHistorySheet, historyEntryFrom, type HistoryEntry } from '@/components/shared/ExerciseHistorySheet';
 import { PrintSessionView } from '@/components/print/PrintSessionView';
 import { useExerciseMetrics } from '@/hooks/useExerciseMetrics';
 import { useCoachProfile } from '@/hooks/useCoachProfile';
@@ -417,22 +417,15 @@ export function WorkoutSessionSheet({
       .then(({ data }) => {
         const cache = new Map<string, HistoryEntry[]>();
         for (const row of (data ?? []) as Record<string, unknown>[]) {
-          const setsLogged = (row.sets_logged as Array<{
-            exerciseName: string;
-            sets?: Array<{ setNumber: number; values: Record<string, string> }>;
-          }>) ?? [];
+          const setsLogged = (row.sets_logged as Array<Parameters<typeof historyEntryFrom>[2]>) ?? [];
           for (const ex of setsLogged) {
-            if (!ex.exerciseName || !ex.sets?.length) continue;
+            if (!ex.exerciseName) continue;
+            const entry = historyEntryFrom(row.date as string, row.session_name as string, ex);
+            if (!entry) continue;
             const key = ex.exerciseName.toLowerCase();
             if (!cache.has(key)) cache.set(key, []);
             const entries = cache.get(key)!;
-            if (entries.length < 10) {
-              entries.push({
-                date: row.date as string,
-                sessionName: row.session_name as string,
-                sets: ex.sets.map(s => ({ setNumber: s.setNumber, values: s.values ?? {} })),
-              });
-            }
+            if (entries.length < 10) entries.push(entry);
           }
         }
         setHistoryCache(cache);
