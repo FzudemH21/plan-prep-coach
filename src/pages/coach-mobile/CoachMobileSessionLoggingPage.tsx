@@ -861,6 +861,16 @@ export default function CoachMobileSessionLoggingPage() {
     setRestActive(true);
   }
 
+  /** A set was just ticked: a rest that is still running is over (the athlete is training or
+   *  logging after the fact — e.g. a whole circuit ticked at its end); the tick's own rest, if any,
+   *  starts next */
+  function endRunningRest() {
+    nextAfterRestRef.current = null;
+    rest.stop();
+    setRestActive(false);
+    setRestOpen(false);
+  }
+
   function skipRest() {
     const next = nextAfterRestRef.current;
     nextAfterRestRef.current = null;
@@ -966,6 +976,7 @@ export default function CoachMobileSessionLoggingPage() {
     const ex = currentSection?.exercises.find(e => e.id === exerciseId);
     if (!ex) return;
     autoFillPlanned(ex, setIdx);
+    endRunningRest();
     const newDoneArr = [...doneArr, setIdx];
     const newCS = { ...completedSets, [exerciseId]: newDoneArr };
     setCompletedSets(newCS);
@@ -996,6 +1007,7 @@ export default function CoachMobileSessionLoggingPage() {
     const added = setIdxs.filter(i => !doneArr.includes(i));
     if (added.length === 0) return;
     added.forEach(i => autoFillPlanned(ex, i));
+    endRunningRest();
     const newCS = { ...completedSets, [exerciseId]: [...doneArr, ...added] };
     setCompletedSets(newCS);
     // The interval timer ran every planned rest (between reps and sets); after its last set no rest
@@ -1015,6 +1027,7 @@ export default function CoachMobileSessionLoggingPage() {
     const undone = Array.from({ length: setCount }, (_, i) => i).filter(i => !doneArr.includes(i));
     if (undone.length === 0) { setCompletedSets(prev => ({ ...prev, [exerciseId]: [] })); return; }
     undone.forEach(setIdx => autoFillPlanned(ex, setIdx));
+    endRunningRest();
     const newDoneArr = [...doneArr, ...undone];
     const newCS = { ...completedSets, [exerciseId]: newDoneArr };
     setCompletedSets(newCS);
@@ -1032,22 +1045,6 @@ export default function CoachMobileSessionLoggingPage() {
    *  "Complete Session" (it used to jump to the next unfinished section right after the last set) */
   function continueAfterSection(_cs: Record<string, number[]>, _restSecs: number) {
     setPhase('active');
-  }
-
-  function handleCompleteCircuitRound(exId: string, roundIdx: number) {
-    const doneArr = completedSets[exId] ?? [];
-    if (doneArr.includes(roundIdx)) {
-      setCompletedSets(prev => ({ ...prev, [exId]: (prev[exId] ?? []).filter(i => i !== roundIdx) }));
-      return;
-    }
-    const newDoneArr = [...doneArr, roundIdx];
-    const newCS = { ...completedSets, [exId]: newDoneArr };
-    setCompletedSets(newCS);
-    const ex = currentSection?.exercises.find(e => e.id === exId);
-    if (!ex) return;
-    if (isSectionComplete(currentSection!, newCS, setCountOverrides)) {
-      continueAfterSection(newCS, 0); // all sets done — no rest after the last one
-    }
   }
 
   // ── Sets payload ───────────────────────────────────────────────────────────
@@ -1599,7 +1596,7 @@ export default function CoachMobileSessionLoggingPage() {
               <div className="mt-3">
                 {ex.isCircuit ? (
                   <CircuitCard exercise={ex} completedSets={completedSets}
-                    onCompleteRound={handleCompleteCircuitRound}
+                    onCompleteRound={handleCompleteSet}
                     onShowDetail={t => setDetailTarget(t)} />
                 ) : (
                   <>

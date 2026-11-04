@@ -903,6 +903,16 @@ export default function AthleteSessionPage() {
     setRestActive(true);
   }
 
+  /** A set was just ticked: a rest that is still running is over (the athlete is training or
+   *  logging after the fact — e.g. a whole circuit ticked at its end); the tick's own rest, if any,
+   *  starts next */
+  function endRunningRest() {
+    nextAfterRestRef.current = null;
+    rest.stop();
+    setRestActive(false);
+    setRestOpen(false);
+  }
+
   function skipRest() {
     const next = nextAfterRestRef.current;
     nextAfterRestRef.current = null;
@@ -1005,6 +1015,7 @@ export default function AthleteSessionPage() {
     if (!ex) return;
 
     autoFillPlanned(ex, setIdx);
+    endRunningRest();
 
     const newDoneArr = [...doneArr, setIdx];
     const newCS = { ...completedSets, [exerciseId]: newDoneArr };
@@ -1040,6 +1051,7 @@ export default function AthleteSessionPage() {
     const added = setIdxs.filter(i => !doneArr.includes(i));
     if (added.length === 0) return;
     added.forEach(i => autoFillPlanned(ex, i));
+    endRunningRest();
     const newCS = { ...completedSets, [exerciseId]: [...doneArr, ...added] };
     setCompletedSets(newCS);
     // The interval timer ran every planned rest (between reps and sets); after its last set no rest
@@ -1067,6 +1079,7 @@ export default function AthleteSessionPage() {
     }
 
     undone.forEach(setIdx => autoFillPlanned(ex, setIdx));
+    endRunningRest();
 
     const newDoneArr = [...doneArr, ...undone];
     const newCS = { ...completedSets, [exerciseId]: newDoneArr };
