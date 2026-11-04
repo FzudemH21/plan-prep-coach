@@ -904,7 +904,7 @@ export default function AthleteSessionPage() {
   }
 
   /** A set was just ticked: a rest that is still running is over (the athlete is training or
-   *  logging after the fact — e.g. a whole circuit ticked at its end); the tick's own rest, if any,
+   *  logging after the fact — e.g. a whole superset ticked at its end); the tick's own rest, if any,
    *  starts next */
   function endRunningRest() {
     nextAfterRestRef.current = null;
