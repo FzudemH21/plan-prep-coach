@@ -1,4 +1,6 @@
 import { SectionDescription } from '@/components/workout/SectionDescription';
+import { FinishTimingRow, useFinishTiming } from '@/components/workout/SessionTiming';
+import { finishTimingPayload, moveLoggedSession } from '@/utils/sessionTiming';
 import { IntervalLauncher } from '@/components/workout/IntervalTimer';
 import { RestPrescription, SupersetRestSummary, SwipeHint, setTableLayout } from '@/components/workout/SetTableParts';
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -144,13 +146,13 @@ function CompletionSheet({
   const { toast } = useToast();
   const { connections } = useAthleteConnections();
   const { athletes, updateAthlete } = useAthletes();
+  const timing = useFinishTiming(open, date, durationSeconds);
 
   async function handleSave() {
     setSaving(true);
     const payload = {
-      completed_at: new Date().toISOString(),
+      ...finishTimingPayload(timing.initial, timing.value, durationSeconds),
       borg_rating: borgRating,
-      duration_seconds: durationSeconds > 0 ? durationSeconds : null,
       comment: comment.trim() || null,
       sets_logged: setsLogged,
     };
@@ -177,6 +179,12 @@ function CompletionSheet({
       return;
     }
 
+    // Done on another day: the session moves there. The workout is saved either way.
+    if (logId && timing.value.date !== date) {
+      const moveError = await moveLoggedSession({ connectionId, logId, sessionId, fromDate: date, toDate: timing.value.date });
+      if (moveError) toast({ title: 'Saved, but not moved to that day', description: moveError, variant: 'destructive' });
+    }
+
     const remarkText = remark.trim();
     if (remarkText && logId) {
       const remarkError = await saveCoachRemark(logId, connectionId, remarkText);
@@ -189,7 +197,7 @@ function CompletionSheet({
       const athleteLocalId = connections.find(c => c.id === connectionId)?.athleteLocalId;
       const athlete = athletes.find(a => a.id === athleteLocalId);
       if (athlete) {
-        const when = new Date(date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        const when = new Date(timing.value.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
         const note: AthleteNote = { id: `note-${Date.now()}`, text: `${sessionName} (${when}):\n${notesText}`, timestamp: new Date().toISOString() };
         await updateAthlete(athlete.id, { notesHistory: [note, ...(athlete.notesHistory ?? [])] });
       }
@@ -210,6 +218,8 @@ function CompletionSheet({
               <p className="text-sm text-muted-foreground">{sessionName}</p>
             </div>
           </SheetHeader>
+
+          <FinishTimingRow value={timing.value} onChange={timing.setValue} error={timing.error} />
 
           <p className="text-sm font-semibold mb-3">{t('coachMobile.sessionLogging.completionSheet.borgLabel')}</p>
           <div className="flex flex-col gap-1 mb-5">
@@ -261,7 +271,7 @@ function CompletionSheet({
             {t('coachMobile.sessionLogging.completionSheet.addToNotes')}
           </label>
 
-          <Button className="w-full" disabled={saving} onClick={handleSave}>
+          <Button className="w-full" disabled={saving || !!timing.error} onClick={handleSave}>
             {saving ? t('coachMobile.sessionLogging.completionSheet.saving') : t('coachMobile.sessionLogging.completionSheet.save')}
           </Button>
         </div>

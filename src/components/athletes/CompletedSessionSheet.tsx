@@ -16,6 +16,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from '@/hooks/use-toast';
 import { getBorgLabel, isBorgLevel } from '@/utils/intensityScale';
 import { fetchCoachRemark, parseExerciseComments, remarksAsText, removeCoachExerciseRemark, saveCoachRemark, sendCommentReply, type ExerciseComment } from '@/utils/sessionComments';
+import { EditLoggedTiming, EditTimingButton } from '@/components/workout/SessionTiming';
+import type { LogTimingChange } from '@/utils/sessionTiming';
 
 // ── Exported types ─────────────────────────────────────────────────────────────
 
@@ -518,6 +520,8 @@ interface CompletedSessionSheetProps {
   connectionId?: string;
   /** Adds a text to the athlete's profile notes */
   onAddToAthleteNotes?: (text: string) => Promise<void> | void;
+  /** The session's day, finish time or duration was corrected */
+  onTimingChanged?: (change: LogTimingChange, moved: boolean) => void;
 }
 
 interface ReplyTarget {
@@ -557,8 +561,10 @@ function CommentBubble({ label, text, onReply, exerciseName, onJump }: {
   );
 }
 
-export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddToAthleteNotes }: CompletedSessionSheetProps) {
+export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddToAthleteNotes, onTimingChanged }: CompletedSessionSheetProps) {
   const { toast } = useToast();
+  const [editingTiming, setEditingTiming] = useState(false);
+  useEffect(() => { setEditingTiming(false); }, [log?.id, open]);
   const exerciseComments = useMemo(() => parseExerciseComments(log?.exercise_comments), [log]);
   const loggedByCoach = log?.started_by === 'coach';
 
@@ -661,9 +667,10 @@ export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddT
             </SheetTitle>
           </div>
           {completedAt && !log.closed_by_coach_at && (
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Completed {format(completedAt, 'EEEE, MMM d yyyy')} at {format(completedAt, 'HH:mm')}
-            </p>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-0.5">
+              <p>Completed {format(completedAt, 'EEEE, MMM d yyyy')} at {format(completedAt, 'HH:mm')}</p>
+              {connectionId && !editingTiming && <EditTimingButton onClick={() => setEditingTiming(true)} />}
+            </div>
           )}
           {log.closed_by_coach_at && (
             <p className="text-sm text-muted-foreground mt-0.5">
@@ -674,6 +681,21 @@ export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddT
 
         <ScrollArea className="flex-1">
           <div className="px-6 py-5 space-y-6">
+
+            {connectionId && editingTiming && (
+              <div className="max-w-sm">
+                <EditLoggedTiming
+                  key={log.id}
+                  connectionId={connectionId}
+                  log={{ id: log.id, date: log.date, sessionId: log.session_id, completedAt: log.completed_at, durationSeconds: log.duration_seconds }}
+                  onCancel={() => setEditingTiming(false)}
+                  onSaved={({ moved, change }) => {
+                    setEditingTiming(false);
+                    onTimingChanged?.(change, moved);
+                  }}
+                />
+              </div>
+            )}
 
             {/* Stats row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

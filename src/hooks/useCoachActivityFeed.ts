@@ -100,7 +100,7 @@ export function useCoachActivityFeed(connections: AthleteConnection[]) {
       .in('athlete_connection_id', connectedIds)
       .or(`completed_at.gte.${windowStart},created_at.gte.${windowStart}`)
       .order('completed_at', { ascending: false });
-    const sessionBase = 'id, athlete_connection_id, session_id, session_name, date, completed_at, borg_rating, duration_seconds, comment';
+    const sessionBase = 'id, athlete_connection_id, session_id, session_name, date, created_at, completed_at, borg_rating, duration_seconds, comment';
     const loadSessions = () => selectWithOptionalColumns(sessionsQuery, sessionBase, ['started_by', 'exercise_comments']);
 
     const [sessionsRes, checkinsRes] = connectedIds.length === 0 ? [{ data: [] }, { data: [] }] : await Promise.all([
@@ -139,7 +139,14 @@ export function useCoachActivityFeed(connections: AthleteConnection[]) {
         });
       }
 
-      if (!row.completed_at || (row.completed_at as string) < windowStart) continue;
+      if (!row.completed_at) continue;
+      // When it was logged, not when it was done: a session logged afterwards has an earlier
+      // finish time, but must still reach the coach as new (at its place at the top)
+      const loggedAt = new Date(Math.max(
+        new Date(row.completed_at as string).getTime(),
+        new Date(row.created_at as string).getTime() || 0,
+      )).toISOString();
+      if (loggedAt < windowStart) continue;
 
       // Session feedback — when the athlete logged it themselves (the coach typed it in otherwise)
       if (typeof row.comment === 'string' && row.comment.trim() && row.started_by !== 'coach') {
@@ -149,7 +156,7 @@ export function useCoachActivityFeed(connections: AthleteConnection[]) {
           connectionId: conn.id,
           athleteName: conn.athleteName,
           athleteLocalId: conn.athleteLocalId,
-          timestamp: row.completed_at as string,
+          timestamp: loggedAt,
           description: `Left feedback on "${row.session_name as string}": “${shortQuote(row.comment)}”`,
           date: row.date as string,
           sessionId: row.session_id as string,
@@ -169,7 +176,7 @@ export function useCoachActivityFeed(connections: AthleteConnection[]) {
         connectionId: conn.id,
         athleteName: conn.athleteName,
         athleteLocalId: conn.athleteLocalId,
-        timestamp: row.completed_at as string,
+        timestamp: loggedAt,
         description: `Completed "${row.session_name as string}"${dur}${rpe}`,
         date: row.date as string,
         sessionId: row.session_id as string,

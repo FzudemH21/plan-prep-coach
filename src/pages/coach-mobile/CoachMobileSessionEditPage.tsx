@@ -28,6 +28,7 @@ import { SessionCommentsPanel } from '@/components/coach-mobile/SessionCommentsP
 import { parseExerciseComments, selectWithOptionalColumns, type ExerciseComment } from '@/utils/sessionComments';
 import { LoggedExerciseResult, type LoggedEntry } from '@/components/workout/LoggedExerciseResult';
 import { UnfinishedSessionDialog } from '@/components/workout/UnfinishedSessionDialog';
+import { EditLoggedTiming, EditTimingButton } from '@/components/workout/SessionTiming';
 import { findUnfinishedLogId } from '@/utils/unfinishedSession';
 
 // ── Section helpers ───────────────────────────────────────────────────────────
@@ -1080,6 +1081,7 @@ export default function CoachMobileSessionEditPage() {
   const session_ref_id = state?.entry?.sessions[state?.sessionIdx ?? 0]?.id ?? null;
   // Bumped after the coach closed / reset an unfinished session — reloads the logs
   const [logVersion, setLogVersion] = useState(0);
+  const [editingTiming, setEditingTiming] = useState(false);
   useEffect(() => {
     if (!connectionId || !state?.entry?.date || !session_ref_id) return;
     const query = (columns: string) => supabase
@@ -1713,7 +1715,10 @@ export default function CoachMobileSessionEditPage() {
                   <div className="rounded-xl bg-green-50 border border-green-200 p-3 flex items-start gap-3">
                     <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-green-800">{t('coachMobile.sessionEdit.sessionCompleted')}</p>
+                      <div className="flex items-center justify-between gap-2 text-green-800">
+                        <p className="text-sm font-semibold">{t('coachMobile.sessionEdit.sessionCompleted')}</p>
+                        {connectionId && !editingTiming && <EditTimingButton onClick={() => setEditingTiming(true)} />}
+                      </div>
                       <p className="text-xs text-green-700 mt-0.5">
                         {sessionLog.completedAt ? new Date(sessionLog.completedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}
                         {` · ${sessionLog.durationSeconds ? Math.round(sessionLog.durationSeconds / 60) : 0} min`}
@@ -1722,6 +1727,20 @@ export default function CoachMobileSessionEditPage() {
                       </p>
                     </div>
                   </div>
+                )}
+                {sessionLog && connectionId && editingTiming && (
+                  <EditLoggedTiming
+                    connectionId={connectionId}
+                    log={{ id: sessionLog.id, date: entry.date, sessionId: session.id, completedAt: sessionLog.completedAt, durationSeconds: sessionLog.durationSeconds }}
+                    onCancel={() => setEditingTiming(false)}
+                    onSaved={({ moved }) => {
+                      setEditingTiming(false);
+                      if (!moved) { setLogVersion(v => v + 1); return; }
+                      // On another day now — back to the calendar, which shows it there
+                      if (state?.returnPath) navigate(state.returnPath, { state: state.returnState ?? null });
+                      else navigate(-1);
+                    }}
+                  />
                 )}
                 {/* Feedback, exercise comments (with Reply) and the coach's private remarks */}
                 {sessionLog && connectionId && (

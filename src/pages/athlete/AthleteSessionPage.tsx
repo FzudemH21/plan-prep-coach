@@ -1,4 +1,6 @@
 import { SectionDescription } from '@/components/workout/SectionDescription';
+import { EditLoggedTiming, EditTimingButton, FinishTimingRow, useFinishTiming } from '@/components/workout/SessionTiming';
+import { finishTimingPayload, moveLoggedSession } from '@/utils/sessionTiming';
 import { InlineVideo } from '@/components/athlete-app/InlineVideo';
 import { IntervalLauncher } from '@/components/workout/IntervalTimer';
 import { RestPrescription, SupersetRestSummary, SwipeHint, setTableLayout } from '@/components/workout/SetTableParts';
@@ -133,19 +135,20 @@ function CompletionSheet({
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
+  const timing = useFinishTiming(open, date, durationSeconds);
 
   async function handleSave() {
     setSaving(true);
     const trimmedComment = comment.trim();
     const completionPayload = {
-      completed_at: new Date().toISOString(),
+      ...finishTimingPayload(timing.initial, timing.value, durationSeconds),
       borg_rating: borgRating,
-      duration_seconds: durationSeconds > 0 ? durationSeconds : null,
       comment: trimmedComment || null,
       sets_logged: setsLogged,
     };
 
     let error;
+    let logId: string | null = sessionLogId ?? null;
     // Update the in-progress row that was created on "Start Session" — only while it's unfinished
     const result = sessionLogId ? await completeStartedLog(sessionLogId, completionPayload) : null;
     if (result?.status === 'closedByCoach') {
@@ -161,20 +164,29 @@ function CompletionSheet({
       error = null;
     } else {
       // Fallback: insert a fresh row (no in-progress row was created)
-      ({ error } = await supabase.from('athlete_session_logs').insert({
+      const res = await supabase.from('athlete_session_logs').insert({
         athlete_connection_id: connectionId,
         date,
         session_id: sessionId,
         session_name: sessionName,
         ...completionPayload,
-      }));
+      }).select('id').single();
+      error = res.error;
+      logId = (res.data as { id: string } | null)?.id ?? null;
     }
 
-    setSaving(false);
     if (error) {
+      setSaving(false);
       toast({ title: 'Error saving session', description: error.message, variant: 'destructive' });
       return;
     }
+
+    // Done on another day: the session moves there. The workout is saved either way.
+    if (logId && timing.value.date !== date) {
+      const moveError = await moveLoggedSession({ connectionId, logId, sessionId, fromDate: date, toDate: timing.value.date });
+      if (moveError) toast({ title: 'Saved, but not moved to that day', description: moveError, variant: 'destructive' });
+    }
+    setSaving(false);
 
     // The feedback stays with the session — the coach is notified (bell), not messaged
     toast({ title: 'Session logged!' });
@@ -192,6 +204,8 @@ function CompletionSheet({
               <p className="text-sm text-muted-foreground">{sessionName}</p>
             </div>
           </SheetHeader>
+
+          <FinishTimingRow value={timing.value} onChange={timing.setValue} error={timing.error} />
 
           <p className="text-sm font-semibold mb-3">How hard was it? (Borg CR10)</p>
           <div className="flex flex-col gap-1 mb-5">
@@ -222,7 +236,7 @@ function CompletionSheet({
             className="resize-none h-20 mb-5"
           />
 
-          <Button className="w-full" disabled={saving} onClick={handleSave}>
+          <Button className="w-full" disabled={saving || !!timing.error} onClick={handleSave}>
             {saving ? 'Saving…' : 'Save & Finish'}
           </Button>
         </div>
@@ -591,6 +605,7 @@ export default function AthleteSessionPage() {
   // ── State ──────────────────────────────────────────────────────────────────
 
   const [phase, setPhase] = useState<Phase>('overview');
+  const [editingTiming, setEditingTiming] = useState(false);
   const [sectionIdx, setSectionIdx] = useState(0);
   const nextAfterRestRef = useRef<(() => void) | null>(null);
   // Rest timer (timestamp-based, ticks + sound at the end) — the big timer opens when a rest starts;
@@ -1299,7 +1314,10 @@ export default function AthleteSessionPage() {
                   <div className="rounded-xl bg-green-50 border border-green-200 p-3 flex items-start gap-3">
                     <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-green-800">Session Completed</p>
+                      <div className="flex items-center justify-between gap-2 text-green-800">
+                        <p className="text-sm font-semibold">Session Completed</p>
+                        {connection && !editingTiming && <EditTimingButton onClick={() => setEditingTiming(true)} />}
+                      </div>
                       <p className="text-xs text-green-700 mt-0.5">
                         {currentLog.completedAt ? formatCompletedAt(currentLog.completedAt) : ''}
                         {currentLog.durationSeconds
@@ -1317,6 +1335,19 @@ export default function AthleteSessionPage() {
                       )}
                     </div>
                   </div>
+                )}
+                {currentLog && connection && editingTiming && (
+                  <EditLoggedTiming
+                    connectionId={connection.id}
+                    log={{ id: currentLog.id, date: currentLog.date, sessionId: session.id, completedAt: currentLog.completedAt, durationSeconds: currentLog.durationSeconds }}
+                    onCancel={() => setEditingTiming(false)}
+                    onSaved={({ moved }) => {
+                      setEditingTiming(false);
+                      refetchLogs().catch(console.error);
+                      // On another day now — back to the calendar, which shows it there
+                      if (moved) navigate(-1);
+                    }}
+                  />
                 )}
 
                 {/* Session notes */}

@@ -3161,6 +3161,11 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         open={completedSheetOpen}
         onClose={() => { setCompletedSheetOpen(false); setSelectedCompletedLog(null); }}
         connectionId={getConnectionForAthlete(athlete.id)?.id}
+        onTimingChanged={(change, moved) => {
+          setSelectedCompletedLog(prev => (prev ? { ...prev, ...change } : prev));
+          setSessionLogsVersion(v => v + 1);
+          if (moved) setLiveScheduleVersion(v => v + 1);
+        }}
         onAddToAthleteNotes={async (text) => {
           const current = athleteData.athletes.find(a => a.id === athlete.id) ?? athlete;
           const note = { id: `note-${Date.now()}`, text, timestamp: new Date().toISOString() };
