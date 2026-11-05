@@ -6,7 +6,6 @@
 import { useEffect, useState } from 'react';
 import { Clock, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import {
   earliestTimingDate, initialFinishTiming, initialLoggedTiming, saveLoggedTiming, timingError, timingSummary, todayLocal,
@@ -19,24 +18,32 @@ function TimingFields({ value, onChange, error }: {
   error: string | null;
 }) {
   const row = 'grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2 text-sm';
+  // The box sets the size: iPhones give date and time inputs their own height and width, which the
+  // box contains — so all three fields look the same
+  const box = 'flex h-11 w-full min-w-0 items-center overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2';
+  const field = 'block h-full w-full min-w-0 appearance-none [-webkit-appearance:none] border-0 bg-transparent px-3 text-left text-base leading-none text-foreground outline-none placeholder:text-muted-foreground md:text-sm [&::-webkit-date-and-time-value]:m-0 [&::-webkit-date-and-time-value]:text-left';
   return (
     <div className="space-y-2">
       <label className={row}>
         <span className="text-muted-foreground">Date</span>
-        <Input type="date" className="h-11" value={value.date} min={earliestTimingDate()} max={todayLocal()}
-          onChange={e => onChange({ ...value, date: e.target.value })} />
+        <span className={box}>
+          <input type="date" className={field} value={value.date} min={earliestTimingDate()} max={todayLocal()}
+            onChange={e => onChange({ ...value, date: e.target.value })} />
+        </span>
       </label>
       <label className={row}>
         <span className="text-muted-foreground">Started</span>
-        <Input type="time" className="h-11" value={value.time}
-          onChange={e => onChange({ ...value, time: e.target.value })} />
+        <span className={box}>
+          <input type="time" className={field} value={value.time}
+            onChange={e => onChange({ ...value, time: e.target.value })} />
+        </span>
       </label>
       <label className={row}>
         <span className="text-muted-foreground">Duration</span>
-        <span className="flex items-center gap-2">
-          <Input type="text" inputMode="numeric" className="h-11" value={value.minutes} placeholder="0"
+        <span className={box}>
+          <input type="text" inputMode="numeric" className={field} value={value.minutes} placeholder="0"
             onChange={e => onChange({ ...value, minutes: e.target.value })} />
-          <span className="text-muted-foreground shrink-0">min</span>
+          <span className="pr-3 text-muted-foreground shrink-0">min</span>
         </span>
       </label>
       {error && <p className="text-xs text-destructive">{error}</p>}

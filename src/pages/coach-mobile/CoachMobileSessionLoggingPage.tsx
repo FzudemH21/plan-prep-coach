@@ -1,5 +1,6 @@
 import { SectionDescription } from '@/components/workout/SectionDescription';
 import { FinishTimingRow, useFinishTiming } from '@/components/workout/SessionTiming';
+import { useSheetAboveKeyboard } from '@/hooks/useSheetAboveKeyboard';
 import { finishTimingPayload, moveLoggedSession } from '@/utils/sessionTiming';
 import { IntervalLauncher } from '@/components/workout/IntervalTimer';
 import { RestPrescription, SupersetRestSummary, SwipeHint, setTableLayout } from '@/components/workout/SetTableParts';
@@ -147,6 +148,7 @@ function CompletionSheet({
   const { connections } = useAthleteConnections();
   const { athletes, updateAthlete } = useAthletes();
   const timing = useFinishTiming(open, date, durationSeconds);
+  const sheetRef = useSheetAboveKeyboard();
 
   async function handleSave() {
     setSaving(true);
@@ -209,7 +211,13 @@ function CompletionSheet({
 
   return (
     <Sheet open={open} onOpenChange={o => { if (!o) onClose(); }}>
-      <SheetContent side="bottom" className="rounded-t-2xl max-h-[90vh] overflow-y-auto p-0 sm:w-[480px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:rounded-2xl">
+      {/* dvh: the part of the screen actually visible — with vh the top was cut off on iPhones */}
+      <SheetContent
+        ref={sheetRef}
+        side="bottom"
+        onOpenAutoFocus={e => e.preventDefault()}
+        className="rounded-t-2xl max-h-[85dvh] overflow-y-auto p-0 sm:w-[480px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:rounded-2xl"
+      >
         <div className="px-5 pt-4 pb-8">
           <SheetHeader className="mb-5">
             <div className="flex flex-col items-center gap-2 pt-2">
