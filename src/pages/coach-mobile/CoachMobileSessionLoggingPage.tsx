@@ -216,25 +216,28 @@ function CompletionSheet({
         ref={sheetRef}
         side="bottom"
         onOpenAutoFocus={e => e.preventDefault()}
-        className="rounded-t-2xl max-h-[85dvh] overflow-y-auto p-0 sm:w-[480px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:rounded-2xl"
+        className="rounded-t-2xl max-h-[96dvh] overflow-y-auto p-0 sm:w-[480px] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:rounded-2xl"
       >
-        <div className="px-5 pt-4 pb-8">
-          <SheetHeader className="mb-5">
-            <div className="flex flex-col items-center gap-2 pt-2">
-              <CheckCircle2 className="h-10 w-10 text-green-500" />
-              <SheetTitle>{t('coachMobile.sessionLogging.completionSheet.title')}</SheetTitle>
-              <p className="text-sm text-muted-foreground">{sessionName}</p>
+        <div className="px-5 pt-3 pb-8">
+          {/* Compact, so the whole Borg scale fits on the screen */}
+          <SheetHeader className="mb-3">
+            <div className="flex flex-col items-center gap-0.5 px-6">
+              <div className="flex items-center gap-2 min-w-0">
+                <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
+                <SheetTitle>{t('coachMobile.sessionLogging.completionSheet.title')}</SheetTitle>
+              </div>
+              <p className="text-sm text-muted-foreground truncate max-w-full">{sessionName}</p>
             </div>
           </SheetHeader>
 
           <FinishTimingRow value={timing.value} onChange={timing.setValue} error={timing.error} />
 
-          <p className="text-sm font-semibold mb-3">{t('coachMobile.sessionLogging.completionSheet.borgLabel')}</p>
+          <p className="text-sm font-semibold mb-2">{t('coachMobile.sessionLogging.completionSheet.borgLabel')}</p>
           <div className="flex flex-col gap-1 mb-5">
             {Array.from({ length: 11 }, (_, v) => (
               <button key={v} onClick={() => setBorgRating(borgRating === v ? null : v)}
                 className={cn(
-                  'flex items-center gap-3 w-full rounded-lg border px-3 py-2 text-sm text-left transition-colors',
+                  'flex items-center gap-3 w-full rounded-lg border px-3 py-1.5 text-sm text-left transition-colors',
                   'border-border hover:bg-muted/60',
                   borgRating === v && 'border-primary bg-primary/10 font-semibold',
                 )}>
