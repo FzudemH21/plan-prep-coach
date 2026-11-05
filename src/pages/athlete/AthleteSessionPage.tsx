@@ -1339,7 +1339,7 @@ export default function AthleteSessionPage() {
                 {currentLog && connection && editingTiming && (
                   <EditLoggedTiming
                     connectionId={connection.id}
-                    log={{ id: currentLog.id, date: currentLog.date, sessionId: session.id, completedAt: currentLog.completedAt, durationSeconds: currentLog.durationSeconds }}
+                    log={{ id: currentLog.id, date: currentLog.date, sessionId: session.id, startedAt: currentLog.startedAt, completedAt: currentLog.completedAt, durationSeconds: currentLog.durationSeconds }}
                     onCancel={() => setEditingTiming(false)}
                     onSaved={({ moved }) => {
                       setEditingTiming(false);

@@ -1,5 +1,5 @@
 /**
- * The day, finish time and duration of a logged session: one quiet line at the end of a workout
+ * The day, start time and duration of a logged session: one quiet line at the end of a workout
  * (filled in automatically, tap to correct — e.g. when logging it afterwards), and the same fields
  * for correcting a session that is already logged.
  */
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import {
-  earliestTimingDate, initialTiming, saveLoggedTiming, timingError, timingSummary, todayLocal,
+  earliestTimingDate, initialFinishTiming, initialLoggedTiming, saveLoggedTiming, timingError, timingSummary, todayLocal,
   type LogTimingChange, type SessionTimingValue,
 } from '@/utils/sessionTiming';
 
@@ -27,7 +27,7 @@ function TimingFields({ value, onChange, error }: {
           onChange={e => onChange({ ...value, date: e.target.value })} />
       </label>
       <label className={row}>
-        <span className="text-muted-foreground">Finished</span>
+        <span className="text-muted-foreground">Started</span>
         <Input type="time" className="h-11" value={value.time}
           onChange={e => onChange({ ...value, time: e.target.value })} />
       </label>
@@ -46,11 +46,11 @@ function TimingFields({ value, onChange, error }: {
 
 /** State of the line on the "Session complete" sheet — filled in anew each time the sheet opens */
 export function useFinishTiming(open: boolean, date: string, durationSeconds: number) {
-  const [initial, setInitial] = useState<SessionTimingValue>(() => initialTiming(date, null, durationSeconds));
+  const [initial, setInitial] = useState<SessionTimingValue>(() => initialFinishTiming(date, durationSeconds));
   const [value, setValue] = useState<SessionTimingValue>(initial);
   useEffect(() => {
     if (!open) return;
-    const next = initialTiming(date, null, durationSeconds);
+    const next = initialFinishTiming(date, durationSeconds);
     setInitial(next);
     setValue(next);
     // Only when the sheet opens — it must not overwrite what is being typed
@@ -71,7 +71,7 @@ export function FinishTimingRow({ value, onChange, error }: {
         type="button"
         onClick={() => setEditing(e => !e)}
         aria-expanded={editing}
-        aria-label={`${timingSummary(value)} — change date, time or duration`}
+        aria-label={`${timingSummary(value)} — change date, start time or duration`}
         className="flex w-full min-h-[44px] items-center gap-2 rounded-lg border px-3 text-sm text-left active:bg-muted/60"
       >
         <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -89,7 +89,7 @@ export function EditTimingButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      aria-label="Change date, time or duration"
+      aria-label="Change date, start time or duration"
       className="-my-2 -mr-2 h-11 w-11 shrink-0 flex items-center justify-center rounded-full opacity-70 hover:opacity-100 active:bg-black/5"
     >
       <Pencil className="h-3.5 w-3.5" />
@@ -100,12 +100,12 @@ export function EditTimingButton({ onClick }: { onClick: () => void }) {
 /** Correcting a session that is already logged */
 export function EditLoggedTiming({ connectionId, log, onCancel, onSaved }: {
   connectionId: string;
-  log: { id: string; date: string; sessionId: string | null; completedAt: string | null; durationSeconds: number | null };
+  log: { id: string; date: string; sessionId: string | null; startedAt: string | null; completedAt: string | null; durationSeconds: number | null };
   onCancel: () => void;
   onSaved: (result: { moved: boolean; change: LogTimingChange }) => void;
 }) {
   const { toast } = useToast();
-  const [initial] = useState(() => initialTiming(log.date, log.completedAt, log.durationSeconds));
+  const [initial] = useState(() => initialLoggedTiming(log.date, log.startedAt, log.completedAt, log.durationSeconds));
   const [value, setValue] = useState(initial);
   const [saving, setSaving] = useState(false);
   const error = timingError(initial, value);
@@ -113,7 +113,7 @@ export function EditLoggedTiming({ connectionId, log, onCancel, onSaved }: {
 
   async function save() {
     setSaving(true);
-    const result = await saveLoggedTiming({ connectionId, logId: log.id, sessionId: log.sessionId, initial, value });
+    const result = await saveLoggedTiming({ connectionId, logId: log.id, sessionId: log.sessionId, initial, value, durationSeconds: log.durationSeconds });
     setSaving(false);
     if (result.error) {
       toast({ title: 'Not saved', description: result.error, variant: 'destructive' });

@@ -520,7 +520,7 @@ interface CompletedSessionSheetProps {
   connectionId?: string;
   /** Adds a text to the athlete's profile notes */
   onAddToAthleteNotes?: (text: string) => Promise<void> | void;
-  /** The session's day, finish time or duration was corrected */
+  /** The session's day, start time or duration was corrected */
   onTimingChanged?: (change: LogTimingChange, moved: boolean) => void;
 }
 
@@ -687,7 +687,7 @@ export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddT
                 <EditLoggedTiming
                   key={log.id}
                   connectionId={connectionId}
-                  log={{ id: log.id, date: log.date, sessionId: log.session_id, completedAt: log.completed_at, durationSeconds: log.duration_seconds }}
+                  log={{ id: log.id, date: log.date, sessionId: log.session_id, startedAt: log.started_at, completedAt: log.completed_at, durationSeconds: log.duration_seconds }}
                   onCancel={() => setEditingTiming(false)}
                   onSaved={({ moved, change }) => {
                     setEditingTiming(false);

@@ -1,6 +1,7 @@
 /**
- * When a logged session happened: its day, finish time and duration — filled in automatically, and
+ * When a logged session happened: its day, start time and duration — filled in automatically, and
  * editable at the end of a workout or on a logged session (a session logged afterwards).
+ * The finish time follows from them (start + duration).
  * A changed day moves the session in the athlete's calendar: logs are matched to it by date + session.
  */
 import { supabase } from '@/lib/supabase';
@@ -10,7 +11,7 @@ import { dayIntensityFromSessions } from '@/utils/dayIntensity';
 export interface SessionTimingValue {
   /** yyyy-MM-dd — the calendar day the session counts on */
   date: string;
-  /** HH:mm, local */
+  /** Start time — HH:mm, local */
   time: string;
   /** Whole minutes as typed; empty = no duration */
   minutes: string;
@@ -30,12 +31,26 @@ export function earliestTimingDate(): string {
   return localDate(d);
 }
 
-export function initialTiming(date: string, completedAt: string | null, durationSeconds: number | null): SessionTimingValue {
-  return {
-    date,
-    time: localTime(completedAt ? new Date(completedAt) : new Date()),
-    minutes: durationSeconds && durationSeconds > 0 ? String(Math.round(durationSeconds / 60)) : '',
-  };
+const minutesText = (durationSeconds: number | null) =>
+  durationSeconds && durationSeconds > 0 ? String(Math.round(durationSeconds / 60)) : '';
+
+/** A workout being finished: it started the timer's duration ago (not before today, past midnight) */
+export function initialFinishTiming(date: string, durationSeconds: number): SessionTimingValue {
+  const now = new Date();
+  const midnight = new Date(now);
+  midnight.setHours(0, 0, 0, 0);
+  const start = new Date(Math.max(now.getTime() - Math.max(durationSeconds, 0) * 1000, midnight.getTime()));
+  return { date, time: localTime(start), minutes: minutesText(durationSeconds) };
+}
+
+/** A logged session: its recorded start — or, if that doesn't fit its finish, finish minus duration */
+export function initialLoggedTiming(
+  date: string, startedAt: string | null, completedAt: string | null, durationSeconds: number | null,
+): SessionTimingValue {
+  const end = completedAt ? new Date(completedAt).getTime() : Date.now();
+  const recorded = startedAt ? new Date(startedAt).getTime() : NaN;
+  const start = recorded <= end ? recorded : end - (durationSeconds ?? 0) * 1000;
+  return { date, time: localTime(new Date(start)), minutes: minutesText(durationSeconds) };
 }
 
 /** "Today, 5:42 PM · 58 min" */
@@ -57,31 +72,51 @@ export function timingSummary(value: SessionTimingValue): string {
 export function timingError(initial: SessionTimingValue, value: SessionTimingValue): string | null {
   const minutes = value.minutes.trim();
   if (minutes !== '' && (!/^\d+$/.test(minutes) || Number(minutes) > 1440)) return 'Enter the duration in minutes.';
-  if (value.date === initial.date && value.time === initial.time) return null;
-  if (!value.date || !value.time) return 'Enter a date and a time.';
-  if (value.date !== initial.date && value.date < earliestTimingDate()) return 'That date is too far back.';
-  if (new Date(`${value.date}T${value.time}:00`).getTime() > Date.now()) return 'That is in the future.';
+  const dayOrTimeEdited = value.date !== initial.date || value.time !== initial.time;
+  if (dayOrTimeEdited) {
+    if (!value.date || !value.time) return 'Enter a date and a start time.';
+    if (value.date !== initial.date && value.date < earliestTimingDate()) return 'That date is too far back.';
+    if (new Date(`${value.date}T${value.time}:00`).getTime() > Date.now()) return 'That start is in the future.';
+  }
+  // Only if it can be checked: a session still ahead of its planned day keeps that day
+  const minutesEdited = value.minutes !== initial.minutes;
+  if ((dayOrTimeEdited || minutesEdited) && value.date <= todayLocal()) {
+    const end = new Date(`${value.date}T${value.time}:00`).getTime() + (secondsOf(value.minutes) ?? 0) * 1000;
+    // A minute's room: the shown start and duration are rounded
+    if (end > Date.now() + 60_000) return 'With this duration it would end in the future.';
+  }
   return null;
 }
 
-const secondsOf = (minutes: string) => {
+function secondsOf(minutes: string): number | null {
   const n = Number(minutes.trim());
   return n > 0 ? n * 60 : null;
-};
+}
+
+/** Start and finish from the entered start + duration (never a finish in the future) */
+function startAndFinish(date: string, time: string, durationSeconds: number | null) {
+  const start = toIso(date, time);
+  const end = Math.min(new Date(start).getTime() + (durationSeconds ?? 0) * 1000, Date.now());
+  return { started_at: start, completed_at: new Date(end).toISOString() };
+}
 
 /**
- * completed_at + duration_seconds of a workout being finished. Nothing edited: the timer's duration,
- * and now — or, for a session of an earlier day, that day (as the sheet shows it). The session stays
- * on its day unless the day was changed, also when it is finished ahead of its planned day.
+ * started_at, completed_at + duration_seconds of a workout being finished. Nothing edited today (or
+ * ahead of its planned day): now and the timer's duration, the recorded start stays. For a session
+ * of an earlier day, or after a correction: what the sheet shows. The session stays on its day
+ * unless the day was changed.
  */
-export function finishTimingPayload(initial: SessionTimingValue, value: SessionTimingValue, elapsedSeconds: number) {
-  const edited = value.date !== initial.date || value.time !== initial.time;
-  return {
-    completed_at: edited || value.date < todayLocal() ? toIso(value.date, value.time) : new Date().toISOString(),
-    duration_seconds: value.minutes !== initial.minutes
-      ? secondsOf(value.minutes)
-      : elapsedSeconds > 0 ? elapsedSeconds : null,
-  };
+export function finishTimingPayload(
+  initial: SessionTimingValue, value: SessionTimingValue, elapsedSeconds: number,
+): { started_at?: string; completed_at: string; duration_seconds: number | null } {
+  const dayOrTimeEdited = value.date !== initial.date || value.time !== initial.time;
+  const minutesEdited = value.minutes !== initial.minutes;
+  const duration = minutesEdited ? secondsOf(value.minutes) : elapsedSeconds > 0 ? elapsedSeconds : null;
+  const today = todayLocal();
+  if (!dayOrTimeEdited && (value.date > today || (value.date === today && !minutesEdited))) {
+    return { completed_at: new Date().toISOString(), duration_seconds: duration };
+  }
+  return { ...startAndFinish(value.date, value.time, duration), duration_seconds: duration };
 }
 
 const ALREADY_THERE = 'This session is already on that day.';
@@ -192,19 +227,30 @@ export async function moveLoggedSession(
 
 export interface LogTimingChange {
   date: string;
+  started_at?: string;
   completed_at?: string;
   duration_seconds?: number | null;
 }
 
 /** Saves the edit of a logged session. The day first: if the move isn't possible, nothing changes. */
 export async function saveLoggedTiming(
-  { connectionId, logId, sessionId, initial, value }:
-  { connectionId: string; logId: string; sessionId: string | null; initial: SessionTimingValue; value: SessionTimingValue },
+  { connectionId, logId, sessionId, initial, value, durationSeconds }:
+  {
+    connectionId: string; logId: string; sessionId: string | null;
+    initial: SessionTimingValue; value: SessionTimingValue;
+    /** The exact duration saved so far — kept unless the minutes were changed */
+    durationSeconds: number | null;
+  },
 ): Promise<{ error: string | null; moved: boolean; change: LogTimingChange }> {
   const moved = value.date !== initial.date;
+  const minutesEdited = value.minutes !== initial.minutes;
+  const duration = minutesEdited ? secondsOf(value.minutes) : durationSeconds;
   const patch: Omit<LogTimingChange, 'date'> = {};
-  if (moved || value.time !== initial.time) patch.completed_at = toIso(value.date, value.time);
-  if (value.minutes !== initial.minutes) patch.duration_seconds = secondsOf(value.minutes);
+  // The finish follows start + duration; a session still ahead of its planned day keeps its finish
+  if (moved || value.time !== initial.time || (minutesEdited && value.date <= todayLocal())) {
+    Object.assign(patch, startAndFinish(value.date, value.time, duration));
+  }
+  if (minutesEdited) patch.duration_seconds = duration;
 
   if (moved) {
     const moveError = sessionId

@@ -1072,6 +1072,7 @@ export default function CoachMobileSessionEditPage() {
     id: string;
     startedBy: string | null;
     exerciseComments: ExerciseComment[];
+    startedAt: string | null;
     completedAt: string | null;
     borgRating: number | null;
     durationSeconds: number | null;
@@ -1092,7 +1093,7 @@ export default function CoachMobileSessionEditPage() {
       .eq('session_id', session_ref_id)
       .not('completed_at', 'is', null)
       .maybeSingle();
-    const base = 'id, completed_at, borg_rating, duration_seconds, comment, sets_logged';
+    const base = 'id, started_at, completed_at, borg_rating, duration_seconds, comment, sets_logged';
     // started_by / exercise_comments need their migrations — a missing one is left out on its own
     selectWithOptionalColumns(query, base, ['started_by', 'exercise_comments'])
       .then(({ data: raw }) => {
@@ -1102,6 +1103,7 @@ export default function CoachMobileSessionEditPage() {
             id: data.id as string,
             startedBy: (data.started_by as string | null) ?? null,
             exerciseComments: parseExerciseComments(data.exercise_comments),
+            startedAt: data.started_at as string | null,
             completedAt: data.completed_at as string | null,
             borgRating: data.borg_rating as number | null,
             durationSeconds: data.duration_seconds as number | null,
@@ -1731,7 +1733,7 @@ export default function CoachMobileSessionEditPage() {
                 {sessionLog && connectionId && editingTiming && (
                   <EditLoggedTiming
                     connectionId={connectionId}
-                    log={{ id: sessionLog.id, date: entry.date, sessionId: session.id, completedAt: sessionLog.completedAt, durationSeconds: sessionLog.durationSeconds }}
+                    log={{ id: sessionLog.id, date: entry.date, sessionId: session.id, startedAt: sessionLog.startedAt, completedAt: sessionLog.completedAt, durationSeconds: sessionLog.durationSeconds }}
                     onCancel={() => setEditingTiming(false)}
                     onSaved={({ moved }) => {
                       setEditingTiming(false);
