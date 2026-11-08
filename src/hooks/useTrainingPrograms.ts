@@ -1,6 +1,8 @@
-import { useCallback } from 'react';
-import { useSupabaseStore } from './useSupabaseStore';
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useAuth } from './useAuth';
+import {
+  ensureProgramsLoaded, getProgramStoreState, markProgramDeleted, putPrograms, resetProgramStore, subscribeProgramStore,
+} from '@/lib/programStore';
 import { savePlanMemory } from '@/lib/planMemory';
 import { snapshotProgram } from '@/lib/programVersions';
 import { bindTabToProgram, programSwitchedElsewhere, ProgramOpenElsewhereError } from '@/lib/wizardTabProgram';
@@ -157,50 +159,34 @@ export interface TrainingProgramsData {
   deletedProgramIds?: string[];
 }
 
-/**
- * All programs share one stored row, so a save built on an incomplete or outdated list (e.g. a
- * page that started before the list had loaded) used to overwrite — and lose — every other
- * program. Merging `base` into `next`: programs `next` lacks come back (unless deleted on purpose),
- * and of a program in both, the newer version (lastModifiedAt) wins.
- * Used when saving (base = latest list), when loading (base = this browser's copy, which restores
- * what the server lost) and by the program restore. Returns null when nothing changes.
- */
-export function mergePrograms(base: TrainingProgramsData, next: TrainingProgramsData): TrainingProgramsData | null {
-  const basePrograms = Array.isArray(base?.programs) ? base.programs : [];
-  if (basePrograms.length === 0 || !Array.isArray(next?.programs)) return null;
-  const deleted = new Set([...(next.deletedProgramIds ?? []), ...(base.deletedProgramIds ?? [])]);
-  const baseById = new Map(basePrograms.filter(p => p?.id).map(p => [p.id, p]));
-  let changed = false;
-  const programs = next.programs.map(p => {
-    const other = baseById.get(p.id);
-    if (other && (other.lastModifiedAt ?? '') > (p.lastModifiedAt ?? '')) { changed = true; return other; }
-    return p;
+/** Of a recovered list, the programs a restore would add or replace (see restorePrograms) */
+export function programsToRestore(recovered: TrainingProgramsData, current: TrainingProgramsData): TrainingProgram[] {
+  const deleted = new Set(current.deletedProgramIds ?? []);
+  const byId = new Map(current.programs.map(p => [p.id, p]));
+  return (Array.isArray(recovered?.programs) ? recovered.programs : []).filter(p => {
+    if (!p?.id || deleted.has(p.id)) return false;
+    const stored = byId.get(p.id);
+    return !stored || (p.lastModifiedAt ?? '') > (stored.lastModifiedAt ?? '');
   });
-  const present = new Set(programs.map(p => p.id));
-  basePrograms.forEach(p => {
-    if (p?.id && !present.has(p.id) && !deleted.has(p.id)) { programs.push(p); present.add(p.id); changed = true; }
-  });
-  return changed ? { ...next, programs } : null;
 }
-
-const CURRENT_VERSION = 1;
-const DEFAULT_DATA: TrainingProgramsData = { version: CURRENT_VERSION, programs: [] };
 
 const generateId = () => `prog_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 export function useTrainingPrograms() {
-  const { user } = useAuth();
-  const [data, setData, isLoading] = useSupabaseStore<TrainingProgramsData>({
-    tableName: 'training_programs',
-    legacyKey: 'trainingPrograms',
-    defaultValue: DEFAULT_DATA,
-    keepMissing: mergePrograms,
-  });
-
-  // Internal save helper
-  const saveData = useCallback(async (newData: TrainingProgramsData) => {
-    await setData(newData);
-  }, [setData]);
+  const { user, loading: authLoading } = useAuth();
+  // One row per program, shared by every component of this tab (see programStore.ts)
+  const store = useSyncExternalStore(subscribeProgramStore, getProgramStoreState);
+  useEffect(() => {
+    if (user) void ensureProgramsLoaded(user.id);
+    else if (!authLoading) resetProgramStore();
+  }, [user, authLoading]);
+  const ownStore = !!user && store.userId === user.id;
+  const isLoading = user ? !ownStore || store.status === 'idle' || store.status === 'loading' : authLoading;
+  const data = useMemo<TrainingProgramsData>(() => ({
+    version: 1,
+    programs: ownStore ? store.programs : [],
+    deletedProgramIds: ownStore ? Object.keys(store.deleted) : [],
+  }), [ownStore, store.programs, store.deleted]);
 
   // Get all programs
   const getPrograms = useCallback(() => {
@@ -217,16 +203,15 @@ export function useTrainingPrograms() {
     const now = new Date().toISOString();
 
     if (program.id) {
-      const existingIndex = data.programs.findIndex(p => p.id === program.id);
-      if (existingIndex >= 0) {
+      // The newest stored version (not this render's copy, which can be a save behind)
+      const existing = getProgramStoreState().programs.find(p => p.id === program.id);
+      if (existing) {
         const updated: TrainingProgram = {
-          ...data.programs[existingIndex],
+          ...existing,
           ...program,
           lastModifiedAt: now,
         };
-        const newPrograms = [...data.programs];
-        newPrograms[existingIndex] = updated;
-        await saveData({ ...data, programs: newPrograms });
+        await putPrograms([updated]);
         // Persist summary to plan_memory in the background (non-blocking)
         if (user) savePlanMemory(updated, user.id).catch(() => {});
         // Version history in the background (at most one version per hour; never blocks the save)
@@ -259,12 +244,12 @@ export function useTrainingPrograms() {
       extraSessionState: program.extraSessionState || null,
     };
 
-    await saveData({ ...data, programs: [...data.programs, newProgram] });
+    await putPrograms([newProgram]);
     // Persist summary to plan_memory in the background (non-blocking)
     if (user) savePlanMemory(newProgram, user.id).catch(() => {});
     if (user) void snapshotProgram(newProgram, user.id);
     return newProgram;
-  }, [data, saveData, user]);
+  }, [user]);
 
   // Copy a program
   const copyProgram = useCallback(async (id: string): Promise<TrainingProgram | null> => {
@@ -281,21 +266,21 @@ export function useTrainingPrograms() {
       status: 'draft',
     };
 
-    await saveData({ ...data, programs: [...data.programs, copy] });
+    await putPrograms([copy]);
     return copy;
-  }, [data, saveData]);
+  }, [data]);
 
   // Delete a program
   const deleteProgram = useCallback(async (id: string): Promise<boolean> => {
     const index = data.programs.findIndex(p => p.id === id);
     if (index < 0) return false;
 
-    // Its last state stays in the version history, so a deleted program can be brought back
+    // Its last state stays in the version history (and in its row, marked deleted), so a deleted
+    // program can be brought back
     if (user) void snapshotProgram(data.programs[index], user.id, 'deleted');
-    const newPrograms = data.programs.filter(p => p.id !== id);
-    await saveData({ ...data, programs: newPrograms, deletedProgramIds: [...(data.deletedProgramIds ?? []), id] });
+    await markProgramDeleted(id);
     return true;
-  }, [data, saveData, user]);
+  }, [data, user]);
 
   /**
    * Puts a program back to an earlier version (also a deleted one). The state it has now is kept
@@ -305,16 +290,9 @@ export function useTrainingPrograms() {
     const current = data.programs.find(p => p.id === version.id);
     if (current && user) await snapshotProgram(current, user.id, 'before-restore');
     const restored: TrainingProgram = { ...version, lastModifiedAt: new Date().toISOString() };
-    const programs = current
-      ? data.programs.map(p => (p.id === version.id ? restored : p))
-      : [...data.programs, restored];
-    await saveData({
-      ...data,
-      programs,
-      deletedProgramIds: (data.deletedProgramIds ?? []).filter(id => id !== version.id),
-    });
+    await putPrograms([restored]);
     return restored;
-  }, [data, saveData, user]);
+  }, [data, user]);
 
   /**
    * Before the session is replaced, write the open program's extra wizard state into it.
@@ -501,28 +479,23 @@ export function useTrainingPrograms() {
     seedPrograms: Array<{ id: string; [key: string]: unknown }>,
   ): Promise<void> => {
     const now = new Date().toISOString();
-    const merged = [...data.programs];
-    for (const seed of seedPrograms) {
-      const idx = merged.findIndex(p => p.id === seed.id);
-      if (idx >= 0) {
-        merged[idx] = { ...merged[idx], ...(seed as unknown as TrainingProgram), lastModifiedAt: now };
-      } else {
-        merged.unshift({ ...(seed as unknown as TrainingProgram), createdAt: now, lastModifiedAt: now });
-      }
-    }
-    await saveData({ ...data, programs: merged });
-  }, [data, saveData]);
+    const changed = seedPrograms.map(seed => {
+      const existing = data.programs.find(p => p.id === seed.id);
+      return existing
+        ? { ...existing, ...(seed as unknown as TrainingProgram), lastModifiedAt: now }
+        : { ...(seed as unknown as TrainingProgram), createdAt: now, lastModifiedAt: now };
+    });
+    await putPrograms(changed);
+  }, [data]);
 
   /** Restore programs from a saved/recovered program list: missing ones are added, and of a
-   *  program in both, the newer version wins (see mergePrograms). Returns how many changed. */
+   *  program in both, the newer version wins. Programs deleted on purpose stay deleted (they come
+   *  back under "Deleted programs"). Returns how many changed. */
   const restorePrograms = useCallback(async (recovered: TrainingProgramsData): Promise<number> => {
-    const merged = mergePrograms(recovered, data);
-    if (!merged) return 0;
-    const before = new Map(data.programs.map(p => [p.id, p]));
-    const changedCount = merged.programs.filter(p => before.get(p.id) !== p).length;
-    await saveData(merged);
-    return changedCount;
-  }, [data, saveData]);
+    const changed = programsToRestore(recovered, data);
+    await putPrograms(changed);
+    return changed.length;
+  }, [data]);
 
   // Get programs sorted by last modified
   const getRecentPrograms = useCallback((limit?: number) => {
@@ -534,6 +507,8 @@ export function useTrainingPrograms() {
 
   return {
     programs: data.programs,
+    /** Programs deleted on purpose (kept, marked deleted) */
+    deletedProgramIds: data.deletedProgramIds ?? [],
     isLoading,
     getPrograms,
     getProgram,

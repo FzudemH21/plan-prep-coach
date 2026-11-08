@@ -9,6 +9,7 @@
  */
 import { supabase } from '@/lib/supabase';
 import { updateSupabaseStoreData } from '@/hooks/useSupabaseStore';
+import { updateAllPrograms } from '@/lib/programStore';
 
 /** Browser event fired after a rename so open pages can update what they hold in memory. */
 export const EXERCISE_RENAMED_EVENT = 'ppc:exercise-renamed';
@@ -174,7 +175,7 @@ export async function propagateExerciseRename(exerciseId: string, newName: strin
   // 2. Saved programs, programming templates (all of them, assigned or not) and the session library
   const rename = <T,>(current: T) => renameExerciseInValue(current, exerciseId, newName);
   await Promise.all([
-    updateSupabaseStoreData('training_programs', 'trainingPrograms', rename).catch(err => console.warn('[exerciseRename] programs:', err)),
+    updateAllPrograms(program => rename(program)).catch(err => console.warn('[exerciseRename] programs:', err)),
     updateSupabaseStoreData('programming_templates', 'programTemplates', rename).catch(err => console.warn('[exerciseRename] templates:', err)),
     updateSupabaseStoreData('session_library', 'ppc-session-library', rename).catch(err => console.warn('[exerciseRename] session library:', err)),
   ]);

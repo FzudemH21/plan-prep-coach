@@ -3,7 +3,7 @@ import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { mergePrograms, useTrainingPrograms, type TrainingProgramsData } from '@/hooks/useTrainingPrograms';
+import { programsToRestore, useTrainingPrograms, type TrainingProgramsData } from '@/hooks/useTrainingPrograms';
 import { exportAllData, downloadJson } from '@/lib/dataExport';
 import { getProgramVersion, listDeletedPrograms, type ProgramVersionSummary } from '@/lib/programVersions';
 import { Download, Upload, Loader2, RotateCcw } from 'lucide-react';
@@ -12,8 +12,14 @@ import { Download, Upload, Loader2, RotateCcw } from 'lucide-react';
 function programsFromFile(parsed: unknown): TrainingProgramsData | null {
   const asList = parsed as TrainingProgramsData;
   if (Array.isArray(asList?.programs)) return asList;
-  const rows = (parsed as { tables?: { training_programs?: Array<{ data?: TrainingProgramsData }> } })?.tables?.training_programs;
-  const fromExport = rows?.[0]?.data;
+  const tables = (parsed as { tables?: {
+    training_programs?: Array<{ data?: TrainingProgramsData }>;
+    program_records?: Array<{ data?: TrainingProgramsData['programs'][number]; deleted_at?: string | null }>;
+  } })?.tables;
+  // Export files since 2026-11-08: one row per program
+  const records = (tables?.program_records ?? []).filter(r => r.data?.id && !r.deleted_at).map(r => r.data!);
+  if (records.length > 0) return { version: 1, programs: records };
+  const fromExport = tables?.training_programs?.[0]?.data;
   return Array.isArray(fromExport?.programs) ? fromExport : null;
 }
 
@@ -24,7 +30,7 @@ function programsFromFile(parsed: unknown): TrainingProgramsData | null {
  */
 export default function RestoreProgramsPage() {
   const { user } = useAuth();
-  const { programs, isLoading, restorePrograms, restoreProgramVersion } = useTrainingPrograms();
+  const { programs, deletedProgramIds, isLoading, restorePrograms, restoreProgramVersion } = useTrainingPrograms();
   const { toast } = useToast();
   const [recovered, setRecovered] = useState<TrainingProgramsData | null>(null);
   const [fileError, setFileError] = useState('');
@@ -71,6 +77,7 @@ export default function RestoreProgramsPage() {
   };
 
   const statusOf = (id: string, lastModifiedAt: string) => {
+    if (deletedProgramIds.includes(id)) return 'Deleted on purpose — not restored (see Deleted programs)';
     const stored = programs.find(p => p.id === id);
     if (!stored) return 'Missing — will be added';
     return (lastModifiedAt ?? '') > (stored.lastModifiedAt ?? '')
@@ -104,7 +111,7 @@ export default function RestoreProgramsPage() {
     }
   };
 
-  const changes = recovered ? mergePrograms(recovered, { version: 1, programs }) : null;
+  const changes = recovered ? programsToRestore(recovered, { version: 1, programs, deletedProgramIds }).length > 0 : false;
 
   return (
     <div className="mx-auto max-w-3xl space-y-8 py-6">
