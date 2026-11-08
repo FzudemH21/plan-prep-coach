@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { WizardTabGuard } from "@/components/programs/WizardTabGuard";
 import { DisplayModeProvider } from "@/contexts/DisplayModeContext";
 import { CustomLibrariesProvider } from "@/contexts/CustomLibrariesContext";
 import { WizardDataProvider } from "@/contexts/WizardDataContext";
@@ -180,6 +181,7 @@ function AppRoutes() {
           element={
             <AuthGuard>
               <AppLayout>
+                <WizardTabGuard />
                 <RouteErrorBoundary>
                 <Routes>
                   <Route path="/" element={<HomeGuard />} />

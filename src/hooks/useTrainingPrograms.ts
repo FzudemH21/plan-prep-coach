@@ -3,6 +3,7 @@ import { useSupabaseStore } from './useSupabaseStore';
 import { useAuth } from './useAuth';
 import { savePlanMemory } from '@/lib/planMemory';
 import { snapshotProgram } from '@/lib/programVersions';
+import { bindTabToProgram, programSwitchedElsewhere, ProgramOpenElsewhereError } from '@/lib/wizardTabProgram';
 import { isProgramChatId } from '@/contexts/AIChatContext';
 import { PlanDuration, SmartGoal, SubGoal, Event, TrainableQuality, IntensityLevel } from '@/types/training';
 
@@ -388,6 +389,7 @@ export function useTrainingPrograms() {
     }
 
     localStorage.setItem('activeProgramId', id);
+    bindTabToProgram(id);
 
     // Restore this program's AI conversation so initChatsFromLocalStorage() picks it up.
     // Global chats (Parameter Database, Toolbox, …) stay as they are — older programs also
@@ -451,6 +453,9 @@ export function useTrainingPrograms() {
 
   // Save current session as a new program or update existing
   const saveCurrentSession = useCallback(async (overrideData?: Partial<TrainingProgram>): Promise<TrainingProgram> => {
+    // Another tab opened a different program: the wizard state in browser storage is now that
+    // program's (mixed with this tab's), and saving would write it into the wrong program
+    if (programSwitchedElsewhere()) throw new ProgramOpenElsewhereError();
     const activeProgramId = localStorage.getItem('activeProgramId');
     const sessionData = collectSessionData();
 
@@ -462,6 +467,7 @@ export function useTrainingPrograms() {
 
     const saved = await saveProgram(programData);
     localStorage.setItem('activeProgramId', saved.id);
+    bindTabToProgram(saved.id);
     return saved;
   }, [collectSessionData, saveProgram]);
 
@@ -476,6 +482,7 @@ export function useTrainingPrograms() {
       'supersets', 'methodAllocations', 'macrocycleStep', 'mesocycleStep', 'microcycleStep', 'activeProgramId',
     ];
     staticKeys.forEach(key => localStorage.removeItem(key));
+    bindTabToProgram(null);
     // Drop the program's AI conversation but keep global chats (Parameter Database, Toolbox, …)
     localStorage.setItem('aiConversations', JSON.stringify(filterChats(readChatsFromLS(), false)));
   }, [flushExtraStateToActiveProgram]);

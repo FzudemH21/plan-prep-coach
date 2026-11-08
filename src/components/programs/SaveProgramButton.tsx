@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Save, Check } from "lucide-react";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useToast } from "@/hooks/use-toast";
+import { ProgramOpenElsewhereError } from "@/lib/wizardTabProgram";
 
 interface SaveProgramButtonProps {
   variant?: "default" | "ghost" | "outline";
@@ -43,7 +44,7 @@ export function SaveProgramButton({
     } catch (error) {
       toast({
         title: "Error saving program",
-        description: "There was a problem saving your program. Please try again.",
+        description: error instanceof ProgramOpenElsewhereError ? error.message : "There was a problem saving your program. Please try again.",
         variant: "destructive",
       });
     } finally {
