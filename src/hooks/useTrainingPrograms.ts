@@ -87,6 +87,14 @@ const EXTRA_SESSION_KEYS = [
 ] as const;
 
 /**
+ * Settings that used to be one per browser (never stored in Supabase) and are now saved with the
+ * program: which parameters each method shows in the periodization table, and the order of the
+ * method categories. A program saved before this has none — it keeps the current settings (so
+ * nothing set up disappears) and stores them with its next save. Never cleared.
+ */
+const CARRY_OVER_KEYS = ['methodParameterVisibility', 'methodCategoryOrder'] as const;
+
+/**
  * Per-session keys ({prefix}{mesocycleId}_{yyyy-MM-dd}_{sessionIndex}): session comments +
  * parameter visibility, session intensities, the session sheet's saved sections. Saved with the
  * program inside extraSessionState, restored on load, cleared on switch.
@@ -95,11 +103,11 @@ const SESSION_KEY_PREFIXES = ['workoutSessions_', 'sessionIntensity_', 'workoutS
 // Keys scoped to an athlete-calendar assignment ("{prefix}@{assignmentId}@…") are not the program's
 const isSessionKey = (key: string) => SESSION_KEY_PREFIXES.some(p => key.startsWith(p) && !key.startsWith(`${p}@`));
 // Legacy prefixes that are only ever cleared
-const LEGACY_SESSION_KEY_PREFIXES = ['sessionIntensities_', 'sessionNames_', 'exercises_'];
+const LEGACY_SESSION_KEY_PREFIXES = ['sessionIntensities_', 'sessionNames_', 'exercises_', 'sessionComments_'];
 
 const readExtraSessionState = (): Record<string, string> => {
   const state: Record<string, string> = {};
-  EXTRA_SESSION_KEYS.forEach(key => {
+  [...EXTRA_SESSION_KEYS, ...CARRY_OVER_KEYS].forEach(key => {
     const value = localStorage.getItem(key);
     if (value !== null) state[key] = value;
   });
@@ -362,7 +370,7 @@ export function useTrainingPrograms() {
         stale.forEach(key => localStorage.removeItem(key));
       }
       Object.entries(program.extraSessionState ?? {}).forEach(([key, value]) => {
-        if ((EXTRA_SESSION_KEYS as readonly string[]).includes(key) || isSessionKey(key)) localStorage.setItem(key, value);
+        if ((EXTRA_SESSION_KEYS as readonly string[]).includes(key) || (CARRY_OVER_KEYS as readonly string[]).includes(key) || isSessionKey(key)) localStorage.setItem(key, value);
       });
     }
 
