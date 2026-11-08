@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -21,6 +21,16 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -250,6 +260,11 @@ export function AthleteGroupSidebar({
   const [newGroupName, setNewGroupName] = useState('');
   const [editingGroup, setEditingGroup] = useState<AthleteGroup | null>(null);
   const [editName, setEditName] = useState('');
+  const [groupPendingDelete, setGroupPendingDelete] = useState<AthleteGroup | null>(null);
+  // Still shown while the dialog closes (its text would otherwise blank out during the animation)
+  const lastGroupPendingDelete = useRef<AthleteGroup | null>(null);
+  if (groupPendingDelete) lastGroupPendingDelete.current = groupPendingDelete;
+  const shownGroupPendingDelete = groupPendingDelete ?? lastGroupPendingDelete.current;
 
   const ungroupedAthletes = getAthletesWithoutGroup();
 
@@ -442,7 +457,7 @@ export function AthleteGroupSidebar({
                                 <Pencil className="h-4 w-4 mr-2" />
                                 Rename
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => onDeleteGroup(group.id)} className="text-destructive">
+                              <DropdownMenuItem onClick={() => setGroupPendingDelete(group)} className="text-destructive">
                                 <Trash2 className="h-4 w-4 mr-2" />
                                 Delete
                               </DropdownMenuItem>
@@ -521,6 +536,32 @@ export function AthleteGroupSidebar({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Delete Group confirmation ── */}
+      <AlertDialog open={!!groupPendingDelete} onOpenChange={open => { if (!open) setGroupPendingDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete group "{shownGroupPendingDelete?.name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {(() => {
+                const count = shownGroupPendingDelete ? getAthletesByGroup(shownGroupPendingDelete.id).length : 0;
+                return count > 0
+                  ? `The ${count} athlete${count === 1 ? '' : 's'} in it stay — only the group is removed.`
+                  : 'The group is empty.';
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { if (groupPendingDelete) onDeleteGroup(groupPendingDelete.id); setGroupPendingDelete(null); }}
+            >
+              Delete group
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
