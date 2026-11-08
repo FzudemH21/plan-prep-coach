@@ -73,7 +73,8 @@ import {
   ParameterValue,
 } from '@/types/athlete';
 import { ParameterV2 } from '@/types/parametersV2';
-import { hasCustomMeasures, limbSymmetryIndex, measureById, measureRef, parameterMeasures } from '@/utils/parameterMeasures';
+import { hasCustomMeasures, limbSymmetryIndex, measureById, measureRef, parameterMeasures, parseMeasureRef } from '@/utils/parameterMeasures';
+import { toParameterId } from '@/utils/parameterRef';
 import { allValuesOf, valuesOfMeasure } from '@/utils/goalMeasures';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
@@ -337,6 +338,30 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
     return () => { cancelled = true; };
   }, [athlete.id, connection]);
 
+  // A test result the athlete reported for a parameter that isn't tracked for them yet: track it,
+  // so the result shows here (it used to stay invisible until the coach added the parameter).
+  // Daily check-in answers belong to Monitoring and are left out.
+  const trackingStarted = useRef(new Set<string>());
+  useEffect(() => {
+    if (athleteData.isLoading || selfReportedMap.size === 0 || athleticismParameters.length === 0) return;
+    const tracked = new Set(athletePerformanceParams.map(pp => pp.athleticismParameterId));
+    const toTrack = new Set<string>();
+    selfReportedMap.forEach((_values, rawRef) => {
+      const ref = parseMeasureRef(rawRef);
+      if (ref.checkin) return;
+      const paramId = toParameterId(ref.parameterId);
+      const key = `${athlete.id}:${paramId}`;
+      if (tracked.has(paramId) || trackingStarted.current.has(key)) return;
+      if (!athleticismParameters.some(p => p.id === paramId)) return;
+      toTrack.add(paramId);
+    });
+    toTrack.forEach(paramId => {
+      const key = `${athlete.id}:${paramId}`;
+      trackingStarted.current.add(key);
+      athleteData.addPerformanceParameter(athlete.id, paramId).catch(() => { trackingStarted.current.delete(key); });
+    });
+  }, [athleteData, athlete.id, selfReportedMap, athleticismParameters, athletePerformanceParams]);
+
   // ── Metrics snapshot — push to athlete_connections.profile_data on mount and on every change ──
   // Uses connection?.id (stable string) instead of connection (object) to avoid re-triggering
   // after updateMetricsSnapshot updates the local connection object reference.
@@ -531,9 +556,15 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
     setEditingValueId(null);
   }, [resolvedSelected, editValue, editDate, editNote, athleteData]);
 
-  // Selecting another metric ends an open edit
+  // Selecting another metric (or another measure / side of it) ends an open edit, and a value or
+  // note typed but not added is not carried over — it would land on the wrong metric (82 cm became
+  // 82 % body fat). The date stays.
   const selectedKey = resolvedSelected ? (resolvedSelected.kind === 'biometric' ? resolvedSelected.ab.id : resolvedSelected.pp.id) : null;
-  useEffect(() => { setEditingValueId(null); }, [selectedKey]);
+  useEffect(() => {
+    setEditingValueId(null);
+    setNewValue('');
+    setNewNote('');
+  }, [selectedKey, measureView.measureId, measureView.side]);
 
   // Newly added metric: cursor straight into "Value"
   useEffect(() => {
