@@ -30,9 +30,12 @@ const LEGACY_TABLE = 'training_programs';
 const legacySeenKey = (userId: string) => `programRecordsLegacySeen_${userId}`;
 const LOAD_ATTEMPTS = 3;
 /** Programs fetched at the same time while loading (each is one request) */
-const PARALLEL_FETCHES = 4;
+const PARALLEL_FETCHES = 12;
 
 export type ProgramStoreStatus = 'idle' | 'loading' | 'loaded' | 'failed';
+
+/** What the program library shows — available before the full programs have loaded */
+export type ProgramSummary = Pick<TrainingProgram, 'id' | 'name' | 'athleteId' | 'primaryGoal' | 'duration' | 'lastModifiedAt'>;
 
 export interface ProgramStoreState {
   userId: string | null;
@@ -42,6 +45,8 @@ export interface ProgramStoreState {
   programs: TrainingProgram[];
   /** Programs deleted on purpose: id → when */
   deleted: Record<string, string>;
+  /** While loading: the list to show meanwhile (see loadSummaries). Never used for saving. */
+  summaries: ProgramSummary[];
 }
 
 /** Thrown by a save before the programs were loaded — nothing was saved */
@@ -58,7 +63,8 @@ interface LegacyData {
   deletedProgramIds?: string[];
 }
 
-let state: ProgramStoreState = { userId: null, status: 'idle', mode: 'rows', programs: [], deleted: {} };
+const EMPTY: Omit<ProgramStoreState, 'userId'> = { status: 'idle', mode: 'rows', programs: [], deleted: {}, summaries: [] };
+let state: ProgramStoreState = { userId: null, ...EMPTY };
 const listeners = new Set<() => void>();
 let loadPromise: Promise<void> | null = null;
 
@@ -220,6 +226,29 @@ async function loadLegacyMode(userId: string) {
   });
 }
 
+/**
+ * The library's columns of every program (a few bytes each, picked out by the server), so the list
+ * shows at once while the full programs load. Only for showing: never saved, and ignored when it
+ * fails or arrives after the full load.
+ */
+async function loadSummaries(userId: string) {
+  type Row = Omit<ProgramSummary, 'duration'> & { duration: ProgramSummary['duration'] | null; deleted_at: string | null };
+  const { data, error } = await supabase.from(TABLE)
+    .select('id, deleted_at, name:data->>name, athleteId:data->>athleteId, primaryGoal:data->>primaryGoal, duration:data->duration, lastModifiedAt:data->>lastModifiedAt')
+    .eq('coach_user_id', userId);
+  if (error) console.warn('[programStore] summaries not loaded (the list shows once the programs are loaded):', error);
+  if (error || !Array.isArray(data) || state.userId !== userId || state.status !== 'loading') return;
+  const summaries = (data as unknown as Row[]).filter(r => r.id && !r.deleted_at).map(r => ({
+    id: r.id,
+    name: r.name ?? 'Untitled Program',
+    athleteId: r.athleteId ?? null,
+    primaryGoal: r.primaryGoal ?? '',
+    duration: r.duration ?? { startDate: '', endDate: '', weeks: 0 },
+    lastModifiedAt: r.lastModifiedAt ?? '',
+  }));
+  setState({ summaries });
+}
+
 async function loadRowsMode(userId: string): Promise<boolean> {
   type Meta = { id: string; last_modified_at: string | null; deleted_at: string | null };
   let metas: Meta[];
@@ -274,19 +303,20 @@ async function loadRowsMode(userId: string): Promise<boolean> {
 
   // The old browser copy of the whole list doesn't fit any more and isn't used
   try { localStorage.removeItem('trainingPrograms_sb_cache'); } catch { /* ignore */ }
-  setState({ mode: 'rows', status: 'loaded', programs: [...byId.values()], deleted });
+  setState({ mode: 'rows', status: 'loaded', programs: [...byId.values()], deleted, summaries: [] });
   return true;
 }
 
 /** Loads the coach's programs once per tab (again after a failed load) */
 export function ensureProgramsLoaded(userId: string): Promise<void> {
   if (state.userId !== userId) {
-    state = { userId, status: 'idle', mode: 'rows', programs: [], deleted: {} };
+    state = { userId, ...EMPTY };
     loadPromise = null;
   }
   if (state.status === 'loaded') return Promise.resolve();
   if (loadPromise) return loadPromise;
   setState({ status: 'loading' });
+  void loadSummaries(userId).catch(() => { /* only for showing */ });
   loadPromise = (async () => {
     try {
       const rows = await loadRowsMode(userId);
@@ -304,7 +334,7 @@ export function ensureProgramsLoaded(userId: string): Promise<void> {
 
 /** Logged out: forget the programs */
 export function resetProgramStore() {
-  state = { userId: null, status: 'idle', mode: 'rows', programs: [], deleted: {} };
+  state = { userId: null, ...EMPTY };
   loadPromise = null;
   listeners.forEach(fn => fn());
 }

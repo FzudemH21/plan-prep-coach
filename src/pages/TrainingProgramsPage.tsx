@@ -42,11 +42,13 @@ import {
   Target,
   FileText,
   History,
-  ShieldCheck
+  ShieldCheck,
+  Loader2
 } from "lucide-react";
 import { ExportPDFButton } from "@/components/pdf/ExportPDFButton";
 import { ProgramVersionsDialog } from "@/components/programs/ProgramVersionsDialog";
 import { useTrainingPrograms, TrainingProgram } from "@/hooks/useTrainingPrograms";
+import type { ProgramSummary } from "@/lib/programStore";
 import { getAthleteDisplayName } from "@/types/athlete";
 import { useAthletes } from "@/hooks/useAthletes";
 import { useToast } from "@/hooks/use-toast";
@@ -57,7 +59,10 @@ import { useAIChatContext } from "@/contexts/AIChatContext";
 export default function TrainingProgramsPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { programs, isLoading, copyProgram, deleteProgram, loadProgramIntoSession, clearSession } = useTrainingPrograms();
+  const { programs, programSummaries, isLoading, copyProgram, deleteProgram, loadProgramIntoSession, clearSession } = useTrainingPrograms();
+  // While the full programs load, the list shows their summaries; opening and the menu wait for the full version
+  const rows: ProgramSummary[] = isLoading ? programSummaries : programs;
+  const fullProgram = (id: string) => (isLoading ? undefined : programs.find(p => p.id === id));
   const { athletes } = useAthletes();
   const { loadWizardSession, resetWizardSession } = useWizardData();
   const aiChat = useAIChatContext();
@@ -77,7 +82,7 @@ export default function TrainingProgramsPage() {
   };
 
   // Filter programs by search query
-  const filteredPrograms = programs.filter(program => {
+  const filteredPrograms = rows.filter(program => {
     const query = searchQuery.toLowerCase();
     const athleteName = getAthleteName(program.athleteId).toLowerCase();
     return (
@@ -130,8 +135,8 @@ export default function TrainingProgramsPage() {
     navigate('/macrocycle');
   };
 
-  const handleCopyProgram = (program: TrainingProgram) => {
-    const copied = copyProgram(program.id);
+  const handleCopyProgram = async (program: TrainingProgram) => {
+    const copied = await copyProgram(program.id).catch(() => null);
     if (copied) {
       toast({
         title: "Program copied",
@@ -157,7 +162,7 @@ export default function TrainingProgramsPage() {
     setDeleteDialogOpen(false);
   };
 
-const formatDuration = (program: TrainingProgram) => {
+const formatDuration = (program: ProgramSummary) => {
     const weeks = program.duration.weeks || 0;
     
     // Calculate total days from dates if available
@@ -187,7 +192,7 @@ const formatDuration = (program: TrainingProgram) => {
     }
   };
 
-  if (isLoading) {
+  if (isLoading && rows.length === 0) {
     return (
       <div className="w-full max-w-none p-6">
         <div className="text-center py-12 text-muted-foreground">
@@ -230,8 +235,9 @@ const formatDuration = (program: TrainingProgram) => {
             className="pl-10"
           />
         </div>
-        <div className="text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           {sortedPrograms.length} program{sortedPrograms.length !== 1 ? 's' : ''}
+          {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-label="Loading programs" />}
         </div>
       </div>
 
@@ -250,33 +256,36 @@ const formatDuration = (program: TrainingProgram) => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedPrograms.map((program) => (
-                <TableRow 
-                  key={program.id} 
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => handleEditProgram(program)}
+              {sortedPrograms.map((row) => {
+                const program = fullProgram(row.id);
+                return (
+                <TableRow
+                  key={row.id}
+                  className={program ? "cursor-pointer hover:bg-muted/50" : "cursor-progress"}
+                  onClick={() => { if (program) handleEditProgram(program); }}
                 >
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-muted-foreground" />
-                      {program.name}
+                      {row.name}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <User className="h-4 w-4 text-muted-foreground" />
-                      {getAthleteName(program.athleteId)}
+                      {getAthleteName(row.athleteId)}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2 max-w-[200px]">
                       <Target className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <span className="truncate">{program.primaryGoal || "—"}</span>
+                      <span className="truncate">{row.primaryGoal || "—"}</span>
                     </div>
                   </TableCell>
-                  <TableCell>{formatDuration(program)}</TableCell>
-                  <TableCell>{formatLastModified(program.lastModifiedAt)}</TableCell>
+                  <TableCell>{formatDuration(row)}</TableCell>
+                  <TableCell>{formatLastModified(row.lastModifiedAt)}</TableCell>
                   <TableCell>
+                    {program ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -310,9 +319,11 @@ const formatDuration = (program: TrainingProgram) => {
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                    ) : <div className="h-8 w-8" />}
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </Card>

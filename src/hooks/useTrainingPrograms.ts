@@ -507,6 +507,8 @@ export function useTrainingPrograms() {
 
   return {
     programs: data.programs,
+    /** While loading: the library's columns of every program, to show meanwhile (not for saving) */
+    programSummaries: ownStore && isLoading ? store.summaries : [],
     /** Programs deleted on purpose (kept, marked deleted) */
     deletedProgramIds: data.deletedProgramIds ?? [],
     isLoading,
