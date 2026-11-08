@@ -154,12 +154,8 @@ export async function savePlanMemory(
   const athleteId = program.macrocycleData?.selectedAthleteId ?? program.athleteId;
   if (athleteId) {
     try {
-      const { data: athleteRow } = await supabase
-        .from('athlete_database')
-        .select('data')
-        .eq('user_id', coachId)
-        .maybeSingle();
-      const athletes = (athleteRow?.data as { athletes?: Array<{ id: string; sport?: string | null; team?: string | null }> } | null)?.athletes ?? [];
+      const { loadAthletesForCoach } = await import('@/hooks/useAthletes');
+      const athletes = await loadAthletesForCoach(coachId);
       const athlete = athletes.find((a) => a.id === athleteId);
       if (athlete) {
         athleteSport = athlete.sport ?? null;

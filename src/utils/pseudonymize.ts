@@ -81,8 +81,9 @@ export async function ensureAthleteNamesLoaded(): Promise<void> {
     loading = (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase.from('athlete_database').select('data').eq('user_id', user.id).maybeSingle();
-      const athletes = ((data?.data as { athletes?: NameEntry[] } | null)?.athletes) ?? [];
+      // The athlete store (loaded once per tab; imported here to avoid an import cycle)
+      const { loadAthletesForCoach } = await import('@/hooks/useAthletes');
+      const athletes: NameEntry[] = await loadAthletesForCoach(user.id);
       if (!entries) setAthleteNamesForAI(athletes);
     })().finally(() => { loading = null; });
   }

@@ -9,6 +9,8 @@ import { supabase } from '@/lib/supabase';
 const TABLES = [
   // Programs: one row each (since 2026-11-08); the old shared row is kept as a backup
   'program_records',
+  // Athletes: one row each (since 2026-11-08); the old shared row is kept as a backup
+  'athlete_records',
   // One row per coach holding a whole store
   'training_programs', 'athlete_database', 'custom_libraries', 'toolbox_data', 'parameters_database',
   'programming_templates', 'session_library', 'calendar_events',

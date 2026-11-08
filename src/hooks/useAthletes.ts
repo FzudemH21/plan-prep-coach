@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { mainSeries } from '@/utils/goalMeasures';
-import { useSupabaseStore } from './useSupabaseStore';
+import { createRecordStore, useRecordStore } from '@/lib/recordStore';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { deleteAthleteCloudData, removeAssignmentScopedLocalData, type AthleteDeletionResult } from '@/utils/athleteDataDeletion';
@@ -133,14 +133,96 @@ function ensureDefaultBiometrics(defs: BiometricDefinition[]): BiometricDefiniti
   return result;
 }
 
+// ── Storage: one row per athlete (table athlete_records) ────────────────────
+// Each athlete's row holds the athlete with their measurements and calendar assignments; one more
+// row ("_shared") holds the groups, the old body-metric lists and anything not tied to an athlete.
+// A save writes only the rows that changed, so it can't affect any other athlete (see recordStore).
+
+const SHARED_RECORD = '_shared';
+
+interface AthleteRecord {
+  athlete: Athlete;
+  performanceParameters: AthletePerformanceParameter[];
+  calendarAssignments: AthleteCalendarAssignment[];
+  biometrics: AthleteBiometric[];
+}
+
+interface SharedRecord {
+  groups: AthleteGroup[];
+  biometricDefinitions: BiometricDefinition[];
+  biometricsMigration?: AthleteDatabase['biometricsMigration'];
+  /** Entries whose athlete no longer exists (kept, not lost) */
+  orphanPerformanceParameters: AthletePerformanceParameter[];
+  orphanCalendarAssignments: AthleteCalendarAssignment[];
+  orphanBiometrics: AthleteBiometric[];
+}
+
+function splitAthleteDatabase(db: AthleteDatabase): Record<string, unknown> {
+  const ids = new Set(db.athletes.map(a => a.id));
+  const records: Record<string, unknown> = {};
+  db.athletes.forEach(athlete => {
+    const record: AthleteRecord = {
+      athlete,
+      performanceParameters: db.athletePerformanceParameters.filter(pp => pp.athleteId === athlete.id),
+      calendarAssignments: db.calendarAssignments.filter(ca => ca.athleteId === athlete.id),
+      biometrics: db.athleteBiometrics.filter(ab => ab.athleteId === athlete.id),
+    };
+    records[athlete.id] = record;
+  });
+  const shared: SharedRecord = {
+    groups: db.groups,
+    biometricDefinitions: db.biometricDefinitions,
+    ...(db.biometricsMigration ? { biometricsMigration: db.biometricsMigration } : {}),
+    orphanPerformanceParameters: db.athletePerformanceParameters.filter(pp => !ids.has(pp.athleteId)),
+    orphanCalendarAssignments: db.calendarAssignments.filter(ca => !ids.has(ca.athleteId)),
+    orphanBiometrics: db.athleteBiometrics.filter(ab => !ids.has(ab.athleteId)),
+  };
+  records[SHARED_RECORD] = shared;
+  return records;
+}
+
+function joinAthleteDatabase(records: Record<string, unknown>): AthleteDatabase {
+  const shared = records[SHARED_RECORD] as SharedRecord | undefined;
+  const athleteRecords = Object.entries(records)
+    .filter(([id, r]) => id !== SHARED_RECORD && (r as AthleteRecord)?.athlete?.id)
+    .map(([, r]) => r as AthleteRecord)
+    // The order they were created in (as in the old single list)
+    .sort((a, b) => (a.athlete.createdAt ?? '').localeCompare(b.athlete.createdAt ?? '') || a.athlete.id.localeCompare(b.athlete.id));
+  const byCreated = <X extends { createdAt?: string }>(list: X[]) => [...list].sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+  return migrateData({
+    groups: shared?.groups ?? [],
+    athletes: athleteRecords.map(r => r.athlete),
+    biometricDefinitions: shared?.biometricDefinitions ?? [],
+    athleteBiometrics: [...athleteRecords.flatMap(r => r.biometrics ?? []), ...(shared?.orphanBiometrics ?? [])],
+    athletePerformanceParameters: [...athleteRecords.flatMap(r => r.performanceParameters ?? []), ...(shared?.orphanPerformanceParameters ?? [])],
+    calendarAssignments: byCreated([...athleteRecords.flatMap(r => r.calendarAssignments ?? []), ...(shared?.orphanCalendarAssignments ?? [])]),
+    ...(shared?.biometricsMigration ? { biometricsMigration: shared.biometricsMigration } : {}),
+  });
+}
+
+export const athleteStore = createRecordStore<AthleteDatabase>({
+  table: 'athlete_records',
+  legacyTable: 'athlete_database',
+  label: 'athlete data',
+  defaultValue: getInitialData,
+  migrate: raw => migrateData(raw as LegacyAthleteDatabase | AthleteDatabase),
+  split: splitAthleteDatabase,
+  join: joinAthleteDatabase,
+  // Only deleting an athlete removes a row — one per save
+  guardedPrefix: id => id !== SHARED_RECORD,
+  maxRemovalsPerSave: 1,
+});
+
+/** The coach's athletes, loaded if needed (for code outside components) */
+export async function loadAthletesForCoach(userId: string): Promise<Athlete[]> {
+  await athleteStore.ensureLoaded(userId);
+  const state = athleteStore.getState();
+  return state.status === 'loaded' ? state.data.athletes : [];
+}
+
 export function useAthletes() {
   const { user } = useAuth();
-  const [rawData, setRawData, isLoading] = useSupabaseStore<AthleteDatabase | LegacyAthleteDatabase>({
-    tableName: 'athlete_database',
-    legacyKey: 'athlete-database',
-    defaultValue: getInitialData(),
-    migrate: (raw) => migrateData(raw as LegacyAthleteDatabase | AthleteDatabase),
-  });
+  const [rawData, setRawData, isLoading] = useRecordStore(athleteStore);
 
   const data = useMemo(() => migrateData(rawData), [rawData]);
 
@@ -153,13 +235,10 @@ export function useAthletes() {
   // Changes build on the latest data, not on the data of the last render: two changes in a row
   // (e.g. create a biometric, then add it to the athlete) used to both start from the same old
   // state, so the second overwrote the first.
-  const latestRawRef = useRef(rawData);
-  latestRawRef.current = rawData;
+  // (the store always holds the latest data, also right after a save of another component)
   const setData = useCallback(
     async (updater: (prev: AthleteDatabase) => AthleteDatabase) => {
-      const next = updater(migrateData(latestRawRef.current));
-      latestRawRef.current = next;
-      await setRawData(next);
+      await setRawData(updater(migrateData(athleteStore.getState().data)));
     },
     [setRawData],
   );
