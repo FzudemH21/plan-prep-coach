@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, X, UserPlus, Dumbbell, BedDouble, Heart } from 'lucide-react';
+import { Search, X, UserPlus, Dumbbell, BedDouble, Heart, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useAthletes } from '@/hooks/useAthletes';
@@ -8,6 +8,7 @@ import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { supabase } from '@/lib/supabase';
 import { wellnessComposite, type AthleteCheckin } from '@/hooks/useAthleteCheckins';
 import { DEFAULT_MONITORING_CONFIG } from '@/types/athlete';
+import { adherenceByDay, plannedSessionId, type AdherenceLogRow } from '@/utils/adherence';
 import { useTranslation } from 'react-i18next';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -81,8 +82,8 @@ export default function CoachMobileAthletesPage() {
   // ── check-ins: today only for wellness dot + illness/pain flags ──────────
   // connectionId → today's checkin
   const [checkinMap, setCheckinMap] = useState<Map<string, AthleteCheckin>>(new Map());
-  // connectionId → first session name | null (rest day)
-  const [sessionMap, setSessionMap] = useState<Map<string, string | null>>(new Map());
+  // connectionId → today's sessions, each finished or not (empty: rest day)
+  const [sessionMap, setSessionMap] = useState<Map<string, Array<{ name: string; done: boolean }>>>(new Map());
 
   useEffect(() => {
     const connectedIds = connections.filter(c => c.connectedAt).map(c => c.id);
@@ -101,23 +102,32 @@ export default function CoachMobileAthletesPage() {
         setCheckinMap(map);
       });
 
-    supabase
-      .from('athlete_schedule')
-      .select('athlete_connection_id, sessions')
-      .eq('date', today)
-      .in('athlete_connection_id', connectedIds)
-      .then(({ data }) => {
-        const map = new Map<string, string | null>();
-        for (const row of (data ?? []) as Record<string, unknown>[]) {
-          const sessions = (row.sessions as Array<{ name?: string }>) ?? [];
-          const name = sessions.length > 0 ? (sessions[0].name || 'Session') : null;
-          map.set(row.athlete_connection_id as string, name);
-          if (sessions.length > 1) {
-            map.set(row.athlete_connection_id as string, `${sessions.length} sessions`);
-          }
-        }
-        setSessionMap(map);
-      });
+    void Promise.all([
+      supabase
+        .from('athlete_schedule')
+        .select('athlete_connection_id, date, sessions')
+        .eq('date', today)
+        .in('athlete_connection_id', connectedIds),
+      supabase
+        .from('athlete_session_logs')
+        .select('athlete_connection_id, date, session_id, completed_at')
+        .eq('date', today)
+        .in('athlete_connection_id', connectedIds)
+        .not('completed_at', 'is', null),
+    ]).then(([scheduleRes, logsRes]) => {
+      const logs = (logsRes.data ?? []) as Array<AdherenceLogRow & { athlete_connection_id: string }>;
+      const map = new Map<string, Array<{ name: string; done: boolean }>>();
+      for (const row of (scheduleRes.data ?? []) as Array<{ athlete_connection_id: string; date: string; sessions: unknown[] | null }>) {
+        const sessions = (row.sessions ?? []) as Array<{ name?: string }>;
+        const done = adherenceByDay([row], logs.filter(l => l.athlete_connection_id === row.athlete_connection_id), today)
+          .get(row.date)?.doneIds;
+        map.set(row.athlete_connection_id, sessions.map((s, i) => ({
+          name: s.name || 'Session',
+          done: done?.has(plannedSessionId(s, row.date, i)) ?? false,
+        })));
+      }
+      setSessionMap(map);
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connections.length, today]);
 
@@ -234,9 +244,9 @@ export default function CoachMobileAthletesPage() {
             const showIllness  = isConnected && hasOstrc && (checkin?.hasIllness ?? false);
             const showPain     = isConnected && hasOstrc && (checkin?.hasPain ?? false);
 
-            // Today's session
-            const sessionName = conn ? sessionMap.get(conn.id) : undefined;
-            const hasSession  = sessionName !== undefined && sessionName !== null;
+            // Today's sessions
+            const daySessions = (conn ? sessionMap.get(conn.id) : undefined) ?? [];
+            const hasSession  = daySessions.length > 0;
 
             return (
               <button
@@ -267,13 +277,20 @@ export default function CoachMobileAthletesPage() {
                     )}
                   </div>
 
+                  {hasSession ? (
+                    <div className="mt-0.5 space-y-0.5">
+                      {daySessions.map((s, i) => (
+                        <div key={i} className="flex items-center gap-1.5">
+                          {s.done
+                            ? <Check className="h-3 w-3 text-emerald-600 shrink-0" aria-label="Done" />
+                            : <Dumbbell className="h-3 w-3 text-primary shrink-0" />}
+                          <span className={cn('text-xs truncate', s.done ? 'text-emerald-700' : 'text-muted-foreground')}>{s.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    {hasSession ? (
-                      <>
-                        <Dumbbell className="h-3 w-3 text-primary shrink-0" />
-                        <span className="text-xs text-muted-foreground truncate">{sessionName}</span>
-                      </>
-                    ) : isConnected ? (
+                    {isConnected ? (
                       <>
                         <BedDouble className="h-3 w-3 text-muted-foreground/50 shrink-0" />
                         <span className="text-xs text-muted-foreground/50">{t('coachMobile.athletes.restDay')}</span>
@@ -284,6 +301,7 @@ export default function CoachMobileAthletesPage() {
                       </span>
                     )}
                   </div>
+                  )}
                 </div>
 
                 {/* Right side: wellness value */}

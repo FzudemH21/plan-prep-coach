@@ -1251,10 +1251,6 @@ export default function CoachMobileAthleteProfilePage() {
                   const isExpanded = expandedMetricId === pid;
                   const isToday = metric?.recordedAt === today;
                   const isScale = block.config.scaleMin !== undefined && block.config.scaleMax !== undefined;
-                  const shownValue = (v: string) => (isScale ? `${v}/${block.config.scaleMax}` : v);
-                  const displayValue = sides && sideMetrics
-                    ? (metric ? sides.map((s, i) => `${s} ${sideMetrics[i] ? shownValue(sideMetrics[i]!.value) : '–'}`).join(' · ') : '—')
-                    : metric ? shownValue(metric.value) : '—';
 
                   return (
                     <div
@@ -1262,28 +1258,34 @@ export default function CoachMobileAthleteProfilePage() {
                       className="rounded-xl border bg-card p-4 space-y-3 cursor-pointer active:opacity-80"
                       onClick={() => setExpandedMetricId(isExpanded ? null : pid)}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="text-xs text-muted-foreground font-medium">
-                            {block.config.label || block.config.parameterName}
-                          </p>
-                          {isScale && (
-                            <p className="text-[10px] text-muted-foreground/60">
-                              {t('coachMobile.athleteProfile.scale')} · {block.config.scaleMin}–{block.config.scaleMax}
-                            </p>
+                      {/* The question first, readable; the answer below it */}
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium leading-snug">
+                          {block.config.label || block.config.parameterName}
+                        </p>
+                        <div className="flex items-end justify-between gap-3">
+                          {!metric ? (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          ) : (
+                            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                              {(sides ?? [null]).map((s, i) => {
+                                const m = sides ? sideMetrics?.[i] : metric;
+                                return (
+                                  <span key={s ?? 'value'} className="inline-flex items-baseline gap-1">
+                                    {s && <span className="text-xs font-medium text-muted-foreground">{s}</span>}
+                                    <span className="text-lg font-semibold tabular-nums leading-none">{m ? m.value : '–'}</span>
+                                    {m && (isScale
+                                      ? <span className="text-xs text-muted-foreground">/{block.config.scaleMax}</span>
+                                      : block.config.parameterUnit && <span className="text-xs text-muted-foreground">{block.config.parameterUnit}</span>)}
+                                  </span>
+                                );
+                              })}
+                            </div>
                           )}
-                          {!isScale && block.config.parameterUnit && (
-                            <p className="text-[10px] text-muted-foreground/60">{block.config.parameterUnit}</p>
-                          )}
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className={cn('text-2xl font-bold leading-none', metric ? '' : 'text-muted-foreground')}>
-                            {displayValue}
-                          </p>
                           {metric && !isToday && (
-                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                            <span className="shrink-0 text-xs text-muted-foreground">
                               {fmtMonitoringDate(metric.recordedAt, today)}
-                            </p>
+                            </span>
                           )}
                         </div>
                       </div>
