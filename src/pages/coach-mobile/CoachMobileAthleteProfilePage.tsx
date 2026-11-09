@@ -4,7 +4,7 @@ import { metricRefOf, monitoringRefsOf, monitoringSideOf } from '@/utils/paramet
 const metricSeriesKey = (ref: string, side?: 'L' | 'R') => (side ? `${ref}::${side}` : ref);
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, BookOpen, Check, GripVertical, Trash2, MessageCircle, Trophy, Calendar, ClipboardCheck, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, BookOpen, Check, GripVertical, Trash2, MessageCircle, Trophy, Calendar, ClipboardCheck, Loader2, ArrowUp, ArrowDown } from 'lucide-react';
 import { CoachAthleteProgressTab } from '@/components/coach-mobile/CoachAthleteProgressTab';
 import { CoachAthleteSettingsTab } from '@/components/coach-mobile/CoachAthleteSettingsTab';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
@@ -32,7 +32,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useAthleteCheckins, wellnessComposite, type AthleteCheckin } from '@/hooks/useAthleteCheckins';
 import { DEFAULT_MONITORING_CONFIG, type AthleteNote } from '@/types/athlete';
 import { FRONT_REGIONS, BACK_REGIONS, nrsSeverityColor, nrsSeverityStroke, svgRegionKey, svgRegionKeyLegacy } from '@/lib/bodyMapData';
-import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, ComposedChart, Area } from 'recharts';
+import { lastPerDay, outsideRange, rangeStatus, withNormalRange, type TrendPoint } from '@/utils/normalRange';
 import { useSessionLibrary } from '@/hooks/useSessionLibrary';
 import type { SessionLibraryEntry } from '@/types/sessionLibrary';
 import { useToast } from '@/hooks/use-toast';
@@ -221,23 +222,79 @@ function WellnessMiniChart({ checkins, days }: { checkins: AthleteCheckin[]; day
   );
 }
 
+const shortLabel = (date: string) =>
+  new Date(date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
 function CustomMetricMiniChart({
-  history, days, unit, scaleMax,
-}: { history: Array<{ date: string; value: number }>; days: number; unit?: string | null; scaleMax?: number }) {
-  const data = useMemo(() => {
+  history, days, unit, scaleMax, normalRange = false,
+}: {
+  history: Array<{ date: string; value: number }>;
+  days: number;
+  unit?: string | null;
+  scaleMax?: number;
+  /** Number questions: the athlete's normal range (average ± 1 SD of the 28 days before) behind the values */
+  normalRange?: boolean;
+}) {
+  const cutoffStr = useMemo(() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
-    const cutoffStr = toLocalDateStr(cutoff);
-    return history.filter(h => h.date >= cutoffStr).map(h => ({
-      label: new Date(h.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      value: h.value,
-    }));
-  }, [history, days]);
+    return toLocalDateStr(cutoff);
+  }, [days]);
+  const data = useMemo(() => {
+    if (normalRange) return withNormalRange(lastPerDay(history), cutoffStr).map(p => ({ ...p, label: shortLabel(p.date) }));
+    return history.filter(h => h.date >= cutoffStr).map(h => ({ label: shortLabel(h.date), value: h.value }));
+  }, [history, cutoffStr, normalRange]);
 
   const { t: tMetric } = useTranslation();
   if (data.length < 2) return (
     <p className="text-xs text-muted-foreground text-center py-4">{tMetric('coachMobile.athleteProfile.notEnoughDataMetric')}</p>
   );
+
+  const withUnit = (v: number | string) => (unit ? `${v} ${unit}` : String(v));
+
+  if (normalRange) {
+    const color = 'hsl(var(--primary))';
+    const RangeTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: TrendPoint & { label: string } }[] }) => {
+      const pt = active ? payload?.[0]?.payload : undefined;
+      if (!pt) return null;
+      return (
+        <div className="rounded-md border bg-background px-2 py-1 text-[11px] shadow-sm space-y-0.5">
+          <p className="font-medium">{pt.label}</p>
+          <p>
+            {withUnit(pt.value)}
+            {pt.z !== undefined && <span className="text-muted-foreground"> · {pt.z >= 0 ? '+' : ''}{pt.z.toFixed(1)} SD</span>}
+          </p>
+          {pt.band && <p className="text-muted-foreground">Normal: {round1(pt.band[0])}–{round1(pt.band[1])}{unit ? ` ${unit}` : ''}</p>}
+        </div>
+      );
+    };
+    return (
+      <ResponsiveContainer width="100%" height={130}>
+        <ComposedChart data={data} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+          <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+          <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+          <Tooltip content={<RangeTooltip />} />
+          {/* Normal range (± 1 SD) and the average */}
+          <Area type="monotone" dataKey="band" stroke="none" fill={color} fillOpacity={0.12} isAnimationActive={false} />
+          <Line type="monotone" dataKey="mean" stroke={color} strokeOpacity={0.5} strokeWidth={1} strokeDasharray="4 3" dot={false} activeDot={false} isAnimationActive={false} />
+          <Line
+            type="monotone" dataKey="value" stroke={color} strokeWidth={2} isAnimationActive={false} activeDot={{ r: 5 }}
+            // Days outside the normal range: amber
+            dot={(props: { cx?: number; cy?: number; index?: number; payload?: TrendPoint }) => (
+              <circle
+                key={props.index} cx={props.cx} cy={props.cy}
+                r={props.payload && outsideRange(props.payload) ? 4 : 3}
+                fill={props.payload && outsideRange(props.payload) ? '#f59e0b' : color}
+                stroke="white" strokeWidth={1}
+              />
+            )}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    );
+  }
 
   const domainMax = scaleMax ?? undefined;
 
@@ -248,7 +305,7 @@ function CustomMetricMiniChart({
         <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
         <YAxis domain={[0, domainMax ?? 'auto']} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
         <Tooltip
-          formatter={(v: number) => [unit ? `${v} ${unit}` : String(v), 'Value']}
+          formatter={(v: number) => [withUnit(v), 'Value']}
           contentStyle={{ fontSize: 10, padding: '4px 8px', borderRadius: 6 }}
           labelStyle={{ fontSize: 10 }}
         />
@@ -1251,6 +1308,13 @@ export default function CoachMobileAthleteProfilePage() {
                   const isExpanded = expandedMetricId === pid;
                   const isToday = metric?.recordedAt === today;
                   const isScale = block.config.scaleMin !== undefined && block.config.scaleMax !== undefined;
+                  const isNumber = block.config.inputType === 'number';
+                  // Number questions: is the latest answer outside the athlete's normal range?
+                  const statusOf = (key: string) => {
+                    if (!isNumber) return null;
+                    const points = withNormalRange(lastPerDay(customMetricHistory.get(key) ?? []), '');
+                    return rangeStatus(points[points.length - 1]);
+                  };
 
                   return (
                     <div
@@ -1270,10 +1334,13 @@ export default function CoachMobileAthleteProfilePage() {
                             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
                               {(sides ?? [null]).map((s, i) => {
                                 const m = sides ? sideMetrics?.[i] : metric;
+                                const status = m ? statusOf(s ? metricSeriesKey(pid, s) : pid) : null;
                                 return (
                                   <span key={s ?? 'value'} className="inline-flex items-baseline gap-1">
                                     {s && <span className="text-xs font-medium text-muted-foreground">{s}</span>}
-                                    <span className="text-lg font-semibold tabular-nums leading-none">{m ? m.value : '–'}</span>
+                                    <span className={cn('text-lg font-semibold tabular-nums leading-none', status && 'text-amber-600')}>{m ? m.value : '–'}</span>
+                                    {status === 'above' && <ArrowUp className="h-3.5 w-3.5 self-center text-amber-600" aria-label="Above normal range" />}
+                                    {status === 'below' && <ArrowDown className="h-3.5 w-3.5 self-center text-amber-600" aria-label="Below normal range" />}
                                     {m && (isScale
                                       ? <span className="text-xs text-muted-foreground">/{block.config.scaleMax}</span>
                                       : block.config.parameterUnit && <span className="text-xs text-muted-foreground">{block.config.parameterUnit}</span>)}
@@ -1303,6 +1370,7 @@ export default function CoachMobileAthleteProfilePage() {
                               <CustomMetricMiniChart
                                 history={customMetricHistory.get(metricSeriesKey(pid, s)) ?? []}
                                 days={metricDays}
+                                normalRange={isNumber}
                                 unit={!isScale ? (block.config.parameterUnit ?? undefined) : undefined}
                                 scaleMax={isScale ? block.config.scaleMax : undefined}
                               />
@@ -1311,6 +1379,7 @@ export default function CoachMobileAthleteProfilePage() {
                             <CustomMetricMiniChart
                               history={history}
                               days={metricDays}
+                              normalRange={isNumber}
                               unit={!isScale ? (block.config.parameterUnit ?? undefined) : undefined}
                               scaleMax={isScale ? block.config.scaleMax : undefined}
                             />

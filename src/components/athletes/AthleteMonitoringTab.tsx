@@ -1,4 +1,5 @@
 import { limbSymmetryIndex, monitoringRefsOf, monitoringSideOf } from '@/utils/parameterMeasures';
+import { BASELINE_DAYS, daysBefore, outsideRange, withNormalRange, type TrendPoint } from '@/utils/normalRange';
 import { useState, useMemo, useEffect } from 'react';
 import { format, isWithinInterval } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -526,31 +527,7 @@ const SIDE_LINES = [
 
 // ── Number questions: values with the athlete's normal range ─────────────────
 
-/** The normal range of a day: average ± 1 SD of the previous 28 days (not the day itself), from 7 values on */
-const BASELINE_DAYS = 28;
-const BASELINE_MIN_VALUES = 7;
-
-type TrendPoint = { date: string; value: number; mean?: number; band?: [number, number]; z?: number };
-
-const daysBefore = (date: string, days: number) => {
-  const d = new Date(`${date}T12:00:00`);
-  d.setDate(d.getDate() - days);
-  return toLocalDateStr(d);
-};
-
-/** The series from `fromDate` on, each day with its normal range (from the days before it) */
-function withNormalRange(series: Array<{ date: string; value: number }>, fromDate: string): TrendPoint[] {
-  return series.filter(p => p.date >= fromDate).map(p => {
-    const start = daysBefore(p.date, BASELINE_DAYS);
-    const previous = series.filter(q => q.date >= start && q.date < p.date).map(q => q.value);
-    if (previous.length < BASELINE_MIN_VALUES) return { ...p };
-    const mean = previous.reduce((s, v) => s + v, 0) / previous.length;
-    const sd = Math.sqrt(previous.reduce((s, v) => s + (v - mean) ** 2, 0) / (previous.length - 1));
-    return { ...p, mean, band: [mean - sd, mean + sd], z: sd > 0 ? (p.value - mean) / sd : 0 };
-  });
-}
-
-const outsideRange = (p: TrendPoint) => !!p.band && (p.value < p.band[0] || p.value > p.band[1]);
+// Normal range (average ± 1 SD of the previous 28 days): utils/normalRange.ts
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const shortDate = (date: string) =>
   new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
