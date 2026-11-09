@@ -247,6 +247,8 @@ export default function CoachMobileAthletesPage() {
             // Today's sessions
             const daySessions = (conn ? sessionMap.get(conn.id) : undefined) ?? [];
             const hasSession  = daySessions.length > 0;
+            const doneCount   = daySessions.filter(s => s.done).length;
+            const allDone     = hasSession && doneCount === daySessions.length;
 
             return (
               <button
@@ -278,15 +280,16 @@ export default function CoachMobileAthletesPage() {
                   </div>
 
                   {hasSession ? (
-                    <div className="mt-0.5 space-y-0.5">
-                      {daySessions.map((s, i) => (
-                        <div key={i} className="flex items-center gap-1.5">
-                          {s.done
-                            ? <Check className="h-3 w-3 text-emerald-600 shrink-0" aria-label="Done" />
-                            : <Dumbbell className="h-3 w-3 text-primary shrink-0" />}
-                          <span className={cn('text-xs truncate', s.done ? 'text-emerald-700' : 'text-muted-foreground')}>{s.name}</span>
-                        </div>
-                      ))}
+                    // One session: its name; several: how many are done. A check once all are done
+                    <div className="mt-0.5 flex items-center gap-1.5">
+                      {allDone
+                        ? <Check className="h-3 w-3 text-emerald-600 shrink-0" aria-label="Done" />
+                        : <Dumbbell className="h-3 w-3 text-primary shrink-0" />}
+                      <span className={cn('text-xs truncate', allDone ? 'text-emerald-700' : 'text-muted-foreground')}>
+                        {daySessions.length === 1
+                          ? daySessions[0].name
+                          : t('coachMobile.athletes.sessionsDone', { done: doneCount, total: daySessions.length })}
+                      </span>
                     </div>
                   ) : (
                   <div className="flex items-center gap-1.5 mt-0.5">

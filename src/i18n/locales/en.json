@@ -330,6 +330,7 @@
       "groupLabel": "{{name}} ({{count}})",
       "noAthletes": "No athletes yet",
       "restDay": "Rest day",
+      "sessionsDone": "{{done}} of {{total}} sessions done",
       "invitePending": "Invite pending",
       "notInvited": "Not invited yet",
       "ill": "Ill",

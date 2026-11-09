@@ -330,6 +330,7 @@
       "groupLabel": "{{name}} ({{count}})",
       "noAthletes": "Noch keine Athleten",
       "restDay": "Ruhetag",
+      "sessionsDone": "{{done}} von {{total}} Einheiten erledigt",
       "invitePending": "Einladung ausstehend",
       "notInvited": "Noch nicht eingeladen",
       "ill": "Krank",
