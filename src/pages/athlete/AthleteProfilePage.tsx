@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Dumbbell, Flame, CheckCircle2, Pencil, X, Check } from 'lucide-react';
+import { LogOut, Dumbbell, Flame, Pencil, X, Check } from 'lucide-react';
 import { AthleteProgressTab } from '@/components/athlete-app/AthleteProgressTab';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,14 +20,6 @@ import { cn } from '@/lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface SessionLog {
-  id: string;
-  date: string;
-  sessionName: string;
-  borgRating: number | null;
-  completedAt: string;
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getInitials(name: string): string {
@@ -36,14 +28,10 @@ function getInitials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function formatLogDate(dateStr: string): string {
-  const d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-function calcStreak(logs: SessionLog[]): number {
-  if (logs.length === 0) return 0;
-  const days = new Set(logs.map(l => l.date));
+/** Days in a row up to today with a finished session */
+function calcStreak(finishedDates: string[]): number {
+  if (finishedDates.length === 0) return 0;
+  const days = new Set(finishedDates);
   const _now = new Date();
   const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
   let streak = 0;
@@ -56,11 +44,6 @@ function calcStreak(logs: SessionLog[]): number {
   }
   return streak;
 }
-
-const BORG_LABELS: Record<number, string> = {
-  0: 'Rest', 1: 'Very, Very Easy', 2: 'Easy', 3: 'Moderate',
-  4: 'Somewhat Hard', 5: 'Hard', 7: 'Very Hard', 10: 'Maximal',
-};
 
 const ACTIVITY_LABELS: Record<string, string> = {
   sedentary: 'Sedentary',
@@ -87,25 +70,6 @@ function StatCard({ value, label, icon }: { value: string | number; label: strin
         <span className="text-xs text-muted-foreground text-center">{label}</span>
       </CardContent>
     </Card>
-  );
-}
-
-function SessionLogRow({ log }: { log: SessionLog }) {
-  return (
-    <div className="flex items-center gap-3 py-2.5 border-b last:border-0">
-      <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
-        <CheckCircle2 className="h-4 w-4 text-primary" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{log.sessionName}</p>
-        <p className="text-xs text-muted-foreground">{formatLogDate(log.date)}</p>
-      </div>
-      {log.borgRating !== null && (
-        <span className="text-xs text-muted-foreground shrink-0">
-          RPE {log.borgRating}{BORG_LABELS[log.borgRating] ? ` · ${BORG_LABELS[log.borgRating]}` : ''}
-        </span>
-      )}
-    </div>
   );
 }
 
@@ -269,29 +233,29 @@ export default function AthleteProfilePage() {
   const { signOut } = useAuth();
 
   const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
-  const [logs, setLogs] = useState<SessionLog[]>([]);
+  // Finished sessions only: a session gets its log row when it is started, so rows without
+  // completed_at are sessions started but not finished
+  const [finishedCount, setFinishedCount] = useState(0);
+  const [finishedDates, setFinishedDates] = useState<string[]>([]);
   const [logsLoading, setLogsLoading] = useState(true);
 
   useEffect(() => {
     if (!connection) return;
-    supabase
-      .from('athlete_session_logs')
-      .select('id, date, session_name, borg_rating, completed_at')
-      .eq('athlete_connection_id', connection.id)
-      .order('completed_at', { ascending: false })
-      .limit(50)
-      .then(({ data }) => {
-        setLogs(
-          (data ?? []).map(r => ({
-            id: r.id as string,
-            date: r.date as string,
-            sessionName: r.session_name as string,
-            borgRating: r.borg_rating as number | null,
-            completedAt: r.completed_at as string,
-          }))
-        );
-        setLogsLoading(false);
-      });
+    let cancelled = false;
+    (async () => {
+      const [countRes, datesRes] = await Promise.all([
+        supabase.from('athlete_session_logs').select('id', { count: 'exact', head: true })
+          .eq('athlete_connection_id', connection.id).not('completed_at', 'is', null),
+        supabase.from('athlete_session_logs').select('date')
+          .eq('athlete_connection_id', connection.id).not('completed_at', 'is', null)
+          .order('date', { ascending: false }).limit(1000),
+      ]);
+      if (cancelled) return;
+      setFinishedCount(countRes.count ?? 0);
+      setFinishedDates(((datesRes.data ?? []) as Array<{ date: string }>).map(r => r.date));
+      setLogsLoading(false);
+    })();
+    return () => { cancelled = true; };
   }, [connection]);
 
   const handleSignOut = async () => {
@@ -305,8 +269,8 @@ export default function AthleteProfilePage() {
     : 'Athlete';
   const initials = getInitials(displayName);
   const email = connection?.athleteEmail;
-  const streak = calcStreak(logs);
-  const totalSessions = logs.length;
+  const streak = calcStreak(finishedDates);
+  const totalSessions = finishedCount;
 
   return (
     <div className="pb-8">
@@ -357,20 +321,6 @@ export default function AthleteProfilePage() {
 
             {/* Profile info */}
             <ProfileCard />
-
-            {/* Recent sessions */}
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-sm font-semibold mb-3">Recent Sessions</p>
-                {logsLoading ? (
-                  <p className="text-sm text-muted-foreground">Loading…</p>
-                ) : logs.slice(0, 10).length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No sessions logged yet.</p>
-                ) : (
-                  logs.slice(0, 10).map(log => <SessionLogRow key={log.id} log={log} />)
-                )}
-              </CardContent>
-            </Card>
 
             {/* Sign out */}
             <Button
