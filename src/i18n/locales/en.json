@@ -516,6 +516,7 @@
       "sessionsLogged_one": "{{count}} session logged",
       "sessionsLogged_other": "{{count}} sessions logged",
       "noValues": "No values yet — tap Add to record the first measurement.",
+      "byAthlete": "by athlete",
       "noSetData": "No set data logged",
       "addValueTitle": "Add {{name}} value",
       "valueLabelWithUnit": "Value ({{unit}})",

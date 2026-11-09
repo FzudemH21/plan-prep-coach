@@ -24,6 +24,8 @@ import { useAthletes } from '@/hooks/useAthletes';
 import { useTranslation } from 'react-i18next';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useExerciseMetrics, epley1RM } from '@/hooks/useExerciseMetrics';
+import { useSelfReportedValues } from '@/hooks/useSelfReportedValues';
+import { mainSeries } from '@/utils/goalMeasures';
 import type { ExerciseEntry, ExerciseSession, ParamTags } from '@/hooks/useExerciseMetrics';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -153,7 +155,8 @@ interface MetricItem {
   unit?: string | null;
   latestValue: string | null;
   latestDate: string | null;
-  values: Array<{ id: string; value: string; recordedAt: string; note?: string }>;
+  /** Coach-entered values and the athlete's own test results (selfReported) */
+  values: Array<{ id: string; value: string; recordedAt: string; note?: string; selfReported?: boolean }>;
 }
 
 function MetricRow({ item, onClick }: { item: MetricItem; onClick: () => void }) {
@@ -250,7 +253,10 @@ function MetricDetail({
             .map((v, i) => (
               <div key={v.id ?? i} className="flex items-baseline justify-between px-4 py-2.5">
                 <div>
-                  <p className="text-xs text-muted-foreground">{fmtDate(v.recordedAt.slice(0, 10))}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {fmtDate(v.recordedAt.slice(0, 10))}
+                    {v.selfReported && <span className="ml-1.5 text-primary">· {t('coachMobile.athleteProgress.byAthlete')}</span>}
+                  </p>
                   {v.note && <p className="text-xs text-muted-foreground/70 italic">{v.note}</p>}
                 </div>
                 <p className="text-sm font-semibold tabular-nums">
@@ -656,6 +662,8 @@ export function CoachAthleteProgressTab({ athleteId, connectionId }: Props) {
   } = useAthletes();
   const { data: paramDb } = useParametersDataV2();
   const { exercises, loading: exLoading, paramTags, setParamTags, getExerciseHistory } = useExerciseMetrics(connectionId);
+  // The athlete's own test results (athlete app) — shown with the coach's values, as on desktop
+  const selfReported = useSelfReportedValues(athleteId);
 
   const { t } = useTranslation();
   const [section, setSection] = useState<Section>('body');
@@ -697,7 +705,8 @@ export function CoachAthleteProgressTab({ athleteId, connectionId }: Props) {
   const allParamItems = useMemo((): Array<MetricItem & { biometric: boolean }> =>
     getAthletePerformanceParameters(athleteId).map(pp => {
       const def = paramDb.parameters.find(p => p.id === pp.athleticismParameterId);
-      const sorted = [...pp.values].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt));
+      const own = mainSeries(selfReported.get(pp.athleticismParameterId) ?? []).map(v => ({ ...v, selfReported: true }));
+      const sorted = [...pp.values, ...own].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt));
       return {
         id: pp.id,
         name: def?.name ?? '?',
@@ -709,7 +718,7 @@ export function CoachAthleteProgressTab({ athleteId, connectionId }: Props) {
       };
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [athleteId, athletePerformanceParameters, paramDb.parameters, getAthletePerformanceParameters],
+    [athleteId, athletePerformanceParameters, paramDb.parameters, getAthletePerformanceParameters, selfReported],
   );
   const perfItems = useMemo(() => allParamItems.filter(i => !i.biometric), [allParamItems]);
   const bodyParamItems = useMemo(() => allParamItems.filter(i => i.biometric), [allParamItems]);

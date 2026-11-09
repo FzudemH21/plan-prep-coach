@@ -3,7 +3,7 @@
 // Mobile-first, 390px design.
 
 import { parseMeasuredNumber } from '@/utils/latestParameterValue';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
@@ -19,11 +19,18 @@ import { useAthleteExerciseMetrics } from '@/hooks/useAthleteExerciseMetrics';
 import { epley1RM, type ExerciseSession, type ExerciseEntry, type ParamTags } from '@/hooks/useExerciseMetrics';
 import type { AthleteConnection } from '@/hooks/useAthleteApp';
 import type { MetricsSnapshotItem } from '@/hooks/useAthleteConnections';
+import { supabase } from '@/lib/supabase';
+import { parseMeasureRef } from '@/utils/parameterMeasures';
+import { toParameterId } from '@/utils/parameterRef';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Section = 'body' | 'performance' | 'exercises';
 type DateRangeKey = '3M' | '6M' | '1Y' | 'All';
+
+/** A value as shown: the coach's (from the metrics snapshot) or the athlete's own test result */
+type ShownValue = { value: string; recordedAt: string; mine?: boolean };
+type ShownItem = Omit<MetricsSnapshotItem, 'values'> & { values: ShownValue[] };
 
 // ── Date range helpers ────────────────────────────────────────────────────────
 
@@ -82,14 +89,14 @@ function fmtDateShort(iso: string): string {
   try { return format(parseISO(iso), 'MMM d'); } catch { return iso; }
 }
 
-function toChartData(item: MetricsSnapshotItem) {
+function toChartData(item: ShownItem) {
   return [...item.values]
     .filter(v => !isNaN((parseMeasuredNumber(v.value) ?? NaN)))
     .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))
     .map(v => ({ date: fmtDateShort(v.recordedAt), value: (parseMeasuredNumber(v.value) ?? NaN) }));
 }
 
-function getLatest(item: MetricsSnapshotItem) {
+function getLatest(item: ShownItem) {
   if (!item.values.length) return null;
   return [...item.values].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0];
 }
@@ -102,9 +109,9 @@ function MetricList({
   onSelect,
   emptyText,
 }: {
-  items: MetricsSnapshotItem[];
+  items: ShownItem[];
   search: string;
-  onSelect: (item: MetricsSnapshotItem) => void;
+  onSelect: (item: ShownItem) => void;
   emptyText: string;
 }) {
   const filtered = useMemo(() => {
@@ -168,7 +175,7 @@ function MetricDetail({
   item,
   onBack,
 }: {
-  item: MetricsSnapshotItem;
+  item: ShownItem;
   onBack: () => void;
 }) {
   const [range, setRange] = useState<DateRangeKey>('All');
@@ -260,7 +267,10 @@ function MetricDetail({
           <div className="border rounded-lg divide-y">
             {sortedValues.map((v, i) => (
               <div key={i} className="px-3 py-2.5 flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">{fmtDate(v.recordedAt)}</span>
+                <span className="text-xs text-muted-foreground">
+                  {fmtDate(v.recordedAt)}
+                  {v.mine && <span className="ml-1.5 text-primary">· by you</span>}
+                </span>
                 <span className="text-sm font-medium tabular-nums">
                   {v.value}{item.unit ? ` ${item.unit}` : ''}
                 </span>
@@ -636,13 +646,13 @@ export function AthleteProgressTab({ connection }: Props) {
 
   const [activeSection, setActiveSection] = useState<Section>('body');
   const [search, setSearch] = useState('');
-  const [selectedMetric, setSelectedMetric] = useState<MetricsSnapshotItem | null>(null);
+  const [selectedMetricKey, setSelectedMetricKey] = useState<string | null>(null);
   const [selectedExerciseName, setSelectedExerciseName] = useState<string | null>(null);
 
   const handleSectionChange = (s: Section) => {
     setActiveSection(s);
     setSearch('');
-    setSelectedMetric(null);
+    setSelectedMetricKey(null);
     setSelectedExerciseName(null);
   };
 
@@ -650,8 +660,39 @@ export function AthleteProgressTab({ connection }: Props) {
   const selectedHistory = selectedExerciseName ? getExerciseHistory(selectedExerciseName) : [];
   const selectedTags = selectedExerciseName ? (paramTags[selectedExerciseName] ?? null) : null;
 
-  const bodyItems    = snapshot?.bodyMetrics     ?? [];
-  const perfItems    = snapshot?.performanceParams ?? [];
+  // The athlete's own test results (main measure; daily check-in answers belong to monitoring),
+  // shown with the coach's values — the same values the coach sees
+  const [ownResults, setOwnResults] = useState<Map<string, ShownValue[]>>(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('athlete_test_results')
+        .select('parameter_id, value, recorded_at')
+        .eq('athlete_connection_id', connection.id);
+      if (cancelled || error) return;
+      const map = new Map<string, ShownValue[]>();
+      for (const row of (data ?? []) as Array<{ parameter_id: string; value: string; recorded_at: string }>) {
+        const ref = parseMeasureRef(row.parameter_id);
+        if (ref.checkin || ref.measureId || ref.side) continue;
+        const key = toParameterId(ref.parameterId);
+        map.set(key, [...(map.get(key) ?? []), { value: row.value, recordedAt: row.recorded_at, mine: true }]);
+      }
+      setOwnResults(map);
+    })();
+    return () => { cancelled = true; };
+  }, [connection.id]);
+
+  const withOwn = (items: MetricsSnapshotItem[]): ShownItem[] => items.map(item => ({
+    ...item,
+    values: [...item.values, ...(item.parameterId ? ownResults.get(item.parameterId) ?? [] : [])],
+  }));
+  const bodyItems    = useMemo(() => withOwn(snapshot?.bodyMetrics ?? []), [snapshot, ownResults]); // eslint-disable-line react-hooks/exhaustive-deps
+  const perfItems    = useMemo(() => withOwn(snapshot?.performanceParams ?? []), [snapshot, ownResults]); // eslint-disable-line react-hooks/exhaustive-deps
+  const itemKey = (item: ShownItem) => item.parameterId ?? `name:${item.name}`;
+  const selectedMetric = selectedMetricKey
+    ? [...bodyItems, ...perfItems].find(item => itemKey(item) === selectedMetricKey) ?? null
+    : null;
   const inDetail     = !!selectedMetric || !!selectedExerciseName;
 
   return (
@@ -697,11 +738,11 @@ export function AthleteProgressTab({ connection }: Props) {
       {/* Body Metrics tab */}
       {activeSection === 'body' && (
         selectedMetric
-          ? <MetricDetail item={selectedMetric} onBack={() => setSelectedMetric(null)} />
+          ? <MetricDetail item={selectedMetric} onBack={() => setSelectedMetricKey(null)} />
           : <MetricList
               items={bodyItems}
               search={search}
-              onSelect={setSelectedMetric}
+              onSelect={item => setSelectedMetricKey(itemKey(item))}
               emptyText="No body metrics yet. Your coach will add metrics like weight, height, and body fat to your profile."
             />
       )}
@@ -709,11 +750,11 @@ export function AthleteProgressTab({ connection }: Props) {
       {/* Performance tab */}
       {activeSection === 'performance' && (
         selectedMetric
-          ? <MetricDetail item={selectedMetric} onBack={() => setSelectedMetric(null)} />
+          ? <MetricDetail item={selectedMetric} onBack={() => setSelectedMetricKey(null)} />
           : <MetricList
               items={perfItems}
               search={search}
-              onSelect={setSelectedMetric}
+              onSelect={item => setSelectedMetricKey(itemKey(item))}
               emptyText="No performance metrics yet. Your coach will link parameters like Squat 1RM or Sprint times to your profile."
             />
       )}

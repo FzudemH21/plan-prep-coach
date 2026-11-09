@@ -1,13 +1,12 @@
 import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import type { MetricsSnapshot, MetricsSnapshotItem, AthleteConnection } from '@/hooks/useAthleteConnections';
+import type { AthleteConnection } from '@/hooks/useAthleteConnections';
 import { ExerciseMetricsTab } from '@/components/athletes/ExerciseMetricsTab';
 import { format, subDays, parseISO } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { attachmentLabel, attachmentUrl, isVideoPath } from '@/utils/athleteUploads';
 import { Image as ImageIcon, Video } from 'lucide-react';
 import { withSelfReported } from '@/hooks/useSelfReportedResults';
-import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import {
   AreaChart,
   Area,
@@ -73,8 +72,7 @@ import {
   ParameterValue,
 } from '@/types/athlete';
 import { ParameterV2 } from '@/types/parametersV2';
-import { hasCustomMeasures, limbSymmetryIndex, measureById, measureRef, parameterMeasures, parseMeasureRef } from '@/utils/parameterMeasures';
-import { toParameterId } from '@/utils/parameterRef';
+import { hasCustomMeasures, limbSymmetryIndex, measureById, measureRef, parameterMeasures } from '@/utils/parameterMeasures';
 import { allValuesOf, valuesOfMeasure } from '@/utils/goalMeasures';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
@@ -295,7 +293,7 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
   const filteredBiometricParams = useMemo(() => filterParams(true), [filterParams]);
 
   // ── Self-reported test results (entered by athlete in athlete app) ───────────
-  const { updateMetricsSnapshot } = useAthleteConnections();
+  // Tracking reported parameters and the athlete app's copy of the progress: AthleteProgressSync
   const connection = connectionProp;
   // Map of athleticismParameterId → self-reported ParameterValue[]
   const [selfReportedMap, setSelfReportedMap] = useState<Map<string, ParameterValue[]>>(new Map());
@@ -337,73 +335,6 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
     })();
     return () => { cancelled = true; };
   }, [athlete.id, connection]);
-
-  // A test result the athlete reported for a parameter that isn't tracked for them yet: track it,
-  // so the result shows here (it used to stay invisible until the coach added the parameter).
-  // Daily check-in answers belong to Monitoring and are left out.
-  const trackingStarted = useRef(new Set<string>());
-  useEffect(() => {
-    if (athleteData.isLoading || selfReportedMap.size === 0 || athleticismParameters.length === 0) return;
-    const tracked = new Set(athletePerformanceParams.map(pp => pp.athleticismParameterId));
-    const toTrack = new Set<string>();
-    selfReportedMap.forEach((_values, rawRef) => {
-      const ref = parseMeasureRef(rawRef);
-      if (ref.checkin) return;
-      const paramId = toParameterId(ref.parameterId);
-      const key = `${athlete.id}:${paramId}`;
-      if (tracked.has(paramId) || trackingStarted.current.has(key)) return;
-      if (!athleticismParameters.some(p => p.id === paramId)) return;
-      toTrack.add(paramId);
-    });
-    toTrack.forEach(paramId => {
-      const key = `${athlete.id}:${paramId}`;
-      trackingStarted.current.add(key);
-      athleteData.addPerformanceParameter(athlete.id, paramId).catch(() => { trackingStarted.current.delete(key); });
-    });
-  }, [athleteData, athlete.id, selfReportedMap, athleticismParameters, athletePerformanceParams]);
-
-  // ── Metrics snapshot — push to athlete_connections.profile_data on mount and on every change ──
-  // Uses connection?.id (stable string) instead of connection (object) to avoid re-triggering
-  // after updateMetricsSnapshot updates the local connection object reference.
-  useEffect(() => {
-    if (!connection) return;
-    const paramItem = (pp: typeof athletePerformanceParams[number]): MetricsSnapshotItem | null => {
-      const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
-      if (!param) return null;
-      return {
-        parameterId: pp.athleticismParameterId,
-        name: param.name,
-        unit: param.unit ?? null,
-        category: param.category ?? undefined,
-        values: pp.values.map(v => ({ value: v.value, recordedAt: v.recordedAt })),
-      };
-    };
-    const snapshot: MetricsSnapshot = {
-      bodyMetrics: [...athleteBiometrics
-        .map((ab): MetricsSnapshotItem | null => {
-          const def = athleteData.biometricDefinitions.find(d => d.id === ab.biometricDefinitionId);
-          if (!def) return null;
-          return {
-            name: def.name,
-            unit: def.unit ?? null,
-            values: ab.values.map(v => ({ value: v.value, recordedAt: v.recordedAt })),
-          };
-        })
-        .filter((x): x is MetricsSnapshotItem => x !== null),
-        // Parameters marked "Biometric" are body metrics in the athlete app too
-        ...athletePerformanceParams
-          .filter(pp => isBiometricParam(pp.athleticismParameterId))
-          .map(paramItem)
-          .filter((x): x is MetricsSnapshotItem => x !== null)],
-      performanceParams: athletePerformanceParams
-        .filter(pp => !isBiometricParam(pp.athleticismParameterId))
-        .map(paramItem)
-        .filter((x): x is MetricsSnapshotItem => x !== null),
-      updatedAt: new Date().toISOString(),
-    };
-    updateMetricsSnapshot(connection.id, snapshot).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [athleteBiometrics, athletePerformanceParams, connection?.id, isBiometricParam]);
 
   // Keep selected item in sync; only resolve if it matches the active tab
   const resolvedSelected = useMemo<SelectedItem | null>(() => {

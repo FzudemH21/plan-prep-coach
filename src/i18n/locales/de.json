@@ -516,6 +516,7 @@
       "sessionsLogged_one": "{{count}} Einheit erfasst",
       "sessionsLogged_other": "{{count}} Einheiten erfasst",
       "noValues": "Noch keine Werte — tippe auf Hinzufügen, um den ersten Wert einzutragen.",
+      "byAthlete": "vom Athleten",
       "noSetData": "Keine Satzdaten erfasst",
       "addValueTitle": "{{name}}-Wert hinzufügen",
       "valueLabelWithUnit": "Wert ({{unit}})",

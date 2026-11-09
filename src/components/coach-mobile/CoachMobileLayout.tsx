@@ -1,3 +1,4 @@
+import { AthleteProgressSync } from '@/components/athletes/AthleteProgressSync';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Users, User, MessageCircle, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -101,6 +102,7 @@ export function CoachMobileLayout() {
 
       {/* Page content */}
       <div className="flex-1 min-h-0 overflow-hidden">
+        <AthleteProgressSync />
         <Outlet />
       </div>
 
