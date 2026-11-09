@@ -96,9 +96,11 @@ export function AdherencePanel({ connectionId }: { connectionId: string }) {
       const done = doneSum[i] - (j >= 0 ? doneSum[j] : 0);
       return planned > 0 ? Math.round((done / planned) * 100) : null;
     };
+    // From the first planned session in the period on (a plan that started recently fills the chart)
+    const firstPlanned = days.find(day => day >= fromYMD && byDay.has(day)) ?? fromYMD;
     const chart = days
       .map((day, i) => ({ day, label: format(parseISO(day), 'MMM d'), r7: rolling(i, 7), r28: rolling(i, 28) }))
-      .filter(p => p.day >= fromYMD);
+      .filter(p => p.day >= firstPlanned);
     return { byDay, chart };
   }, [schedule, logs, todayYMD, fetchFromYMD, fromYMD]);
 
