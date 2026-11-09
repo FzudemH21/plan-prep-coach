@@ -13,7 +13,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useAthletes } from '@/hooks/useAthletes';
+import { athleteStore, useAthletes } from '@/hooks/useAthletes';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { parseMeasureRef } from '@/utils/parameterMeasures';
@@ -64,11 +64,14 @@ export function AthleteProgressSync() {
     return () => window.removeEventListener('focus', onFocus);
   }, [refresh, loadReported]);
 
+  // Only the really loaded athlete data — not the browser copy shown meanwhile or after a failed load
+  const athletesLoaded = !athleteData.isLoading && athleteStore.getState().status === 'loaded';
+
   // 1. Track parameters the athlete reported results for
   const trackingStarted = useRef(new Set<string>());
   const parameters = paramDb?.parameters;
   useEffect(() => {
-    if (athleteData.isLoading || paramsLoading || connectionsLoading || !reported || !parameters?.length) return;
+    if (!athletesLoaded || paramsLoading || connectionsLoading || !reported || !parameters?.length) return;
     const known = new Set(parameters.map(p => p.id));
     connections.forEach(connection => {
       const athleteId = connection.athleteLocalId;
@@ -88,12 +91,12 @@ export function AthleteProgressSync() {
         athleteData.addPerformanceParameter(athleteId, paramId).catch(() => { trackingStarted.current.delete(key); });
       });
     });
-  }, [athleteData, paramsLoading, connectionsLoading, reported, parameters, connections]);
+  }, [athleteData, athletesLoaded, paramsLoading, connectionsLoading, reported, parameters, connections]);
 
   // 2. The athlete app's copy of the progress
   const pushing = useRef(new Set<string>());
   useEffect(() => {
-    if (athleteData.isLoading || paramsLoading || connectionsLoading || !parameters?.length) return;
+    if (!athletesLoaded || paramsLoading || connectionsLoading || !parameters?.length) return;
     const timer = setTimeout(() => {
       connections.forEach(connection => {
         const athleteId = connection.athleteLocalId;
@@ -113,7 +116,7 @@ export function AthleteProgressSync() {
       });
     }, SETTLE_MS);
     return () => clearTimeout(timer);
-  }, [athleteData, paramsLoading, connectionsLoading, parameters, connections, updateMetricsSnapshot]);
+  }, [athleteData, athletesLoaded, paramsLoading, connectionsLoading, parameters, connections, updateMetricsSnapshot]);
 
   return null;
 }

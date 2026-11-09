@@ -417,7 +417,7 @@ export default function CoachMobileAthleteProfilePage() {
     return getMondayOf(weekOf ?? today);
   });
 
-  const { athletes, updateAthlete, athletePerformanceParameters, getAthleteBiometrics } = useAthletes();
+  const { athletes, isLoading: athletesLoading, updateAthlete, athletePerformanceParameters, getAthleteBiometrics } = useAthletes();
   const { getEventsForAthlete, addEvent: addCalendarEvent, deleteEvent: deleteCalendarEvent } = useCalendarEvents();
   const { connections } = useAthleteConnections();
 
@@ -470,20 +470,21 @@ export default function CoachMobileAthleteProfilePage() {
   // Derive all notes (newest-first), appending the legacy `notes` string as the
   // oldest entry until it's been migrated — keeps it visible even after newer
   // notesHistory entries exist, instead of only showing it while history is empty.
+  // (the athlete can still be loading — this runs before the "not found" check below)
   const allNotes = useMemo((): AthleteNote[] => {
-    const history = athlete.notesHistory ?? [];
+    const history = athlete?.notesHistory ?? [];
     const alreadyMigrated = history.some(n => n.id === '__migrated__');
-    if (!alreadyMigrated && athlete.notes) {
+    if (athlete && !alreadyMigrated && athlete.notes) {
       return [...history, { id: '__migrated__', text: athlete.notes, timestamp: athlete.createdAt }];
     }
     return history;
-  }, [athlete.notesHistory, athlete.notes, athlete.createdAt]);
+  }, [athlete]);
 
   const handleAddNote = async () => {
     const text = notesInput.trim();
     if (!text) return;
     const newEntry: AthleteNote = { id: `note-${Date.now()}`, text, timestamp: new Date().toISOString() };
-    await updateAthlete(athleteId!, { notesHistory: [newEntry, ...(athlete.notesHistory ?? [])] });
+    await updateAthlete(athleteId!, { notesHistory: [newEntry, ...(athlete?.notesHistory ?? [])] });
     setNotesInput('');
     setEditingNotes(false);
   };
@@ -996,7 +997,7 @@ export default function CoachMobileAthleteProfilePage() {
   if (!athlete) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-muted-foreground text-sm">
-        {t('coachMobile.athleteProfile.notFound')}
+        {athletesLoading ? t('common.loading') : t('coachMobile.athleteProfile.notFound')}
       </div>
     );
   }

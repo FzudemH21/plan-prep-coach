@@ -211,6 +211,8 @@ export const athleteStore = createRecordStore<AthleteDatabase>({
   // Only deleting an athlete removes a row — one per save
   guardedPrefix: id => id !== SHARED_RECORD,
   maxRemovalsPerSave: 1,
+  cacheKey: 'athlete_records_sb_cache',
+  oldCacheKeys: ['athlete-database_sb_cache'],
 });
 
 /** The coach's athletes, loaded if needed (for code outside components) */

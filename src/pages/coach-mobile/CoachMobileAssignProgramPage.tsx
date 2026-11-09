@@ -322,7 +322,7 @@ export default function CoachMobileAssignProgramPage() {
   const { toast } = useToast();
   const { t } = useTranslation();
 
-  const { athletes, createCalendarAssignment, getAthletePerformanceParameters, getAthleteBiometrics, biometricDefinitions } = useAthletes();
+  const { athletes, isLoading: athletesLoading, createCalendarAssignment, getAthletePerformanceParameters, getAthleteBiometrics, biometricDefinitions } = useAthletes();
   const { connections } = useAthleteConnections();
   const { programs } = useTrainingPrograms();
   const { data: toolboxData } = useToolboxData();
@@ -800,7 +800,7 @@ export default function CoachMobileAssignProgramPage() {
   if (!athlete) {
     return (
       <div className="flex flex-col h-full items-center justify-center text-muted-foreground text-sm">
-        {t('coachMobile.assignProgram.athleteNotFound')}
+        {athletesLoading ? t('common.loading') : t('coachMobile.assignProgram.athleteNotFound')}
       </div>
     );
   }

@@ -12,6 +12,9 @@
  * - The old one-row table stays as a frozen backup: copied over on the first load; afterwards only
  *   records that exist there but not here (e.g. added by a tab still running the old code) are taken.
  * - Without the new table (SQL not run yet) everything works on the old row as before.
+ * - A copy in the browser (`cacheKey`) is shown right away while loading, as pages expect the data
+ *   at once (e.g. an athlete's page opened directly). Only for showing: nothing is saved before the
+ *   real data has loaded, and the loaded data replaces it.
  */
 import { useEffect, useSyncExternalStore } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -33,6 +36,10 @@ export interface RecordStoreConfig<T> {
   /** Records of which only `maxRemovalsPerSave` may be removed by one save (e.g. athletes) */
   guardedPrefix?: (id: string) => boolean;
   maxRemovalsPerSave?: number;
+  /** Browser copy shown while loading (ends in "_sb_cache": dropped first when storage is full) */
+  cacheKey?: string;
+  /** Older browser copies to remove */
+  oldCacheKeys?: string[];
 }
 
 type Status = 'idle' | 'loading' | 'loaded' | 'failed';
@@ -78,7 +85,32 @@ export interface RecordStore<T> {
 }
 
 export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<T> {
-  const fresh = (userId: string | null): StoreState<T> => ({ userId, status: 'idle', mode: 'rows', data: config.defaultValue() });
+  // ─── Browser copy (only for showing while loading) ──────────────────────────
+  const readCache = (): { userId: string; data: T } | null => {
+    if (!config.cacheKey) return null;
+    try {
+      const raw = localStorage.getItem(config.cacheKey);
+      const parsed = raw ? JSON.parse(raw) as { userId?: string; data?: unknown } : null;
+      return parsed?.userId && parsed.data ? { userId: parsed.userId, data: config.migrate(parsed.data) } : null;
+    } catch { return null; }
+  };
+  const writeCache = (userId: string, data: T) => {
+    if (!config.cacheKey) return;
+    try { localStorage.setItem(config.cacheKey, JSON.stringify({ userId, data })); } catch { /* only a convenience */ }
+  };
+  const clearCache = () => {
+    try { if (config.cacheKey) localStorage.removeItem(config.cacheKey); } catch { /* ignore */ }
+  };
+  try { config.oldCacheKeys?.forEach(key => localStorage.removeItem(key)); } catch { /* ignore */ }
+  let cached = readCache();
+
+  const fresh = (userId: string | null): StoreState<T> => ({
+    userId,
+    status: 'idle',
+    mode: 'rows',
+    // Before the login is known: the copy of whoever used this browser last (replaced right after)
+    data: cached && (userId === null || cached.userId === userId) ? cached.data : config.defaultValue(),
+  });
   let state: StoreState<T> = fresh(null);
   const listeners = new Set<() => void>();
   let loadPromise: Promise<void> | null = null;
@@ -224,13 +256,17 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
         }
       }
     }
-    setState({ mode: 'rows', status: 'loaded', data: config.join(records) });
+    const data = config.join(records);
+    setState({ mode: 'rows', status: 'loaded', data });
+    writeCache(userId, data);
     return true;
   };
 
   const loadLegacy = async (userId: string) => {
     const legacy = await readLegacy(userId);
-    setState({ mode: 'legacy', status: 'loaded', data: legacy?.data ? config.migrate(legacy.data) : config.defaultValue() });
+    const data = legacy?.data ? config.migrate(legacy.data) : config.defaultValue();
+    setState({ mode: 'legacy', status: 'loaded', data });
+    writeCache(userId, data);
   };
 
   const ensureLoaded = (userId: string): Promise<void> => {
@@ -266,6 +302,7 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
     }
     if (state.mode === 'legacy') {
       setState({ data: next });
+      writeCache(userId, next);
       await writeLegacy(userId, next).catch(err => { console.error('[recordStore] legacy save failed:', err); warnSaveFailed(); });
       return;
     }
@@ -290,6 +327,7 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
     }
 
     setState({ data: next });
+    writeCache(userId, next);
     const results = await Promise.all([
       ...changed.map(([id, data, json]) => queueWrite(userId, id, data, json, false)),
       // A removed record keeps its last stored version, marked deleted
@@ -305,7 +343,8 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
     getState: () => state,
     subscribe: (fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
     ensureLoaded,
-    reset: () => { state = fresh(null); stored = new Map(); loadPromise = null; listeners.forEach(fn => fn()); },
+    // Logged out: forget the data, also the browser copy
+    reset: () => { clearCache(); cached = null; state = fresh(null); stored = new Map(); loadPromise = null; listeners.forEach(fn => fn()); },
     save,
   };
 }
