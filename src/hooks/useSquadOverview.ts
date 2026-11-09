@@ -20,6 +20,7 @@ import { supabase } from '@/lib/supabase';
 import { startOfISOWeek, subDays, format } from 'date-fns';
 import type { MonitoringConfig } from '@/types/athlete';
 import { isBorgLevel, migrateLegacyIntensity } from '@/utils/intensityScale';
+import { adherenceByDay, adherenceTotal, plannedSessionId } from '@/utils/adherence';
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -35,6 +36,8 @@ export interface DaySessionInfo {
   name: string;
   /** Planned session-level intensity (Borg CR10 string "0"–"10", or null). */
   intensity: string | null;
+  /** Finished by the athlete */
+  done: boolean;
 }
 
 export interface DayScheduleInfo {
@@ -63,7 +66,9 @@ export interface AthleteSquadSummary {
   weekAU: number;
   /** Average weekly AU across complete prior ISO weeks in the 28-day window. */
   avgWeeklyAU: number;
+  /** Planned sessions Mon → selectedDate that are finished (see utils/adherence) */
   weekCompletedSessions: number;
+  /** Planned sessions Mon → selectedDate (today's open ones not counted yet) */
   weekPlannedSessions: number;
   /** Z-score vs all daily composites in the 28-day window. Null if < 2 data points. */
   wellnessZScore: number | null;
@@ -98,6 +103,8 @@ interface CheckinRow {
 interface LogRow {
   athlete_connection_id: string;
   date: string;
+  session_id: string | null;
+  completed_at: string | null;
   borg_rating: number | null;
   duration_seconds: number | null;
 }
@@ -192,6 +199,7 @@ export function useSquadOverview(
       const weekStart    = startOfISOWeek(today);
       const weekStartStr = format(weekStart, 'yyyy-MM-dd');
       const todayStr     = format(today, 'yyyy-MM-dd');
+      const realTodayStr = format(new Date(), 'yyyy-MM-dd');
       const from28Str    = format(subDays(today, 28), 'yyyy-MM-dd');
 
       const [checkinsRes, logsRes, scheduleRes, testRes] = await Promise.all([
@@ -207,7 +215,7 @@ export function useSquadOverview(
         // 2. Completed session logs — 28-day window
         supabase
           .from('athlete_session_logs')
-          .select('athlete_connection_id, date, borg_rating, duration_seconds, completed_at')
+          .select('athlete_connection_id, date, session_id, borg_rating, duration_seconds, completed_at')
           .in('athlete_connection_id', connectionIds)
           .gte('date', from28Str)
           .lte('date', todayStr)
@@ -292,11 +300,10 @@ export function useSquadOverview(
           ? Math.round(prevWeekAUs.reduce((a, b) => a + b, 0) / prevWeekAUs.length)
           : 0;
 
-        // Planned sessions for the week containing selectedDate
-        const connSchedule        = schedule.filter(s => s.athlete_connection_id === conn.id);
-        const weekPlannedSessions = connSchedule.reduce(
-          (sum, row) => sum + (Array.isArray(row.sessions) ? row.sessions.length : 0), 0,
-        );
+        // Adherence for the week containing selectedDate (Mon → selectedDate)
+        const connSchedule = schedule.filter(s => s.athlete_connection_id === conn.id);
+        const byDay        = adherenceByDay(connSchedule, weekLogs, realTodayStr);
+        const weekAdherence = adherenceTotal(byDay, weekStartStr, todayStr);
 
         // Day schedule for exactly selectedDate
         const dayRow = connSchedule.find(s => s.date === todayStr) ?? null;
@@ -316,8 +323,9 @@ export function useSquadOverview(
           return migrated;
         }
         const daySchedule: DayScheduleInfo | null = dayRow ? {
-          sessions: (dayRow.sessions as Array<{ name?: string; intensity?: string | null }>).map(s => ({
+          sessions: (dayRow.sessions as Array<{ name?: string; intensity?: string | null }>).map((s, i) => ({
             name: s.name ?? 'Session',
+            done: byDay.get(dayRow.date)?.doneIds.has(plannedSessionId(s, dayRow.date, i)) ?? false,
             // Fall back to the row-level day intensity when the session has no
             // per-session intensity. Migrate legacy strings ("moderate" etc.) to Borg.
             intensity: resolveIntensity(s.intensity) ?? resolveIntensity(dayRow.intensity),
@@ -353,8 +361,8 @@ export function useSquadOverview(
           hasIllnessFlag:        checkin?.has_illness ?? false,
           weekAU,
           avgWeeklyAU,
-          weekCompletedSessions: weekLogs.length,
-          weekPlannedSessions,
+          weekCompletedSessions: weekAdherence.done,
+          weekPlannedSessions:   weekAdherence.planned,
           wellnessZScore,
           weekAUZScore,
           customMetricValues,

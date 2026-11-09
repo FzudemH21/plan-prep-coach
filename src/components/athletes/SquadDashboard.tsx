@@ -10,7 +10,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { LayoutGrid, List, Thermometer, Zap, Users, Loader2, ChevronLeft, ChevronRight, CalendarDays, FlaskConical } from 'lucide-react';
+import { LayoutGrid, List, Thermometer, Zap, Users, Loader2, ChevronLeft, ChevronRight, CalendarDays, FlaskConical, Check } from 'lucide-react';
 import { isBorgLevel, getBorgBg, getBorgFg } from '@/utils/intensityScale';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -306,10 +306,10 @@ function AthleteCard({ name, summary, onClick }: CardProps) {
             {summary.weekPlannedSessions > 0 ? (
               <>
                 <p className="font-medium tabular-nums">
-                  {summary.weekCompletedSessions}/{summary.weekPlannedSessions}
+                  {summary.weekCompletedSessions} of {summary.weekPlannedSessions} done
                 </p>
                 <p className="text-[10px] text-muted-foreground tabular-nums">
-                  {Math.round((summary.weekCompletedSessions / summary.weekPlannedSessions) * 100)}%
+                  {Math.round((summary.weekCompletedSessions / summary.weekPlannedSessions) * 100)}% · week so far
                 </p>
               </>
             ) : (
@@ -325,7 +325,8 @@ function AthleteCard({ name, summary, onClick }: CardProps) {
           {summary.daySchedule.sessions.map((s, i) => (
             <div key={i} className="text-xs text-left w-full">
               <div className="flex items-center justify-between gap-1">
-                <span className="truncate font-medium flex-1">{s.name}</span>
+                {s.done && <Check className="h-3 w-3 shrink-0 text-emerald-600" aria-label="Done" />}
+                <span className={cn('truncate font-medium flex-1', s.done && 'text-muted-foreground')}>{s.name}</span>
                 {s.intensity && isBorgLevel(s.intensity) && (
                   <span
                     className="shrink-0 px-1 rounded text-[10px] font-bold"
@@ -423,7 +424,8 @@ function AthleteListRow({ name, summary, onClick, customColumns }: RowProps) {
             {summary.daySchedule.sessions.map((s, i) => (
               <div key={i}>
                 <div className="flex items-center gap-1.5 text-xs">
-                  <span className="truncate max-w-[110px]">{s.name}</span>
+                  {s.done && <Check className="h-3 w-3 shrink-0 text-emerald-600" aria-label="Done" />}
+                  <span className={cn('truncate max-w-[110px]', s.done && 'text-muted-foreground')}>{s.name}</span>
                   {s.intensity && isBorgLevel(s.intensity) && (
                     <span
                       className="shrink-0 px-1 rounded text-[10px] font-bold"

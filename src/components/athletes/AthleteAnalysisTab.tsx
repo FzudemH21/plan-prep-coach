@@ -13,7 +13,6 @@ import {
 } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -39,6 +38,7 @@ import {
 } from '@/components/ui/select';
 import { CalendarIcon, X, Plus, Download } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
+import { AdherencePanel } from './AdherencePanel';
 import { exportAnalysisXLSX, type RawSessionLogForExport } from '@/utils/xlsxExport';
 import { supabase } from '@/lib/supabase';
 import { type AthleteConnection } from '@/hooks/useAthleteConnections';
@@ -656,9 +656,6 @@ export function AthleteAnalysisTab({
     return { ...point, ma };
   });
 
-  const plannedCount   = schedule.reduce((s, r) => s + (r.sessions?.length ?? 0), 0);
-  const completedCount = completedLoadLogs.length;
-  const adherencePct   = plannedCount > 0 ? Math.round((completedCount / plannedCount) * 100) : 0;
   const loadIsEmpty = completedLoadLogs.length === 0 && schedule.length === 0;
 
   // ── Derived — Stimulus section ────────────────────────────────────────────
@@ -901,6 +898,9 @@ export function AthleteAnalysisTab({
               </Button>
             </div>
 
+            {/* ── Adherence: consistency first ── */}
+            <AdherencePanel connectionId={resolvedConnectionId} />
+
             {/* ── Internal Load ── */}
             <Card>
               <CardHeader className="pb-2">
@@ -998,23 +998,6 @@ export function AthleteAnalysisTab({
                     </ComposedChart>
                   </ResponsiveContainer>
                 )}
-              </CardContent>
-            </Card>
-
-            {/* ── Adherence ── */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Adherence</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <p className="text-sm">
-                    <span className="font-medium">{completedCount} / {plannedCount}</span>
-                    <span className="text-muted-foreground"> sessions completed</span>
-                    {plannedCount > 0 && <span className="font-medium ml-2">{adherencePct}%</span>}
-                  </p>
-                  {plannedCount > 0 && <Progress value={adherencePct} className="h-2" />}
-                </div>
               </CardContent>
             </Card>
 
