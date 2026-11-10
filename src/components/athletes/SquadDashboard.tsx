@@ -302,18 +302,23 @@ function AthleteCard({ name, summary, onClick }: CardProps) {
             {summary.weekAUZScore !== null && <ZBadge z={summary.weekAUZScore} />}
           </div>
           <div className="text-center">
-            <p className="text-[10px] text-muted-foreground">Sessions this week</p>
-            {summary.weekPlannedSessions > 0 ? (
-              <>
-                <p className="font-medium tabular-nums">
-                  {summary.weekCompletedSessions} of {summary.weekPlannedSessions} done
+            {/* The shown day: sessions done, or rest day; below it the week's adherence */}
+            <p className="text-[10px] text-muted-foreground">Sessions</p>
+            {(() => {
+              const daySessions = summary.daySchedule?.sessions ?? [];
+              const dayDone = daySessions.filter(s => s.done).length;
+              return daySessions.length > 0 ? (
+                <p className={cn('font-medium tabular-nums', dayDone === daySessions.length && 'text-emerald-600')}>
+                  {dayDone} of {daySessions.length} done
                 </p>
-                <p className="text-[10px] text-muted-foreground tabular-nums">
-                  {Math.round((summary.weekCompletedSessions / summary.weekPlannedSessions) * 100)}% · {summary.weekThroughDay === 'Mon' ? 'Mon' : `Mon–${summary.weekThroughDay}`}
-                </p>
-              </>
-            ) : (
-              <p className="font-medium text-muted-foreground">—</p>
+              ) : (
+                <p className="font-medium text-muted-foreground">Rest day</p>
+              );
+            })()}
+            {summary.weekPlannedSessions > 0 && (
+              <p className="text-[10px] text-muted-foreground tabular-nums">
+                {Math.round((summary.weekCompletedSessions / summary.weekPlannedSessions) * 100)}% this week
+              </p>
             )}
           </div>
         </div>
