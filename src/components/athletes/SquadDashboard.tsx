@@ -302,14 +302,14 @@ function AthleteCard({ name, summary, onClick }: CardProps) {
             {summary.weekAUZScore !== null && <ZBadge z={summary.weekAUZScore} />}
           </div>
           <div className="text-center">
-            <p className="text-[10px] text-muted-foreground">Sessions</p>
+            <p className="text-[10px] text-muted-foreground">Sessions this week</p>
             {summary.weekPlannedSessions > 0 ? (
               <>
                 <p className="font-medium tabular-nums">
                   {summary.weekCompletedSessions} of {summary.weekPlannedSessions} done
                 </p>
                 <p className="text-[10px] text-muted-foreground tabular-nums">
-                  {Math.round((summary.weekCompletedSessions / summary.weekPlannedSessions) * 100)}% · week so far
+                  {Math.round((summary.weekCompletedSessions / summary.weekPlannedSessions) * 100)}% · {summary.weekThroughDay === 'Mon' ? 'Mon' : `Mon–${summary.weekThroughDay}`}
                 </p>
               </>
             ) : (

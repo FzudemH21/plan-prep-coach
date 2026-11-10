@@ -17,7 +17,7 @@
 import { checkinRefOf, metricRefOf, withoutCheckinTag } from '@/utils/parameterMeasures';
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { startOfISOWeek, subDays, format } from 'date-fns';
+import { startOfISOWeek, subDays, addDays, format } from 'date-fns';
 import type { MonitoringConfig } from '@/types/athlete';
 import { isBorgLevel, migrateLegacyIntensity } from '@/utils/intensityScale';
 import { adherenceByDay, adherenceTotal, plannedSessionId } from '@/utils/adherence';
@@ -68,8 +68,10 @@ export interface AthleteSquadSummary {
   avgWeeklyAU: number;
   /** Planned sessions Mon → selectedDate that are finished (see utils/adherence) */
   weekCompletedSessions: number;
-  /** Planned sessions Mon → selectedDate (today's open ones not counted yet) */
+  /** Planned sessions Mon → selectedDate, all of today's included (later days only once done) */
   weekPlannedSessions: number;
+  /** Last day of the counted range, e.g. "Tue" (Mon–Tue) */
+  weekThroughDay: string;
   /** Z-score vs all daily composites in the 28-day window. Null if < 2 data points. */
   wellnessZScore: number | null;
   /** Z-score of weekAU vs prior complete-week AUs. Null if < 2 prior weeks. */
@@ -199,7 +201,8 @@ export function useSquadOverview(
       const weekStart    = startOfISOWeek(today);
       const weekStartStr = format(weekStart, 'yyyy-MM-dd');
       const todayStr     = format(today, 'yyyy-MM-dd');
-      const realTodayStr = format(new Date(), 'yyyy-MM-dd');
+      // Sessions count from their day on — today's too, done or not; days after today only once done
+      const countFromTomorrow = format(addDays(selectedDate < new Date() ? selectedDate : new Date(), 1), 'yyyy-MM-dd');
       const from28Str    = format(subDays(today, 28), 'yyyy-MM-dd');
 
       const [checkinsRes, logsRes, scheduleRes, testRes] = await Promise.all([
@@ -302,7 +305,7 @@ export function useSquadOverview(
 
         // Adherence for the week containing selectedDate (Mon → selectedDate)
         const connSchedule = schedule.filter(s => s.athlete_connection_id === conn.id);
-        const byDay        = adherenceByDay(connSchedule, weekLogs, realTodayStr);
+        const byDay        = adherenceByDay(connSchedule, weekLogs, countFromTomorrow);
         const weekAdherence = adherenceTotal(byDay, weekStartStr, todayStr);
 
         // Day schedule for exactly selectedDate
@@ -363,6 +366,7 @@ export function useSquadOverview(
           avgWeeklyAU,
           weekCompletedSessions: weekAdherence.done,
           weekPlannedSessions:   weekAdherence.planned,
+          weekThroughDay:        format(today, 'EEE'),
           wellnessZScore,
           weekAUZScore,
           customMetricValues,
