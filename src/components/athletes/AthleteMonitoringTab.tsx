@@ -1,5 +1,6 @@
 import { limbSymmetryIndex, monitoringRefsOf, monitoringSideOf } from '@/utils/parameterMeasures';
-import { BASELINE_DAYS, daysBefore, outsideRange, withNormalRange, type TrendPoint } from '@/utils/normalRange';
+import { BASELINE_DAYS, daysBefore, outsideRange, withNormalRange, type TrendPoint, type GapPoint } from '@/utils/normalRange';
+import { fillMissingDays } from '@/utils/dailySeries';
 import { useState, useMemo, useEffect } from 'react';
 import { format, isWithinInterval } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -383,11 +384,13 @@ function CalendarRangePicker({ from, to, onChange, onClear }: CalendarRangePicke
 
 // ── Trend helpers ─────────────────────────────────────────────────────────────
 
+/** One value per calendar day (null: no entry). Average of the last `window` days, from more than half of them */
 function movingAverage(values: (number | null)[], window: number): (number | null)[] {
+  const minValues = Math.floor(window / 2) + 1;
   return values.map((_, i) => {
-    if (i < window - 1) return null; // need full window before computing
+    if (i < window - 1) return null; // need the full window before computing
     const slice = values.slice(i - window + 1, i + 1).filter((v): v is number => v !== null);
-    if (slice.length < window) return null; // skip if any nulls in the window
+    if (slice.length < minValues) return null; // too many days without a check-in
     return parseFloat((slice.reduce((a, b) => a + b, 0) / slice.length).toFixed(2));
   });
 }
@@ -400,15 +403,17 @@ function ZScoreChart({ checkins, stats, maWindow = 7 }: {
   maWindow?: number;
 }) {
   const data = useMemo(() => {
-    const sorted = [...checkins].reverse(); // oldest → newest
+    // Oldest → newest, every day — a day without a check-in is a gap in the chart
+    const sorted = fillMissingDays([...checkins].reverse(), date => ({ date, blank: true as const }));
+    const compOf = (c: (typeof sorted)[number]) => ('blank' in c ? null : wellnessComposite(c));
     const zValues = sorted.map(c => {
-      const comp = wellnessComposite(c);
+      const comp = compOf(c);
       return (comp !== null && stats) ? zScore(comp, stats) : null;
     });
     const maValues = movingAverage(zValues, maWindow);
 
     return sorted.map((c, i) => {
-      const comp = wellnessComposite(c);
+      const comp = compOf(c);
       const d = new Date(c.date + 'T12:00:00');
       return {
         date: c.date,
@@ -420,7 +425,7 @@ function ZScoreChart({ checkins, stats, maWindow = 7 }: {
     });
   }, [checkins, stats, maWindow]);
 
-  if (data.length < 2) {
+  if (data.filter(d => d.composite !== null).length < 2) {
     return (
       <p className="text-xs text-muted-foreground text-center py-6">
         Not enough data yet — chart appears after 2+ check-ins.
@@ -447,7 +452,9 @@ function ZScoreChart({ checkins, stats, maWindow = 7 }: {
     return (
       <div className="bg-background border border-border rounded-lg shadow-lg px-3 py-2 text-xs space-y-1">
         <p className="font-semibold">{label}</p>
-        {p.composite !== null && <p>Wellness: <span className="font-medium">{p.composite.toFixed(1)} / 5</span></p>}
+        {p.composite !== null
+          ? <p>Wellness: <span className="font-medium">{p.composite.toFixed(1)} / 5</span></p>
+          : <p className="text-muted-foreground">No check-in</p>}
         {p.z !== null && (
           <p className={cn('font-semibold', zColor(p.z))}>
             z = {p.z >= 0 ? '+' : ''}{p.z.toFixed(2)} — {zLabel(p.z)}
@@ -543,10 +550,12 @@ function NumberTrend({ points, unit, label, color }: {
     return <p className="text-xs text-muted-foreground py-2">{label ? `${label}: ` : ''}No data yet.</p>;
   }
   const latest = points[points.length - 1];
+  // Every day — a day without an entry is a gap
+  const chartPoints = fillMissingDays(points, date => ({ date, value: null }));
 
-  const TrendTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: TrendPoint }[] }) => {
+  const TrendTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: TrendPoint | GapPoint }[] }) => {
     const p = active ? payload?.[0]?.payload : undefined;
-    if (!p) return null;
+    if (!p || p.value === null) return null;
     return (
       <div className="bg-background border border-border rounded-lg shadow-lg px-3 py-2 text-xs space-y-0.5">
         <p className="font-semibold">{shortDate(p.date)}{label ? ` · ${label}` : ''}</p>
@@ -577,7 +586,7 @@ function NumberTrend({ points, unit, label, color }: {
           <p className="text-xs text-muted-foreground py-8 text-center">Chart appears after 2+ entries.</p>
         ) : (
           <ResponsiveContainer width="100%" height={120}>
-            <ComposedChart data={points} margin={{ top: 4, right: 8, left: -28, bottom: 0 }}>
+            <ComposedChart data={chartPoints} margin={{ top: 4, right: 8, left: -28, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
               <XAxis
                 dataKey="date"
@@ -600,13 +609,14 @@ function NumberTrend({ points, unit, label, color }: {
                 isAnimationActive={false}
                 activeDot={{ r: 5 }}
                 // Days outside the normal range: amber
-                dot={(props: { cx?: number; cy?: number; index?: number; payload?: TrendPoint }) => (
+                dot={(props: { cx?: number; cy?: number; index?: number; payload?: TrendPoint | GapPoint }) => (
+                  props.payload?.value == null || props.cy == null ? <g key={props.index} /> :
                   <circle
                     key={props.index}
                     cx={props.cx}
                     cy={props.cy}
-                    r={props.payload && outsideRange(props.payload) ? 4 : 3}
-                    fill={props.payload && outsideRange(props.payload) ? '#f59e0b' : color}
+                    r={outsideRange(props.payload) ? 4 : 3}
+                    fill={outsideRange(props.payload) ? '#f59e0b' : color}
                     stroke="white"
                     strokeWidth={1}
                   />
@@ -793,7 +803,7 @@ function CustomMetricCard({
                 </p>
               ) : (
                 <ResponsiveContainer width="100%" height={120}>
-                  <LineChart data={data} margin={{ top: 4, right: 8, left: -28, bottom: 0 }}>
+                  <LineChart data={fillMissingDays(data, date => ({ date }))} margin={{ top: 4, right: 8, left: -28, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
                     <XAxis
                       dataKey="date"

@@ -33,7 +33,8 @@ import { useAthleteCheckins, wellnessComposite, type AthleteCheckin } from '@/ho
 import { DEFAULT_MONITORING_CONFIG, type AthleteNote } from '@/types/athlete';
 import { FRONT_REGIONS, BACK_REGIONS, nrsSeverityColor, nrsSeverityStroke, svgRegionKey, svgRegionKeyLegacy } from '@/lib/bodyMapData';
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, ComposedChart, Area } from 'recharts';
-import { lastPerDay, outsideRange, rangeStatus, withNormalRange, type TrendPoint } from '@/utils/normalRange';
+import { lastPerDay, outsideRange, rangeStatus, withNormalRange, type TrendPoint, type GapPoint } from '@/utils/normalRange';
+import { fillMissingDays } from '@/utils/dailySeries';
 import { useSessionLibrary } from '@/hooks/useSessionLibrary';
 import type { SessionLibraryEntry } from '@/types/sessionLibrary';
 import { useToast } from '@/hooks/use-toast';
@@ -241,13 +242,16 @@ function CustomMetricMiniChart({
     cutoff.setDate(cutoff.getDate() - days);
     return toLocalDateStr(cutoff);
   }, [days]);
+  // Every day — a day without an entry is a gap in the chart
   const data = useMemo(() => {
-    if (normalRange) return withNormalRange(lastPerDay(history), cutoffStr).map(p => ({ ...p, label: shortLabel(p.date) }));
-    return history.filter(h => h.date >= cutoffStr).map(h => ({ label: shortLabel(h.date), value: h.value }));
+    const points: Array<TrendPoint | GapPoint> = normalRange
+      ? withNormalRange(lastPerDay(history), cutoffStr)
+      : history.filter(h => h.date >= cutoffStr);
+    return fillMissingDays(points, date => ({ date, value: null })).map(p => ({ ...p, label: shortLabel(p.date) }));
   }, [history, cutoffStr, normalRange]);
 
   const { t: tMetric } = useTranslation();
-  if (data.length < 2) return (
+  if (data.filter(p => p.value !== null).length < 2) return (
     <p className="text-xs text-muted-foreground text-center py-4">{tMetric('coachMobile.athleteProfile.notEnoughDataMetric')}</p>
   );
 
@@ -255,9 +259,9 @@ function CustomMetricMiniChart({
 
   if (normalRange) {
     const color = 'hsl(var(--primary))';
-    const RangeTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: TrendPoint & { label: string } }[] }) => {
+    const RangeTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: (TrendPoint | GapPoint) & { label: string } }[] }) => {
       const pt = active ? payload?.[0]?.payload : undefined;
-      if (!pt) return null;
+      if (!pt || pt.value === null) return null;
       return (
         <div className="rounded-md border bg-background px-2 py-1 text-[11px] shadow-sm space-y-0.5">
           <p className="font-medium">{pt.label}</p>
@@ -282,11 +286,12 @@ function CustomMetricMiniChart({
           <Line
             type="monotone" dataKey="value" stroke={color} strokeWidth={2} isAnimationActive={false} activeDot={{ r: 5 }}
             // Days outside the normal range: amber
-            dot={(props: { cx?: number; cy?: number; index?: number; payload?: TrendPoint }) => (
+            dot={(props: { cx?: number; cy?: number; index?: number; payload?: TrendPoint | GapPoint }) => (
+              props.payload?.value == null || props.cy == null ? <g key={props.index} /> :
               <circle
                 key={props.index} cx={props.cx} cy={props.cy}
-                r={props.payload && outsideRange(props.payload) ? 4 : 3}
-                fill={props.payload && outsideRange(props.payload) ? '#f59e0b' : color}
+                r={outsideRange(props.payload) ? 4 : 3}
+                fill={outsideRange(props.payload) ? '#f59e0b' : color}
                 stroke="white" strokeWidth={1}
               />
             )}
@@ -305,7 +310,7 @@ function CustomMetricMiniChart({
         <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
         <YAxis domain={[0, domainMax ?? 'auto']} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
         <Tooltip
-          formatter={(v: number) => [withUnit(v), 'Value']}
+          formatter={(v: number | null) => [v == null ? '—' : withUnit(v), 'Value']}
           contentStyle={{ fontSize: 10, padding: '4px 8px', borderRadius: 6 }}
           labelStyle={{ fontSize: 10 }}
         />

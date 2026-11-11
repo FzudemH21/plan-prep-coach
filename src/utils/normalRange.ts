@@ -8,6 +8,8 @@ export const BASELINE_DAYS = 28;
 export const BASELINE_MIN_VALUES = 7;
 
 export type TrendPoint = { date: string; value: number; mean?: number; band?: [number, number]; z?: number };
+/** A day without an entry in a chart (a gap) */
+export type GapPoint = { date: string; value: null; mean?: undefined; band?: undefined; z?: undefined };
 
 const ymd = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
