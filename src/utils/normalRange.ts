@@ -36,7 +36,9 @@ export function withNormalRange(series: Array<{ date: string; value: number }>, 
     if (previous.length < BASELINE_MIN_VALUES) return { ...p };
     const mean = previous.reduce((s, v) => s + v, 0) / previous.length;
     const sd = Math.sqrt(previous.reduce((s, v) => s + (v - mean) ** 2, 0) / (previous.length - 1));
-    return { ...p, mean, band: [mean - sd, mean + sd], z: sd > 0 ? (p.value - mean) / sd : 0 };
+    // Values that can't go below 0 (pain, minutes, cm…): the range doesn't either
+    const lower = previous.every(v => v >= 0) && p.value >= 0 ? Math.max(0, mean - sd) : mean - sd;
+    return { ...p, mean, band: [lower, mean + sd], z: sd > 0 ? (p.value - mean) / sd : 0 };
   });
 }
 
