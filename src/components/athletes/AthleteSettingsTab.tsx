@@ -252,15 +252,17 @@ function AppAccountCard({ athlete }: { athlete: Athlete }) {
                     {regenerating ? 'Creating…' : 'New Invite Link'}
                   </Button>
                 )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:text-destructive gap-1.5"
-                  onClick={() => setShowRevokeConfirm(true)}
-                >
-                  <UserX className="h-3.5 w-3.5" />
-                  Revoke Access
-                </Button>
+                {connection.connectedAt && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:text-destructive gap-1.5"
+                    onClick={() => setShowRevokeConfirm(true)}
+                  >
+                    <UserX className="h-3.5 w-3.5" />
+                    Revoke Access
+                  </Button>
+                )}
               </div>
             </div>
           ) : (
@@ -317,7 +319,7 @@ function AppAccountCard({ athlete }: { athlete: Athlete }) {
           <DialogHeader>
             <DialogTitle>Revoke App Access?</DialogTitle>
             <DialogDescription>
-              {athlete.firstName} will immediately lose access to the athlete app. You can create a new account for them at any time.
+              {athlete.firstName} will immediately lose access to the athlete app. Their logged sessions, check-ins and messages stay here — a new invite link brings them back with their history.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

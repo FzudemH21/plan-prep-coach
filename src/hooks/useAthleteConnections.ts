@@ -6,7 +6,6 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { removeConnectionFiles } from '@/utils/athleteDataDeletion';
 import { patchConnectionProfileData } from '@/utils/athleteProfileSync';
 import { useAuth } from '@/hooks/useAuth';
 import type { MonitoringConfig } from '@/types/athlete';
@@ -226,18 +225,26 @@ export function useAthleteConnections() {
     return code;
   }, []);
 
-  /** Delete a connection (revoke athlete app access). Its app data goes with it (database cascade);
-   *  its files are removed first, while the storage policies can still find the connection. */
+  /**
+   * Revoke athlete app access: the athlete's login is unlinked and the invite link replaced, so they
+   * are out of the app at once. Everything they logged (sessions, check-ins, tests, chat, files)
+   * stays with the athlete — deleting the connection used to take all of it with it (database
+   * cascade). A new invite link brings them back to the same history. Removing the data is
+   * "Delete athlete".
+   */
   const revokeConnection = useCallback(async (connectionId: string) => {
-    await removeConnectionFiles(connectionId);
+    const bytes = crypto.getRandomValues(new Uint8Array(6));
+    const code = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
     const { data, error } = await supabase
       .from('athlete_connections')
-      .delete()
+      .update({ athlete_auth_user_id: null, connected_at: null, invite_code: code })
       .eq('id', connectionId)
       .select('id');
     if (error) throw error;
-    if (!data || data.length === 0) throw new Error('The app account could not be removed. Please reload and try again.');
-    setConnections(prev => prev.filter(c => c.id !== connectionId));
+    if (!data || data.length === 0) throw new Error('App access could not be revoked. Please reload and try again.');
+    setConnections(prev => prev.map(c => c.id === connectionId
+      ? { ...c, athleteAuthUserId: null, connectedAt: null, inviteCode: code }
+      : c));
   }, []);
 
   /** Push a metrics snapshot (body metrics + performance params) into profile_data.
