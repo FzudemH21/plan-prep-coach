@@ -1,4 +1,5 @@
 import '@/styles/print-session.css';
+import { useEffect } from 'react';
 import { WorkoutSection, WorkoutExercise } from '@/types/workout';
 import { ToolboxDatabase, ToolboxEntry } from '@/types/toolbox';
 import { ParameterVisibilityOverrides, isParameterVisible } from '@/components/microcycle-planning/ParameterVisibilityPopover';
@@ -380,6 +381,26 @@ export function PrintSessionView({
   coachLogo,
   accentColor,
 }: PrintSessionViewProps) {
+  // Printing (button or Ctrl+P): the document — and the saved PDF's file name — is the workout's name
+  useEffect(() => {
+    let previous: string | null = null;
+    const before = () => {
+      previous = document.title;
+      document.title = sessionName.trim() || previous;
+    };
+    const after = () => {
+      if (previous !== null) document.title = previous;
+      previous = null;
+    };
+    window.addEventListener('beforeprint', before);
+    window.addEventListener('afterprint', after);
+    return () => {
+      window.removeEventListener('beforeprint', before);
+      window.removeEventListener('afterprint', after);
+      after();
+    };
+  }, [sessionName]);
+
   return (
     <div
       className="print-session-view"
