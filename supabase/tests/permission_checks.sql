@@ -22,6 +22,8 @@ declare
   v_coach   uuid;
   v_athlete uuid;
   v_conn    uuid;
+  v_org     uuid;
+  n0        bigint;
   tabs      text[];
   t         text;
   cols      text[];
@@ -39,6 +41,10 @@ begin
   select athlete_auth_user_id, id into v_athlete, v_conn from public.athlete_connections
    where coach_user_id = v_coach and athlete_auth_user_id is not null
    order by connected_at desc nulls last limit 1;
+  -- Your organization (phase 2 on)
+  if to_regclass('public.organization_members') is not null then
+    execute 'select org_id from public.organization_members where user_id = $1' into v_org using v_coach;
+  end if;
   select array_agg(format('%I.%I', schemaname, tablename) order by tablename) into tabs
     from pg_tables where schemaname = 'public' and tablename <> 'perm_results';
   tabs := tabs || 'storage.objects'::text;
@@ -65,7 +71,11 @@ begin
           if n > 0 then st := 'FAIL'; end if;
           acc := acc || jsonb_build_object('who', who, 'table_name', t, 'check_name', 'rows visible', 'expected', '0', 'actual', n::text, 'status', st);
         elsif who = 'athlete' then
-          if t = 'public.athlete_connections' then
+          if t in ('public.organizations', 'public.organization_members') then
+            execute format('select count(*) from %s', t) into n;
+            if n > 0 then st := 'FAIL'; end if;
+            acc := acc || jsonb_build_object('who', who, 'table_name', t, 'check_name', 'organizations visible', 'expected', '0', 'actual', n::text, 'status', st);
+          elsif t = 'public.athlete_connections' then
             execute format('select count(*) from %s where id is distinct from %L', t, v_conn) into n;
             if n > 0 then st := 'FAIL'; end if;
             acc := acc || jsonb_build_object('who', who, 'table_name', t, 'check_name', 'other athletes'' rows visible', 'expected', '0', 'actual', n::text, 'status', st);
@@ -87,7 +97,13 @@ begin
             acc := acc || jsonb_build_object('who', who, 'table_name', t, 'check_name', 'rows visible (no per-athlete column)', 'expected', '0', 'actual', n::text, 'status', st);
           end if;
         else -- coach: no rows of other coaches
-          if 'coach_user_id' = any(cols) then
+          if t = 'public.organizations' then
+            execute format('select count(*) from %s where id is distinct from %L', t, v_org) into n;
+            if n > 0 then st := 'FAIL'; end if;
+          elsif t = 'public.organization_members' then
+            execute format('select count(*) from %s where org_id is distinct from %L', t, v_org) into n;
+            if n > 0 then st := 'FAIL'; end if;
+          elsif 'coach_user_id' = any(cols) then
             execute format('select count(*) from %s where coach_user_id is distinct from %L', t, uid) into n;
             if n > 0 then st := 'FAIL'; end if;
           elsif 'user_id' = any(cols) then
@@ -156,6 +172,55 @@ begin
             acc := acc || jsonb_build_object('who', who, 'table_name', wt.tbl, 'check_name', wt.label, 'expected', '0 rows / blocked', 'actual', sqlerrm, 'status', 'ERROR');
         end;
       end loop;
+    end if;
+
+    -- Organizations (phase 2 on): nobody — the coach included — can add members, change roles or
+    -- rights, create organizations, or move data to another organization from the app
+    if v_org is not null then
+      for wt in
+        select * from (values
+          ('public.organization_members', 'join the organization as owner',
+             format('insert into public.organization_members (org_id, user_id, role) values (%L, coalesce(auth.uid(), gen_random_uuid()), %L)', v_org, 'owner')),
+          ('public.organization_members', 'change roles or rights',
+             'update public.organization_members set role = role, rights = rights'),
+          ('public.organization_members', 'remove members',
+             'delete from public.organization_members'),
+          ('public.organizations', 'create an organization',
+             'insert into public.organizations (name) values (''perm-check'')'),
+          ('public.organizations', 'rename or delete organizations',
+             'update public.organizations set name = name')
+        ) as w(tbl, label, stmt)
+      loop
+        n := 0; st := 'ok';
+        begin
+          execute wt.stmt;
+          get diagnostics n = row_count;
+          raise exception using errcode = 'P0001', message = 'perm_check_undo';
+        exception
+          when sqlstate 'P0001' then
+            if n > 0 then st := 'FAIL'; end if;
+            acc := acc || jsonb_build_object('who', who, 'table_name', wt.tbl, 'check_name', wt.label, 'expected', '0 rows / blocked', 'actual', n::text || ' rows (undone)', 'status', st);
+          when insufficient_privilege or check_violation or foreign_key_violation or not_null_violation or unique_violation then
+            acc := acc || jsonb_build_object('who', who, 'table_name', wt.tbl, 'check_name', wt.label, 'expected', '0 rows / blocked', 'actual', 'blocked', 'status', 'ok');
+          when others then
+            acc := acc || jsonb_build_object('who', who, 'table_name', wt.tbl, 'check_name', wt.label, 'expected', '0 rows / blocked', 'actual', sqlerrm, 'status', 'ERROR');
+        end;
+      end loop;
+
+      -- The coach's own programs keep their organization even if the app tries to change it
+      if who = 'coach' then
+        begin
+          execute 'select count(*) from public.program_records where org_id is not null' into n0;
+          execute 'update public.program_records set org_id = null where org_id is not null';
+          execute 'select count(*) from public.program_records where org_id is not null' into n;
+          raise exception using errcode = 'P0001', message = 'perm_check_undo';
+        exception
+          when sqlstate 'P0001' then
+            acc := acc || jsonb_build_object('who', who, 'table_name', 'public.program_records', 'check_name', 'move programs out of the organization', 'expected', n0::text || ' keep it', 'actual', n::text || ' (undone)', 'status', case when n = n0 and n0 > 0 then 'ok' else 'FAIL' end);
+          when others then
+            acc := acc || jsonb_build_object('who', who, 'table_name', 'public.program_records', 'check_name', 'move programs out of the organization', 'expected', 'kept', 'actual', sqlerrm, 'status', 'ERROR');
+        end;
+      end if;
     end if;
 
     reset role;
