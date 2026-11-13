@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useCallback } from 'react';
-import { useSupabaseStore } from '@/hooks/useSupabaseStore';
+import { createRecordStore, useRecordStore } from '@/lib/recordStore';
+import { EXERCISE_LIBRARY_VERSION, joinExerciseLibraries, normalizeExerciseLibraries, splitExerciseLibraries } from '@/lib/exerciseLibraryRecords';
 import { syncExerciseDetailToSchedule } from '@/utils/exerciseDetailSync';
 import { propagateExerciseRename, renameExerciseInValue } from '@/utils/exerciseRename';
 
@@ -121,34 +122,35 @@ interface CustomLibrariesContextType {
 
 const CustomLibrariesContext = createContext<CustomLibrariesContextType | undefined>(undefined);
 
-const CURRENT_VERSION = '3.0.0';
-
-const DEFAULT_DATA: CustomLibraryData = {
-  libraries: [],
-  lastUpdated: new Date().toISOString(),
-  version: CURRENT_VERSION,
-};
-
-function migrateLegacy(raw: unknown): CustomLibraryData {
-  const r = raw as CustomLibraryData;
-  // If version is outdated, discard old built-in libraries and start fresh
-  if (!r?.version || r.version < CURRENT_VERSION) return DEFAULT_DATA;
-  return r;
-}
+/**
+ * One row per library, exercise and circuit (coach_records, store "exercises" — see
+ * exerciseLibraryRecords.ts). The old one-row table custom_libraries stays as a frozen backup.
+ */
+export const exerciseLibraryStore = createRecordStore<CustomLibraryData>({
+  table: 'coach_records',
+  store: 'exercises',
+  legacyTable: 'custom_libraries',
+  label: 'exercise library',
+  defaultValue: () => ({ libraries: [], lastUpdated: new Date().toISOString(), version: EXERCISE_LIBRARY_VERSION }),
+  migrate: normalizeExerciseLibraries,
+  split: splitExerciseLibraries,
+  join: joinExerciseLibraries,
+  // Deleting a library is one per save (its exercises go with it)
+  guardedPrefix: id => id.startsWith('lib:'),
+  maxRemovalsPerSave: 1,
+  cacheKey: 'coach_records_exercises_sb_cache',
+  oldCacheKeys: ['custom_libraries_sb_cache'],
+});
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [data, saveData, isLoading] = useSupabaseStore<CustomLibraryData>({
-    tableName: 'custom_libraries',
-    legacyKey: 'custom_libraries',
-    defaultValue: DEFAULT_DATA,
-    migrate: migrateLegacy,
-  });
+  const [data, saveData, isLoading] = useRecordStore(exerciseLibraryStore);
 
   // Fire-and-forget helper — keeps public API synchronous
   const save = useCallback((newData: CustomLibraryData) => {
-    void saveData({ ...newData, lastUpdated: new Date().toISOString() });
+    // Not loaded yet / refused: the store already told the coach (toast)
+    saveData({ ...newData, lastUpdated: new Date().toISOString() }).catch(err => console.warn('[exerciseLibrary] not saved:', err));
   }, [saveData]);
 
   // ── Library operations ────────────────────────────────────────────────────

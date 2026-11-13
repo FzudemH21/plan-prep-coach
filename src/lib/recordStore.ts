@@ -5,13 +5,18 @@
  * the records that changed — so a save can't touch, let alone overwrite, any other record.
  *
  * - Nothing is saved before the data has really been loaded (a failed load blocks saving).
- * - Removing records is limited per save (`maxRemovalsPerSave` of the `guardedPrefix` records), so a
- *   save built on missing data can't empty the store; removed records keep their row, marked deleted.
+ * - Removing records is limited per save (`maxRemovalsPerSave` / `refuseEmptying` of the
+ *   `guardedPrefix` records), so a save built on missing data can't empty the store; removed records
+ *   keep their row, marked deleted.
  * - A record whose write failed stays "changed" and is written with the next save.
- * - Writes of one record run one after another, the newest last.
+ * - Writes of one record run one after another, the newest last. Many records at once (the first
+ *   copy, an import) are written in batches.
+ * - A stored record that `join` can't place (e.g. an exercise whose library row is missing) is left
+ *   alone: never removed or overwritten by a save.
  * - The old one-row table stays as a frozen backup: copied over on the first load; afterwards only
  *   records that exist there but not here (e.g. added by a tab still running the old code) are taken.
  * - Without the new table (SQL not run yet) everything works on the old row as before.
+ * - Several stores can share one table (`store`: the value of its `store` column).
  * - A copy in the browser (`cacheKey`) is shown right away while loading, as pages expect the data
  *   at once (e.g. an athlete's page opened directly). Only for showing: nothing is saved before the
  *   real data has loaded, and the loaded data replaces it.
@@ -22,20 +27,26 @@ import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 
 export interface RecordStoreConfig<T> {
-  /** One row per record: (coach_user_id, id, data, deleted_at, updated_at) */
+  /** One row per record: (coach_user_id, [store,] id, data, deleted_at, updated_at) */
   table: string;
+  /** The table holds several stores: this store's value of the `store` column */
+  store?: string;
   /** The old one-row-per-coach table: (user_id, data, updated_at) */
   legacyTable: string;
   /** Shown in messages, e.g. "athlete data" */
   label: string;
+  /** The data when nothing has been stored yet */
   defaultValue: () => T;
-  /** Brings old stored formats up to date */
+  /** Brings old stored formats up to date (the old row and the browser copy) */
   migrate: (raw: unknown) => T;
   split: (data: T) => Record<string, unknown>;
   join: (records: Record<string, unknown>) => T;
-  /** Records of which only `maxRemovalsPerSave` may be removed by one save (e.g. athletes) */
+  /** The records whose removal is limited (e.g. athletes, exercise libraries) */
   guardedPrefix?: (id: string) => boolean;
+  /** At most this many guarded records removed by one save */
   maxRemovalsPerSave?: number;
+  /** Refuse a save that removes more than one guarded record and leaves none (built on empty data) */
+  refuseEmptying?: boolean;
   /** Browser copy shown while loading (ends in "_sb_cache": dropped first when storage is full) */
   cacheKey?: string;
   /** Older browser copies to remove */
@@ -59,6 +70,13 @@ export class RecordStoreNotLoadedError extends Error {
 }
 
 const LOAD_ATTEMPTS = 3;
+/** Rows per request when loading (Supabase returns at most 1000) */
+const PAGE = 1000;
+/** From this many records written at once: in batches instead of one request each */
+const BATCH_FROM = 8;
+const BATCH_SIZE = 200;
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 function isMissingTable(error: { code?: string; message?: string } | null | undefined): boolean {
   if (!error) return false;
@@ -72,19 +90,24 @@ async function withRetries<R>(what: string, run: () => PromiseLike<{ data: R; er
     if (isMissingTable(error)) throw error;
     console.error(`[recordStore] ${what} failed (attempt ${attempt}):`, error);
     if (attempt >= LOAD_ATTEMPTS) throw error;
-    await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    await sleep(1000 * attempt);
   }
 }
 
 export interface RecordStore<T> {
+  label: string;
   getState: () => StoreState<T>;
   subscribe: (fn: () => void) => () => void;
   ensureLoaded: (userId: string) => Promise<void>;
   reset: () => void;
   save: (next: T) => Promise<void>;
+  /** Records confirmed as stored in Supabase (ids) */
+  savedIds: () => Set<string>;
 }
 
 export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<T> {
+  const name = config.store ? `${config.table}/${config.store}` : config.table;
+
   // ─── Browser copy (only for showing while loading) ──────────────────────────
   const readCache = (): { userId: string; data: T } | null => {
     if (!config.cacheKey) return null;
@@ -116,7 +139,9 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
   let loadPromise: Promise<void> | null = null;
   /** Record id → JSON of the version stored in Supabase (what a save compares against) */
   let stored = new Map<string, string>();
-  const seenKey = (userId: string) => `${config.table}LegacySeen_${userId}`;
+  const seenKey = (userId: string) => (config.store
+    ? `${config.table}_${config.store}_LegacySeen_${userId}`
+    : `${config.table}LegacySeen_${userId}`);
 
   const setState = (next: Partial<StoreState<T>>) => {
     state = { ...state, ...next };
@@ -148,37 +173,47 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
 
   // ─── Writing ────────────────────────────────────────────────────────────────
 
-  const writeRow = async (userId: string, id: string, data: unknown, deleted: boolean) => {
-    const now = new Date().toISOString();
-    const { error } = await supabase.from(config.table).upsert(
-      { coach_user_id: userId, id, data, deleted_at: deleted ? now : null, updated_at: now },
-      { onConflict: 'coach_user_id,id' },
-    );
+  const rowOf = (userId: string, id: string, data: unknown, deleted: boolean, now: string) => ({
+    coach_user_id: userId,
+    ...(config.store ? { store: config.store } : {}),
+    id,
+    data,
+    deleted_at: deleted ? now : null,
+    updated_at: now,
+  });
+  const onConflict = config.store ? 'coach_user_id,store,id' : 'coach_user_id,id';
+  const writeRows = async (rows: ReturnType<typeof rowOf>[]) => {
+    const { error } = await supabase.from(config.table).upsert(rows, { onConflict });
     if (error) throw error;
   };
 
+  interface Pending { id: string; data: unknown; json: string; deleted: boolean }
+  const markStored = (userId: string, entry: Pending) => {
+    if (state.userId !== userId) return;
+    if (entry.deleted) stored.delete(entry.id); else stored.set(entry.id, entry.json);
+  };
+
   // Per record: the version waiting to be written (only the newest is written, one at a time)
-  const queued = new Map<string, { data: unknown; json: string; deleted: boolean }>();
-  // A record's running write loop; it also writes what is queued meanwhile, so callers wait for it
+  const queued = new Map<string, Pending>();
+  // A record's running write; it also writes what is queued meanwhile, so callers wait for it
   const running = new Map<string, Promise<boolean>>();
   const drain = async (userId: string, id: string): Promise<boolean> => {
     let ok = true;
     try {
       for (let entry = queued.get(id); entry; entry = queued.get(id)) {
         queued.delete(id);
+        const row = rowOf(userId, id, entry.data, entry.deleted, new Date().toISOString());
         try {
           try {
-            await writeRow(userId, id, entry.data, entry.deleted);
+            await writeRows([row]);
           } catch {
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            await writeRow(userId, id, entry.data, entry.deleted);
+            await sleep(1500);
+            await writeRows([row]);
           }
-          if (state.userId === userId) {
-            if (entry.deleted) stored.delete(id); else stored.set(id, entry.json);
-          }
+          markStored(userId, entry);
         } catch (err) {
           // Not marked as stored: the next save sees it as changed and writes it again
-          console.error(`[recordStore] ${config.table}/${id} not saved:`, err);
+          console.error(`[recordStore] ${name}/${id} not saved:`, err);
           ok = false;
         }
       }
@@ -187,13 +222,56 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
     }
     return ok;
   };
-  const queueWrite = (userId: string, id: string, data: unknown, json: string, deleted: boolean): Promise<boolean> => {
-    queued.set(id, { data, json, deleted });
-    const current = running.get(id);
+  const queueWrite = (userId: string, entry: Pending): Promise<boolean> => {
+    queued.set(entry.id, entry);
+    const current = running.get(entry.id);
     if (current) return current;
-    const loop = drain(userId, id);
-    running.set(id, loop);
+    const loop = drain(userId, entry.id);
+    running.set(entry.id, loop);
     return loop;
+  };
+
+  /** Write many records: in batches when they are many, one by one otherwise. Per record: true = stored */
+  const writeAll = (userId: string, entries: Pending[]): Promise<boolean[]> => {
+    const busy = entries.filter(e => running.has(e.id) || queued.has(e.id));
+    const free = entries.filter(e => !running.has(e.id) && !queued.has(e.id));
+    if (free.length < BATCH_FROM) return Promise.all(entries.map(e => queueWrite(userId, e)));
+
+    const batch = (async () => {
+      const ok = new Set<string>();
+      for (let i = 0; i < free.length; i += BATCH_SIZE) {
+        const chunk = free.slice(i, i + BATCH_SIZE);
+        const now = new Date().toISOString();
+        const rows = chunk.map(e => rowOf(userId, e.id, e.data, e.deleted, now));
+        try {
+          try {
+            await writeRows(rows);
+          } catch {
+            await sleep(1500);
+            await writeRows(rows);
+          }
+          chunk.forEach(e => { ok.add(e.id); markStored(userId, e); });
+        } catch (err) {
+          console.error(`[recordStore] ${name}: ${chunk.length} records not saved:`, err);
+        }
+      }
+      return ok;
+    })();
+    const freeResults = free.map(e => {
+      const done = batch.then(async ok => {
+        running.delete(e.id);
+        // Changed again while the batch was running: the newer version follows
+        if (queued.has(e.id)) {
+          const loop = drain(userId, e.id);
+          running.set(e.id, loop);
+          return (await loop) && ok.has(e.id);
+        }
+        return ok.has(e.id);
+      });
+      running.set(e.id, done);
+      return done;
+    });
+    return Promise.all([...busy.map(e => queueWrite(userId, e)), ...freeResults]);
   };
 
   let legacyChain: Promise<void> = Promise.resolve();
@@ -216,12 +294,24 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
     return row as { data: unknown; updated_at: string | null } | null;
   };
 
+  type Row = { id: string; data: unknown; deleted_at: string | null };
+  const fetchRows = async (userId: string): Promise<Row[]> => {
+    const all: Row[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const page = await withRetries(`loading the ${config.label}`, () => {
+        let query = supabase.from(config.table).select('id, data, deleted_at').eq('coach_user_id', userId);
+        if (config.store) query = query.eq('store', config.store);
+        return query.order('id').range(from, from + PAGE - 1);
+      }) as Row[];
+      all.push(...page);
+      if (page.length < PAGE) return all;
+    }
+  };
+
   const loadRows = async (userId: string): Promise<boolean> => {
-    type Row = { id: string; data: unknown; deleted_at: string | null };
     let rows: Row[];
     try {
-      rows = await withRetries(`loading the ${config.label}`, () =>
-        supabase.from(config.table).select('id, data, deleted_at').eq('coach_user_id', userId)) as Row[];
+      rows = await fetchRows(userId);
     } catch (err) {
       if (isMissingTable(err as { code?: string; message?: string })) return false;
       throw err;
@@ -249,14 +339,25 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
         const toCopy = Object.entries(legacyRecords).filter(([id]) => !known.has(id));
         // Copied rows aren't marked as stored until written: a failed copy is retried with the next save
         toCopy.forEach(([id, data]) => { records[id] = data; });
-        const results = await Promise.all(toCopy.map(([id, data]) => queueWrite(userId, id, data, JSON.stringify(data), false)));
+        const results = await writeAll(userId, toCopy.map(([id, data]) => ({ id, data, json: JSON.stringify(data), deleted: false })));
         if (toCopy.length > 0) console.info(`[recordStore] copied ${toCopy.length} record(s) of the ${config.label} from the old storage`);
         if (results.every(Boolean)) {
           try { localStorage.setItem(seenKey(userId), legacyMeta?.updated_at ?? ''); } catch { /* copied again next time — harmless */ }
         }
       }
     }
-    const data = config.join(records);
+    // Nothing ever stored: the default data (e.g. the starter training methods)
+    const data = rows.length === 0 && !legacyMeta ? config.defaultValue() : config.join(records);
+
+    // Records the data doesn't hold (join couldn't place them) are left alone: a save never
+    // removes or overwrites them
+    const placed = config.split(data);
+    const unplaced = [...stored.keys()].filter(id => !(id in placed));
+    if (unplaced.length > 0) {
+      unplaced.forEach(id => stored.delete(id));
+      console.warn(`[recordStore] ${name}: ${unplaced.length} stored record(s) could not be placed and are left as they are:`, unplaced.slice(0, 20));
+    }
+
     setState({ mode: 'rows', status: 'loaded', data });
     writeCache(userId, data);
     return true;
@@ -282,7 +383,7 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
       try {
         if (!(await loadRows(userId))) await loadLegacy(userId);
       } catch (err) {
-        console.error(`[recordStore] ${config.table} load failed:`, err);
+        console.error(`[recordStore] ${name} load failed:`, err);
         if (state.userId === userId) setState({ status: 'failed' });
         warnLoadFailed();
       } finally {
@@ -293,6 +394,17 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
   };
 
   // ─── Saving ─────────────────────────────────────────────────────────────────
+
+  const refuse = (count: number) => {
+    console.error(`[recordStore] refused a save that would remove ${count} records of the ${config.label}`);
+    toast({
+      title: 'Not saved',
+      description: `This change would have removed ${count} entries of your ${config.label} at once, so it was stopped. Reload the page.`,
+      variant: 'destructive',
+      duration: 15000,
+    });
+    throw new Error('Refused: too many removals in one save');
+  };
 
   const save = async (next: T): Promise<void> => {
     const userId = state.userId;
@@ -308,44 +420,39 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
     }
 
     const parts = config.split(next);
-    const changed: Array<[string, unknown, string]> = [];
+    const changed: Pending[] = [];
     Object.entries(parts).forEach(([id, data]) => {
       const json = JSON.stringify(data);
-      if (stored.get(id) !== json) changed.push([id, data, json]);
+      if (stored.get(id) !== json) changed.push({ id, data, json, deleted: false });
     });
     const removed = [...stored.keys()].filter(id => !(id in parts));
-    const guardedRemovals = removed.filter(id => config.guardedPrefix?.(id) ?? false);
-    if (guardedRemovals.length > (config.maxRemovalsPerSave ?? Infinity)) {
-      console.error(`[recordStore] refused a save that would remove ${guardedRemovals.length} records of the ${config.label}`);
-      toast({
-        title: 'Not saved',
-        description: `This change would have removed ${guardedRemovals.length} entries of your ${config.label} at once, so it was stopped. Reload the page.`,
-        variant: 'destructive',
-        duration: 15000,
-      });
-      throw new Error('Refused: too many removals in one save');
-    }
+    const isGuarded = (id: string) => config.guardedPrefix?.(id) ?? false;
+    const guardedRemovals = removed.filter(isGuarded);
+    if (guardedRemovals.length > (config.maxRemovalsPerSave ?? Infinity)) refuse(guardedRemovals.length);
+    if (config.refuseEmptying && guardedRemovals.length > 1 && !Object.keys(parts).some(isGuarded)) refuse(guardedRemovals.length);
 
     setState({ data: next });
     writeCache(userId, next);
-    const results = await Promise.all([
-      ...changed.map(([id, data, json]) => queueWrite(userId, id, data, json, false)),
+    const results = await writeAll(userId, [
+      ...changed,
       // A removed record keeps its last stored version, marked deleted
       ...removed.map(id => {
         const last = stored.get(id);
-        return queueWrite(userId, id, last ? JSON.parse(last) : {}, '', true);
+        return { id, data: last ? JSON.parse(last) as unknown : {}, json: '', deleted: true };
       }),
     ]);
     if (!results.every(Boolean)) warnSaveFailed();
   };
 
   return {
+    label: config.label,
     getState: () => state,
     subscribe: (fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
     ensureLoaded,
     // Logged out: forget the data, also the browser copy
     reset: () => { clearCache(); cached = null; state = fresh(null); stored = new Map(); loadPromise = null; listeners.forEach(fn => fn()); },
     save,
+    savedIds: () => new Set(stored.keys()),
   };
 }
 
@@ -360,4 +467,19 @@ export function useRecordStore<T>(store: RecordStore<T>): [T, (next: T) => Promi
   const own = !!user && state.userId === user.id;
   const isLoading = user ? !own || state.status === 'idle' || state.status === 'loading' : authLoading;
   return [state.data, store.save, isLoading];
+}
+
+/**
+ * Change a store from outside a component (e.g. an exercise rename carried into every template).
+ * Loads the store first if needed; `update` returns the same object when nothing changed.
+ */
+export async function updateRecordStore<T>(store: RecordStore<T>, update: (current: T) => T): Promise<void> {
+  const { data: authData } = await supabase.auth.getUser();
+  const userId = authData.user?.id;
+  if (!userId) return;
+  await store.ensureLoaded(userId);
+  const state = store.getState();
+  if (state.userId !== userId || state.status !== 'loaded') throw new RecordStoreNotLoadedError(store.label);
+  const next = update(state.data);
+  if (next !== state.data) await store.save(next);
 }

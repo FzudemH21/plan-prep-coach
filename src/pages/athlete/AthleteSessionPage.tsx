@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { readCoachExerciseLibraries } from '@/lib/exerciseLibraryRecords';
 import { useAthleteApp, AthleteScheduleEntry, ExerciseSummary, SessionLog } from '@/hooks/useAthleteApp';
 import { ExerciseHistorySheet } from '@/components/shared/ExerciseHistorySheet';
 import { useToast } from '@/hooks/use-toast';
@@ -732,14 +733,8 @@ export default function AthleteSessionPage() {
     // Back-fill missing names from coach's exercise library
     const needsName = entries.filter(e => !e.toExerciseName);
     if (needsName.length > 0) {
-      const { data: libRow } = await supabase
-        .from('custom_libraries')
-        .select('data')
-        .eq('user_id', connection.coachUserId)
-        .single();
-      if (libRow?.data) {
-        type RawLib = { id: string; columns: Array<{ id: string }>; exercises: Array<{ id: string; data: Record<string, unknown> }> };
-        const libs = (libRow.data as { libraries?: RawLib[] }).libraries ?? [];
+      const libs = await readCoachExerciseLibraries(connection.coachUserId);
+      if (libs) {
         const nameMap = new Map<string, string>();
         for (const lib of libs) {
           const nameColId = lib.columns?.[0]?.id ?? 'exercise';

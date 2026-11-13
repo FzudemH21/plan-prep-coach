@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { useSupabaseStore } from './useSupabaseStore';
+import { createRecordStore, useRecordStore } from '@/lib/recordStore';
+import { META_ID } from '@/lib/recordSplit';
 import { ToolboxEntry, ToolboxDatabase } from '@/types/toolbox';
 import { defaultToolboxData } from '@/data/toolboxData';
 
@@ -167,12 +168,6 @@ function applyAllMigrations(entries: LegacyToolboxEntry[]): ToolboxEntry[] {
   return migrated;
 }
 
-function migrateToolboxData(raw: unknown): ToolboxDatabase {
-  const r = raw as any;
-  if (!r || !Array.isArray(r.entries)) return getDefaultMigratedData();
-  return { ...r, entries: applyAllMigrations(r.entries) };
-}
-
 function getDefaultMigratedData(): ToolboxDatabase {
   return {
     ...defaultToolboxData,
@@ -180,13 +175,87 @@ function getDefaultMigratedData(): ToolboxDatabase {
   };
 }
 
-export function useToolboxData() {
-  const [data, setData, isLoading] = useSupabaseStore<ToolboxDatabase>({
-    tableName: 'toolbox_data',
-    legacyKey: 'toolbox-data',
-    defaultValue: getDefaultMigratedData(),
-    migrate: migrateToolboxData,
+// ─── Stored one row per method (coach_records, store "methods") ──────────────
+// A method's row holds its parameters (entries) and description; "_meta" the order of the methods
+// and descriptions of methods without parameters. The old one-row table toolbox_data stays as a
+// frozen backup.
+
+type Obj = Record<string, unknown>;
+interface MethodRecord { category: string; subCategory: string; entries: ToolboxEntry[]; description?: string }
+const methodKey = (category: string, subCategory: string) => `${category}|||${subCategory}`;
+
+/** Stored data as it is (only missing fields filled) — the full migrations are for very old data */
+function normalizeToolbox(raw: unknown): ToolboxDatabase {
+  const r = raw as Partial<ToolboxDatabase> | null;
+  if (!r || !Array.isArray(r.entries)) return getDefaultMigratedData();
+  return { ...r, entries: r.entries, lastUpdated: r.lastUpdated ?? new Date().toISOString() };
+}
+
+function splitToolbox(db: ToolboxDatabase): Obj {
+  const records: Obj = {};
+  const methodOrder: string[] = [];
+  const methods = new Map<string, MethodRecord>();
+  db.entries.forEach(entry => {
+    const key = methodKey(entry.category, entry.subCategory);
+    let method = methods.get(key);
+    if (!method) {
+      method = { category: entry.category, subCategory: entry.subCategory, entries: [] };
+      methods.set(key, method);
+      methodOrder.push(key);
+    }
+    method.entries.push(entry);
   });
+  const descriptions = db.methodDescriptions ?? {};
+  methods.forEach((method, key) => {
+    records[`m:${key}`] = descriptions[key] !== undefined ? { ...method, description: descriptions[key] } : method;
+  });
+  const { entries: _entries, methodDescriptions, ...meta } = db;
+  const otherDescriptions = Object.fromEntries(Object.entries(descriptions).filter(([key]) => !methods.has(key)));
+  records[META_ID] = { ...meta, methodOrder, ...(methodDescriptions !== undefined ? { methodDescriptions: otherDescriptions } : {}) };
+  return records;
+}
+
+function joinToolbox(records: Obj): ToolboxDatabase {
+  const meta = (records[META_ID] ?? {}) as Obj & { methodOrder?: unknown; methodDescriptions?: Record<string, string> };
+  const { methodOrder, methodDescriptions, ...rest } = meta;
+  const entries: ToolboxEntry[] = [];
+  const descriptions: Record<string, string> = { ...(methodDescriptions ?? {}) };
+  let hasDescriptions = methodDescriptions !== undefined;
+  const used = new Set<string>();
+  const add = (key: string) => {
+    if (used.has(key) || !(key in records)) return;
+    used.add(key);
+    const method = records[key] as Partial<MethodRecord>;
+    entries.push(...(Array.isArray(method.entries) ? method.entries : []));
+    if (method.description !== undefined) { descriptions[key.slice(2)] = method.description; hasDescriptions = true; }
+  };
+  if (Array.isArray(methodOrder)) methodOrder.forEach(key => { if (typeof key === 'string') add(`m:${key}`); });
+  Object.keys(records).filter(key => key.startsWith('m:')).sort().forEach(add);
+  return {
+    ...rest,
+    entries,
+    lastUpdated: typeof rest.lastUpdated === 'string' ? rest.lastUpdated : new Date().toISOString(),
+    ...(hasDescriptions ? { methodDescriptions: descriptions } : {}),
+  };
+}
+
+export const toolboxStore = createRecordStore<ToolboxDatabase>({
+  table: 'coach_records',
+  store: 'methods',
+  legacyTable: 'toolbox_data',
+  label: 'training methods',
+  defaultValue: getDefaultMigratedData,
+  migrate: normalizeToolbox,
+  split: splitToolbox,
+  join: joinToolbox,
+  guardedPrefix: id => id.startsWith('m:'),
+  refuseEmptying: true,
+  cacheKey: 'coach_records_methods_sb_cache',
+  oldCacheKeys: ['toolbox-data_sb_cache'],
+});
+
+export function useToolboxData() {
+  const [data, setData, isLoading] = useRecordStore(toolboxStore);
 
   const saveData = useCallback(async (newData: ToolboxDatabase) => {
     await setData({ ...newData, lastUpdated: new Date().toISOString() });

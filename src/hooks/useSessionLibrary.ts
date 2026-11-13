@@ -2,23 +2,22 @@
  * useSessionLibrary — the coach's reusable sessions (Session Library page, "Add from session
  * library" in the athlete calendar and the coach mobile app, "Save to library").
  *
- * Stored in Supabase (table `session_library`, one row per coach, migration 20261009) via
- * useSupabaseStore, so every device sees the same library. It used to live only in the browser
- * (localStorage 'ppc-session-library'): on the first load without a Supabase row the store uploads
- * it; a library still left in another browser is merged in (entries and columns by id) and removed
- * from that browser once the upload is confirmed.
+ * Stored in Supabase, one row per session (coach_records, store "workouts", since 2026-11-13; before
+ * one row per coach in `session_library`, kept as a frozen backup), so every device sees the same
+ * library. It used to live only in the browser (localStorage 'ppc-session-library'): a library still
+ * left in a browser is merged in (entries and columns by id) and removed from that browser once
+ * every session of it is confirmed stored.
  */
 import { useCallback, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
-import { useSupabaseStore } from '@/hooks/useSupabaseStore';
+import { createRecordStore, useRecordStore } from '@/lib/recordStore';
+import { joinFields, splitFields } from '@/lib/recordSplit';
 import type {
   SessionLibraryData,
   SessionLibraryEntry,
   SessionLibraryColumn,
 } from '@/types/sessionLibrary';
 
-const TABLE = 'session_library';
 const LEGACY_KEY = 'ppc-session-library';
 
 const DEFAULT_DATA: SessionLibraryData = { version: '1', columns: [], entries: [] };
@@ -42,17 +41,30 @@ function readLegacy(): SessionLibraryData | null {
   }
 }
 
+const WORKOUT_LISTS = { entries: 'w:' };
+
+/** One row per session (coach_records, store "workouts"); session_library stays as a frozen backup */
+export const sessionLibraryStore = createRecordStore<SessionLibraryData>({
+  table: 'coach_records',
+  store: 'workouts',
+  legacyTable: 'session_library',
+  label: 'session library',
+  defaultValue: () => DEFAULT_DATA,
+  migrate: normalize,
+  split: data => splitFields(data, WORKOUT_LISTS),
+  join: records => normalize(joinFields(records, WORKOUT_LISTS, DEFAULT_DATA)),
+  guardedPrefix: id => id.startsWith('w:'),
+  refuseEmptying: true,
+  cacheKey: 'coach_records_workouts_sb_cache',
+  oldCacheKeys: [`${LEGACY_KEY}_sb_cache`],
+});
+
 /** Only one instance merges a leftover browser library per page load */
 let legacyMergeDone = false;
 
 export function useSessionLibrary() {
   const { user } = useAuth();
-  const [stored, save, isLoading] = useSupabaseStore<SessionLibraryData>({
-    tableName: TABLE,
-    legacyKey: LEGACY_KEY,
-    defaultValue: DEFAULT_DATA,
-    migrate: normalize,
-  });
+  const [stored, save, isLoading] = useRecordStore(sessionLibraryStore);
   const data = normalize(stored);
 
   // Latest data for back-to-back changes (two updates before the next render build on each other)
@@ -90,10 +102,10 @@ export function useSessionLibrary() {
         latest.current = merged;
         await save(merged);
       }
-      // Remove the browser copy only once the library is confirmed in Supabase
-      const { data: row, error } = await supabase.from(TABLE).select('data').eq('user_id', user.id).maybeSingle();
-      const savedIds = new Set(normalize(row?.data).entries.map(e => e.id));
-      if (!error && row && legacy.entries.every(e => savedIds.has(e.id))) {
+      // Remove the browser copy only once every session of it is confirmed in Supabase
+      const saved = sessionLibraryStore.savedIds();
+      const inLegacyMode = sessionLibraryStore.getState().mode === 'legacy';
+      if (!inLegacyMode && legacy.entries.every(e => saved.has(`w:${e.id}`))) {
         localStorage.removeItem(LEGACY_KEY);
         if (newEntries.length > 0) console.info(`[sessionLibrary] ${newEntries.length} session(s) from this browser added to the library`);
       } else {

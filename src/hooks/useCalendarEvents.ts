@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react';
-import { useSupabaseStore } from './useSupabaseStore';
+import { createRecordStore, useRecordStore } from '@/lib/recordStore';
+import { joinMap, splitMap } from '@/lib/recordSplit';
 import { toParameterId } from '@/utils/parameterRef';
 
 export interface CalendarEvent {
@@ -89,12 +90,25 @@ type CalendarEventsStore = Record<string, CalendarEvent[]>;
  */
 let latestStore: CalendarEventsStore | null = null;
 
+/** One row per athlete (coach_records, store "calendar_events"); calendar_events stays as a frozen backup */
+export const calendarEventsStore = createRecordStore<CalendarEventsStore>({
+  table: 'coach_records',
+  store: 'calendar_events',
+  legacyTable: 'calendar_events',
+  label: 'tests and events',
+  defaultValue: () => ({}),
+  migrate: raw => (raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as CalendarEventsStore : {}),
+  split: data => splitMap(data, 'a:'),
+  join: records => joinMap(records, 'a:') as CalendarEventsStore,
+  // An athlete's events are removed only together with the athlete — one per save
+  guardedPrefix: id => id.startsWith('a:'),
+  maxRemovalsPerSave: 1,
+  cacheKey: 'coach_records_calendar_events_sb_cache',
+  oldCacheKeys: ['calendarEvents_sb_cache'],
+});
+
 export function useCalendarEvents() {
-  const [store, setStore, isLoading] = useSupabaseStore<CalendarEventsStore>({
-    tableName: 'calendar_events',
-    legacyKey: 'calendarEvents',
-    defaultValue: {},
-  });
+  const [store, setStore, isLoading] = useRecordStore(calendarEventsStore);
 
   // A newly loaded / received store (Supabase load, another instance's write) becomes the latest
   const seenStoreRef = useRef<CalendarEventsStore | null>(null);

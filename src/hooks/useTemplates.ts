@@ -6,7 +6,8 @@
  */
 
 import { useState, useCallback } from 'react';
-import { useSupabaseStore } from './useSupabaseStore';
+import { createRecordStore, useRecordStore } from '@/lib/recordStore';
+import { joinFields, splitFields } from '@/lib/recordSplit';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,13 +82,33 @@ function migrateLegacy(raw: unknown): TemplatesStore {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
+/** Stored data as it is (an old plain list becomes { version, templates }) */
+function normalizeTemplates(raw: unknown): TemplatesStore {
+  if (Array.isArray(raw)) return migrateLegacy(raw);
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<TemplatesStore>;
+  return { ...r, version: r.version ?? STORE_VERSION, templates: Array.isArray(r.templates) ? r.templates : [] };
+}
+
+const TEMPLATE_LISTS = { templates: 't:' };
+
+/** One row per template (coach_records, store "templates"); programming_templates stays as a frozen backup */
+export const templatesStore = createRecordStore<TemplatesStore>({
+  table: 'coach_records',
+  store: 'templates',
+  legacyTable: 'programming_templates',
+  label: 'programming templates',
+  defaultValue: () => DEFAULT_STORE,
+  migrate: normalizeTemplates,
+  split: data => splitFields(data, TEMPLATE_LISTS),
+  join: records => normalizeTemplates(joinFields(records, TEMPLATE_LISTS, DEFAULT_STORE)),
+  guardedPrefix: id => id.startsWith('t:'),
+  refuseEmptying: true,
+  cacheKey: 'coach_records_templates_sb_cache',
+  oldCacheKeys: ['programTemplates_sb_cache'],
+});
+
 export function useTemplates() {
-  const [store, setStore, isLoading] = useSupabaseStore<TemplatesStore>({
-    tableName: 'programming_templates',
-    legacyKey: 'programTemplates',
-    defaultValue: DEFAULT_STORE,
-    migrate: migrateLegacy,
-  });
+  const [store, setStore, isLoading] = useRecordStore(templatesStore);
 
   const templates = store.templates;
 

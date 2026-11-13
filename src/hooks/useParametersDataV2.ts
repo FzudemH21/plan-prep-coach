@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { useSupabaseStore } from './useSupabaseStore';
+import { createRecordStore, useRecordStore } from '@/lib/recordStore';
+import { joinFields, splitFields } from '@/lib/recordSplit';
 import { ParametersDatabaseV2, ParameterV2, ParameterInteraction, ParameterMethodV2, InteractionDirection, InteractionStrength } from '@/types/parametersV2';
 
 const LEGACY_KEY = 'parameters-database-v2';
@@ -78,13 +79,41 @@ function migrateLegacy(raw: unknown): ParametersDatabaseV2 {
   return migrateToDirectional(db ?? defaultDatabase);
 }
 
-export function useParametersDataV2() {
-  const [data, setData, isLoading] = useSupabaseStore<ParametersDatabaseV2>({
-    tableName: 'parameters_database',
-    legacyKey: LEGACY_KEY,
-    defaultValue: defaultDatabase,
-    migrate: migrateLegacy,
+// ─── Stored one row per parameter, interaction, method link and level set ─────
+// (coach_records, store "parameters"; "_meta" holds the rest and the order). The old one-row table
+// parameters_database stays as a frozen backup.
+const PARAMETER_LISTS = { parameters: 'p:', interactions: 'i:', parameterMethods: 'pm:', levelPresets: 'lp:' };
+
+/** Stored data as it is (missing lists filled, old interaction format brought up to date) */
+function normalizeParameters(raw: unknown): ParametersDatabaseV2 {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<ParametersDatabaseV2> & { goals?: unknown };
+  if ('goals' in r) return migrateLegacy(r);
+  return migrateToDirectional({
+    ...r,
+    parameters: Array.isArray(r.parameters) ? r.parameters : [],
+    interactions: Array.isArray(r.interactions) ? r.interactions : [],
+    parameterMethods: Array.isArray(r.parameterMethods) ? r.parameterMethods : [],
+    lastUpdated: r.lastUpdated ?? new Date().toISOString(),
   });
+}
+
+export const parametersStore = createRecordStore<ParametersDatabaseV2>({
+  table: 'coach_records',
+  store: 'parameters',
+  legacyTable: 'parameters_database',
+  label: 'parameter database',
+  defaultValue: () => ({ ...defaultDatabase, lastUpdated: new Date().toISOString() }),
+  migrate: normalizeParameters,
+  split: db => splitFields(db, PARAMETER_LISTS),
+  join: records => normalizeParameters(joinFields(records, PARAMETER_LISTS, defaultDatabase)),
+  guardedPrefix: id => id.startsWith('p:'),
+  refuseEmptying: true,
+  cacheKey: 'coach_records_parameters_sb_cache',
+  oldCacheKeys: [`${LEGACY_KEY}_sb_cache`],
+});
+
+export function useParametersDataV2() {
+  const [data, setData, isLoading] = useRecordStore(parametersStore);
 
   // Tracks the latest committed-or-pending data so sequential writes within the
   // same render cycle (e.g. "Apply All" firing multiple updates synchronously)

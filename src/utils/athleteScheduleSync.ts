@@ -8,6 +8,7 @@
 import type { TestMeasureSpec } from '@/utils/parameterMeasures';
 import { intervalSpecFor, type IntervalSpec } from '@/types/toolbox';
 import { supabase } from '@/lib/supabase';
+import { readCoachExerciseLibraries } from '@/lib/exerciseLibraryRecords';
 import { getExerciseVisibility, sessionMetaKey, type SessionVisibilityData } from '@/utils/parameterVisibility';
 import { AthleteCalendarAssignment } from '@/types/athlete';
 import type { ToolboxEntry } from '@/types/toolbox';
@@ -167,27 +168,10 @@ type ExerciseDetailMap = Map<string, { videoUrl?: string; description?: string }
 async function buildExerciseDetailMap(userId: string): Promise<ExerciseDetailMap> {
   const map: ExerciseDetailMap = new Map();
   try {
-    const { data: libRow } = await supabase
-      .from('custom_libraries')
-      .select('data')
-      .eq('user_id', userId)
-      .maybeSingle();
+    const libraries = await readCoachExerciseLibraries(userId);
+    if (!libraries) return map;
 
-    if (!libRow?.data) return map;
-
-    const libData = libRow.data as {
-      libraries?: Array<{
-        columns?: Array<{ id: string; role?: string }>;
-        exercises?: Array<{
-          id: string;
-          videoUrl?: string;
-          description?: string;
-          data?: Record<string, unknown>;
-        }>;
-      }>;
-    };
-
-    for (const lib of libData.libraries ?? []) {
+    for (const lib of libraries) {
       const videoCol = lib.columns?.find(c => c.role === 'video');
       const descCol  = lib.columns?.find(c => c.role === 'description');
 
