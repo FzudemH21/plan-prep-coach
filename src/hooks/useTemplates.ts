@@ -95,6 +95,7 @@ const TEMPLATE_LISTS = { templates: 't:' };
 export const templatesStore = createRecordStore<TemplatesStore>({
   table: 'coach_records',
   store: 'templates',
+  area: 'libraries',
   legacyTable: 'programming_templates',
   label: 'programming templates',
   defaultValue: () => DEFAULT_STORE,

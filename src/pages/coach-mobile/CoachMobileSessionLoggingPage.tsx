@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { dataIdFor, resolveDataScope } from '@/lib/dataScope';
 import type { AthleteScheduleEntry, ExerciseSummary } from '@/hooks/useAthleteApp';
 import { useToast } from '@/hooks/use-toast';
 import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
@@ -713,7 +714,7 @@ export default function CoachMobileSessionLoggingPage() {
       .from('exercise_progressions')
       .select('id, to_exercise_id, to_exercise_name, direction, level, notes')
       .eq('from_exercise_id', ex.exerciseLibraryId)
-      .eq('coach_user_id', user.id)
+      .eq('coach_user_id', dataIdFor(await resolveDataScope(user.id), 'libraries'))
       .order('direction').order('level');
 
     const entries: ChainEntry[] = (progData ?? []).map((r: Record<string, unknown>) => ({

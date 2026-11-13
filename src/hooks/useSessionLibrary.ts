@@ -47,6 +47,8 @@ const WORKOUT_LISTS = { entries: 'w:' };
 export const sessionLibraryStore = createRecordStore<SessionLibraryData>({
   table: 'coach_records',
   store: 'workouts',
+  area: 'libraries',
+  sharedMayBeEmpty: true,
   legacyTable: 'session_library',
   label: 'session library',
   defaultValue: () => DEFAULT_DATA,

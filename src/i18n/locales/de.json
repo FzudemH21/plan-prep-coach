@@ -947,7 +947,8 @@
       "athlete_account": "Diese E-Mail ist mit einem Athletenkonto verbunden. Bitte um eine Einladung an eine andere E-Mail.",
       "other_org": "Dieses Konto gehört schon zu einer anderen Organisation.",
       "owner_has_all_rights": "Der Inhaber hat immer alle Rechte.",
-      "not_member": "Diese Person ist kein Mitglied."
+      "not_member": "Diese Person ist kein Mitglied.",
+      "data_owner": "Dein Konto hält die Daten der Organisation, deshalb bleibt es Inhaber und Mitglied."
     },
     "rights": {
       "title": "Rechte",

@@ -242,6 +242,7 @@ function joinToolbox(records: Obj): ToolboxDatabase {
 export const toolboxStore = createRecordStore<ToolboxDatabase>({
   table: 'coach_records',
   store: 'methods',
+  area: 'libraries',
   legacyTable: 'toolbox_data',
   label: 'training methods',
   defaultValue: getDefaultMigratedData,

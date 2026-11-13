@@ -29,6 +29,7 @@ import { CircuitBuilderDialog } from '@/components/templates/CircuitBuilderDialo
 import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import type { Circuit } from '@/contexts/CustomLibrariesContext';
 import { supabase } from '@/lib/supabase';
+import { dataIdFor, resolveDataScope } from '@/lib/dataScope';
 import { useAuth } from '@/hooks/useAuth';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { format, parseISO } from 'date-fns';
@@ -2659,7 +2660,7 @@ export function WorkoutSessionSheet({
       .from('exercise_progressions')
       .select('id, to_exercise_id, to_exercise_name, direction, level, notes')
       .eq('from_exercise_id', targetEx.exerciseId)
-      .eq('coach_user_id', user.id)
+      .eq('coach_user_id', dataIdFor(await resolveDataScope(user.id), 'libraries'))
       .order('direction').order('level');
 
     // Build a name map from the already-loaded libraries context

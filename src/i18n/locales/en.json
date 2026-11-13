@@ -947,7 +947,8 @@
       "athlete_account": "This email is connected to an athlete account. Ask for an invite to another email.",
       "other_org": "This account already belongs to another organization.",
       "owner_has_all_rights": "The owner always has every right.",
-      "not_member": "This person isn't a member."
+      "not_member": "This person isn't a member.",
+      "data_owner": "Your account holds the organization's data, so it stays owner and member."
     },
     "rights": {
       "title": "Rights",

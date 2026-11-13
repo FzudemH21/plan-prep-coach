@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/hooks/useAuth';
+import { useDataScope } from '@/hooks/useDataScope';
 
 export type ProgressionDirection = 'progression' | 'regression';
 
@@ -80,20 +80,21 @@ function buildCrossLinkRows(
 }
 
 export function useExerciseProgressions(exerciseId: string | null) {
-  const { user } = useAuth();
+  // The organization's library for members (lib/dataScope)
+  const { dataId } = useDataScope('libraries');
   const [progressions, setProgressions] = useState<ExerciseProgression[]>([]);
   // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
   const [loading, setLoading] = useState(!!exerciseId);
 
   const fetch = useCallback(async () => {
     if (!exerciseId) { setLoading(false); return; }
-    if (!user) return;
+    if (!dataId) return;
     setLoading(true);
     const { data, error } = await supabase
       .from('exercise_progressions')
       .select('*')
       .eq('from_exercise_id', exerciseId)
-      .eq('coach_user_id', user.id)
+      .eq('coach_user_id', dataId)
       .order('direction')
       .order('level');
     if (!error && data) {
@@ -108,7 +109,7 @@ export function useExerciseProgressions(exerciseId: string | null) {
       })));
     }
     setLoading(false);
-  }, [exerciseId, user]);
+  }, [exerciseId, dataId]);
 
   useEffect(() => { fetch(); }, [fetch]);
 
@@ -120,7 +121,7 @@ export function useExerciseProgressions(exerciseId: string | null) {
     level: number;
     notes: string;
   }) => {
-    if (!exerciseId || !user) return;
+    if (!exerciseId || !dataId) return;
     const reverseDirection: ProgressionDirection =
       params.direction === 'progression' ? 'regression' : 'progression';
 
@@ -129,7 +130,7 @@ export function useExerciseProgressions(exerciseId: string | null) {
       .from('exercise_progressions')
       .select('to_exercise_id, to_exercise_name, level')
       .eq('from_exercise_id', exerciseId)
-      .eq('coach_user_id', user.id)
+      .eq('coach_user_id', dataId)
       .eq('direction', params.direction)
       .neq('to_exercise_id', params.toExerciseId);
 
@@ -138,7 +139,7 @@ export function useExerciseProgressions(exerciseId: string | null) {
       .from('exercise_progressions')
       .insert([
         {
-          coach_user_id: user.id,
+          coach_user_id: dataId,
           from_exercise_id: exerciseId,
           to_exercise_id: params.toExerciseId,
           to_exercise_name: params.toExerciseName,
@@ -147,7 +148,7 @@ export function useExerciseProgressions(exerciseId: string | null) {
           notes: params.notes || null,
         },
         {
-          coach_user_id: user.id,
+          coach_user_id: dataId,
           from_exercise_id: params.toExerciseId,
           to_exercise_id: exerciseId,
           to_exercise_name: params.fromExerciseName,
@@ -189,13 +190,13 @@ export function useExerciseProgressions(exerciseId: string | null) {
 
       if (params.level > itemLevel) {
         chainRows.push(
-          { coach_user_id: user.id, from_exercise_id: itemId, to_exercise_id: params.toExerciseId, to_exercise_name: params.toExerciseName, direction: params.direction, level: relLevel, notes: null },
-          { coach_user_id: user.id, from_exercise_id: params.toExerciseId, to_exercise_id: itemId, to_exercise_name: itemName, direction: reverseDirection, level: relLevel, notes: null },
+          { coach_user_id: dataId, from_exercise_id: itemId, to_exercise_id: params.toExerciseId, to_exercise_name: params.toExerciseName, direction: params.direction, level: relLevel, notes: null },
+          { coach_user_id: dataId, from_exercise_id: params.toExerciseId, to_exercise_id: itemId, to_exercise_name: itemName, direction: reverseDirection, level: relLevel, notes: null },
         );
       } else {
         chainRows.push(
-          { coach_user_id: user.id, from_exercise_id: params.toExerciseId, to_exercise_id: itemId, to_exercise_name: itemName, direction: params.direction, level: relLevel, notes: null },
-          { coach_user_id: user.id, from_exercise_id: itemId, to_exercise_id: params.toExerciseId, to_exercise_name: params.toExerciseName, direction: reverseDirection, level: relLevel, notes: null },
+          { coach_user_id: dataId, from_exercise_id: params.toExerciseId, to_exercise_id: itemId, to_exercise_name: itemName, direction: params.direction, level: relLevel, notes: null },
+          { coach_user_id: dataId, from_exercise_id: itemId, to_exercise_id: params.toExerciseId, to_exercise_name: params.toExerciseName, direction: reverseDirection, level: relLevel, notes: null },
         );
       }
     }
@@ -214,7 +215,7 @@ export function useExerciseProgressions(exerciseId: string | null) {
         .from('exercise_progressions')
         .select('from_exercise_id, to_exercise_id, to_exercise_name, level')
         .in('from_exercise_id', batchIds)
-        .eq('coach_user_id', user.id)
+        .eq('coach_user_id', dataId)
         .eq('direction', reverseDirection);
 
       const nextQueue: Array<{ id: string; cumulativeLevel: number }> = [];
@@ -229,8 +230,8 @@ export function useExerciseProgressions(exerciseId: string | null) {
         const totalLevel = params.level + ancestorCumLevel;
 
         chainRows.push(
-          { coach_user_id: user.id, from_exercise_id: ancestorId, to_exercise_id: params.toExerciseId, to_exercise_name: params.toExerciseName, direction: params.direction, level: totalLevel, notes: null },
-          { coach_user_id: user.id, from_exercise_id: params.toExerciseId, to_exercise_id: ancestorId, to_exercise_name: (entry.to_exercise_name as string) || '', direction: reverseDirection, level: totalLevel, notes: null },
+          { coach_user_id: dataId, from_exercise_id: ancestorId, to_exercise_id: params.toExerciseId, to_exercise_name: params.toExerciseName, direction: params.direction, level: totalLevel, notes: null },
+          { coach_user_id: dataId, from_exercise_id: params.toExerciseId, to_exercise_id: ancestorId, to_exercise_name: (entry.to_exercise_name as string) || '', direction: reverseDirection, level: totalLevel, notes: null },
         );
         nextQueue.push({ id: ancestorId, cumulativeLevel: ancestorCumLevel });
       }
@@ -240,7 +241,7 @@ export function useExerciseProgressions(exerciseId: string | null) {
 
     await insertBestEffort(chainRows);
     return null;
-  }, [exerciseId, user]);
+  }, [exerciseId, dataId]);
 
   const remove = useCallback(async (id: string) => {
     const entry = await supabase
@@ -296,7 +297,7 @@ export function useExerciseProgressions(exerciseId: string | null) {
   }, [exerciseId]);
 
   const updateLevels = useCallback(async (ordered: ExerciseProgression[]) => {
-    if (!user) return;
+    if (!dataId) return;
     const updates = ordered.map((p, i) => ({ ...p, level: i + 1 }));
 
     // Optimistic update
@@ -318,22 +319,22 @@ export function useExerciseProgressions(exerciseId: string | null) {
     if (memberIds.length >= 2) {
       // Delete existing cross-links between members
       await supabase.from('exercise_progressions').delete()
-        .eq('coach_user_id', user.id)
+        .eq('coach_user_id', dataId)
         .in('from_exercise_id', memberIds)
         .in('to_exercise_id', memberIds);
 
       // Re-insert with correct relative levels
-      await insertBestEffort(buildCrossLinkRows(user.id, updates));
+      await insertBestEffort(buildCrossLinkRows(dataId, updates));
     }
 
     // Also update the reverse entries (member → exerciseId) to match new levels
     await Promise.all(updates.map(u =>
       supabase.from('exercise_progressions').update({ level: u.level })
-        .eq('coach_user_id', user.id)
+        .eq('coach_user_id', dataId)
         .eq('from_exercise_id', u.toExerciseId)
         .eq('to_exercise_id', exerciseId)
     ));
-  }, [user, exerciseId]);
+  }, [dataId, exerciseId]);
 
   return { progressions, loading, add, remove, updateLevels, refetch: fetch };
 }

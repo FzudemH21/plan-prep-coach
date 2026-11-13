@@ -21,10 +21,11 @@
  *   at once (e.g. an athlete's page opened directly). Only for showing: nothing is saved before the
  *   real data has loaded, and the loaded data replaces it.
  */
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { canEditIn, dataIdFor, isSharedIn, resolveDataScope, type DataArea, type DataScope } from '@/lib/dataScope';
 
 export interface RecordStoreConfig<T> {
   /** One row per record: (coach_user_id, [store,] id, data, deleted_at, updated_at) */
@@ -51,6 +52,17 @@ export interface RecordStoreConfig<T> {
   cacheKey?: string;
   /** Older browser copies to remove */
   oldCacheKeys?: string[];
+  /** The area whose rights apply; areas shared with the organization load the organization's data */
+  area?: DataArea;
+  /** The organization's data may legitimately be empty (e.g. no saved sessions yet) — otherwise an
+   *  empty result from the organization's account counts as a failed load */
+  sharedMayBeEmpty?: boolean;
+}
+
+/** How a store is loaded: in someone else's (the organization's) account, and whether saving is allowed */
+export interface LoadOptions {
+  shared?: boolean;
+  canEdit?: boolean;
 }
 
 type Status = 'idle' | 'loading' | 'loaded' | 'failed';
@@ -96,9 +108,10 @@ async function withRetries<R>(what: string, run: () => PromiseLike<{ data: R; er
 
 export interface RecordStore<T> {
   label: string;
+  area?: DataArea;
   getState: () => StoreState<T>;
   subscribe: (fn: () => void) => () => void;
-  ensureLoaded: (userId: string) => Promise<void>;
+  ensureLoaded: (userId: string, options?: LoadOptions) => Promise<void>;
   reset: () => void;
   save: (next: T) => Promise<void>;
   /** Records confirmed as stored in Supabase (ids) */
@@ -139,6 +152,9 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
   let loadPromise: Promise<void> | null = null;
   /** Record id → JSON of the version stored in Supabase (what a save compares against) */
   let stored = new Map<string, string>();
+  /** Loaded from the organization's account (no old-storage copy, never default data) */
+  let sharedMode = false;
+  let editable = true;
   const seenKey = (userId: string) => (config.store
     ? `${config.table}_${config.store}_LegacySeen_${userId}`
     : `${config.table}LegacySeen_${userId}`);
@@ -313,9 +329,11 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
     try {
       rows = await fetchRows(userId);
     } catch (err) {
-      if (isMissingTable(err as { code?: string; message?: string })) return false;
+      if (isMissingTable(err as { code?: string; message?: string }) && !sharedMode) return false;
       throw err;
     }
+    // The organization's data must be there — empty means not readable (yet), never "start fresh"
+    if (sharedMode && rows.length === 0 && !config.sharedMayBeEmpty) throw new Error(`the organization's ${config.label} came back empty`);
     const records: Record<string, unknown> = {};
     const known = new Set<string>();
     stored = new Map();
@@ -326,8 +344,9 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
       stored.set(r.id, JSON.stringify(r.data));
     });
 
-    // The old row: everything on the first load; later only records missing here
-    const legacyMeta = await withRetries(`checking the old ${config.label}`, () =>
+    // The old row: everything on the first load; later only records missing here (only the
+    // account's own person copies it)
+    const legacyMeta = sharedMode ? null : await withRetries(`checking the old ${config.label}`, () =>
       supabase.from(config.legacyTable).select('updated_at').eq('user_id', userId).maybeSingle()) as { updated_at: string | null } | null;
     let seen = '';
     try { seen = localStorage.getItem(seenKey(userId)) ?? ''; } catch { /* no browser storage */ }
@@ -347,7 +366,7 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
       }
     }
     // Nothing ever stored: the default data (e.g. the starter training methods)
-    const data = rows.length === 0 && !legacyMeta ? config.defaultValue() : config.join(records);
+    const data = rows.length === 0 && !legacyMeta && !sharedMode ? config.defaultValue() : config.join(records);
 
     // Records the data doesn't hold (join couldn't place them) are left alone: a save never
     // removes or overwrites them
@@ -370,12 +389,14 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
     writeCache(userId, data);
   };
 
-  const ensureLoaded = (userId: string): Promise<void> => {
+  const ensureLoaded = (userId: string, options?: LoadOptions): Promise<void> => {
     if (state.userId !== userId) {
       state = fresh(userId);
       stored = new Map();
       loadPromise = null;
     }
+    sharedMode = !!options?.shared;
+    editable = options?.canEdit ?? true;
     if (state.status === 'loaded') return Promise.resolve();
     if (loadPromise) return loadPromise;
     setState({ status: 'loading' });
@@ -412,6 +433,10 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
       toast({ title: `Still loading your ${config.label}`, description: 'This change was not saved — please try again in a moment.', variant: 'destructive' });
       throw new RecordStoreNotLoadedError(config.label);
     }
+    if (!editable) {
+      toast({ title: 'Not saved', description: `You can view the ${config.label}, but not change them.`, variant: 'destructive' });
+      throw new Error(`No right to change the ${config.label}`);
+    }
     if (state.mode === 'legacy') {
       setState({ data: next });
       writeCache(userId, next);
@@ -446,6 +471,7 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
 
   return {
     label: config.label,
+    area: config.area,
     getState: () => state,
     subscribe: (fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
     ensureLoaded,
@@ -457,14 +483,25 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
 }
 
 /** The store's data for components, loading it once the login is known: [data, save, isLoading] */
+const loadOptions = (scope: DataScope, area: DataArea | undefined): LoadOptions =>
+  ({ shared: isSharedIn(scope, area), canEdit: canEditIn(scope, area) });
+
 export function useRecordStore<T>(store: RecordStore<T>): [T, (next: T) => Promise<void>, boolean] {
   const { user, loading: authLoading } = useAuth();
   const state = useSyncExternalStore(store.subscribe, store.getState);
+  const [scope, setScope] = useState<DataScope | null>(null);
   useEffect(() => {
-    if (user) void store.ensureLoaded(user.id);
-    else if (!authLoading) store.reset();
-  }, [store, user, authLoading]);
-  const own = !!user && state.userId === user.id;
+    if (!user) { setScope(null); return; }
+    let cancelled = false;
+    void resolveDataScope(user.id).then((s) => { if (!cancelled) setScope(s); });
+    return () => { cancelled = true; };
+  }, [user]);
+  const dataId = user && scope?.userId === user.id ? dataIdFor(scope, store.area) : null;
+  useEffect(() => {
+    if (user && scope && dataId) void store.ensureLoaded(dataId, loadOptions(scope, store.area));
+    else if (!user && !authLoading) store.reset();
+  }, [store, user, authLoading, scope, dataId]);
+  const own = !!dataId && state.userId === dataId;
   const isLoading = user ? !own || state.status === 'idle' || state.status === 'loading' : authLoading;
   return [state.data, store.save, isLoading];
 }
@@ -475,9 +512,11 @@ export function useRecordStore<T>(store: RecordStore<T>): [T, (next: T) => Promi
  */
 export async function updateRecordStore<T>(store: RecordStore<T>, update: (current: T) => T): Promise<void> {
   const { data: authData } = await supabase.auth.getUser();
-  const userId = authData.user?.id;
-  if (!userId) return;
-  await store.ensureLoaded(userId);
+  const ownId = authData.user?.id;
+  if (!ownId) return;
+  const scope = await resolveDataScope(ownId);
+  const userId = dataIdFor(scope, store.area);
+  await store.ensureLoaded(userId, loadOptions(scope, store.area));
   const state = store.getState();
   if (state.userId !== userId || state.status !== 'loaded') throw new RecordStoreNotLoadedError(store.label);
   const next = update(state.data);

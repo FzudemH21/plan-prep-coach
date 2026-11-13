@@ -129,6 +129,7 @@ const CustomLibrariesContext = createContext<CustomLibrariesContextType | undefi
 export const exerciseLibraryStore = createRecordStore<CustomLibraryData>({
   table: 'coach_records',
   store: 'exercises',
+  area: 'libraries',
   legacyTable: 'custom_libraries',
   label: 'exercise library',
   defaultValue: () => ({ libraries: [], lastUpdated: new Date().toISOString(), version: EXERCISE_LIBRARY_VERSION }),

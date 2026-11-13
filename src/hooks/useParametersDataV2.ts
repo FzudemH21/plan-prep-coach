@@ -100,6 +100,7 @@ function normalizeParameters(raw: unknown): ParametersDatabaseV2 {
 export const parametersStore = createRecordStore<ParametersDatabaseV2>({
   table: 'coach_records',
   store: 'parameters',
+  area: 'libraries',
   legacyTable: 'parameters_database',
   label: 'parameter database',
   defaultValue: () => ({ ...defaultDatabase, lastUpdated: new Date().toISOString() }),

@@ -7,6 +7,7 @@
 --   stranger  — logged in, but neither coach nor athlete (e.g. someone who created an account)
 --   athlete   — one of your connected athletes
 --   coach     — you
+--   member    — a member of your organization who isn't an owner (e.g. a test intern), if there is one
 -- Every table of the database is checked (new tables are included automatically).
 --
 -- Result: only the checks that need attention, plus a summary line.
@@ -23,6 +24,9 @@ declare
   v_athlete uuid;
   v_conn    uuid;
   v_org     uuid;
+  v_member  uuid;
+  v_mlib    text;
+  v_shared  boolean := to_regprocedure('public.my_data_owner()') is not null;
   n0        bigint;
   tabs      text[];
   t         text;
@@ -44,13 +48,21 @@ begin
   -- Your organization (phase 2 on)
   if to_regclass('public.organization_members') is not null then
     execute 'select org_id from public.organization_members where user_id = $1' into v_org using v_coach;
+    -- A member who isn't an owner, and their library right
+    execute 'select user_id from public.organization_members where org_id = $1 and role <> ''owner'' order by created_at limit 1'
+      into v_member using v_org;
+    if v_member is not null and to_regprocedure('public.org_member_rights(text, jsonb)') is not null then
+      execute 'select public.org_member_rights(role, rights)->>''libraries'' from public.organization_members where user_id = $1'
+        into v_mlib using v_member;
+    end if;
   end if;
   select array_agg(format('%I.%I', schemaname, tablename) order by tablename) into tabs
     from pg_tables where schemaname = 'public' and tablename <> 'perm_results';
   tabs := tabs || 'storage.objects'::text;
 
-  foreach who in array array['anon', 'stranger', 'athlete', 'coach'] loop
-    uid := case who when 'stranger' then gen_random_uuid() when 'athlete' then v_athlete when 'coach' then v_coach end;
+  foreach who in array array['anon', 'stranger', 'athlete', 'coach', 'member'] loop
+    uid := case who when 'stranger' then gen_random_uuid() when 'athlete' then v_athlete when 'coach' then v_coach when 'member' then v_member end;
+    if who = 'member' and uid is null then continue; end if;  -- no member yet
     db_role := case when who = 'anon' then 'anon' else 'authenticated' end;
     if who in ('athlete', 'coach') and uid is null then
       acc := acc || jsonb_build_object('who', who, 'table_name', '-', 'check_name', 'person found', 'expected', 'yes', 'actual', 'no', 'status', 'ERROR');
@@ -96,12 +108,40 @@ begin
             if n > 0 then st := 'REVIEW'; end if;
             acc := acc || jsonb_build_object('who', who, 'table_name', t, 'check_name', 'rows visible (no per-athlete column)', 'expected', '0', 'actual', n::text, 'status', st);
           end if;
+        elsif who = 'member' then
+          -- A member of your organization: the shared libraries — never another organization, and
+          -- (not shared yet) none of your athletes, programs, tests / events or personal settings
+          if t = 'public.organizations' then
+            execute format('select count(*) from %s where id is distinct from %L', t, v_org) into n;
+          elsif t in ('public.organization_members', 'public.organization_invites') then
+            execute format('select count(*) from %s where org_id is distinct from %L', t, v_org) into n;
+          elsif t = 'public.athlete_connections' or 'athlete_connection_id' = any(cols) or 'connection_id' = any(cols) then
+            execute format('select count(*) from %s', t) into n;
+          elsif t = 'public.coach_records' then
+            execute format('select count(*) from %s where coach_user_id is distinct from %L and (org_id is distinct from %L
+                            or store not in (''exercises'', ''methods'', ''parameters'', ''templates'', ''workouts''))', t, uid, v_org) into n;
+          elsif t = 'public.exercise_progressions' then
+            execute format('select count(*) from %s where coach_user_id is distinct from %L and org_id is distinct from %L', t, uid, v_org) into n;
+          elsif 'coach_user_id' = any(cols) or 'user_id' = any(cols) or 'coach_id' = any(cols) or 'owner_user_id' = any(cols) then
+            col := case when 'coach_user_id' = any(cols) then 'coach_user_id' when 'user_id' = any(cols) then 'user_id'
+                        when 'coach_id' = any(cols) then 'coach_id' else 'owner_user_id' end;
+            execute format('select count(*) from %s where %I::text is distinct from %L', t, col, uid) into n;
+          else
+            execute format('select count(*) from %s', t) into n;
+            if n > 0 then st := 'REVIEW'; end if;
+          end if;
+          if n > 0 and st = 'ok' then st := 'FAIL'; end if;
+          acc := acc || jsonb_build_object('who', who, 'table_name', t, 'check_name', 'rows not shared with members visible', 'expected', '0', 'actual', n::text, 'status', st);
         else -- coach: no rows of other coaches
           if t = 'public.organizations' then
             execute format('select count(*) from %s where id is distinct from %L', t, v_org) into n;
             if n > 0 then st := 'FAIL'; end if;
           elsif t in ('public.organization_members', 'public.organization_invites') then
             execute format('select count(*) from %s where org_id is distinct from %L', t, v_org) into n;
+            if n > 0 then st := 'FAIL'; end if;
+          elsif 'coach_user_id' = any(cols) and 'org_id' = any(cols) and v_org is not null then
+            -- Rows of your organization's members may be visible (shared data) — other coaches' never
+            execute format('select count(*) from %s where coach_user_id is distinct from %L and org_id is distinct from %L', t, uid, v_org) into n;
             if n > 0 then st := 'FAIL'; end if;
           elsif 'coach_user_id' = any(cols) then
             execute format('select count(*) from %s where coach_user_id is distinct from %L', t, uid) into n;
@@ -131,8 +171,14 @@ begin
       acc := acc || jsonb_build_object('who', who, 'table_name', 'public.program_records', 'check_name', 'own programs visible', 'expected', '> 0', 'actual', n::text, 'status', case when n > 0 then 'ok' else 'FAIL' end);
     end if;
 
+    -- The member sees the organization's libraries
+    if who = 'member' and v_shared then
+      execute format('select count(*) from public.coach_records where coach_user_id = %L and store = ''exercises''', v_coach) into n;
+      acc := acc || jsonb_build_object('who', who, 'table_name', 'public.coach_records', 'check_name', 'shared exercise library visible', 'expected', '> 0', 'actual', n::text, 'status', case when n > 0 then 'ok' else 'FAIL' end);
+    end if;
+
     -- ── Changing (every write is undone at once) ───────────────────────────────────────────────
-    if who in ('anon', 'stranger', 'athlete') then
+    if who in ('anon', 'stranger', 'athlete', 'member') then
       for wt in
         select * from (values
           ('public.athlete_connections', 'change other athletes'' connections',
@@ -170,6 +216,37 @@ begin
             acc := acc || jsonb_build_object('who', who, 'table_name', wt.tbl, 'check_name', wt.label, 'expected', '0 rows / blocked', 'actual', 'blocked', 'status', 'ok');
           when others then
             acc := acc || jsonb_build_object('who', who, 'table_name', wt.tbl, 'check_name', wt.label, 'expected', '0 rows / blocked', 'actual', sqlerrm, 'status', 'ERROR');
+        end;
+      end loop;
+    end if;
+
+    -- The member changes the shared libraries only with the "libraries: edit" right, and nothing else
+    if who = 'member' and v_shared then
+      for wt in
+        select * from (values
+          ('public.coach_records', 'change the shared exercise library', coalesce(v_mlib, 'view'),
+             format('update public.coach_records set updated_at = updated_at where coach_user_id = %L and store = ''exercises''', v_coach)),
+          ('public.coach_records', 'change tests / events', 'never',
+             format('update public.coach_records set updated_at = updated_at where coach_user_id = %L and store = ''calendar_events''', v_coach)),
+          ('public.program_records', 'change programs', 'never',
+             format('update public.program_records set updated_at = updated_at where coach_user_id = %L', v_coach)),
+          ('public.coach_records', 'move a shared library row into its own account', 'never',
+             format('update public.coach_records set coach_user_id = auth.uid() where coach_user_id = %L and store = ''exercises''', v_coach))
+        ) as w(tbl, label, allowed, stmt)
+      loop
+        n := 0;
+        begin
+          execute wt.stmt;
+          get diagnostics n = row_count;
+          raise exception using errcode = 'P0001', message = 'perm_check_undo';
+        exception
+          when sqlstate 'P0001' or insufficient_privilege then
+            acc := acc || jsonb_build_object('who', who, 'table_name', wt.tbl, 'check_name', wt.label,
+              'expected', case when wt.allowed = 'edit' then '> 0 (right: edit)' when wt.allowed = 'view' then '0 (right: view)' else '0' end,
+              'actual', n::text || ' rows (undone)',
+              'status', case when (wt.allowed = 'edit') = (n > 0) then 'ok' else 'FAIL' end);
+          when others then
+            acc := acc || jsonb_build_object('who', who, 'table_name', wt.tbl, 'check_name', wt.label, 'expected', '-', 'actual', sqlerrm, 'status', 'ERROR');
         end;
       end loop;
     end if;
