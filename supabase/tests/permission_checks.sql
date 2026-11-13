@@ -11,8 +11,7 @@
 --
 -- Result: only the checks that need attention, plus a summary line.
 --   FAIL   — someone can see or change data that isn't theirs
---   REVIEW — an athlete can read a table without a per-athlete column (may be intended, e.g. exercise
---            videos for their sessions) — look at it once
+--   REVIEW — an athlete can read a table that has neither an athlete nor an owner column — look at it once
 --   ERROR  — the check itself failed (see "actual")
 
 drop table if exists perm_results;
@@ -26,6 +25,7 @@ declare
   tabs      text[];
   t         text;
   cols      text[];
+  col       text;
   who       text;
   uid       uuid;
   db_role   text;
@@ -69,10 +69,18 @@ begin
             execute format('select count(*) from %s where id is distinct from %L', t, v_conn) into n;
             if n > 0 then st := 'FAIL'; end if;
             acc := acc || jsonb_build_object('who', who, 'table_name', t, 'check_name', 'other athletes'' rows visible', 'expected', '0', 'actual', n::text, 'status', st);
-          elsif 'athlete_connection_id' = any(cols) then
-            execute format('select count(*) from %s where athlete_connection_id is distinct from %L', t, v_conn) into n;
+          elsif 'athlete_connection_id' = any(cols) or 'connection_id' = any(cols) then
+            col := case when 'athlete_connection_id' = any(cols) then 'athlete_connection_id' else 'connection_id' end;
+            execute format('select count(*) from %s where %I is distinct from %L', t, col, v_conn) into n;
             if n > 0 then st := 'FAIL'; end if;
             acc := acc || jsonb_build_object('who', who, 'table_name', t, 'check_name', 'other athletes'' rows visible', 'expected', '0', 'actual', n::text, 'status', st);
+          elsif 'coach_user_id' = any(cols) or 'user_id' = any(cols) then
+            -- Coach-owned tables (exercise library, progressions, e1RM tags): the athlete may read
+            -- their own coach's rows (videos, exercise swaps, charts), nobody else's
+            col := case when 'coach_user_id' = any(cols) then 'coach_user_id' else 'user_id' end;
+            execute format('select count(*) from %s where %I is distinct from %L and %I is distinct from %L', t, col, v_coach, col, uid) into n;
+            if n > 0 then st := 'FAIL'; end if;
+            acc := acc || jsonb_build_object('who', who, 'table_name', t, 'check_name', 'other coaches'' rows visible', 'expected', '0', 'actual', n::text, 'status', st);
           else
             execute format('select count(*) from %s', t) into n;
             if n > 0 then st := 'REVIEW'; end if;
