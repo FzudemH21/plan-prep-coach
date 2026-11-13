@@ -182,15 +182,16 @@ begin
       for wt in
         select * from (values
           ('public.athlete_connections', 'change other athletes'' connections',
-             format('update public.athlete_connections set athlete_name = athlete_name where id is distinct from %L', v_conn)),
+             format('update public.athlete_connections set athlete_name = athlete_name where id is distinct from %L and coach_user_id is distinct from auth.uid()', v_conn)),
           ('public.athlete_session_logs', 'delete other athletes'' logged sessions',
-             format('delete from public.athlete_session_logs where athlete_connection_id is distinct from %L', v_conn)),
+             format('delete from public.athlete_session_logs where athlete_connection_id is distinct from %L and athlete_connection_id not in (select id from public.athlete_connections where coach_user_id = auth.uid())', v_conn)),
           ('public.athlete_daily_checkins', 'delete other athletes'' check-ins',
-             format('delete from public.athlete_daily_checkins where athlete_connection_id is distinct from %L', v_conn)),
+             format('delete from public.athlete_daily_checkins where athlete_connection_id is distinct from %L and athlete_connection_id not in (select id from public.athlete_connections where coach_user_id = auth.uid())', v_conn)),
+          -- (only rows of other accounts: a member may have rows of their own)
           ('public.athlete_records', 'change the coach''s athletes',
-             'update public.athlete_records set updated_at = updated_at'),
+             'update public.athlete_records set updated_at = updated_at where coach_user_id is distinct from auth.uid()'),
           ('public.program_records', 'change the coach''s programs',
-             'update public.program_records set updated_at = updated_at'),
+             'update public.program_records set updated_at = updated_at where coach_user_id is distinct from auth.uid()'),
           ('public.athlete_records', 'add an athlete to the coach',
              format('insert into public.athlete_records (coach_user_id, id, data) values (%L, %L, %L)', v_coach, 'perm-check', '{}')),
           ('public.coach_accounts', 'make itself a coach (AI access)',
