@@ -40,6 +40,7 @@ import SessionLibraryPage from "./pages/SessionLibraryPage";
 import PrintPreviewPage from "./pages/dev/PrintPreviewPage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
+import JoinOrganizationPage from "./pages/JoinOrganizationPage";
 import AthleteLoginPage from "./pages/athlete/AthleteLoginPage";
 import AthleteConnectPage from "./pages/athlete/AthleteConnectPage";
 import AnamnesisFormPage from "./pages/AnamnesisFormPage";
@@ -119,6 +120,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+        <Route path="/join" element={<JoinOrganizationPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/dev/print-preview" element={<PrintPreviewPage />} />
 

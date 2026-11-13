@@ -71,7 +71,7 @@ begin
           if n > 0 then st := 'FAIL'; end if;
           acc := acc || jsonb_build_object('who', who, 'table_name', t, 'check_name', 'rows visible', 'expected', '0', 'actual', n::text, 'status', st);
         elsif who = 'athlete' then
-          if t in ('public.organizations', 'public.organization_members') then
+          if t in ('public.organizations', 'public.organization_members', 'public.organization_invites') then
             execute format('select count(*) from %s', t) into n;
             if n > 0 then st := 'FAIL'; end if;
             acc := acc || jsonb_build_object('who', who, 'table_name', t, 'check_name', 'organizations visible', 'expected', '0', 'actual', n::text, 'status', st);
@@ -100,7 +100,7 @@ begin
           if t = 'public.organizations' then
             execute format('select count(*) from %s where id is distinct from %L', t, v_org) into n;
             if n > 0 then st := 'FAIL'; end if;
-          elsif t = 'public.organization_members' then
+          elsif t in ('public.organization_members', 'public.organization_invites') then
             execute format('select count(*) from %s where org_id is distinct from %L', t, v_org) into n;
             if n > 0 then st := 'FAIL'; end if;
           elsif 'coach_user_id' = any(cols) then
@@ -175,10 +175,11 @@ begin
     end if;
 
     -- Organizations (phase 2 on): nobody — the coach included — can add members, change roles or
-    -- rights, create organizations, or move data to another organization from the app
+    -- rights, create organizations, or move data to another organization from the app. The owner
+    -- functions (phase 3) refuse everyone but the owner.
     if v_org is not null then
       for wt in
-        select * from (values
+        select tbl, label, stmt from (values
           ('public.organization_members', 'join the organization as owner',
              format('insert into public.organization_members (org_id, user_id, role) values (%L, coalesce(auth.uid(), gen_random_uuid()), %L)', v_org, 'owner')),
           ('public.organization_members', 'change roles or rights',
@@ -190,6 +191,27 @@ begin
           ('public.organizations', 'rename or delete organizations',
              'update public.organizations set name = name')
         ) as w(tbl, label, stmt)
+        union all
+        select tbl, label, stmt from (values
+          ('public.organization_invites', 'create an invite directly', 'all',
+             format('insert into public.organization_invites (org_id, email, role, code) values (%L, %L, %L, repeat(%L, 40))', v_org, 'perm@example.com', 'coach', 'x')),
+          ('public.organization_invites', 'change invites', 'all',
+             'update public.organization_invites set expires_at = expires_at'),
+          ('public.organization_invites', 'join with a made-up invite code', 'all',
+             'select public.accept_org_invite(repeat(''a'', 64))'),
+          ('public.organization_invites', 'create an invite link (not owner)', 'others',
+             'select public.create_org_invite(''perm@example.com'', ''coach'')'),
+          ('public.organizations', 'rename the organization (not owner)', 'others',
+             'select public.rename_org(''perm-check'')'),
+          ('public.organization_members', 'make itself owner (not owner)', 'others',
+             'select public.set_org_member_role(auth.uid(), ''owner'')'),
+          ('public.organization_members', 'remove the owner (not owner)', 'others',
+             format('select public.remove_org_member(%L)', v_coach)),
+          ('public.organization_members', 'remove the last owner', 'coach',
+             format('select public.remove_org_member(%L)', v_coach))
+        ) as f(tbl, label, applies, stmt)
+        where to_regprocedure('public.accept_org_invite(text)') is not null
+          and (applies = 'all' or (applies = 'coach') = (who = 'coach'))
       loop
         n := 0; st := 'ok';
         begin
@@ -200,7 +222,8 @@ begin
           when sqlstate 'P0001' then
             if n > 0 then st := 'FAIL'; end if;
             acc := acc || jsonb_build_object('who', who, 'table_name', wt.tbl, 'check_name', wt.label, 'expected', '0 rows / blocked', 'actual', n::text || ' rows (undone)', 'status', st);
-          when insufficient_privilege or check_violation or foreign_key_violation or not_null_violation or unique_violation then
+          when insufficient_privilege or check_violation or foreign_key_violation or not_null_violation
+               or unique_violation or invalid_parameter_value then
             acc := acc || jsonb_build_object('who', who, 'table_name', wt.tbl, 'check_name', wt.label, 'expected', '0 rows / blocked', 'actual', 'blocked', 'status', 'ok');
           when others then
             acc := acc || jsonb_build_object('who', who, 'table_name', wt.tbl, 'check_name', wt.label, 'expected', '0 rows / blocked', 'actual', sqlerrm, 'status', 'ERROR');

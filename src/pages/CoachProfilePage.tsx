@@ -29,6 +29,7 @@ import { useCoachPrivacyNotice } from "@/hooks/useCoachPrivacyNotice";
 import { PrivacyNoticeEditor } from "@/components/anamnesis/AnamnesisFormLink";
 import { DocumentsSection } from "@/components/coach/DocumentsSection";
 import { TrainingPlanEnricher } from "@/components/coach/TrainingPlanEnricher";
+import { OrganizationTab } from "@/components/organization/OrganizationTab";
 import {
   Save,
   ShieldCheck,
@@ -52,6 +53,7 @@ import {
   Upload,
   RotateCcw,
   Camera,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -961,6 +963,10 @@ export default function CoachProfilePage() {
             <Files className="h-3.5 w-3.5" />
             {t('coachProfile.tabs.documents')}
           </TabsTrigger>
+          <TabsTrigger value="organization" className="flex items-center gap-1.5">
+            <Building2 className="h-3.5 w-3.5" />
+            {t('coachProfile.tabs.organization')}
+          </TabsTrigger>
           <TabsTrigger value="settings" className="flex items-center gap-1.5">
             <Settings className="h-3.5 w-3.5" />
             {t('coachProfile.tabs.settings')}
@@ -990,6 +996,10 @@ export default function CoachProfilePage() {
               <TrainingPlanEnricher />
             </TabsContent>
           </Tabs>
+        </TabsContent>
+
+        <TabsContent value="organization">
+          <OrganizationTab />
         </TabsContent>
 
         <TabsContent value="settings">

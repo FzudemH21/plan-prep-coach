@@ -86,7 +86,8 @@
       "documents": "Documents",
       "settings": "Settings",
       "docs": "Documents",
-      "trainingPlans": "Training Plans"
+      "trainingPlans": "Training Plans",
+      "organization": "Organization"
     },
     "noProfile": {
       "title": "No coach profile found",
@@ -850,6 +851,101 @@
       "sending": "Sending…",
       "cancel": "Cancel",
       "removeNote": "Remove note"
+    }
+  },
+  "organization": {
+    "unavailable": "Your account doesn't belong to an organization yet.",
+    "roles": {
+      "owner": "Owner",
+      "coach": "Coach",
+      "intern": "Intern"
+    },
+    "name": {
+      "title": "Organization",
+      "saved": "Organization renamed"
+    },
+    "members": {
+      "title": "Members",
+      "you": "you",
+      "remove": "Remove",
+      "removed": "{{name}} removed",
+      "removeTitle": "Remove {{name}}?",
+      "removeDesc": "They lose access to the organization and the AI. Nothing they created is deleted — it stays with the organization."
+    },
+    "invite": {
+      "button": "Invite",
+      "title": "Invite to the organization",
+      "role": "Role",
+      "create": "Create invite link",
+      "created": "Send this link to {{email}}. It works once, for that email, for 14 days.",
+      "copy": "Copy link",
+      "copied": "Invite link copied",
+      "revoke": "Withdraw invite",
+      "open": "Open invites",
+      "until": "until {{date}}"
+    },
+    "deletionLog": {
+      "title": "Deleted items",
+      "empty": "Nothing deleted yet.",
+      "someoneElse": "someone else",
+      "kinds": {
+        "sessionLog": "Logged session",
+        "testResult": "Test result",
+        "checkin": "Check-in",
+        "anamnesis": "Anamnesis",
+        "anamnesisForm": "Anamnesis form",
+        "appConnection": "App connection",
+        "chatMessage": "Chat message",
+        "remark": "Session remark",
+        "assignedPlan": "Assigned plan",
+        "programVersion": "Program version",
+        "program": "Program",
+        "athlete": "Athlete",
+        "exerciseLibrary": "Exercise library",
+        "exercise": "Exercise",
+        "circuit": "Circuit",
+        "method": "Training method",
+        "parameter": "Parameter",
+        "parameterLink": "Parameter link",
+        "template": "Programming template",
+        "workout": "Session",
+        "testsEvents": "Tests & events",
+        "other": "Item"
+      }
+    },
+    "join": {
+      "title": "Join {{org}}",
+      "desc": "{{name}} invited you as {{role}}.",
+      "join": "Join",
+      "existingHint": "Already have an account with this email? Enter its password.",
+      "passwordTooShort": "Password must be at least 8 characters.",
+      "wrongPassword": "This email already has an account — enter its password.",
+      "confirmEmail": "We sent a confirmation link to {{email}}. Confirm it, then open the invite link again.",
+      "otherAccount": "You're logged in as {{current}}, but this invite is for {{invited}}.",
+      "signOut": "Log out",
+      "unavailableTitle": "Invite not available",
+      "status": {
+        "invalid": "This invite link doesn't exist. Ask for a new one.",
+        "used": "This invite link has already been used.",
+        "expired": "This invite link has expired. Ask for a new one.",
+        "revoked": "This invite link was withdrawn. Ask for a new one."
+      }
+    },
+    "errors": {
+      "unknown": "Something went wrong. Please try again.",
+      "not_owner": "Only the owner can do this.",
+      "invalid_name": "Enter a name.",
+      "invalid_email": "Enter a valid email.",
+      "invalid_role": "Unknown role.",
+      "already_member": "This person is already a member.",
+      "last_owner": "The organization needs at least one owner.",
+      "not_signed_in": "Please log in first.",
+      "invite_invalid": "This invite link doesn't exist or was withdrawn.",
+      "invite_used": "This invite link has already been used.",
+      "invite_expired": "This invite link has expired.",
+      "wrong_email": "This invite is for another email.",
+      "athlete_account": "This email is connected to an athlete account. Ask for an invite to another email.",
+      "other_org": "This account already belongs to another organization."
     }
   }
 }
