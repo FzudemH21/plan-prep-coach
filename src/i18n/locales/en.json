@@ -210,6 +210,10 @@
       "error": "Sign in failed. Please try again."
     },
     "signup": {
+      "inviteOnly": {
+        "title": "By invitation only",
+        "desc": "Coach accounts are created by invitation. Ask the owner of your organization to invite you."
+      },
       "title": "Create an account",
       "subtitle": "Enter your details to get started",
       "confirmPassword": "Confirm Password",

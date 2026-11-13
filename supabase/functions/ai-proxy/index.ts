@@ -34,7 +34,41 @@ Deno.serve(async (req: Request) => {
   }
   const userId = authData.user.id;
 
+  // AI only for coach accounts (table coach_accounts, written only in SQL — athletes and accounts
+  // created without an invitation get no AI). Until that SQL has been run, everything stays open.
+  const { data: coach, error: coachError } = await supabase
+    .from('coach_accounts')
+    .select('ai_enabled')
+    .eq('user_id', userId)
+    .maybeSingle();
+  const coachTableMissing = !!coachError && (coachError.code === '42P01' || coachError.code === 'PGRST205');
+  if (!coachTableMissing) {
+    if (coachError) return new Response('Could not check AI access — please try again', { status: 503, headers: CORS_HEADERS });
+    if (!coach) return new Response('AI is only available to coach accounts', { status: 403, headers: CORS_HEADERS });
+    if (!coach.ai_enabled) return new Response('AI is turned off for this account', { status: 403, headers: CORS_HEADERS });
+  }
+
   const target = req.headers.get('x-target') ?? 'anthropic';
+
+  // One row per call in ai_usage — a failed log never fails the call
+  const logUsage = async (status: number, responseText: string) => {
+    try {
+      let json: Record<string, unknown> = {};
+      try { json = JSON.parse(responseText); } catch { /* not JSON (e.g. an error page) */ }
+      const usage = (json.usage ?? null) as Record<string, number> | null;
+      await supabase.from('ai_usage').insert({
+        user_id: userId,
+        target,
+        model: typeof json.model === 'string' ? json.model : null,
+        status,
+        input_tokens: usage?.input_tokens ?? usage?.prompt_tokens ?? null,
+        output_tokens: usage?.output_tokens ?? usage?.completion_tokens ?? null,
+        cache_read_tokens: usage?.cache_read_input_tokens ?? null,
+        cache_write_tokens: usage?.cache_creation_input_tokens ?? null,
+        usage,
+      });
+    } catch { /* logging must never break the AI */ }
+  };
 
   // Speech-to-text for dictated anamnesis notes: Mistral Voxtral, EU. The app has put the recording
   // into the coach's own anamnesis folder; Mistral gets a 10-minute link to it, and the file is
@@ -73,7 +107,9 @@ Deno.serve(async (req: Request) => {
         headers: { 'Authorization': `Bearer ${mistralKey}` },
         body: form,
       });
-      return new Response(await upstream.text(), {
+      const text = await upstream.text();
+      await logUsage(upstream.status, text);
+      return new Response(text, {
         status: upstream.status,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       });
@@ -100,7 +136,9 @@ Deno.serve(async (req: Request) => {
       body,
     });
 
-    return new Response(await upstream.text(), {
+    const text = await upstream.text();
+    await logUsage(upstream.status, text);
+    return new Response(text, {
       status: upstream.status,
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
     });
@@ -122,7 +160,9 @@ Deno.serve(async (req: Request) => {
     body,
   });
 
-  return new Response(await upstream.text(), {
+  const text = await upstream.text();
+  await logUsage(upstream.status, text);
+  return new Response(text, {
     status: upstream.status,
     headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
   });

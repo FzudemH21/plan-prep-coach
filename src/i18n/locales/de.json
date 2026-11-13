@@ -210,6 +210,10 @@
       "error": "Anmeldung fehlgeschlagen. Bitte erneut versuchen."
     },
     "signup": {
+      "inviteOnly": {
+        "title": "Nur mit Einladung",
+        "desc": "Coach-Konten werden per Einladung erstellt. Bitte den Inhaber deiner Organisation, dich einzuladen."
+      },
       "title": "Konto erstellen",
       "subtitle": "Gib deine Daten ein, um loszulegen",
       "confirmPassword": "Passwort bestätigen",

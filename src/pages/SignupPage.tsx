@@ -15,6 +15,10 @@ import {
 import { Dumbbell, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
+/** Coach accounts are by invitation only (organizations, 2026-11). Athletes sign up through their
+ *  invite link (/athlete/connect), not here. The form below comes back with coach invitations. */
+const INVITE_ONLY = true;
+
 export default function SignupPage() {
   const { t } = useTranslation();
   const { session, loading, signUp } = useAuth();
@@ -30,6 +34,30 @@ export default function SignupPage() {
   // Already authenticated — redirect into the app
   if (!loading && session) {
     return <Navigate to="/" replace />;
+  }
+
+  if (INVITE_ONLY) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <div className="w-full max-w-sm space-y-6">
+          <div className="flex items-center justify-center gap-2">
+            <Dumbbell className="h-7 w-7 text-primary" />
+            <span className="text-2xl font-bold text-primary">Plan Prep Coach</span>
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl">{t('auth.signup.inviteOnly.title')}</CardTitle>
+              <CardDescription>{t('auth.signup.inviteOnly.desc')}</CardDescription>
+            </CardHeader>
+            <CardFooter>
+              <Button asChild variant="outline" className="w-full">
+                <Link to="/login">{t('auth.signup.checkEmail.backToLogin')}</Link>
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      </div>
+    );
   }
 
   const handleSubmit = async (e: FormEvent) => {

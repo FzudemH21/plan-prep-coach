@@ -1,6 +1,6 @@
 import { useState, FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -100,12 +100,6 @@ export default function LoginPage() {
                 {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 {t('auth.login.submit')}
               </Button>
-              <p className="text-sm text-muted-foreground text-center">
-                {t('auth.login.noAccount')}{" "}
-                <Link to="/signup" className="text-primary hover:underline font-medium">
-                  {t('auth.login.signUp')}
-                </Link>
-              </p>
             </CardFooter>
           </form>
         </Card>
