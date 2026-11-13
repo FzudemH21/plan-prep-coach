@@ -945,7 +945,22 @@
       "invite_expired": "This invite link has expired.",
       "wrong_email": "This invite is for another email.",
       "athlete_account": "This email is connected to an athlete account. Ask for an invite to another email.",
-      "other_org": "This account already belongs to another organization."
+      "other_org": "This account already belongs to another organization.",
+      "owner_has_all_rights": "The owner always has every right.",
+      "not_member": "This person isn't a member."
+    },
+    "rights": {
+      "title": "Rights",
+      "titleFor": "Rights of {{name}}",
+      "custom": "custom rights",
+      "athletes": "Athletes",
+      "programs": "Programs",
+      "libraries": "Libraries",
+      "health": "Health data (anamnesis, pain)",
+      "ai": "AI assistant",
+      "view": "View",
+      "edit": "Edit",
+      "reset": "Back to {{role}} defaults"
     }
   }
 }

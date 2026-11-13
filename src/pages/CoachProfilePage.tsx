@@ -793,9 +793,6 @@ function SettingsTab() {
 
   return (
     <div className="space-y-6">
-      {/* Branding */}
-      <BrandingCard />
-
       {/* Personal data */}
       <PersonalInfoCard />
 
@@ -999,7 +996,7 @@ export default function CoachProfilePage() {
         </TabsContent>
 
         <TabsContent value="organization">
-          <OrganizationTab />
+          <OrganizationTab brandingCard={<BrandingCard />} />
         </TabsContent>
 
         <TabsContent value="settings">

@@ -11,12 +11,25 @@ import { useAuth } from '@/hooks/useAuth';
 
 export type OrgRole = 'owner' | 'coach' | 'intern';
 
+/** Rights of a member (role template + the owner's changes). The owner has all of them. */
+export interface OrgRights {
+  athletes: 'view' | 'edit';
+  programs: 'view' | 'edit';
+  libraries: 'view' | 'edit';
+  health: boolean;
+  ai: boolean;
+}
+
 export interface OrgMember {
   userId: string;
   email: string;
   name: string | null;
   role: OrgRole;
   joinedAt: string;
+  /** null until the rights SQL (phase 3 step 2a) has run */
+  rights: OrgRights | null;
+  /** The owner changed rights away from the role's template */
+  customRights: boolean;
 }
 
 export interface OrgInvite {
@@ -28,7 +41,7 @@ export interface OrgInvite {
   expiresAt: string;
 }
 
-interface MemberRow { user_id: string; email: string | null; name: string | null; role: OrgRole; joined_at: string }
+interface MemberRow { user_id: string; email: string | null; name: string | null; role: OrgRole; joined_at: string; rights?: OrgRights; custom?: boolean }
 interface InviteRow { id: string; email: string; role: Exclude<OrgRole, 'owner'>; code: string; created_at: string; expires_at: string }
 
 /** The short key the database functions raise (e.g. 'last_owner'), or the plain message */
@@ -72,6 +85,7 @@ export function useOrganization() {
 
     setMembers(rows.map((r) => ({
       userId: r.user_id, email: r.email ?? '', name: r.name, role: r.role, joinedAt: r.joined_at,
+      rights: r.rights ?? null, customRights: !!r.custom,
     })));
     setOrgId((org as { id: string } | null)?.id ?? null);
     setOrgName((org as { name: string } | null)?.name ?? '');
@@ -95,6 +109,8 @@ export function useOrganization() {
   const revokeInvite = useCallback((id: string) => run('revoke_org_invite', { p_id: id }), [run]);
   const setRole = useCallback((userId: string, role: OrgRole) => run('set_org_member_role', { p_user: userId, p_role: role }), [run]);
   const removeMember = useCallback((userId: string) => run('remove_org_member', { p_user: userId }), [run]);
+  /** Saves a member's rights; {} resets them to the role's template */
+  const setRights = useCallback((userId: string, rights: Partial<OrgRights>) => run('set_org_member_rights', { p_user: userId, p_rights: rights }), [run]);
   const createInvite = useCallback(async (email: string, role: Exclude<OrgRole, 'owner'>): Promise<string> => {
     const data = await run('create_org_invite', { p_email: email, p_role: role });
     const row = (Array.isArray(data) ? data[0] : data) as { code?: string } | null;
@@ -102,5 +118,5 @@ export function useOrganization() {
     return row.code;
   }, [run]);
 
-  return { status, orgId, orgName, members, invites, myRole, isOwner, reload: load, rename, createInvite, revokeInvite, setRole, removeMember };
+  return { status, orgId, orgName, members, invites, myRole, isOwner, reload: load, rename, createInvite, revokeInvite, setRole, removeMember, setRights };
 }

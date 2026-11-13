@@ -945,7 +945,22 @@
       "invite_expired": "Dieser Einladungslink ist abgelaufen.",
       "wrong_email": "Diese Einladung ist für eine andere E-Mail.",
       "athlete_account": "Diese E-Mail ist mit einem Athletenkonto verbunden. Bitte um eine Einladung an eine andere E-Mail.",
-      "other_org": "Dieses Konto gehört schon zu einer anderen Organisation."
+      "other_org": "Dieses Konto gehört schon zu einer anderen Organisation.",
+      "owner_has_all_rights": "Der Inhaber hat immer alle Rechte.",
+      "not_member": "Diese Person ist kein Mitglied."
+    },
+    "rights": {
+      "title": "Rechte",
+      "titleFor": "Rechte von {{name}}",
+      "custom": "eigene Rechte",
+      "athletes": "Athleten",
+      "programs": "Programme",
+      "libraries": "Bibliotheken",
+      "health": "Gesundheitsdaten (Anamnese, Schmerz)",
+      "ai": "KI-Assistent",
+      "view": "Ansehen",
+      "edit": "Bearbeiten",
+      "reset": "Zurück zu {{role}}-Standard"
     }
   }
 }

@@ -208,9 +208,14 @@ begin
           ('public.organization_members', 'remove the owner (not owner)', 'others',
              format('select public.remove_org_member(%L)', v_coach)),
           ('public.organization_members', 'remove the last owner', 'coach',
-             format('select public.remove_org_member(%L)', v_coach))
+             format('select public.remove_org_member(%L)', v_coach)),
+          ('public.organization_members', 'give itself rights (not owner)', 'others',
+             'select public.set_org_member_rights(auth.uid(), ''{"ai": true, "health": true}'')'),
+          ('public.organization_members', 'take rights from the owner', 'coach',
+             format('select public.set_org_member_rights(%L, ''{"ai": false}'')', v_coach))
         ) as f(tbl, label, applies, stmt)
         where to_regprocedure('public.accept_org_invite(text)') is not null
+          and (stmt not like '%set_org_member_rights%' or to_regprocedure('public.set_org_member_rights(uuid, jsonb)') is not null)
           and (applies = 'all' or (applies = 'coach') = (who = 'coach'))
       loop
         n := 0; st := 'ok';
