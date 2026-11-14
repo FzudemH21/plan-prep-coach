@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Plus, X, ChevronDown } from 'lucide-react';
+import { useReadOnly } from '@/hooks/useDataScope';
 import { ParameterV2, ParameterInteraction, ParameterMethodV2, PARAMETER_CATEGORIES, INTERACTION_STRENGTHS, InteractionDirection, InteractionStrength } from '@/types/parametersV2';
 import { ToolboxEntry } from '@/types/toolbox';
 import { ParameterMeasuresEditor } from '@/components/goals/ParameterMeasuresEditor';
@@ -85,6 +86,7 @@ export function EditParameterDialogV2({
   onUpdateMethod,
   onRemoveMethod,
 }: EditParameterDialogV2Props) {
+  const readOnly = useReadOnly('libraries');
   const [name, setName] = useState(parameter.name);
   const [unit, setUnit] = useState(parameter.unit || '');
   const [category, setCategory] = useState(parameter.category || '');
@@ -273,9 +275,11 @@ export function EditParameterDialogV2({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[calc(100%-2rem)] max-w-[780px] max-h-[85vh] overflow-hidden flex flex-col mx-4 sm:mx-auto">
         <DialogHeader className="shrink-0">
-          <DialogTitle>Edit Parameter</DialogTitle>
+          <DialogTitle>{readOnly ? 'Parameter' : 'Edit Parameter'}</DialogTitle>
         </DialogHeader>
 
+        {/* View only (organization right): everything shown, nothing can be changed */}
+        <fieldset disabled={readOnly} className="contents">
         <div className="flex-1 min-h-0 overflow-y-auto pr-4">
           <div className="space-y-6 pb-6 px-1">
             {/* Basic Info */}
@@ -933,6 +937,7 @@ export function EditParameterDialogV2({
             </div>
           </div>
         </div>
+        </fieldset>
 
         <DialogFooter className="shrink-0">
           <Button onClick={() => onOpenChange(false)}>Done</Button>

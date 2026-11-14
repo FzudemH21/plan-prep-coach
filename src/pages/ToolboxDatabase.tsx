@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit, Copy, ChevronUp, ChevronDown, AlertCircle, LayoutTemplate } from "lucide-react";
+import { ArrowLeft, Plus, Search, Download, Upload, Trash2, Edit, Copy, ChevronUp, ChevronDown, AlertCircle, LayoutTemplate, Eye } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToolboxData } from "@/hooks/useToolboxData";
@@ -18,6 +18,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ParameterManagementDialog } from "@/components/toolbox/ParameterManagementDialog";
 import { ToolboxColumnFilter } from "@/components/toolbox/ToolboxColumnFilter";
 import { MethodTemplatesPanel } from "@/components/toolbox/MethodTemplatesPanel";
+import { useReadOnly } from "@/hooks/useDataScope";
+import { ViewOnlyBadge } from "@/components/shared/ViewOnlyBadge";
 import { WizardAIAssistant, type ApplySuggestion } from "@/components/wizard/WizardAIAssistant";
 import { useGlobalAIContext } from "@/hooks/useGlobalAIContext";
 import { useCoachMemory } from "@/hooks/useCoachMemory";
@@ -32,6 +34,7 @@ interface SubCategoryData {
 
 export default function ToolboxDatabase() {
   const navigate = useNavigate();
+  const readOnly = useReadOnly('libraries');
   const { toast } = useToast();
   const { data, isLoading, addEntries, deleteEntry, deleteSubCategory, copyEntry, renameSubCategory, renameMethodCategory, reorderParameters, setMethodDescription, importData, exportData, saveData } = useToolboxData();
   const globalAIContext = useGlobalAIContext(true);
@@ -360,12 +363,12 @@ export default function ToolboxDatabase() {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <div>
-            <h1 className="text-3xl font-bold">Training Toolbox Database</h1>
+            <h1 className="text-3xl font-bold flex items-center gap-2">Training Toolbox Database <ViewOnlyBadge show={readOnly} /></h1>
             <p className="text-muted-foreground">Comprehensive database of training method parameters</p>
           </div>
         </div>
         
-        <div className="flex items-center space-x-2">
+        {!readOnly && <div className="flex items-center space-x-2">
           <input
             type="file"
             accept=".tsv,.txt,.csv"
@@ -381,7 +384,7 @@ export default function ToolboxDatabase() {
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-        </div>
+        </div>}
       </div>
 
       {/* Stats Cards */}
@@ -461,7 +464,7 @@ export default function ToolboxDatabase() {
         </div>
         
         <div className="flex items-center gap-2">          
-          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+          {!readOnly && <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
             setIsAddDialogOpen(open);
             if (!open) resetAddDialog();
           }}>
@@ -510,7 +513,7 @@ export default function ToolboxDatabase() {
                 </div>
               </div>
             </DialogContent>
-          </Dialog>
+          </Dialog>}
         </div>
       </div>
 
@@ -591,10 +594,11 @@ export default function ToolboxDatabase() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleOpenParameterDialog(item.category, item.subCategory)}
-                          title="Edit Parameters"
+                          title={readOnly ? 'View Parameters' : 'Edit Parameters'}
                         >
-                          <Edit className="h-4 w-4" />
+                          {readOnly ? <Eye className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
                         </Button>
+                        {!readOnly && <>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -611,6 +615,7 @@ export default function ToolboxDatabase() {
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
+                        </>}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -721,8 +726,8 @@ IMPORTANT rules:
 - When referencing methods or parameters, use the exact names shown in the context.
 - If the coach asks about something not in the toolbox, say you don't see it in the current data.
 - You can ONLY change method descriptions — no other toolbox edits are possible via APPLY blocks.`}
-        onApplySuggestion={handleToolboxAIApply}
-        onApplyAll={handleToolboxAIApplyAll}
+        onApplySuggestion={readOnly ? undefined : handleToolboxAIApply}
+        onApplyAll={readOnly ? undefined : handleToolboxAIApplyAll}
       />
     </div>
   );

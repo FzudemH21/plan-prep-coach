@@ -31,7 +31,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Search, Edit2, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Filter, X, Loader2 } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Filter, X, Loader2, Eye } from 'lucide-react';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { isDatabaseAction, useDatabaseAIActions } from '@/hooks/useDatabaseAIActions';
@@ -40,6 +40,8 @@ import { useToast } from '@/hooks/use-toast';
 import { ParameterV2, ParameterInteraction, ParameterMethodV2, PARAMETER_CATEGORIES, InteractionDirection, InteractionStrength, type ParameterMeasure } from '@/types/parametersV2';
 import { AddParameterDialogV2 } from '@/components/goals/AddParameterDialogV2';
 import { EditParameterDialogV2 } from '@/components/goals/EditParameterDialogV2';
+import { useReadOnly } from '@/hooks/useDataScope';
+import { ViewOnlyBadge } from '@/components/shared/ViewOnlyBadge';
 
 type SortColumn = 'category' | 'parameter';
 type SortDirection = 'asc' | 'desc';
@@ -47,6 +49,7 @@ type SortDirection = 'asc' | 'desc';
 
 export default function AthleticismDatabaseV2() {
   const { toast } = useToast();
+  const readOnly = useReadOnly('libraries');
   const {
     data,
     isLoading,
@@ -263,7 +266,7 @@ export default function AthleticismDatabaseV2() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <div>
-              <h1 className="text-xl font-semibold">Parameter Database</h1>
+              <h1 className="text-xl font-semibold flex items-center gap-2">Parameter Database <ViewOnlyBadge show={readOnly} /></h1>
               <p className="text-sm text-muted-foreground">
                 Parameters with interactions and training methods
               </p>
@@ -276,10 +279,10 @@ export default function AthleticismDatabaseV2() {
       <div className="container mx-auto px-4 py-4">
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-end">
           <div className="flex gap-2">
-            <Button size="sm" onClick={() => setShowAddDialog(true)}>
+            {!readOnly && <Button size="sm" onClick={() => setShowAddDialog(true)}>
               <Plus className="h-4 w-4 mr-1" />
               Add Parameter
-            </Button>
+            </Button>}
           </div>
         </div>
       </div>
@@ -472,16 +475,16 @@ export default function AthleticismDatabaseV2() {
                               className="h-8 w-8"
                               onClick={() => setEditingParameter(parameter)}
                             >
-                              <Edit2 className="h-4 w-4" />
+                              {readOnly ? <Eye className="h-4 w-4" /> : <Edit2 className="h-4 w-4" />}
                             </Button>
-                            <Button
+                            {!readOnly && <Button
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-destructive hover:text-destructive"
                               onClick={() => setDeleteConfirm(parameter)}
                             >
                               <Trash2 className="h-4 w-4" />
-                            </Button>
+                            </Button>}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -549,8 +552,8 @@ export default function AthleticismDatabaseV2() {
         coachMemoryContext={coachMemoryContext}
         ragContext={ragContext}
         globalContext={globalAIContext}
-        onApplySuggestion={handleAIApply}
-        onApplyAll={handleAIApplyAll}
+        onApplySuggestion={readOnly ? undefined : handleAIApply}
+        onApplyAll={readOnly ? undefined : handleAIApplyAll}
         assistantRole="Answer sports science questions and help the coach define and structure their parameter database. This is a general template database — it is NOT tied to any specific athlete, training phase, or mesocycle. Parameters already in the database are examples or templates, not athlete-specific data. Do NOT ask about the coach's athlete, training phase, season context, or testing infrastructure unless the coach explicitly brings it up. When suggesting or filling parameters, use general scientific specifications (e.g. 'Ground contact time at maximum velocity, 30–60m phase') without assuming any particular athlete context. Suggest relevant parameters, categories, units, and evidence-based rationale. When asked, suggest interactions between parameters or links to training methods. Do not make unsolicited judgments about parameters the coach has already added.
 
 Training Toolbox awareness (critical): The global context contains the coach's full Training Toolbox — every method with its parameters and, where the coach has written one, a Description field explaining what the method means in their context. Before suggesting any parameter-method link, read ALL method descriptions in the Training Toolbox section of the global context. Use the descriptions to reason about which parameters each method actually develops, at what intensities and volumes, and through which physiological pathways. A method description might reveal a specific focus (e.g. 'high-velocity maximal strength') that makes some parameter links strong (peak power, RFD, velocity at 1RM) and others weak (aerobic capacity, flexibility). Always reference the description when writing the rationale for a link — quote it briefly if relevant. If a method has no description yet, fall back to the method name and its configured parameters to infer the link. Never suggest a parameter-method link without first checking whether the method description provides direct evidence for or against it."

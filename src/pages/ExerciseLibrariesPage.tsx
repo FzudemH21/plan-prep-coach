@@ -32,9 +32,12 @@ import { AddLibraryDialog } from "@/components/templates/AddLibraryDialog";
 import { EditLibraryDialog } from "@/components/templates/EditLibraryDialog";
 import { useCustomLibraries, CustomLibrary } from "@/hooks/useCustomLibraries";
 import { useToast } from "@/hooks/use-toast";
+import { useReadOnly } from "@/hooks/useDataScope";
+import { ViewOnlyBadge } from "@/components/shared/ViewOnlyBadge";
 
 export default function ExerciseLibrariesPage() {
   const navigate = useNavigate();
+  const readOnly = useReadOnly('libraries');
   const [isAddLibraryDialogOpen, setIsAddLibraryDialogOpen] = useState(false);
   const [isEditLibraryDialogOpen, setIsEditLibraryDialogOpen] = useState(false);
   const [editingLibrary, setEditingLibrary] = useState<CustomLibrary | null>(null);
@@ -91,13 +94,15 @@ export default function ExerciseLibrariesPage() {
     <div className="w-full max-w-none space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Exercise Libraries</h1>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">Exercise Libraries <ViewOnlyBadge show={readOnly} /></h1>
           <p className="text-muted-foreground">Manage your exercise libraries</p>
         </div>
-        <Button onClick={() => setIsAddLibraryDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Library
-        </Button>
+        {!readOnly && (
+          <Button onClick={() => setIsAddLibraryDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Library
+          </Button>
+        )}
       </div>
 
       <div className="text-sm text-muted-foreground">
@@ -145,7 +150,7 @@ export default function ExerciseLibrariesPage() {
                     </TableCell>
                     <TableCell>{library.exercises.length}</TableCell>
                     <TableCell>
-                      <DropdownMenu>
+                      {!readOnly && <DropdownMenu>
                         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                           <Button variant="ghost" size="icon" className="h-8 w-8">
                             <MoreHorizontal className="h-4 w-4" />
@@ -169,7 +174,7 @@ export default function ExerciseLibrariesPage() {
                             Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
-                      </DropdownMenu>
+                      </DropdownMenu>}
                     </TableCell>
                   </TableRow>
                 );
@@ -182,11 +187,15 @@ export default function ExerciseLibrariesPage() {
           <CardContent className="text-center py-12">
             <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">No exercise libraries yet</h3>
-            <p className="text-muted-foreground mb-4">Get started by creating your first exercise library</p>
-            <Button onClick={() => setIsAddLibraryDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Library
-            </Button>
+            {!readOnly && (
+              <>
+                <p className="text-muted-foreground mb-4">Get started by creating your first exercise library</p>
+                <Button onClick={() => setIsAddLibraryDialogOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Library
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       )}

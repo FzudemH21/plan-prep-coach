@@ -14,6 +14,7 @@ import {
 import { Plus, Pencil, Trash2, LayoutTemplate, Columns } from 'lucide-react';
 import { format } from 'date-fns';
 import { useTemplates, type ProgramTemplate } from '@/hooks/useTemplates';
+import { useReadOnly } from '@/hooks/useDataScope';
 import { TemplateEditorDialog } from '@/components/toolbox/TemplateEditorDialog';
 import { ToolboxEntry } from '@/types/toolbox';
 
@@ -29,6 +30,7 @@ export function MethodTemplatesPanel({
   parameters,
 }: MethodTemplatesPanelProps) {
   const { getTemplatesForMethod, addTemplate, updateTemplate, deleteTemplate } = useTemplates();
+  const readOnly = useReadOnly('libraries');
   const templates = getTemplatesForMethod(methodId);
 
   const [editorOpen, setEditorOpen] = useState(false);
@@ -74,16 +76,16 @@ export function MethodTemplatesPanel({
             <Badge variant="secondary" className="text-xs">{templates.length}</Badge>
           )}
         </div>
-        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={openNew}>
+        {!readOnly && <Button size="sm" variant="outline" className="h-7 text-xs" onClick={openNew}>
           <Plus className="h-3 w-3 mr-1" />
           New Template
-        </Button>
+        </Button>}
       </div>
 
       {/* Template list */}
       {templates.length === 0 ? (
         <p className="text-xs text-muted-foreground italic">
-          No templates yet. Click "New Template" to create one.
+          {readOnly ? 'No templates yet.' : 'No templates yet. Click "New Template" to create one.'}
         </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -110,7 +112,7 @@ export function MethodTemplatesPanel({
                     {format(new Date(tpl.createdAt), 'dd.MM.yyyy')}
                   </p>
                 </div>
-                <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                {!readOnly && <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                   <Button
                     variant="ghost" size="sm"
                     className="h-6 w-6 p-0"
@@ -127,7 +129,7 @@ export function MethodTemplatesPanel({
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
-                </div>
+                </div>}
               </div>
             );
           })}

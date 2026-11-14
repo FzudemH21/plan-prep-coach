@@ -30,6 +30,7 @@ import { useCustomLibraries } from '@/contexts/CustomLibrariesContext';
 import type { Circuit } from '@/contexts/CustomLibrariesContext';
 import { supabase } from '@/lib/supabase';
 import { dataIdFor, resolveDataScope } from '@/lib/dataScope';
+import { useReadOnly } from '@/hooks/useDataScope';
 import { useAuth } from '@/hooks/useAuth';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { format, parseISO } from 'date-fns';
@@ -145,6 +146,8 @@ interface WorkoutSessionSheetProps {
   // When true the sheet is opened from the Session Library — hide the "Save to Library"
   // button (already in the library) and show only "Save Changes"
   isLibrarySession?: boolean;
+  /** View only (organization right): the session is shown, nothing can be changed */
+  readOnly?: boolean;
   // Athlete connection ID — when present, the exercise history icon appears on each exercise row
   athleteConnectionId?: string;
   // Live athlete_schedule entry — when present, param overrides from mobile coach edits
@@ -367,10 +370,13 @@ export function WorkoutSessionSheet({
   forceParamRefresh,
   storageScope,
   isLibrarySession = false,
+  readOnly = false,
   athleteConnectionId,
   liveScheduleEntry,
   editedSessionIntensity,
 }: WorkoutSessionSheetProps) {
+  // The library is view only for this person: no "Save to Library"
+  const libraryReadOnly = useReadOnly('libraries');
   const { toast } = useToast();
   const { user } = useAuth();
   const { libraries, updateExerciseInLibrary } = useCustomLibraries();
@@ -1688,6 +1694,7 @@ export function WorkoutSessionSheet({
   };
 
   const handleDragEnd = (result: DropResult) => {
+    if (readOnly) return;
     const { source, destination, type } = result;
 
     if (!destination) {
@@ -3330,6 +3337,7 @@ export function WorkoutSessionSheet({
         className="max-w-[95vw] max-h-[95vh] w-full h-full flex flex-col p-0"
         onInteractOutside={(e) => e.preventDefault()}
       >
+        <fieldset disabled={readOnly} className="contents">
         <DialogHeader className="p-6 pb-4 border-b">
           <div className="flex items-center justify-between">
             <div className="flex-1 min-w-0 pr-4">
@@ -3492,7 +3500,7 @@ export function WorkoutSessionSheet({
                 <Save className="h-4 w-4 mr-2" />
                 Save Changes
               </Button>
-              {!isLibrarySession && (
+              {!isLibrarySession && !libraryReadOnly && (
                 <Button
                   onClick={() => setSaveLibOpen(true)}
                   className="bg-gray-900 text-white hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200"
@@ -3744,6 +3752,7 @@ export function WorkoutSessionSheet({
           )}
         </div>
         </DragDropContext>
+        </fieldset>
       </DialogContent>
 
       {/* Exercise Library Popup - Rendered outside DialogContent for proper overlay layering */}

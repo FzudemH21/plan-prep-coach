@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, Calculator, AlertCircle, ChevronDown, Pencil, Check, X } from 'lucide-react';
+import { useReadOnly } from '@/hooks/useDataScope';
 import { ToolboxEntry } from '@/types/toolbox';
 import { DraggableParameterList } from './DraggableParameterList';
 import { DraggableExerciseCategoryList } from './DraggableExerciseCategoryList';
@@ -160,6 +161,8 @@ export function ParameterManagementDialog({
   description,
   onDescriptionChange,
 }: ParameterManagementDialogProps) {
+  // View only (organization right): everything shown, nothing can be changed
+  const readOnly = useReadOnly('libraries');
   const [editingParameter, setEditingParameter] = useState<ToolboxEntry | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
@@ -442,6 +445,7 @@ export function ParameterManagementDialog({
       {/* Main Parameter Management Dialog */}
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <fieldset disabled={readOnly} className="contents">
           <DialogHeader>
             <DialogTitle asChild>
               <div className="flex items-center gap-1 flex-wrap text-xl font-semibold">
@@ -590,7 +594,7 @@ export function ParameterManagementDialog({
               {parameters.length > 0 ? (
                 <DraggableParameterList
                   parameters={parameters}
-                  onReorder={handleReorderParameters}
+                  onReorder={readOnly ? () => undefined : handleReorderParameters}
                   onEditParameter={handleEditParameter}
                   onDeleteParameter={handleDeleteParameter}
                 />
@@ -614,7 +618,7 @@ export function ParameterManagementDialog({
               {exerciseCategories.length > 0 ? (
                 <DraggableExerciseCategoryList
                   categories={exerciseCategories}
-                  onReorder={handleReorderExerciseCategories}
+                  onReorder={readOnly ? () => undefined : handleReorderExerciseCategories}
                   onDeleteCategory={handleDeleteExerciseCategory}
                   onRenameCategory={handleRenameExerciseCategory}
                 />
@@ -625,6 +629,7 @@ export function ParameterManagementDialog({
               )}
             </div>
           </div>
+          </fieldset>
         </DialogContent>
       </Dialog>
 

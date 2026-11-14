@@ -6,6 +6,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, Pencil, Check, X } from 'lucide-react';
 import { useCustomLibraries } from '@/hooks/useCustomLibraries';
 import { DynamicLibraryTable } from '@/components/templates/DynamicLibraryTable';
+import { useReadOnly } from '@/hooks/useDataScope';
+import { ViewOnlyBadge } from '@/components/shared/ViewOnlyBadge';
 import { WizardAIAssistant, type ApplySuggestion } from '@/components/wizard/WizardAIAssistant';
 import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
 import { useCoachMemory } from '@/hooks/useCoachMemory';
@@ -34,6 +36,7 @@ const findLibraryBySlug = (libraries: any[], slug: string) => {
 export default function LibraryPage() {
   const { libraryName } = useParams<{ libraryName: string }>();
   const navigate = useNavigate();
+  const readOnly = useReadOnly('libraries');
   const {
     libraries,
     isLoading,
@@ -298,29 +301,29 @@ export default function LibraryPage() {
         ) : (
           <div className="flex items-center gap-2 group">
             <div>
-              <h1 className="text-3xl font-bold">{library.name}</h1>
+              <h1 className="text-3xl font-bold flex items-center gap-2">{library.name} <ViewOnlyBadge show={readOnly} /></h1>
               {library.description && <p className="text-muted-foreground">{library.description}</p>}
             </div>
-            <Button
+            {!readOnly && <Button
               variant="ghost"
               size="sm"
               className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity mt-1"
               onClick={() => { setEditName(library.name); setEditDesc(library.description || ''); setIsEditingMeta(true); }}
             >
               <Pencil className="h-4 w-4" />
-            </Button>
+            </Button>}
           </div>
         )}
       </div>
 
-      <DynamicLibraryTable library={library} />
+      <DynamicLibraryTable library={library} readOnly={readOnly} />
 
       <WizardAIAssistant
         stepLabel={`Exercise Library — ${library.name}`}
         wizardContext={buildLibraryContext()}
         assistantRole={`You are an expert strength & conditioning assistant helping a coach manage their Exercise Library called "${library.name}". You can add, update, or delete exercises and columns in this library. Always use the exact column names, exercise IDs, and library ID shown in context. When adding exercises, infer sensible values for all listed columns based on the exercise name and type. When deleting exercises or columns, always confirm with the coach first since this is irreversible.`}
-        onApplySuggestion={handleAIApply}
-        onApplyAll={handleAIApplyAll}
+        onApplySuggestion={readOnly ? undefined : handleAIApply}
+        onApplyAll={readOnly ? undefined : handleAIApplyAll}
         globalContext={globalAIContext}
         coachMemoryContext={coachMemoryContext}
         ragContext={ragContext}

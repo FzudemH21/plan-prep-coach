@@ -23,6 +23,8 @@ import { BulkImportDialog } from './BulkImportDialog';
 
 interface DynamicLibraryTableProps {
   library: CustomLibrary;
+  /** View only (organization right): no adding, editing, deleting, importing or exporting */
+  readOnly?: boolean;
 }
 
 interface EditingCell {
@@ -65,7 +67,7 @@ interface ExerciseDetailState {
   exercise: CustomExercise | null;
 }
 
-export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
+export function DynamicLibraryTable({ library, readOnly = false }: DynamicLibraryTableProps) {
   const {
     addExerciseToLibrary,
     updateExerciseInLibrary,
@@ -400,7 +402,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
           >
             {value || 'Unnamed Exercise'}
           </button>
-          <button
+          {!readOnly && <button
             className="p-1 rounded hover:bg-muted/50"
             onClick={(e) => {
               e.stopPropagation();
@@ -409,10 +411,12 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
             title="Edit name"
           >
             <Edit2 className="h-3 w-3 text-muted-foreground" />
-          </button>
+          </button>}
         </div>
       );
     }
+
+    if (readOnly) return <div className="p-1 min-h-[24px]">{value}</div>;
 
     return (
       <div
@@ -452,8 +456,8 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
               isDragging && "opacity-40",
               isDragOver && "border-l-2 border-primary bg-primary/5"
             )}
-            draggable={!isFirstColumn}
-            onDragStart={!isFirstColumn ? (e) => {
+            draggable={!isFirstColumn && !readOnly}
+            onDragStart={!isFirstColumn && !readOnly ? (e) => {
               e.dataTransfer.effectAllowed = 'move';
               setDraggedColId(column.id);
             } : undefined}
@@ -476,7 +480,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1">
-                {!isFirstColumn && (
+                {!isFirstColumn && !readOnly && (
                   <GripVertical className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity cursor-grab" />
                 )}
                 <span className="font-medium">{column.name}</span>
@@ -491,7 +495,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
                   onSortChange={(direction) => handleSortChange(column.id, direction)}
                   sortDirection={filterState.sortColumn === column.id ? filterState.sortDirection : null}
                 />
-                <DropdownMenu>
+                {!readOnly && <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="p-0.5 rounded hover:bg-accent transition-colors" onClick={e => e.stopPropagation()}>
                       <MoreHorizontal className="h-4 w-4" />
@@ -516,12 +520,12 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
                       </DropdownMenuItem>
                     )}
                   </DropdownMenuContent>
-                </DropdownMenu>
+                </DropdownMenu>}
               </div>
             </div>
           </TableHead>
         </ContextMenuTrigger>
-        <ContextMenuContent>
+        <ContextMenuContent className={readOnly ? 'hidden' : undefined}>
           <ContextMenuItem
             key={`rename-${column.id}`}
             onSelect={() => {
@@ -608,6 +612,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
             {/* Action Bar */}
             <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg">
               <div className="flex items-center space-x-2">
+                {!readOnly && <>
                 <Button onClick={handleAddExercise} size="sm">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Exercise
@@ -620,10 +625,12 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
                   <Plus className="h-4 w-4 mr-2" />
                   Add Column
                 </Button>
+                </>}
                 <Button onClick={handleResetFilters} variant="outline" size="sm">
                   <RotateCcw className="h-4 w-4 mr-2" />
                   Reset Filters
                 </Button>
+                {!readOnly && <>
                 <Button onClick={() => setIsBulkImportOpen(true)} variant="outline" size="sm">
                   <Upload className="h-4 w-4 mr-2" />
                   Import
@@ -632,6 +639,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
                   <Download className="h-4 w-4 mr-2" />
                   Export CSV
                 </Button>
+                </>}
               </div>
               <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                 {Object.values(filterState.valueFilters).some(v => v.length > 0) && (
@@ -649,7 +657,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow className="bg-background hover:bg-background">
                     {safeLibrary.columns.map((column, index) => renderColumnHeader(column, index === 0))}
-                    <TableHead className="w-20 bg-background">Actions</TableHead>
+                    {!readOnly && <TableHead className="w-20 bg-background">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -657,7 +665,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
                     <TableRow>
                       <TableCell colSpan={safeLibrary.columns.length + 1} className="text-center py-12 text-muted-foreground">
                         {safeLibrary.exercises.length === 0
-                          ? "No exercises yet. Click \"Add Exercise\" or import a file to get started."
+                          ? (readOnly ? "No exercises yet." : "No exercises yet. Click \"Add Exercise\" or import a file to get started.")
                           : "No exercises match the current filters."
                         }
                       </TableCell>
@@ -673,7 +681,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
                             {renderCell(exercise, column, columnIndex === 0)}
                           </TableCell>
                         ))}
-                        <TableCell>
+                        {!readOnly && <TableCell>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -682,7 +690,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
-                        </TableCell>
+                        </TableCell>}
                       </TableRow>
                     ))
                   )}
@@ -699,14 +707,14 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
               <span className="text-sm text-muted-foreground">
                 {(library.circuits ?? []).length} circuit{(library.circuits ?? []).length !== 1 ? 's' : ''}
               </span>
-              <Button
+              {!readOnly && <Button
                 size="sm"
                 variant="outline"
                 onClick={() => { setEditingCircuit(undefined); setCircuitBuilderOpen(true); }}
               >
                 <Plus className="h-3.5 w-3.5 mr-1" />
                 New Circuit
-              </Button>
+              </Button>}
             </div>
 
             {(library.circuits ?? []).length === 0 ? (
@@ -730,6 +738,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
                         <p className="text-xs text-muted-foreground/70 italic truncate mt-0.5">{circuit.comments}</p>
                       )}
                     </div>
+                    {!readOnly && <>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -753,6 +762,7 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
+                    </>}
                   </div>
                 ))}
               </div>
@@ -846,8 +856,8 @@ export function DynamicLibraryTable({ library }: DynamicLibraryTableProps) {
           exerciseId={detailDialog.exercise.id}
           exerciseName={detailDialog.exercise.data[safeLibrary.columns[0]?.id] || 'Unnamed Exercise'}
           libraryId={library.id}
-          readOnly={false}
-          mode="edit"
+          readOnly={readOnly}
+          mode={readOnly ? 'view' : 'edit'}
           columns={safeLibrary.columns}
           exerciseData={detailDialog.exercise.data}
           videoUrl={detailDialog.exercise.videoUrl}

@@ -63,6 +63,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useSessionLibrary } from '@/hooks/useSessionLibrary';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { WorkoutSessionSheet } from '@/components/microcycle-planning/WorkoutSessionSheet';
+import { useReadOnly } from '@/hooks/useDataScope';
+import { ViewOnlyBadge } from '@/components/shared/ViewOnlyBadge';
 import { LIBRARY_DAY, LIBRARY_SESS } from '@/components/session-library/SaveToLibraryDialog';
 import type { SessionLibraryEntry, SessionLibraryColumn } from '@/types/sessionLibrary';
 import type { ExerciseDistribution, SessionSection } from '@/types/microcycle-planning';
@@ -204,6 +206,7 @@ type SortDir = 'asc' | 'desc' | null;
 export default function SessionLibraryPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const readOnly = useReadOnly('libraries');
   const {
     entries,
     columns,
@@ -252,7 +255,9 @@ export default function SessionLibraryPage() {
   };
 
   const closeSheet = useCallback(() => {
-    if (libSheet === 'new') {
+    if (readOnly) {
+      // View only: nothing to save
+    } else if (libSheet === 'new') {
       // Only create a library entry if the user actually added something
       if (liveExercises.length > 0 || liveSections.length > 0) {
         addEntry({
@@ -273,7 +278,7 @@ export default function SessionLibraryPage() {
       });
     }
     setLibSheet(null);
-  }, [libSheet, liveName, liveExercises, liveSections, liveParamValues, addEntry, updateEntry, toast, t]);
+  }, [readOnly, libSheet, liveName, liveExercises, liveSections, liveParamValues, addEntry, updateEntry, toast, t]);
 
   // ── WorkoutSessionSheet callbacks (library mode) ───────────────────────────
 
@@ -400,12 +405,13 @@ export default function SessionLibraryPage() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <BookmarkPlus className="h-6 w-6 text-primary" />
             {t('sessionLibrary.title')}
+            <ViewOnlyBadge show={readOnly} />
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {t('sessionLibrary.subtitle')}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        {!readOnly && <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -418,7 +424,7 @@ export default function SessionLibraryPage() {
             <Plus className="h-4 w-4 mr-2" />
             {t('sessionLibrary.newSession')}
           </Button>
-        </div>
+        </div>}
       </div>
 
       {/* Search */}
@@ -452,10 +458,10 @@ export default function SessionLibraryPage() {
           <p className="text-sm text-muted-foreground max-w-sm mx-auto">
             {t('sessionLibrary.empty.desc')}
           </p>
-          <Button onClick={openNew}>
+          {!readOnly && <Button onClick={openNew}>
             <Plus className="h-4 w-4 mr-2" />
             {t('sessionLibrary.newSession')}
-          </Button>
+          </Button>}
         </div>
       ) : (
         <div className="rounded-md border overflow-x-auto">
@@ -486,7 +492,7 @@ export default function SessionLibraryPage() {
                     <span className="flex items-center gap-1">
                       {col.name}
                       <SortIcon col={col.id} />
-                      <button
+                      {!readOnly && <button
                         className="ml-1 text-muted-foreground hover:text-destructive"
                         onClick={e => {
                           e.stopPropagation();
@@ -495,7 +501,7 @@ export default function SessionLibraryPage() {
                         title={t('common.remove')}
                       >
                         <X className="h-3 w-3" />
-                      </button>
+                      </button>}
                     </span>
                   </TableHead>
                 ))}
@@ -563,6 +569,7 @@ export default function SessionLibraryPage() {
                           <DropdownMenuItem onClick={() => openEntry(entry)}>
                             {t('sessionLibrary.viewDetail')}
                           </DropdownMenuItem>
+                          {!readOnly && <>
                           <DropdownMenuItem
                             onClick={() => handleDuplicate(entry.id)}
                           >
@@ -577,6 +584,7 @@ export default function SessionLibraryPage() {
                             <Trash2 className="h-3.5 w-3.5 mr-2" />
                             {t('sessionLibrary.delete')}
                           </DropdownMenuItem>
+                          </>}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -644,6 +652,7 @@ export default function SessionLibraryPage() {
           onRenameSession={(_day, _idx, name) => setLiveName(name)}
           isAdHocSession={true}
           isLibrarySession={true}
+          readOnly={readOnly}
           toolboxData={toolboxData}
         />
       )}
