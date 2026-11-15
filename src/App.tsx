@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { WizardTabGuard } from "@/components/programs/WizardTabGuard";
+import { PlannerGate } from "@/components/programs/PlannerGate";
 import { DisplayModeProvider } from "@/contexts/DisplayModeContext";
 import { CustomLibrariesProvider } from "@/contexts/CustomLibrariesContext";
 import { WizardDataProvider } from "@/contexts/WizardDataContext";
@@ -187,9 +188,9 @@ function AppRoutes() {
                 <RouteErrorBoundary>
                 <Routes>
                   <Route path="/" element={<HomeGuard />} />
-                  <Route path="/macrocycle" element={<MacrocyclePage />} />
-                  <Route path="/mesocycle" element={<MesocyclePage />} />
-                  <Route path="/microcycle" element={<MicrocyclePlanningPage />} />
+                  <Route path="/macrocycle" element={<PlannerGate><MacrocyclePage /></PlannerGate>} />
+                  <Route path="/mesocycle" element={<PlannerGate><MesocyclePage /></PlannerGate>} />
+                  <Route path="/microcycle" element={<PlannerGate><MicrocyclePlanningPage /></PlannerGate>} />
                   <Route path="/athletes" element={<AthleteDatabase />} />
                   {/* The old "Templates & Libraries" overview is gone from the menu — its pages are sidebar entries now */}
                   <Route path="/templates" element={<Navigate to="/" replace />} />
