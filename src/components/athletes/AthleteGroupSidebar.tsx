@@ -32,6 +32,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
+  DropdownMenuCheckboxItem,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -48,12 +49,14 @@ import {
   Trash2,
   User,
   UserPlus,
+  UserCheck,
   Users,
   Loader2,
   LayoutGrid,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Athlete, AthleteGroup, getAthleteDisplayName } from '@/types/athlete';
+import type { CoachFilter, OrgCoach } from '@/hooks/useOrgCoaches';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -82,6 +85,15 @@ interface AthleteGroupSidebarProps {
   selectedGroupId?: string | null;
   /** Called when the user clicks a group name to navigate to its squad view. */
   onSelectGroup?: (groupId: string) => void;
+  /** Organization with several coaches: "My athletes / All" and assigning coaches */
+  coachAssignment?: CoachAssignment;
+}
+
+interface CoachAssignment {
+  coaches: OrgCoach[];
+  filter: CoachFilter;
+  onFilterChange: (filter: CoachFilter) => void;
+  onToggleCoach: (athleteId: string, coachId: string) => void;
 }
 
 // ── Athlete row (shared between both tabs) ────────────────────────────────────
@@ -94,15 +106,19 @@ interface AthleteRowProps {
   onAssignAthleteToGroup: (athleteId: string, groupId: string) => void;
   onArchiveAthlete: (id: string) => void;
   onDeleteAthlete: (id: string) => void;
+  coachAssignment?: CoachAssignment;
   compact?: boolean;
 }
 
 function AthleteRow({
   athlete, groups, selectedAthleteId,
   onSelectAthlete, onAssignAthleteToGroup, onArchiveAthlete, onDeleteAthlete,
-  compact = false,
+  coachAssignment, compact = false,
 }: AthleteRowProps) {
   const availableGroups = groups.filter(g => !athlete.groupIds.includes(g.id));
+  const assignedCoaches = coachAssignment
+    ? coachAssignment.coaches.filter(c => athlete.coachIds?.includes(c.userId))
+    : [];
   return (
     <div className="flex items-center gap-1">
       <Button
@@ -117,6 +133,14 @@ function AthleteRow({
       >
         <User className="h-3 w-3 shrink-0" />
         <span className="truncate">{getAthleteDisplayName(athlete)}</span>
+        {assignedCoaches.length > 0 && (
+          <span
+            className="ml-auto shrink-0 text-[10px] font-medium text-muted-foreground"
+            title={assignedCoaches.map(c => c.label).join(', ')}
+          >
+            {assignedCoaches.map(c => c.initials).join(' · ')}
+          </span>
+        )}
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -125,6 +149,26 @@ function AthleteRow({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {coachAssignment && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <UserCheck className="h-4 w-4 mr-2" />
+                Coaches
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {coachAssignment.coaches.map(c => (
+                  <DropdownMenuCheckboxItem
+                    key={c.userId}
+                    checked={athlete.coachIds?.includes(c.userId) ?? false}
+                    onSelect={(e) => e.preventDefault()}
+                    onCheckedChange={() => coachAssignment.onToggleCoach(athlete.id, c.userId)}
+                  >
+                    {c.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )}
           {availableGroups.length > 0 ? (
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
@@ -253,6 +297,7 @@ export function AthleteGroupSidebar({
   selectedGroupId,
   onSelectGroup,
   onShowSquad,
+  coachAssignment,
 }: AthleteGroupSidebarProps) {
   const [sidebarTab, setSidebarTab] = useState<'athletes' | 'groups'>('athletes');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -306,7 +351,9 @@ export function AthleteGroupSidebar({
     onAssignAthleteToGroup,
     onArchiveAthlete,
     onDeleteAthlete,
+    coachAssignment,
   };
+  const onlyMine = coachAssignment?.filter === 'mine';
 
   return (
     <div className="h-full border rounded-lg bg-card flex flex-col">
@@ -349,6 +396,25 @@ export function AthleteGroupSidebar({
             </button>
           ))}
         </div>
+        {/* My athletes / All — only in an organization with several coaches */}
+        {coachAssignment && (
+          <div className="flex gap-1 mt-2 text-xs">
+            {(['mine', 'all'] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => coachAssignment.onFilterChange(f)}
+                className={cn(
+                  'px-2.5 py-1 rounded-full border font-medium transition-colors',
+                  coachAssignment.filter === f
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {f === 'mine' ? 'My athletes' : 'All'}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Content ── */}
@@ -379,10 +445,17 @@ export function AthleteGroupSidebar({
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
               ) : sortedActiveAthletes.length === 0 && archivedAthletes.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <p className="text-sm">No athletes yet</p>
-                  <p className="text-xs mt-1">Click + to add your first athlete</p>
-                </div>
+                onlyMine ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p className="text-sm">No athletes assigned to you</p>
+                    <p className="text-xs mt-1">Assign coaches in an athlete's menu, or switch to All</p>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p className="text-sm">No athletes yet</p>
+                    <p className="text-xs mt-1">Click + to add your first athlete</p>
+                  </div>
+                )
               ) : (
                 <>
                   {sortedActiveAthletes.map(athlete => (

@@ -13,6 +13,7 @@ import { Plus } from 'lucide-react';
 import { type Athlete, getAthleteDisplayName } from '@/types/athlete';
 import { useToast } from '@/hooks/use-toast';
 import { SquadDashboard } from '@/components/athletes/SquadDashboard';
+import { useOrgCoaches, useCoachFilter, isAssignedTo, toggledCoachIds } from '@/hooks/useOrgCoaches';
 
 interface NavState {
   openAthleteId?: string;
@@ -47,6 +48,19 @@ export default function AthleteDatabase() {
   const { deleteEventsForAthlete } = useCalendarEvents();
   const { toast } = useToast();
   const { connections, loading: connectionsLoading, getConnectionForAthlete, syncProfileToConnection } = useAthleteConnections();
+
+  // Organization with several coaches: "My athletes / All" (assignment is only a label, see useOrgCoaches)
+  const { coaches, myId, enabled: coachesEnabled } = useOrgCoaches();
+  const [coachFilter, setCoachFilter] = useCoachFilter();
+  const onlyMine = coachesEnabled && coachFilter === 'mine';
+  const shown = useCallback(
+    (list: Athlete[]) => (onlyMine ? list.filter(a => isAssignedTo(a, myId)) : list),
+    [onlyMine, myId],
+  );
+  const handleToggleCoach = useCallback((athleteId: string, coachId: string) => {
+    const athlete = athleteData.getAthlete(athleteId);
+    if (athlete) athleteData.updateAthlete(athleteId, { coachIds: toggledCoachIds(athlete, coachId) });
+  }, [athleteData]);
 
   // ── Load-time sync: pull athlete-edited profile_data back into the coach blob ──
   // Runs once per session after both data sources are ready.
@@ -212,8 +226,8 @@ export default function AthleteDatabase() {
         <AthleteGroupSidebar
           loading={athleteData.isLoading}
           groups={athleteData.groups}
-          athletes={athleteData.athletes}
-          archivedAthletes={athleteData.getArchivedAthletes()}
+          athletes={shown(athleteData.athletes)}
+          archivedAthletes={shown(athleteData.getArchivedAthletes())}
           selectedAthleteId={selectedAthleteId}
           onSelectAthlete={handleSelectAthlete}
           onCreateGroup={athleteData.createGroup}
@@ -221,8 +235,14 @@ export default function AthleteDatabase() {
           onDeleteGroup={athleteData.deleteGroup}
           onAddAthleteToGroup={handleAddAthleteToGroup}
           onAssignAthleteToGroup={handleAssignAthleteToGroup}
-          getAthletesByGroup={athleteData.getAthletesByGroup}
-          getAthletesWithoutGroup={athleteData.getAthletesWithoutGroup}
+          getAthletesByGroup={(groupId) => shown(athleteData.getAthletesByGroup(groupId))}
+          getAthletesWithoutGroup={() => shown(athleteData.getAthletesWithoutGroup())}
+          coachAssignment={coachesEnabled ? {
+            coaches,
+            filter: coachFilter,
+            onFilterChange: setCoachFilter,
+            onToggleCoach: handleToggleCoach,
+          } : undefined}
           onCreateAthlete={() => handleCreateAthlete()}
           onDeleteAthlete={setAthleteIdPendingDelete}
           onArchiveAthlete={handleArchiveAthlete}
@@ -243,6 +263,7 @@ export default function AthleteDatabase() {
             onUpdateAthlete={(updates) => handleUpdateAthlete(selectedAthlete, updates)}
             onDeleteAthlete={() => setAthleteIdPendingDelete(selectedAthlete.id)}
             groups={athleteData.groups}
+            coaches={coachesEnabled ? coaches : undefined}
             athleteData={athleteData}
             openNewAnamnesis={pendingAnamnesisAthleteId === selectedAthlete.id}
             onNewAnamnesisOpened={() => setPendingAnamnesisAthleteId(null)}
@@ -254,7 +275,7 @@ export default function AthleteDatabase() {
           />
         ) : (
           <SquadDashboard
-            athletes={athleteData.athletes.filter(a => !a.isArchived)}
+            athletes={shown(athleteData.athletes.filter(a => !a.isArchived))}
             groups={athleteData.groups}
             connections={connections}
             viewMode={squadViewMode}
@@ -262,6 +283,7 @@ export default function AthleteDatabase() {
             onSelectAthlete={handleSelectAthlete}
             selectedGroupId={selectedGroupId}
             onGroupChange={setSelectedGroupId}
+            onlyMine={onlyMine}
           />
         )}
       </div>

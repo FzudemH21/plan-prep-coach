@@ -10,6 +10,7 @@ import { wellnessComposite, type AthleteCheckin } from '@/hooks/useAthleteChecki
 import { DEFAULT_MONITORING_CONFIG } from '@/types/athlete';
 import { adherenceByDay, plannedSessionId, type AdherenceLogRow } from '@/utils/adherence';
 import { useTranslation } from 'react-i18next';
+import { useOrgCoaches, useCoachFilter, isAssignedTo } from '@/hooks/useOrgCoaches';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -69,6 +70,10 @@ export default function CoachMobileAthletesPage() {
   const { connections } = useAthleteConnections();
   const [search, setSearch] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  // Organization with several coaches: "My athletes / All" (shared with the desktop list)
+  const { myId, enabled: coachesEnabled } = useOrgCoaches();
+  const [coachFilter, setCoachFilter] = useCoachFilter();
+  const onlyMine = coachesEnabled && coachFilter === 'mine';
 
   const today = getToday();
 
@@ -137,9 +142,10 @@ export default function CoachMobileAthletesPage() {
     return active.filter(a => {
       const matchesSearch = !q || `${a.firstName} ${a.lastName}`.toLowerCase().includes(q);
       const matchesGroup  = !selectedGroup || a.groupIds.includes(selectedGroup);
-      return matchesSearch && matchesGroup;
+      const matchesCoach  = !onlyMine || isAssignedTo(a, myId);
+      return matchesSearch && matchesGroup && matchesCoach;
     });
-  }, [active, search, selectedGroup]);
+  }, [active, search, selectedGroup, onlyMine, myId]);
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -150,6 +156,26 @@ export default function CoachMobileAthletesPage() {
         </p>
         <h1 className="text-2xl font-bold">{t('coachMobile.athletes.heading')}</h1>
       </div>
+
+      {/* My athletes / All */}
+      {coachesEnabled && (
+        <div className="px-4 pb-3 flex gap-1.5">
+          {(['mine', 'all'] as const).map(f => (
+            <button
+              key={f}
+              onClick={() => setCoachFilter(f)}
+              className={cn(
+                'shrink-0 min-h-[36px] px-3 py-1 rounded-full text-xs font-medium border transition-colors active:opacity-70',
+                coachFilter === f
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {f === 'mine' ? t('coachMobile.athletes.myAthletes') : t('coachMobile.athletes.everyone')}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Group selector */}
       {groups.length > 0 && (
@@ -208,7 +234,7 @@ export default function CoachMobileAthletesPage() {
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
           {selectedGroup
             ? t('coachMobile.athletes.groupLabel', { name: groups.find(g => g.id === selectedGroup)?.name ?? 'Group', count: displayed.length })
-            : t('coachMobile.athletes.allAthletes', { count: displayed.length })}
+            : t(onlyMine ? 'coachMobile.athletes.myAthletesCount' : 'coachMobile.athletes.allAthletes', { count: displayed.length })}
         </p>
       </div>
 
@@ -219,7 +245,7 @@ export default function CoachMobileAthletesPage() {
         ) : displayed.length === 0 ? (
           <div className="py-12 text-center space-y-2">
             <UserPlus className="h-8 w-8 text-muted-foreground mx-auto" />
-            <p className="text-sm text-muted-foreground">{t('coachMobile.athletes.noAthletes')}</p>
+            <p className="text-sm text-muted-foreground">{onlyMine ? t('coachMobile.athletes.noneAssigned') : t('coachMobile.athletes.noAthletes')}</p>
           </div>
         ) : (
           displayed.map(athlete => {

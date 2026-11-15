@@ -278,7 +278,15 @@ export function useAthletes() {
   const createAthlete = useCallback(async (athlete: Omit<Athlete, 'id' | 'createdAt' | 'updatedAt'>): Promise<Athlete> => {
     const now = new Date().toISOString();
     const athleteId = generateId();
-    const newAthlete: Athlete = { ...athlete, id: athleteId, isArchived: athlete.isArchived ?? false, createdAt: now, updatedAt: now };
+    const newAthlete: Athlete = {
+      ...athlete,
+      id: athleteId,
+      isArchived: athlete.isArchived ?? false,
+      // The coach who creates the athlete looks after them (an organization's "My athletes")
+      coachIds: athlete.coachIds ?? (user ? [user.id] : []),
+      createdAt: now,
+      updatedAt: now,
+    };
 
     const heightDef = data.biometricDefinitions.find(d => d.name === 'Height');
     const weightDef = data.biometricDefinitions.find(d => d.name === 'Weight');
@@ -292,7 +300,7 @@ export function useAthletes() {
       athleteBiometrics: [...prev.athleteBiometrics, ...newBiometrics],
     }));
     return newAthlete;
-  }, [setData, data.biometricDefinitions]);
+  }, [setData, data.biometricDefinitions, user]);
 
   const updateAthlete = useCallback(async (id: string, updates: Partial<Omit<Athlete, 'id' | 'createdAt'>>) => {
     await setData(prev => ({

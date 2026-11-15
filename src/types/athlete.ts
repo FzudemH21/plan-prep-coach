@@ -94,6 +94,9 @@ export interface Athlete {
   settings?: AthleteSettings;
   /** Optional — absent on athletes created before billing addresses existed. */
   billingAddress?: BillingAddress | null;
+  /** Coaches of the organization who look after this athlete (user ids; hooks/useOrgCoaches).
+   *  Only a label for "My athletes" — every coach still has access. Absent on older athletes. */
+  coachIds?: string[];
 }
 
 export interface BillingAddress {

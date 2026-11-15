@@ -325,6 +325,10 @@
     },
     "athletes": {
       "heading": "Athletes",
+      "myAthletes": "My athletes",
+      "myAthletesCount": "My athletes ({{count}})",
+      "everyone": "All athletes",
+      "noneAssigned": "No athletes assigned to you",
       "todayDate": "Today, {{date}}",
       "connected": "Connected",
       "pending": "Pending",

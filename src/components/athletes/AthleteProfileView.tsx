@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { toggledCoachIds, type OrgCoach } from '@/hooks/useOrgCoaches';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -77,6 +78,8 @@ interface AthleteProfileViewProps {
   /** Opens the shared delete confirmation (owned by the page) — never deletes directly. */
   onDeleteAthlete: () => void;
   groups: AthleteGroup[];
+  /** The organization's coaches — only given when it has several (assigning coaches) */
+  coaches?: OrgCoach[];
   athleteData: ReturnType<typeof useAthletes>;
   /** True right after "Continue with anamnesis" in the Add Athlete dialog. */
   openNewAnamnesis?: boolean;
@@ -97,6 +100,7 @@ export function AthleteProfileView({
   onUpdateAthlete,
   onDeleteAthlete,
   groups,
+  coaches,
   athleteData,
   openNewAnamnesis = false,
   onNewAnamnesisOpened,
@@ -297,6 +301,8 @@ export function AthleteProfileView({
     isEditing ? ((editedAthlete[field] !== undefined ? editedAthlete[field] : athlete[field]) as Athlete[K]) : athlete[field];
 
   const assignedGroups = groups.filter(g => athlete.groupIds.includes(g.id));
+  const assignedCoaches = (coaches ?? []).filter(c => athlete.coachIds?.includes(c.userId));
+  const availableCoaches = (coaches ?? []).filter(c => !athlete.coachIds?.includes(c.userId));
   const availableGroups = groups.filter(g => !athlete.groupIds.includes(g.id));
 
   const athleteAge = athlete.birthday
@@ -777,6 +783,56 @@ export function AthleteProfileView({
                 )}
               </div>
             </div>
+
+            {/* Coaches who look after this athlete (organization with several coaches) */}
+            {coaches && (
+              <div className="space-y-2 pt-4 border-t">
+                <Label>Coaches</Label>
+                <div className="flex flex-wrap gap-2 items-center">
+                  {assignedCoaches.length > 0 ? (
+                    assignedCoaches.map((coach) => (
+                      <Badge key={coach.userId} variant="secondary" className="flex items-center gap-1">
+                        {coach.label}
+                        <button
+                          onClick={() => onUpdateAthlete({ coachIds: toggledCoachIds(athlete, coach.userId) })}
+                          className="ml-1 hover:bg-muted-foreground/20 rounded-full p-0.5"
+                          aria-label={`Remove ${coach.label}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))
+                  ) : (
+                    <span className="text-sm text-muted-foreground">No coach assigned</span>
+                  )}
+                  {availableCoaches.length > 0 && (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-6 w-6 p-0 rounded-full" aria-label="Assign coach">
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-56 p-2" align="start">
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground mb-2">Assign coach</p>
+                          {availableCoaches.map((coach) => (
+                            <Button
+                              key={coach.userId}
+                              variant="ghost"
+                              size="sm"
+                              className="w-full justify-start text-sm h-8"
+                              onClick={() => onUpdateAthlete({ coachIds: toggledCoachIds(athlete, coach.userId) })}
+                            >
+                              <span className="truncate">{coach.label}</span>
+                            </Button>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

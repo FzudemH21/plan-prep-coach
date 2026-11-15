@@ -485,6 +485,8 @@ interface SquadDashboardProps {
   /** Lifted from AthleteDatabase so sidebar + dashboard stay in sync. */
   selectedGroupId: string | null;
   onGroupChange: (id: string | null) => void;
+  /** Only the athletes assigned to the logged-in coach are passed ("My athletes") */
+  onlyMine?: boolean;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -493,7 +495,7 @@ export function SquadDashboard({
   athletes, groups, connections,
   viewMode, onViewModeChange,
   onSelectAthlete,
-  selectedGroupId, onGroupChange,
+  selectedGroupId, onGroupChange, onlyMine = false,
 }: SquadDashboardProps) {
 
   const filteredAthletes = useMemo(
@@ -540,8 +542,8 @@ export function SquadDashboard({
   const flaggedCount   = displayItems.filter(i => i.summary && (i.summary.hasPainFlag || i.summary.hasIllnessFlag)).length;
 
   const activeGroupName = useMemo(
-    () => selectedGroupId ? (groups.find(g => g.id === selectedGroupId)?.name ?? 'Squad') : 'All Athletes',
-    [groups, selectedGroupId],
+    () => selectedGroupId ? (groups.find(g => g.id === selectedGroupId)?.name ?? 'Squad') : (onlyMine ? 'My Athletes' : 'All Athletes'),
+    [groups, selectedGroupId, onlyMine],
   );
 
   return (
