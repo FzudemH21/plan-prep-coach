@@ -28,6 +28,8 @@ const ACTION = [
   '[role="slider"]', '[role="combobox"]', '[role="option"]', '[role="menuitem"]', '[role="menuitemcheckbox"]',
   '[role="menuitemradio"]', '[role="radio"]', '[role="spinbutton"]', '[contenteditable=""]', '[contenteditable="true"]',
   '[data-edit]', '[draggable="true"]', '[aria-roledescription]', '[data-rbd-drag-handle-draggable-id]',
+  // Anything that opens a dropdown, picker or dialog — also badges and other non-buttons
+  '[aria-haspopup]',
 ].join(', ');
 /** Things that can be dragged — pressing them is always blocked (a click may still open them) */
 const DRAG = '[draggable="true"], [aria-roledescription], [data-rbd-drag-handle-draggable-id], [data-rbd-draggable-id]';
@@ -83,7 +85,7 @@ if (typeof window !== 'undefined') {
   ['beforeinput', 'paste', 'cut'].forEach(type => window.addEventListener(type, e => { if (inScope(e.target)) stop(e); }, { capture: true }));
 }
 
-const DIMMED = ':is(button, [role="button"], [role="checkbox"], [role="switch"], [role="radio"], [role="combobox"], [role="menuitem"], [role="option"], [data-edit])'
+const DIMMED = ':is(button, [role="button"], [role="checkbox"], [role="switch"], [role="radio"], [role="combobox"], [role="menuitem"], [role="option"], [data-edit], [aria-haspopup])'
   + ':not([data-nav]):not([data-nav] *):not([data-open]):not([data-dialog-close]):not([role="tab"])'
   + ':not([aria-expanded]:not([aria-haspopup]):not([role="combobox"])):not(:not([aria-haspopup]):not([role="combobox"]):has(> svg[class*="lucide-chevron-"]))';
 const READONLY_CSS = `
