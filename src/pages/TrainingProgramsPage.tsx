@@ -42,7 +42,7 @@ import {
   Target,
   FileText,
   History,
-  ShieldCheck,
+
   Loader2
 } from "lucide-react";
 import { ExportPDFButton } from "@/components/pdf/ExportPDFButton";
@@ -55,9 +55,13 @@ import { useToast } from "@/hooks/use-toast";
 import { format, formatDistanceToNow, differenceInCalendarDays } from "date-fns";
 import { useWizardData } from "@/contexts/WizardDataContext";
 import { useAIChatContext } from "@/contexts/AIChatContext";
+import { useReadOnly } from "@/hooks/useDataScope";
+import { ViewOnlyBadge } from "@/components/shared/ViewOnlyBadge";
 
 export default function TrainingProgramsPage() {
   const navigate = useNavigate();
+  // Programs unticked in the rights grid: view (PDF, version history) — no create, edit, duplicate, delete
+  const readOnly = useReadOnly('programs');
   const { toast } = useToast();
   const { programs, programSummaries, isLoading, copyProgram, deleteProgram, loadProgramIntoSession, clearSession } = useTrainingPrograms();
   // While the full programs load, the list shows their summaries; opening and the menu wait for the full version
@@ -208,19 +212,17 @@ const formatDuration = (program: ProgramSummary) => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Training Programs</h1>
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">Training Programs <ViewOnlyBadge show={readOnly} /></h1>
             <p className="text-muted-foreground">Manage your saved training plans</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => navigate('/restore-programs')}>
-            <ShieldCheck className="h-4 w-4 mr-2" />
-            Backup & restore
-          </Button>
-          <Button onClick={handleCreateNew}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create New Program
-          </Button>
+          {!readOnly && (
+            <Button onClick={handleCreateNew}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create New Program
+            </Button>
+          )}
         </div>
       </div>
 
@@ -262,7 +264,11 @@ const formatDuration = (program: ProgramSummary) => {
                 <TableRow
                   key={row.id}
                   className={program ? "cursor-pointer hover:bg-muted/50" : "cursor-progress"}
-                  onClick={() => { if (program) handleEditProgram(program); }}
+                  onClick={() => {
+                    if (!program) return;
+                    // View only: the program opens as its PDF (no editing in the planner)
+                    if (readOnly) { setPdfExportProgram(program); setPdfExportOpen(true); } else handleEditProgram(program);
+                  }}
                 >
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-2">
@@ -293,14 +299,18 @@ const formatDuration = (program: ProgramSummary) => {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditProgram(program); }}>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleCopyProgram(program); }}>
-                          <Copy className="h-4 w-4 mr-2" />
-                          Duplicate
-                        </DropdownMenuItem>
+                        {!readOnly && (
+                          <>
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditProgram(program); }}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleCopyProgram(program); }}>
+                              <Copy className="h-4 w-4 mr-2" />
+                              Duplicate
+                            </DropdownMenuItem>
+                          </>
+                        )}
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setPdfExportProgram(program); setPdfExportOpen(true); }}>
                           <FileText className="h-4 w-4 mr-2" />
                           Export PDF
@@ -309,14 +319,18 @@ const formatDuration = (program: ProgramSummary) => {
                           <History className="h-4 w-4 mr-2" />
                           Version history
                         </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={(e) => { e.stopPropagation(); handleDeleteClick(program); }}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
+                        {!readOnly && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={(e) => { e.stopPropagation(); handleDeleteClick(program); }}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                     ) : <div className="h-8 w-8" />}
@@ -340,7 +354,7 @@ const formatDuration = (program: ProgramSummary) => {
                 : "Get started by creating your first training program"
               }
             </p>
-            {!searchQuery && (
+            {!searchQuery && !readOnly && (
               <Button onClick={handleCreateNew}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create Your First Program
@@ -367,7 +381,7 @@ const formatDuration = (program: ProgramSummary) => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Training Program</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{programToDelete?.name}"? It can be brought back under Backup & restore.
+              Are you sure you want to delete "{programToDelete?.name}"? It can be brought back under Coach Profile → Organization → Backup & restore.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

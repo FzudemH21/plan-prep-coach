@@ -28,6 +28,10 @@ declare
   v_mlib    text;
   v_mr      jsonb;     -- the member's rights
   v_conns   uuid[];    -- app connections the member may reach (the data owner's and its own)
+  -- Coaches reach only the athletes assigned to them (2026-11-16)
+  v_asg     boolean := to_regprocedure('public.my_athlete_ids()') is not null;
+  v_assigned text[] := '{}';  -- the data owner's athletes assigned to the member
+  v_anams   uuid[] := '{}';   -- their anamneses
   v_shared  boolean := to_regprocedure('public.my_data_owner()') is not null;
   v_sh_ath  boolean := exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'athlete_records' and policyname = 'org_read');
   v_sh_prog boolean := exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'program_records' and policyname = 'org_read');
@@ -62,8 +66,18 @@ begin
       v_mlib := v_mr->>'libraries';
     end if;
   end if;
-  select coalesce(array_agg(id), '{}') into v_conns from public.athlete_connections
-   where coach_user_id = v_coach and v_sh_ath or coach_user_id = v_member;
+  if v_asg and v_member is not null then
+    select coalesce(array_agg(id), '{}') into v_assigned from public.athlete_records
+     where coach_user_id = v_coach and left(id, 1) <> '_'
+       and coalesce(data->'athlete'->'coachIds', '[]'::jsonb) ? v_member::text;
+    select coalesce(array_agg(id), '{}') into v_anams from public.athlete_anamneses
+     where coach_user_id = v_coach and athlete_local_id = any(v_assigned);
+    select coalesce(array_agg(id), '{}') into v_conns from public.athlete_connections
+     where coach_user_id = v_coach and athlete_local_id = any(v_assigned) or coach_user_id = v_member;
+  else
+    select coalesce(array_agg(id), '{}') into v_conns from public.athlete_connections
+     where coach_user_id = v_coach and v_sh_ath or coach_user_id = v_member;
+  end if;
   select array_agg(format('%I.%I', schemaname, tablename) order by tablename) into tabs
     from pg_tables where schemaname = 'public' and tablename <> 'perm_results';
   tabs := tabs || 'storage.objects'::text;
@@ -131,8 +145,18 @@ begin
             execute format('select count(*) from %s where id is distinct from %L', t, v_org) into n;
           elsif t in ('public.organization_members', 'public.organization_invites', 'public.activity_log') then
             execute format('select count(*) from %s where org_id is distinct from %L', t, v_org) into n;
+          elsif v_asg and t = 'public.athlete_records' then
+            -- Only the athletes assigned to it (and the shared groups row)
+            execute format('select count(*) from %s where coach_user_id is distinct from %L
+                            and not (coach_user_id = %L and (id = ''_shared'' or id = any(%L::text[])))', t, uid, v_coach, v_assigned) into n;
+          elsif v_asg and t = 'public.athlete_anamneses' then
+            execute format('select count(*) from %s where coach_user_id is distinct from %L
+                            and not (coach_user_id = %L and athlete_local_id = any(%L::text[]))', t, uid, v_coach, v_assigned) into n;
+          elsif v_asg and t = 'public.anamnesis_change_log' then
+            execute format('select count(*) from %s where coach_user_id is distinct from %L
+                            and not (anamnesis_id = any(%L::uuid[]))', t, uid, v_anams) into n;
           elsif t in ('public.athlete_daily_checkins', 'public.athlete_anamneses', 'public.anamnesis_change_log', 'public.anamnesis_templates')
-                and not coalesce((v_mr->>'health')::boolean, false) then
+                and not v_asg and not coalesce((v_mr->>'health')::boolean, false) then
             -- No health right: nothing of anyone else
             col := case when 'coach_user_id' = any(cols) then 'coach_user_id' else null end;
             if col is null then
@@ -150,6 +174,16 @@ begin
             -- Personal: only its own
             col := case when 'coach_user_id' = any(cols) then 'coach_user_id' when 'user_id' = any(cols) then 'user_id' else 'owner_user_id' end;
             execute format('select count(*) from %s where %I is distinct from %L', t, col, uid) into n;
+          elsif t = 'storage.objects' and v_asg then
+            execute format('select count(*) from storage.objects o where coalesce(o.owner_id, o.owner::text) is distinct from %L and not (
+                              (o.bucket_id = ''athlete-uploads'' and (storage.foldername(o.name))[1] = any(%L::text[]))
+                              or (o.bucket_id = ''documents'' and (storage.foldername(o.name))[1] = ''chat'' and (storage.foldername(o.name))[2] = any(%L::text[]))
+                              or (o.bucket_id = ''documents'' and (storage.foldername(o.name))[1] = ''athlete-docs'' and (storage.foldername(o.name))[2] = any(%L::text[])
+                                  and coalesce(o.owner_id, o.owner::text) in (select m.user_id::text from public.organization_members m where m.org_id = %L))
+                              or (o.bucket_id = ''documents'' and (storage.foldername(o.name))[1] = ''anamnesis'' and (storage.foldername(o.name))[2] = %L
+                                  and (storage.foldername(o.name))[3] = any(%L::text[]))
+                              or (o.bucket_id = ''documents'' and (storage.foldername(o.name))[1] = ''anamnesis-form'' and (storage.foldername(o.name))[2] = any(%L::text[])))',
+                           uid::text, v_conns::text[], v_conns::text[], v_assigned, v_org, v_coach::text, v_assigned, v_anams::text[]) into n;
           elsif t = 'storage.objects' then
             execute format('select count(*) from storage.objects o where coalesce(o.owner_id, o.owner::text) is distinct from %L and not (
                               (o.bucket_id = ''athlete-uploads'' and (storage.foldername(o.name))[1] = any(%L::text[]))
@@ -160,6 +194,9 @@ begin
                               or (%L::boolean and o.bucket_id = ''documents'' and (storage.foldername(o.name))[1] = ''anamnesis-form''))',
                            uid::text, v_conns::text[], v_conns::text[], v_org,
                            coalesce((v_mr->>'health')::boolean, false), v_coach::text, coalesce((v_mr->>'health')::boolean, false)) into n;
+          elsif t = 'public.coach_records' and v_asg then
+            execute format('select count(*) from %s where coach_user_id is distinct from %L and (coach_user_id is distinct from %L
+                            or (store = ''calendar_events'' and not (substr(id, 3) = any(%L::text[]))))', t, uid, v_coach, v_assigned) into n;
           elsif t = 'public.coach_records' then
             execute format('select count(*) from %s where coach_user_id is distinct from %L and (coach_user_id is distinct from %L
                             or (store = ''calendar_events'' and not %L::boolean))', t, uid, v_coach, v_sh_ath) into n;
@@ -284,19 +321,25 @@ begin
         select * from (values
           ('public.coach_records', 'change the shared exercise library', coalesce(v_mr->>'libraries', 'view'),
              'updated_at', format('coach_records where coach_user_id = %L and store = ''exercises''', v_coach)),
-          ('public.coach_records', 'change tests / events', case when v_sh_ath then coalesce(v_mr->>'athletes', 'view') else 'never' end,
+          ('public.coach_records', 'change tests / events', case when v_asg then 'edit' when v_sh_ath then coalesce(v_mr->>'athletes', 'view') else 'never' end,
              'updated_at', format('coach_records where coach_user_id = %L and store = ''calendar_events''', v_coach)),
-          ('public.athlete_records', 'change athletes', case when v_sh_ath then coalesce(v_mr->>'athletes', 'view') else 'never' end,
+          ('public.athlete_records', 'change athletes', case when v_asg then 'edit' when v_sh_ath then coalesce(v_mr->>'athletes', 'view') else 'never' end,
              'updated_at', format('athlete_records where coach_user_id = %L', v_coach)),
-          ('public.athlete_session_logs', 'change logged sessions', case when v_sh_ath then coalesce(v_mr->>'athletes', 'view') else 'never' end,
+          ('public.athlete_session_logs', 'change logged sessions', case when v_asg then 'edit' when v_sh_ath then coalesce(v_mr->>'athletes', 'view') else 'never' end,
              'athlete_connection_id', format('athlete_session_logs where athlete_connection_id in (select id from public.athlete_connections where coach_user_id = %L)', v_coach)),
           ('public.athlete_anamneses', 'change anamneses (health data)',
-             case when v_sh_ath and coalesce((v_mr->>'health')::boolean, false) then coalesce(v_mr->>'athletes', 'view') else 'never' end,
+             case when v_asg then (case when coalesce((v_mr->>'health')::boolean, false) then 'edit' else 'view' end)
+                  when v_sh_ath and coalesce((v_mr->>'health')::boolean, false) then coalesce(v_mr->>'athletes', 'view') else 'never' end,
              'updated_at', format('athlete_anamneses where coach_user_id = %L', v_coach)),
           ('public.athlete_daily_checkins', 'change check-ins', 'never',
              'athlete_connection_id', format('athlete_daily_checkins where athlete_connection_id in (select id from public.athlete_connections where coach_user_id = %L)', v_coach)),
           ('public.program_records', 'change programs', case when v_sh_prog then coalesce(v_mr->>'programs', 'view') else 'never' end,
-             'updated_at', format('program_records where coach_user_id = %L', v_coach))
+             'updated_at', format('program_records where coach_user_id = %L', v_coach)),
+          -- Athletes not assigned to it: out of reach
+          ('public.athlete_records', 'change athletes not assigned to it', case when v_asg then 'never' when v_sh_ath then coalesce(v_mr->>'athletes', 'view') else 'never' end,
+             'updated_at', format('athlete_records where coach_user_id = %L and left(id, 1) <> ''_'' and not (id = any(%L::text[]))', v_coach, v_assigned)),
+          ('public.athlete_session_logs', 'change logged sessions of athletes not assigned to it', case when v_asg then 'never' when v_sh_ath then coalesce(v_mr->>'athletes', 'view') else 'never' end,
+             'athlete_connection_id', format('athlete_session_logs where athlete_connection_id in (select id from public.athlete_connections where coach_user_id = %L) and not (athlete_connection_id = any(%L::uuid[]))', v_coach, v_conns))
         ) as w(tbl, label, allowed, setcol, target)
       loop
         n := 0;

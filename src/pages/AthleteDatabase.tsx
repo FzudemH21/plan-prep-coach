@@ -50,9 +50,11 @@ export default function AthleteDatabase() {
   const { connections, loading: connectionsLoading, getConnectionForAthlete, syncProfileToConnection } = useAthleteConnections();
 
   // Organization with several coaches: "My athletes / All" (assignment is only a label, see useOrgCoaches)
-  const { coaches, myId, enabled: coachesEnabled } = useOrgCoaches();
+  const { coaches, myId, enabled: coachesEnabled, isOwner } = useOrgCoaches();
   const [coachFilter, setCoachFilter] = useCoachFilter();
-  const onlyMine = coachesEnabled && coachFilter === 'mine';
+  // Coaches only reach their assigned athletes anyway — the filter is for owners
+  const showCoachFilter = coachesEnabled && isOwner;
+  const onlyMine = showCoachFilter && coachFilter === 'mine';
   const shown = useCallback(
     (list: Athlete[]) => (onlyMine ? list.filter(a => isAssignedTo(a, myId)) : list),
     [onlyMine, myId],
@@ -240,6 +242,7 @@ export default function AthleteDatabase() {
           coachAssignment={coachesEnabled ? {
             coaches,
             filter: coachFilter,
+            showFilter: showCoachFilter,
             onFilterChange: setCoachFilter,
             onToggleCoach: handleToggleCoach,
           } : undefined}

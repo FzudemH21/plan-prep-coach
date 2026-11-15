@@ -24,7 +24,7 @@ interface Props {
 /** Earlier versions of one program — any of them can be restored (the current state is kept first) */
 export function ProgramVersionsDialog({ program, onOpenChange }: Props) {
   // The organization's programs for members (lib/dataScope)
-  const { dataId: programsId } = useDataScope('programs');
+  const { dataId: programsId, canEdit } = useDataScope('programs');
   const { toast } = useToast();
   const { restoreProgramVersion, loadProgramIntoSession } = useTrainingPrograms();
   const { loadWizardSession } = useWizardData();
@@ -82,10 +82,12 @@ export function ProgramVersionsDialog({ program, onOpenChange }: Props) {
                   <div className="text-sm font-medium">{format(new Date(version.saved_at), 'EEE d MMM yyyy, HH:mm')}</div>
                   <div className="text-xs text-muted-foreground truncate">{REASON_LABEL[version.reason] ?? 'Saved'}</div>
                 </div>
-                <Button size="sm" variant="outline" disabled={restoringId !== null} onClick={() => void restore(version)}>
-                  {restoringId === version.id ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1.5" />}
-                  Restore
-                </Button>
+                {canEdit && (
+                  <Button size="sm" variant="outline" disabled={restoringId !== null} onClick={() => void restore(version)}>
+                    {restoringId === version.id ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1.5" />}
+                    Restore
+                  </Button>
+                )}
               </div>
             ))}
           </div>

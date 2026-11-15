@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { canEditIn, dataIdFor, resolveDataScope, type DataArea, type DataScope } from '@/lib/dataScope';
+import { canEditHealth, canEditIn, dataIdFor, resolveDataScope, type DataArea, type DataScope } from '@/lib/dataScope';
 
 /** The logged-in person's data scope (lib/dataScope), null until known */
 function useScope(): DataScope | null {
@@ -35,4 +35,10 @@ export function useDataScope(area: DataArea): { dataId: string | null; canEdit: 
 export function useReadOnly(area: DataArea): boolean {
   const scope = useScope();
   return !!scope && !canEditIn(scope, area);
+}
+
+/** True when the logged-in coach may only view health data (Health unticked in the rights grid) */
+export function useHealthReadOnly(): boolean {
+  const scope = useScope();
+  return !!scope && !canEditHealth(scope);
 }

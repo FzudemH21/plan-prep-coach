@@ -71,7 +71,9 @@ export default function CoachMobileAthletesPage() {
   const [search, setSearch] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   // Organization with several coaches: "My athletes / All" (shared with the desktop list)
-  const { myId, enabled: coachesEnabled } = useOrgCoaches();
+  const { myId, enabled: orgHasCoaches, isOwner } = useOrgCoaches();
+  // Coaches only reach their assigned athletes anyway — the filter is for owners
+  const coachesEnabled = orgHasCoaches && isOwner;
   const [coachFilter, setCoachFilter] = useCoachFilter();
   const onlyMine = coachesEnabled && coachFilter === 'mine';
 

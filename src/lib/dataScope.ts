@@ -21,7 +21,7 @@ export interface DataScope {
   /** The account holding the organization's data (= userId without an organization) */
   ownerId: string;
   /** The person's rights in the organization (null without one) */
-  rights: Partial<Record<DataArea, 'view' | 'edit'>> | null;
+  rights: (Partial<Record<DataArea, 'view' | 'edit'>> & { health?: boolean }) | null;
 }
 
 let current: { userId: string; promise: Promise<DataScope> } | null = null;
@@ -58,9 +58,17 @@ export function dataIdFor(scope: DataScope, area: DataArea | undefined): string 
   return area && SHARED_AREAS.has(area) ? scope.ownerId : scope.userId;
 }
 
-/** Whether this person may change the area's data */
+/**
+ * Whether this person may change the area's data. Athletes: always — a coach reaches only the
+ * athletes assigned to them and has full access to those (database rules, 2026-11-16).
+ */
 export function canEditIn(scope: DataScope, area: DataArea | undefined): boolean {
-  return dataIdFor(scope, area) === scope.userId || scope.rights?.[area as DataArea] === 'edit';
+  return dataIdFor(scope, area) === scope.userId || area === 'athletes' || scope.rights?.[area as DataArea] === 'edit';
+}
+
+/** Whether this person may change health data (anamneses, forms, anamnesis files) — the Health tick */
+export function canEditHealth(scope: DataScope): boolean {
+  return scope.ownerId === scope.userId || scope.rights === null || scope.rights.health === true;
 }
 
 /** Whether the area's data belongs to someone else's account (the organization's) */

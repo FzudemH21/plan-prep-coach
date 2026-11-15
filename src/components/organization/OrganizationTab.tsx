@@ -4,7 +4,8 @@
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Activity, Building2, Copy, Link2, Trash2, UserPlus, X, History } from 'lucide-react';
+import { Activity, Building2, Copy, Link2, Trash2, UserPlus, X, History, ShieldCheck } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +40,7 @@ export function OrganizationTab({ brandingCard }: { brandingCard?: ReactNode }) 
       <div className="space-y-6">
         {brandingCard}
         <p className="text-sm text-muted-foreground">{t('organization.unavailable')}</p>
+        <BackupCard />
       </div>
     );
   }
@@ -49,6 +51,7 @@ export function OrganizationTab({ brandingCard }: { brandingCard?: ReactNode }) 
       <MembersCard org={org} />
       {org.members.length > 1 && <ActivityCard members={org.members} />}
       <DeletionLogCard members={org.members} />
+      <BackupCard />
     </div>
   );
 }
@@ -99,9 +102,10 @@ function NameCard({ name, isOwner, onRename }: { name: string; isOwner: boolean;
 
 // ── Members, rights and invites ─────────────────────────────────────────────────────────────────
 
-/** The rights grid: athletes / programs / libraries ticked = may change (else view only), health
- *  data and AI ticked = on. Owners always have everything. */
-const GRID_RIGHTS = ['athletes', 'programs', 'libraries', 'health', 'ai'] as const;
+/** The rights grid: programs / libraries ticked = may change (else view only); health ticked = may
+ *  change the health data of their athletes (else view only); AI ticked = on. Athletes aren't in the
+ *  grid: a coach reaches the athletes assigned to them, owners all. Owners always have everything. */
+const GRID_RIGHTS = ['programs', 'libraries', 'health', 'ai'] as const;
 type GridRight = typeof GRID_RIGHTS[number];
 const isOn = (rights: OrgRights, k: GridRight): boolean =>
   k === 'health' || k === 'ai' ? rights[k] : rights[k] === 'edit';
@@ -110,7 +114,7 @@ const toggled = (rights: OrgRights, k: GridRight): OrgRights =>
     ? { ...rights, [k]: !rights[k] }
     : { ...rights, [k]: rights[k] === 'edit' ? 'view' : 'edit' };
 
-const GRID_COLS = 'grid grid-cols-[minmax(0,1fr)_7rem_repeat(5,3.5rem)_2rem] items-center gap-x-1';
+const GRID_COLS = 'grid grid-cols-[minmax(0,1fr)_7rem_repeat(4,3.5rem)_2rem] items-center gap-x-1';
 
 function MembersCard({ org }: { org: ReturnType<typeof useOrganization> }) {
   const { t, i18n } = useTranslation();
@@ -369,6 +373,49 @@ function kindKey(row: { table_name: string; record_id: string | null }): string 
   } as Record<string, string>)[row.table_name] ?? 'other';
 }
 
+// ── Logs: the latest few, the rest in a dialog ────────────────────────────────────────────────
+
+const PREVIEW_ROWS = 5;
+
+function LogRows<T>({ title, rows, render }: { title: string; rows: T[]; render: (row: T) => ReactNode }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <div className="-mx-2">{rows.slice(0, PREVIEW_ROWS).map(render)}</div>
+      {rows.length > PREVIEW_ROWS && (
+        <Button variant="ghost" size="sm" className="mt-2 h-8 px-2 text-xs" onClick={() => setOpen(true)}>
+          {t('organization.showAll', { count: rows.length })}
+        </Button>
+      )}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
+          <div className="max-h-[65vh] overflow-y-auto px-2">{rows.map(render)}</div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// ── Backup & restore (moved here from the program library) ─────────────────────────────────────
+
+function BackupCard() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  return (
+    <Card>
+      <CardContent className="flex items-center justify-between gap-4 py-4">
+        <div className="min-w-0">
+          <p className="text-sm font-medium flex items-center gap-2"><ShieldCheck className="h-4 w-4" />{t('organization.backup.title')}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{t('organization.backup.text')}</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => navigate('/restore-programs')}>{t('organization.backup.open')}</Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Recent changes (phase 4) ────────────────────────────────────────────────────────────────────
 
 interface ActivityRow {
@@ -422,8 +469,10 @@ function ActivityCard({ members }: { members: OrgMember[] }) {
         ) : rows.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('organization.activity.empty')}</p>
         ) : (
-          <div className="max-h-96 overflow-y-auto -mx-2">
-            {rows.map((row) => (
+          <LogRows
+            title={t('organization.activity.title')}
+            rows={rows}
+            render={(row) => (
               <div key={row.id} className="flex items-baseline gap-3 px-2 py-1.5 text-sm border-b last:border-b-0">
                 <span className="text-xs text-muted-foreground w-28 shrink-0 tabular-nums">
                   {new Date(row.at).toLocaleString(i18n.language, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
@@ -436,8 +485,8 @@ function ActivityCard({ members }: { members: OrgMember[] }) {
                 </span>
                 <span className="text-xs text-muted-foreground shrink-0">{byWhom(row.actor)}</span>
               </div>
-            ))}
-          </div>
+            )}
+          />
         )}
       </CardContent>
     </Card>
@@ -491,8 +540,10 @@ function DeletionLogCard({ members }: { members: OrgMember[] }) {
         ) : rows.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('organization.deletionLog.empty')}</p>
         ) : (
-          <div className="max-h-96 overflow-y-auto -mx-2">
-            {rows.map((row) => {
+          <LogRows
+            title={t('organization.deletionLog.title')}
+            rows={rows}
+            render={(row) => {
               const athlete = row.athlete_connection_id ? athleteNames.get(row.athlete_connection_id) : undefined;
               return (
                 <div key={row.id} className="flex items-baseline gap-3 px-2 py-1.5 text-sm border-b last:border-b-0">
@@ -507,8 +558,8 @@ function DeletionLogCard({ members }: { members: OrgMember[] }) {
                   <span className="text-xs text-muted-foreground shrink-0">{byWhom(row)}</span>
                 </div>
               );
-            })}
-          </div>
+            }}
+          />
         )}
       </CardContent>
     </Card>

@@ -13,12 +13,13 @@ import type { Athlete } from '@/types/athlete';
 
 export interface OrgCoach {
   userId: string;
+  role?: string;
   /** Name from the coach profile, else the e-mail */
   label: string;
   initials: string;
 }
 
-interface MemberRow { user_id: string; email: string | null; name: string | null }
+interface MemberRow { user_id: string; email: string | null; name: string | null; role?: string }
 
 function initialsOf(label: string): string {
   const base = label.includes('@') ? label.split('@')[0] : label;
@@ -38,7 +39,7 @@ function loadCoaches(userId: string): Promise<OrgCoach[]> {
       if (error) { cache.delete(userId); return []; }
       return ((data ?? []) as MemberRow[]).map((r) => {
         const label = r.name?.trim() || r.email || 'Coach';
-        return { userId: r.user_id, label, initials: initialsOf(label) };
+        return { userId: r.user_id, role: r.role, label, initials: initialsOf(label) };
       });
     })();
     cache.set(userId, p);
@@ -46,7 +47,7 @@ function loadCoaches(userId: string): Promise<OrgCoach[]> {
   return p;
 }
 
-export function useOrgCoaches(): { coaches: OrgCoach[]; myId: string | null; enabled: boolean } {
+export function useOrgCoaches(): { coaches: OrgCoach[]; myId: string | null; enabled: boolean; isOwner: boolean } {
   const { user } = useAuth();
   const [coaches, setCoaches] = useState<OrgCoach[]>([]);
   useEffect(() => {
@@ -55,7 +56,9 @@ export function useOrgCoaches(): { coaches: OrgCoach[]; myId: string | null; ena
     void loadCoaches(user.id).then((c) => { if (!cancelled) setCoaches(c); });
     return () => { cancelled = true; };
   }, [user]);
-  return { coaches, myId: user?.id ?? null, enabled: coaches.length > 1 };
+  // Owners reach every athlete; coaches only their assigned ones (so "My athletes / All" is for owners)
+  const isOwner = coaches.find((c) => c.userId === user?.id)?.role === 'owner';
+  return { coaches, myId: user?.id ?? null, enabled: coaches.length > 1, isOwner };
 }
 
 export type CoachFilter = 'mine' | 'all';

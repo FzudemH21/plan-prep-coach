@@ -92,6 +92,8 @@ interface AthleteGroupSidebarProps {
 interface CoachAssignment {
   coaches: OrgCoach[];
   filter: CoachFilter;
+  /** "My athletes / All" — for owners (coaches only reach their own athletes) */
+  showFilter: boolean;
   onFilterChange: (filter: CoachFilter) => void;
   onToggleCoach: (athleteId: string, coachId: string) => void;
 }
@@ -353,7 +355,7 @@ export function AthleteGroupSidebar({
     onDeleteAthlete,
     coachAssignment,
   };
-  const onlyMine = coachAssignment?.filter === 'mine';
+  const onlyMine = !!coachAssignment?.showFilter && coachAssignment.filter === 'mine';
 
   return (
     <div className="h-full border rounded-lg bg-card flex flex-col">
@@ -397,7 +399,7 @@ export function AthleteGroupSidebar({
           ))}
         </div>
         {/* My athletes / All — only in an organization with several coaches */}
-        {coachAssignment && (
+        {coachAssignment?.showFilter && (
           <div className="flex gap-1 mt-2 text-xs">
             {(['mine', 'all'] as const).map(f => (
               <button

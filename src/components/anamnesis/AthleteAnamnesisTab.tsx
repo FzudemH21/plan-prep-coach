@@ -68,7 +68,8 @@ import { answerFileCount, contextFor, fieldState, filesKey, formatAnswer } from 
 import { localizeField, localizeSection } from '@/utils/anamnesisI18n';
 import { AnamnesisFieldInput } from '@/components/anamnesis/AnamnesisInputs';
 import { AnswerFiles } from '@/components/anamnesis/AnamnesisFiles';
-import { useDataScope } from '@/hooks/useDataScope';
+import { useDataScope, useHealthReadOnly } from '@/hooks/useDataScope';
+import { ViewOnlyBadge } from '@/components/shared/ViewOnlyBadge';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -180,6 +181,8 @@ interface RecordFormProps {
   onDelete?: () => Promise<void>;
   isSaving: boolean;
   isDeleting: boolean;
+  /** Health data may only be viewed (Health unticked in the rights grid) */
+  locked?: boolean;
 }
 
 function RecordForm({
@@ -197,6 +200,7 @@ function RecordForm({
   onDelete,
   isSaving,
   isDeleting,
+  locked = false,
 }: RecordFormProps) {
   const { templates, createTemplate, updateTemplate, deleteTemplate } = useAnamnesisTemplates();
   const { profile: coachProfile } = useCoachProfile();
@@ -952,19 +956,21 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
 
           )}
 
-          {/* Notes — typed or dictated; work in the read-only view too */}
+          {/* Notes — typed or dictated; work in the read-only view too (not when health data is view only) */}
+          <fieldset disabled={locked} className="contents">
           <AnamnesisNotesPanel
             entries={noteEntries}
             onChange={handleNotesChange}
             coachUserId={coachUserId}
             athleteLocalId={athleteLocalId}
           />
+          </fieldset>
 
           {/* Attachments */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label className="text-sm font-semibold">Attachments</Label>
-              {(!readOnly || attachDirectly) && <Button
+              {(!readOnly || attachDirectly) && !locked && <Button
                 type="button"
                 variant="ghost"
                 size="sm"
@@ -1036,7 +1042,7 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
                       </Button>
                     </a>
                   )}
-                  {(!readOnly || attachDirectly) && (
+                  {(!readOnly || attachDirectly) && !locked && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -1074,7 +1080,7 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label className="text-sm font-semibold">AI Summary</Label>
-              <Button
+              {!locked && <Button
                 variant="outline"
                 size="sm"
                 className="h-7 gap-1.5 text-xs"
@@ -1085,7 +1091,7 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
                   ? <Loader2 className="h-3 w-3 animate-spin" />
                   : <Sparkles className="h-3 w-3" />}
                 {aiSummary ? 'Regenerate' : 'Generate'}
-              </Button>
+              </Button>}
             </div>
             {summaryQuestions.length > 0 && !generatingSummary && (
               <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2.5 space-y-2">
@@ -1214,7 +1220,9 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
               }}
             />
           )}
-          {readOnly ? (
+          {locked ? (
+            <ViewOnlyBadge show />
+          ) : readOnly ? (
             <Button size="sm" className="gap-1.5" onClick={() => setMode('edit')}>
               <Pencil className="h-3.5 w-3.5" />
               Edit
@@ -1335,6 +1343,8 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
   const { user } = useAuth();
   // The account holding the anamneses (the organization's for members, lib/dataScope)
   const { dataId: athletesId } = useDataScope('athletes');
+  // Health unticked in the rights grid: anamneses can be read, not created, changed or deleted
+  const healthLocked = useHealthReadOnly();
   const {
     anamneses, loading, createAnamnesis, updateAnamnesis, deleteAnamnesis,
     sendFormLink, updateFormLink, markProfileApplied,
@@ -1453,14 +1463,18 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
             <ShieldCheck className="h-3.5 w-3.5" />
             Privacy notice
           </Button>
-          <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => setSendOpen(true)}>
-            <Send className="h-3.5 w-3.5" />
-            Send form link
-          </Button>
-          <Button size="sm" className="gap-1.5 h-8" onClick={openNew}>
-            <Plus className="h-3.5 w-3.5" />
-            New Anamnesis
-          </Button>
+          {healthLocked ? <ViewOnlyBadge show /> : (
+            <>
+              <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => setSendOpen(true)}>
+                <Send className="h-3.5 w-3.5" />
+                Send form link
+              </Button>
+              <Button size="sm" className="gap-1.5 h-8" onClick={openNew}>
+                <Plus className="h-3.5 w-3.5" />
+                New Anamnesis
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -1476,13 +1490,17 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
           <div className="flex flex-col items-center justify-center py-16 text-center px-4">
             <ClipboardList className="h-8 w-8 text-muted-foreground mb-2" />
             <p className="text-sm font-medium mb-1">No anamnesis records</p>
-            <p className="text-xs text-muted-foreground mb-4">
-              Create the first record to document this athlete's intake assessment.
-            </p>
-            <Button size="sm" onClick={openNew} className="gap-1.5">
-              <Plus className="h-3.5 w-3.5" />
-              New Anamnesis
-            </Button>
+            {!healthLocked && (
+              <>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Create the first record to document this athlete's intake assessment.
+                </p>
+                <Button size="sm" onClick={openNew} className="gap-1.5">
+                  <Plus className="h-3.5 w-3.5" />
+                  New Anamnesis
+                </Button>
+              </>
+            )}
           </div>
         )}
 
@@ -1600,9 +1618,10 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
             recordId={selectedRecord?.id}
             onPatch={selectedRecord ? (updates) => updateAnamnesis(selectedRecord.id, updates) : undefined}
             onDirtyChange={setFormDirty}
-            onDelete={selectedRecord ? handleDelete : undefined}
+            onDelete={selectedRecord && !healthLocked ? handleDelete : undefined}
             isSaving={isSaving}
             isDeleting={isDeleting}
+            locked={healthLocked}
           />
         </DialogContent>
       </Dialog>

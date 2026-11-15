@@ -893,6 +893,8 @@
       "open": "Offene Einladungen",
       "until": "bis {{date}}"
     },
+    "showAll": "Alle anzeigen ({{count}})",
+    "backup": { "title": "Backup & Wiederherstellen", "text": "Lade ein Backup aller Daten herunter oder hole gelöschte Programme zurück.", "open": "Öffnen" },
     "activity": {
       "title": "Letzte Änderungen",
       "empty": "Noch keine Änderungen.",
@@ -978,7 +980,7 @@
         "health": "Gesundheit",
         "ai": "KI"
       },
-      "legend": "Nicht angehakt: nur ansehen. Gesundheitsdaten und KI nicht angehakt: kein Zugriff."
+      "legend": "Coaches sehen die ihnen zugewiesenen Athleten, Owner alle. Nicht angehakt: Programme / Bibliotheken / Gesundheitsdaten nur ansehen, KI aus."
     }
   }
 }

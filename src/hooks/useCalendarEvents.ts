@@ -123,7 +123,10 @@ export function useCalendarEvents() {
 
   /** Apply a change to the newest store and save it */
   const write = useCallback(async (update: (current: CalendarEventsStore) => CalendarEventsStore) => {
-    const next = update(latestStore ?? store);
+    const current = latestStore ?? store;
+    const next = update(current);
+    // Nothing changed (e.g. the anamnesis sync on opening an athlete): nothing to save
+    if (next === current) return;
     latestStore = next;
     await setStore(next);
   }, [store, setStore]);

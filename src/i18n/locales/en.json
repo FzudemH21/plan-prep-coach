@@ -893,6 +893,8 @@
       "open": "Open invites",
       "until": "until {{date}}"
     },
+    "showAll": "Show all ({{count}})",
+    "backup": { "title": "Backup & restore", "text": "Download a backup of all data, or bring back deleted programs.", "open": "Open" },
     "activity": {
       "title": "Recent changes",
       "empty": "No changes yet.",
@@ -978,7 +980,7 @@
         "health": "Health",
         "ai": "AI"
       },
-      "legend": "Unticked: view only. Health data and AI unticked: no access."
+      "legend": "Coaches see the athletes assigned to them, owners all. Unticked: programs / libraries / health data view only, AI off."
     }
   }
 }
