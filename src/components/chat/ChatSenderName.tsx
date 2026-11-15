@@ -39,3 +39,18 @@ export function ChatSenderName({ name, isOwn }: { name: string | undefined; isOw
     </span>
   );
 }
+
+/** In place of the message field for coaches who aren't assigned to the athlete (hooks/useMyAthletes) */
+export function ChatAssignedOnlyNote({ text }: { text: string }) {
+  return (
+    <div className="shrink-0 border-t px-4 py-3">
+      <p className="text-xs text-muted-foreground text-center">{text}</p>
+    </div>
+  );
+}
+
+/** "Only Lena Berg and Felix write with this athlete." — the names of the assigned coaches */
+export function joinNames(names: string[], and: string): string {
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} ${and} ${names[names.length - 1]}`;
+}

@@ -14,7 +14,8 @@ import { useNavigate } from 'react-router-dom';
 import { uploadChatFile } from '@/lib/storage';
 import { ChatAttachmentDisplay } from '@/components/chat/ChatAttachmentDisplay';
 import { ChatQuote } from '@/components/chat/ChatQuote';
-import { ChatSenderName, chatSenderLabels } from '@/components/chat/ChatSenderName';
+import { ChatAssignedOnlyNote, ChatSenderName, chatSenderLabels, joinNames } from '@/components/chat/ChatSenderName';
+import { useMyAthletes } from '@/hooks/useMyAthletes';
 
 function formatMessageDate(iso: string): string {
   const d = parseISO(iso);
@@ -73,9 +74,12 @@ function ThreadView({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Several coaches: only the athlete's assigned coaches write and mark as read (hooks/useMyAthletes)
+  const { isMine, coachesOf } = useMyAthletes();
+  const canWrite = isMine(athleteLocalId);
   useEffect(() => {
-    if (!loading) markRead();
-  }, [loading, markRead]);
+    if (!loading && canWrite) markRead();
+  }, [loading, markRead, canWrite]);
 
   const handleSend = async () => {
     const hasText = draft.trim().length > 0;
@@ -216,7 +220,9 @@ function ThreadView({
       </ScrollArea>
 
       {/* Input or disabled notice */}
-      {chatEnabled ? (
+      {!canWrite ? (
+        <ChatAssignedOnlyNote text={`Only ${joinNames(coachesOf(athleteLocalId).map(c => c.label), 'and')} write with ${athleteName}.`} />
+      ) : chatEnabled ? (
         <div className="shrink-0 border-t px-4 py-3">
           {/* Pending file chips */}
           {pendingFiles.length > 0 && (
@@ -304,10 +310,11 @@ export default function CoachMessagesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  // Only connected athletes (have athlete_auth_user_id)
+  // Only connected athletes (have athlete_auth_user_id) — with several coaches, this coach's own
+  const { isMine } = useMyAthletes();
   const connected = useMemo(
-    () => connections.filter((c) => c.athleteAuthUserId),
-    [connections]
+    () => connections.filter((c) => c.athleteAuthUserId && isMine(c.athleteLocalId)),
+    [connections, isMine]
   );
 
   const connectionIds = useMemo(() => connected.map((c) => c.id), [connected]);

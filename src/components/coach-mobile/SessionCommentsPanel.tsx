@@ -22,11 +22,13 @@ interface Props {
   /** 'coach' when the session was logged with the coach app — its feedback was typed in by the coach */
   startedBy: string | null;
   exerciseComments: ExerciseComment[];
+  /** false: another coach is assigned to the athlete — replies (chat messages) are theirs */
+  canReply?: boolean;
 }
 
 interface ReplyTarget { quote: string; exerciseName?: string; sectionName?: string }
 
-export function SessionCommentsPanel({ connectionId, logId, date, sessionName, feedback, startedBy, exerciseComments }: Props) {
+export function SessionCommentsPanel({ connectionId, logId, date, sessionName, feedback, startedBy, exerciseComments, canReply = true }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [remark, setRemark] = useState('');
@@ -76,7 +78,7 @@ export function SessionCommentsPanel({ connectionId, logId, date, sessionName, f
     toast({ title: t('coachMobile.sessionComments.remarkSaved') });
   };
 
-  const replyButton = (target: ReplyTarget) => (
+  const replyButton = (target: ReplyTarget) => canReply && (
     <Button variant="ghost" size="sm" className="h-9 px-2 text-xs gap-1 shrink-0 active:opacity-60" onClick={() => setReplyTarget(target)}>
       <Reply className="h-3.5 w-3.5" />
       {t('coachMobile.sessionComments.reply')}

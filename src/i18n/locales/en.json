@@ -354,6 +354,8 @@
     "messages": {
       "heading": "Messages",
       "you": "You",
+      "assignedOnly": "Only {{coaches}} write with {{name}}.",
+      "and": "and",
       "coach": "Coach",
       "noConnectedAthletes": "No connected athletes",
       "noConnectedDesc": "Once an athlete connects via the athlete app, you can message them here.",

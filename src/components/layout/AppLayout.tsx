@@ -12,6 +12,7 @@ import { CoachActivityBell } from "./CoachActivityBell";
 import { useBiometricsMigration } from "@/hooks/useBiometricsMigration";
 import { useMonitoringSideSync } from '@/hooks/useMonitoringSideSync';
 import { useEmbeddingUpgrade } from "@/hooks/useEmbeddingUpgrade";
+import { useMyAthletes } from '@/hooks/useMyAthletes';
 
 interface AppLayoutProps {
   children?: React.ReactNode;
@@ -26,7 +27,12 @@ export function AppLayout({ children }: AppLayoutProps) {
   useEmbeddingUpgrade();
 
   const { connections } = useAthleteConnections();
-  const connectionIds = useMemo(() => connections.map((c) => c.id), [connections]);
+  // Several coaches: chat badges only for this coach's athletes (hooks/useMyAthletes)
+  const { isMine } = useMyAthletes();
+  const connectionIds = useMemo(
+    () => connections.filter((c) => isMine(c.athleteLocalId)).map((c) => c.id),
+    [connections, isMine],
+  );
   const { totalUnread } = useUnreadCounts(connectionIds, 'coach');
   const { profile } = useCoachProfile();
   const brandingName = profile?.branding?.businessName?.trim() || "";

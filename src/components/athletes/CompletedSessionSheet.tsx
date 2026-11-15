@@ -518,6 +518,8 @@ interface CompletedSessionSheetProps {
   onClose: () => void;
   /** The athlete's app connection — needed for coach remarks and replies */
   connectionId?: string;
+  /** false: another coach is assigned to the athlete — replies (chat messages) are theirs */
+  canReply?: boolean;
   /** Adds a text to the athlete's profile notes */
   onAddToAthleteNotes?: (text: string) => Promise<void> | void;
   /** The session's day, start time or duration was corrected */
@@ -561,7 +563,7 @@ function CommentBubble({ label, text, onReply, exerciseName, onJump }: {
   );
 }
 
-export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddToAthleteNotes, onTimingChanged }: CompletedSessionSheetProps) {
+export function CompletedSessionSheet({ log, open, onClose, connectionId, canReply = true, onAddToAthleteNotes, onTimingChanged }: CompletedSessionSheetProps) {
   const { toast } = useToast();
   const [editingTiming, setEditingTiming] = useState(false);
   useEffect(() => { setEditingTiming(false); }, [log?.id, open]);
@@ -647,7 +649,7 @@ export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddT
   const otherComments = athleteComments;
   const commentLabel = (c: ExerciseComment) =>
     `${c.author === 'coach' ? 'Noted while logging' : 'Athlete'} · ${format(parseISO(c.createdAt), 'HH:mm')}`;
-  const replyFor = (c: ExerciseComment) => (c.author !== 'coach' && connectionId
+  const replyFor = (c: ExerciseComment) => (c.author !== 'coach' && connectionId && canReply
     ? () => setReplyTarget({ quote: c.text, exerciseName: c.exerciseName, sectionName: c.sectionName })
     : undefined);
 
@@ -729,7 +731,7 @@ export function CompletedSessionSheet({ log, open, onClose, connectionId, onAddT
                   <p className="text-xs text-muted-foreground font-medium">
                     Athlete feedback{loggedByCoach ? ' (entered by you while logging)' : ''}
                   </p>
-                  {connectionId && !loggedByCoach && (
+                  {connectionId && canReply && !loggedByCoach && (
                     <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => setReplyTarget({ quote: log.comment! })}>
                       <Reply className="h-3 w-3" />
                       Reply

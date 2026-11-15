@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { useCoachActivityFeed, type FeedItem } from '@/hooks/useCoachActivityFeed';
 import type { AthleteConnection } from '@/hooks/useAthleteConnections';
+import { useMyAthletes } from '@/hooks/useMyAthletes';
 
 function ItemIcon({ item }: { item: FeedItem }) {
   if (item.type === 'anamnesis_submitted') {
@@ -41,7 +42,9 @@ const TAB_FOR: Record<FeedItem['type'], string> = {
 export function CoachActivityBell({ connections }: { connections: AthleteConnection[] }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
-  const { items, loading, unseenCount, markSeen, markItemRead, readIds } = useCoachActivityFeed(connections);
+  // Several coaches: only this coach's athletes notify them (hooks/useMyAthletes)
+  const { isMine } = useMyAthletes();
+  const { items, loading, unseenCount, markSeen, markItemRead, readIds } = useCoachActivityFeed(connections, isMine);
 
   const openItem = (item: FeedItem) => {
     markItemRead(item.id);

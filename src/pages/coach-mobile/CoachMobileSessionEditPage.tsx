@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ChevronLeft, ChevronDown, ChevronRight, Plus, Minus, Check,
   Info, RefreshCw, Dumbbell, Trash2, Link2, AlignLeft,
@@ -30,6 +30,7 @@ import { LoggedExerciseResult, type LoggedEntry } from '@/components/workout/Log
 import { UnfinishedSessionDialog } from '@/components/workout/UnfinishedSessionDialog';
 import { EditLoggedTiming, EditTimingButton } from '@/components/workout/SessionTiming';
 import { findUnfinishedLogId } from '@/utils/unfinishedSession';
+import { useMyAthletes } from '@/hooks/useMyAthletes';
 
 // ── Section helpers ───────────────────────────────────────────────────────────
 
@@ -1015,6 +1016,9 @@ export default function CoachMobileSessionEditPage() {
   const { data: toolboxData } = useToolboxData();
 
   const state = location.state as LocationState | null;
+  // Several coaches: only the athlete's assigned coaches reply in the chat (hooks/useMyAthletes)
+  const { athleteId: routeAthleteId } = useParams<{ athleteId: string }>();
+  const { isMine } = useMyAthletes();
   const originalEntry = useRef<AthleteScheduleEntry | null>(state?.entry ?? null);
   // connectionId from navigation state — used to identify the row by (athlete_connection_id, date)
   // instead of by the row UUID (which changes after every loadSync/autoSync DELETE+UPSERT).
@@ -1754,6 +1758,7 @@ export default function CoachMobileSessionEditPage() {
                     feedback={sessionLog.comment}
                     startedBy={sessionLog.startedBy}
                     exerciseComments={sessionLog.exerciseComments}
+                    canReply={isMine(routeAthleteId)}
                   />
                 )}
 

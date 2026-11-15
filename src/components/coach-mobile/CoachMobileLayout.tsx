@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBiometricsMigration } from '@/hooks/useBiometricsMigration';
 import { useMonitoringSideSync } from '@/hooks/useMonitoringSideSync';
+import { useMyAthletes } from '@/hooks/useMyAthletes';
 
 export function CoachMobileLayout() {
   const { t } = useTranslation();
@@ -28,13 +29,15 @@ export function CoachMobileLayout() {
   ];
   const { connections } = useAthleteConnections();
 
+  // Several coaches: badges and notifications only for this coach's athletes (hooks/useMyAthletes)
+  const { isMine } = useMyAthletes();
   const connectionIds = useMemo(
-    () => connections.filter((c) => c.athleteAuthUserId).map((c) => c.id),
-    [connections]
+    () => connections.filter((c) => c.athleteAuthUserId && isMine(c.athleteLocalId)).map((c) => c.id),
+    [connections, isMine]
   );
   const { totalUnread } = useUnreadCounts(connectionIds, 'coach');
   const { items: feedItems, loading: feedLoading, unseenCount, markSeen, markItemRead, readIds } =
-    useCoachActivityFeed(connections);
+    useCoachActivityFeed(connections, isMine);
   const [notifOpen, setNotifOpen] = useState(false);
 
   const handleBellClick = () => {

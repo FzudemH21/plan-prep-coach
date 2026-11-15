@@ -6,16 +6,19 @@ import { cn } from '@/lib/utils';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { useUnreadCounts } from '@/hooks/useChat';
 import { useTranslation } from 'react-i18next';
+import { useMyAthletes } from '@/hooks/useMyAthletes';
 
 export default function CoachMobileMessagesPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { connections, loading: connLoading } = useAthleteConnections();
 
-  // Only athletes who have signed in to the athlete app can be messaged
+  // Only athletes who have signed in to the athlete app can be messaged — with several coaches,
+  // only this coach's own (hooks/useMyAthletes)
+  const { isMine } = useMyAthletes();
   const connected = useMemo(
-    () => connections.filter((c) => c.athleteAuthUserId),
-    [connections]
+    () => connections.filter((c) => c.athleteAuthUserId && isMine(c.athleteLocalId)),
+    [connections, isMine]
   );
 
   const connectionIds = useMemo(() => connected.map((c) => c.id), [connected]);
@@ -84,14 +87,14 @@ export default function CoachMobileMessagesPage() {
       )}
 
       {/* Also show athletes who haven't connected yet */}
-      {connections.filter((c) => !c.athleteAuthUserId).length > 0 && (
+      {connections.filter((c) => !c.athleteAuthUserId && isMine(c.athleteLocalId)).length > 0 && (
         <div className="mt-6">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 px-1">
             Not yet connected
           </p>
           <div className="space-y-1">
             {connections
-              .filter((c) => !c.athleteAuthUserId)
+              .filter((c) => !c.athleteAuthUserId && isMine(c.athleteLocalId))
               .map((conn) => (
                 <div
                   key={conn.id}

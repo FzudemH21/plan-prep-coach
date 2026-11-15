@@ -69,7 +69,8 @@ import { useRef, useLayoutEffect } from 'react';
 import { SportTagInput } from './SportTagInput';
 import { ChatQuote } from '@/components/chat/ChatQuote';
 import { useAnamnesisCalendarSync } from '@/hooks/useAnamnesisCalendarSync';
-import { ChatSenderName, chatSenderLabels } from '@/components/chat/ChatSenderName';
+import { ChatAssignedOnlyNote, ChatSenderName, chatSenderLabels, joinNames } from '@/components/chat/ChatSenderName';
+import { useMyAthletes } from '@/hooks/useMyAthletes';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -158,6 +159,10 @@ export function AthleteProfileView({
     connectionId: athleteConnection?.id ?? null,
     callerRole: 'coach',
   });
+  // Several coaches: only the athlete's assigned coaches write, get the badge and mark as read
+  // (hooks/useMyAthletes) — the others read along
+  const { isMine: isMyAthlete, coachesOf } = useMyAthletes();
+  const chatIsMine = isMyAthlete(athlete.id);
   // Several coaches in this chat: who wrote which message
   const chatSenderNames = useMemo(
     () => chatSenderLabels(chatMessages, { viewer: 'coach', myId: authUser?.id, you: 'You', fallback: 'Coach' }),
@@ -355,7 +360,7 @@ export function AthleteProfileView({
           <TabsTrigger value="chat" className="gap-2 relative">
             <MessageCircle className="h-4 w-4" />
             Chat
-            {chatUnread > 0 && (
+            {chatIsMine && chatUnread > 0 && (
               <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] text-white font-medium">
                 {chatUnread}
               </span>
@@ -890,7 +895,7 @@ export function AthleteProfileView({
           />
         </TabsContent>
 
-        <TabsContent value="chat" className="flex-1 mt-0 min-h-0 flex flex-col" onFocus={() => chatMarkRead()}>
+        <TabsContent value="chat" className="flex-1 mt-0 min-h-0 flex flex-col" onFocus={() => { if (chatIsMine) void chatMarkRead(); }}>
           {!athleteConnection ? (
             <div className="flex flex-col items-center justify-center h-full py-12 text-center px-4">
               <MessageCircle className="h-8 w-8 text-muted-foreground mb-3" />
@@ -950,7 +955,9 @@ export function AthleteProfileView({
                 </div>
                 <div ref={chatBottomRef} />
               </ScrollArea>
-              {(athleteConnection?.chatEnabled ?? true) ? (
+              {!chatIsMine ? (
+                <ChatAssignedOnlyNote text={`Only ${joinNames(coachesOf(athlete.id).map(c => c.label), 'and')} write with ${displayName}.`} />
+              ) : (athleteConnection?.chatEnabled ?? true) ? (
               <div className="shrink-0 border-t px-4 py-3">
                 {/* Pending file chips */}
                 {chatPendingFiles.length > 0 && (

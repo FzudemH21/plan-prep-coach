@@ -32,6 +32,7 @@ import { useMemo } from "react";
 import { useCoachProfile } from "@/hooks/useCoachProfile";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { useMyAthletes } from '@/hooks/useMyAthletes';
 
 interface NavigationSidebarProps {
   open: boolean;
@@ -78,7 +79,12 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
   });
 
   const { connections } = useAthleteConnections();
-  const connectionIds = useMemo(() => connections.map((c) => c.id), [connections]);
+  // Several coaches: chat badges only for this coach's athletes (hooks/useMyAthletes)
+  const { isMine } = useMyAthletes();
+  const connectionIds = useMemo(
+    () => connections.filter((c) => isMine(c.athleteLocalId)).map((c) => c.id),
+    [connections, isMine],
+  );
   const { totalUnread } = useUnreadCounts(connectionIds, 'coach');
 
   const createSlug = (name: string): string => {

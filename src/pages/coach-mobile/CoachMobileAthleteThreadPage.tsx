@@ -17,7 +17,8 @@ import { uploadChatFile } from '@/lib/storage';
 import { ChatAttachmentDisplay } from '@/components/chat/ChatAttachmentDisplay';
 import { useTranslation } from 'react-i18next';
 import { ChatQuote } from '@/components/chat/ChatQuote';
-import { ChatSenderName, chatSenderLabels } from '@/components/chat/ChatSenderName';
+import { ChatAssignedOnlyNote, ChatSenderName, chatSenderLabels, joinNames } from '@/components/chat/ChatSenderName';
+import { useMyAthletes } from '@/hooks/useMyAthletes';
 
 function formatMessageDate(iso: string): string {
   const d = parseISO(iso);
@@ -72,9 +73,12 @@ export default function CoachMobileAthleteThreadPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Several coaches: only the athlete's assigned coaches write and mark as read (hooks/useMyAthletes)
+  const { isMine, coachesOf } = useMyAthletes();
+  const canWrite = isMine(athleteId);
   useEffect(() => {
-    if (!loading && connectionId) markRead();
-  }, [loading, connectionId, markRead]);
+    if (!loading && connectionId && canWrite) markRead();
+  }, [loading, connectionId, markRead, canWrite]);
 
   const handleSend = async () => {
     const hasText = draft.trim().length > 0;
@@ -244,7 +248,9 @@ export default function CoachMobileAthleteThreadPage() {
       </ScrollArea>
 
       {/* Input bar or disabled notice */}
-      {chatEnabled ? (
+      {!canWrite ? (
+        <ChatAssignedOnlyNote text={t('coachMobile.messages.assignedOnly', { coaches: joinNames(coachesOf(athleteId).map(c => c.label), t('coachMobile.messages.and')), name: athleteName })} />
+      ) : chatEnabled ? (
         <div className="shrink-0 border-t px-3 py-2 bg-background">
           {pendingFiles.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-2">

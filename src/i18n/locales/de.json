@@ -354,6 +354,8 @@
     "messages": {
       "heading": "Nachrichten",
       "you": "Du",
+      "assignedOnly": "Nur {{coaches}} schreiben mit {{name}}.",
+      "and": "und",
       "coach": "Coach",
       "noConnectedAthletes": "Keine verbundenen Athleten",
       "noConnectedDesc": "Sobald sich ein Athlet über die Athleten-App verbindet, kannst du hier mit ihm schreiben.",

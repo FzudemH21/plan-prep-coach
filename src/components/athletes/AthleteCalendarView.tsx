@@ -76,6 +76,7 @@ import { fetchCoachRemarks, parseExerciseComments, remarksAsText, selectWithOpti
 import type { SessionFeedbackEntry } from '@/hooks/useAthleteAIContext';
 import { UnfinishedSessionDialog } from '@/components/workout/UnfinishedSessionDialog';
 import { useDataScope } from '@/hooks/useDataScope';
+import { useMyAthletes } from '@/hooks/useMyAthletes';
 
 interface AthleteCalendarViewProps {
   athlete: Athlete;
@@ -302,6 +303,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   const { user } = useAuth();
   // The account holding the athletes (the organization's for members, lib/dataScope)
   const { dataId: athletesId } = useDataScope('athletes');
+  // Several coaches: only the athlete's assigned coaches reply in the chat (hooks/useMyAthletes)
+  const { isMine: isMyAthlete } = useMyAthletes();
   const { programs, getProgram } = useTrainingPrograms();
   const athleteData = useAthletes();
   const { data: toolboxData } = useToolboxData();
@@ -3164,6 +3167,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         open={completedSheetOpen}
         onClose={() => { setCompletedSheetOpen(false); setSelectedCompletedLog(null); }}
         connectionId={getConnectionForAthlete(athlete.id)?.id}
+        canReply={isMyAthlete(athlete.id)}
         onTimingChanged={(change, moved) => {
           setSelectedCompletedLog(prev => (prev ? { ...prev, ...change } : prev));
           setSessionLogsVersion(v => v + 1);

@@ -15,7 +15,7 @@
  * "Mark all as read" adds their IDs. The sets only ever grow (a union of both), so no device can
  * undo another's reads; the shared list keeps the items of the feed window only.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { AthleteConnection } from '@/hooks/useAthleteConnections';
 import { parseExerciseComments, selectWithOptionalColumns, shortQuote } from '@/utils/sessionComments';
@@ -64,8 +64,16 @@ function wellnessComposite(scores: (number | null)[]): number | null {
   return valid.length === 5 ? valid.reduce((a, b) => a + b, 0) / 5 : null;
 }
 
-export function useCoachActivityFeed(connections: AthleteConnection[]) {
-  const [items, setItems] = useState<FeedItem[]>([]);
+/**
+ * isMine: in an organization with several coaches only the coach's own athletes notify them
+ * (hooks/useMyAthletes) — the others' items are left out of the list and the count.
+ */
+export function useCoachActivityFeed(connections: AthleteConnection[], isMine?: (athleteLocalId: string) => boolean) {
+  const [allItems, setItems] = useState<FeedItem[]>([]);
+  const items = useMemo(
+    () => (isMine ? allItems.filter((item) => isMine(item.athleteLocalId)) : allItems),
+    [allItems, isMine],
+  );
   // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
   const [loading, setLoading] = useState(true);
   const [readIds, setReadIds] = useState<Set<string>>(loadReadIds);
@@ -278,14 +286,14 @@ export function useCoachActivityFeed(connections: AthleteConnection[]) {
   /** Adds read ids to the shared list (union with what is there; keeps only items still in the feed) */
   const shareReads = useCallback((added: string[]) => {
     if (added.length === 0) return;
-    const inFeed = new Set(items.map(item => item.id));
+    const inFeed = new Set(allItems.map(item => item.id));
     void updateCoachSetting<string[]>(SHARED_READ_IDS, current => {
       const union = [...new Set([...(Array.isArray(current) ? current : []), ...added])];
       // Older items are no longer shown — drop their ids (only when the feed is loaded)
       const kept = inFeed.size > 0 ? union.filter(id => inFeed.has(id) || added.includes(id)) : union;
       return kept.slice(-1000);
     }).catch(() => { /* stays on this device */ });
-  }, [items]);
+  }, [allItems]);
 
   const markItemRead = useCallback((id: string) => {
     setReadIds(prev => {
