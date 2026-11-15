@@ -353,6 +353,8 @@
     },
     "messages": {
       "heading": "Messages",
+      "you": "You",
+      "coach": "Coach",
       "noConnectedAthletes": "No connected athletes",
       "noConnectedDesc": "Once an athlete connects via the athlete app, you can message them here.",
       "athleteLabel": "Athlete",
@@ -887,6 +889,11 @@
       "revoke": "Withdraw invite",
       "open": "Open invites",
       "until": "until {{date}}"
+    },
+    "activity": {
+      "title": "Recent changes",
+      "empty": "No changes yet.",
+      "kinds": { "create": "Created", "change": "Changed", "restore": "Restored" }
     },
     "deletionLog": {
       "title": "Deleted items",

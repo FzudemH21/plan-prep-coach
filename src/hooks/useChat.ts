@@ -33,6 +33,8 @@ export interface ChatMessage {
   connectionId: string;
   senderRole: SenderRole;
   senderAuthUserId: string;
+  /** The coach's name, filled by the database (organizations: several coaches in one chat) */
+  senderName?: string | null;
   content: string;
   messageType: MessageType;
   reference?: MessageReference;
@@ -48,6 +50,7 @@ function rowToMessage(row: Record<string, unknown>): ChatMessage {
     connectionId: row.connection_id as string,
     senderRole: row.sender_role as SenderRole,
     senderAuthUserId: row.sender_auth_user_id as string,
+    senderName: (row.sender_name as string | null | undefined) ?? null,
     content: row.content as string,
     messageType: (row.message_type as MessageType) ?? 'text',
     reference: row.reference as MessageReference | undefined,

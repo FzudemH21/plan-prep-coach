@@ -69,6 +69,7 @@ import { useRef, useLayoutEffect } from 'react';
 import { SportTagInput } from './SportTagInput';
 import { ChatQuote } from '@/components/chat/ChatQuote';
 import { useAnamnesisCalendarSync } from '@/hooks/useAnamnesisCalendarSync';
+import { ChatSenderName, chatSenderLabels } from '@/components/chat/ChatSenderName';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -157,6 +158,11 @@ export function AthleteProfileView({
     connectionId: athleteConnection?.id ?? null,
     callerRole: 'coach',
   });
+  // Several coaches in this chat: who wrote which message
+  const chatSenderNames = useMemo(
+    () => chatSenderLabels(chatMessages, { viewer: 'coach', myId: authUser?.id, you: 'You', fallback: 'Coach' }),
+    [chatMessages, authUser?.id],
+  );
   const [chatDraft, setChatDraft] = useState('');
   const [chatSending, setChatSending] = useState(false);
   const [chatPendingFiles, setChatPendingFiles] = useState<File[]>([]);
@@ -910,6 +916,7 @@ export function AthleteProfileView({
                     const isOwn = msg.senderRole === 'coach';
                     return (
                       <div key={msg.id} className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+                        <ChatSenderName name={chatSenderNames.get(msg.id)} isOwn={isOwn} />
                         {(msg.messageType === 'exercise_comment' || msg.messageType === 'session_note') && msg.reference && (
                           <button
                             onClick={() => {

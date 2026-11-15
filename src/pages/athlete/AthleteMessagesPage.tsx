@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { format, parseISO, isToday, isYesterday } from 'date-fns';
 import { Send, MessageCircle, Loader2, Paperclip, X, FileText, ImageIcon, Film } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import type { MessageReference } from '@/hooks/useChat';
 import { uploadChatFile } from '@/lib/storage';
 import { ChatAttachmentDisplay } from '@/components/chat/ChatAttachmentDisplay';
 import { ChatQuote } from '@/components/chat/ChatQuote';
+import { ChatSenderName, chatSenderLabels } from '@/components/chat/ChatSenderName';
 
 function formatMessageDate(iso: string): string {
   const d = parseISO(iso);
@@ -54,6 +55,11 @@ export default function AthleteMessagesPage() {
     connectionId,
     callerRole: 'athlete',
   });
+  // Several coaches write in this chat: which coach wrote which message
+  const senderNames = useMemo(
+    () => chatSenderLabels(messages, { viewer: 'athlete', myId: user?.id, you: 'You', fallback: 'Coach' }),
+    [messages, user?.id],
+  );
 
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -178,6 +184,7 @@ export default function AthleteMessagesPage() {
                     key={msg.id}
                     className={cn('flex flex-col', isOwn ? 'items-end' : 'items-start')}
                   >
+                    <ChatSenderName name={senderNames.get(msg.id)} isOwn={isOwn} />
                     {(msg.messageType === 'exercise_comment' || msg.messageType === 'session_note') && msg.reference && (
                       <button
                         onClick={() => handleReferenceClick(msg.reference!)}

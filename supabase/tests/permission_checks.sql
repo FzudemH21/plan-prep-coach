@@ -98,7 +98,7 @@ begin
                            v_conn::text, v_conn::text) into n;
             if n > 0 then st := 'FAIL'; end if;
             acc := acc || jsonb_build_object('who', who, 'table_name', t, 'check_name', 'files outside its own folders visible', 'expected', '0', 'actual', n::text, 'status', st);
-          elsif t in ('public.organizations', 'public.organization_members', 'public.organization_invites') then
+          elsif t in ('public.organizations', 'public.organization_members', 'public.organization_invites', 'public.activity_log') then
             execute format('select count(*) from %s', t) into n;
             if n > 0 then st := 'FAIL'; end if;
             acc := acc || jsonb_build_object('who', who, 'table_name', t, 'check_name', 'organizations visible', 'expected', '0', 'actual', n::text, 'status', st);
@@ -129,7 +129,7 @@ begin
           -- shared yet (see the org_read rules) not at all
           if t = 'public.organizations' then
             execute format('select count(*) from %s where id is distinct from %L', t, v_org) into n;
-          elsif t in ('public.organization_members', 'public.organization_invites') then
+          elsif t in ('public.organization_members', 'public.organization_invites', 'public.activity_log') then
             execute format('select count(*) from %s where org_id is distinct from %L', t, v_org) into n;
           elsif t in ('public.athlete_daily_checkins', 'public.athlete_anamneses', 'public.anamnesis_change_log', 'public.anamnesis_templates')
                 and not coalesce((v_mr->>'health')::boolean, false) then
@@ -184,7 +184,7 @@ begin
           if t = 'public.organizations' then
             execute format('select count(*) from %s where id is distinct from %L', t, v_org) into n;
             if n > 0 then st := 'FAIL'; end if;
-          elsif t in ('public.organization_members', 'public.organization_invites') then
+          elsif t in ('public.organization_members', 'public.organization_invites', 'public.activity_log') then
             execute format('select count(*) from %s where org_id is distinct from %L', t, v_org) into n;
             if n > 0 then st := 'FAIL'; end if;
           elsif 'coach_user_id' = any(cols) and 'org_id' = any(cols) and v_org is not null then
@@ -364,6 +364,17 @@ begin
              'update public.organizations set name = name')
         ) as w(tbl, label, stmt)
         union all
+        -- The activity log (phase 4) is written only by the database
+        select tbl, label, stmt from (values
+          ('public.activity_log', 'write the activity log',
+             format('insert into public.activity_log (org_id, actor, table_name, record_id, kind) values (%L, coalesce(auth.uid(), gen_random_uuid()), %L, %L, %L)', v_org, 'program_records', 'perm-check', 'change')),
+          ('public.activity_log', 'change the activity log',
+             'update public.activity_log set label = label'),
+          ('public.activity_log', 'erase the activity log',
+             'delete from public.activity_log')
+        ) as a(tbl, label, stmt)
+        where to_regclass('public.activity_log') is not null
+        union all
         select tbl, label, stmt from (values
           ('public.organization_invites', 'create an invite directly', 'all',
              format('insert into public.organization_invites (org_id, email, role, code) values (%L, %L, %L, repeat(%L, 40))', v_org, 'perm@example.com', 'coach', 'x')),
@@ -406,6 +417,23 @@ begin
             acc := acc || jsonb_build_object('who', who, 'table_name', wt.tbl, 'check_name', wt.label, 'expected', '0 rows / blocked', 'actual', sqlerrm, 'status', 'ERROR');
         end;
       end loop;
+
+      -- A chat message can't carry a made-up sender name (phase 4)
+      if who in ('coach', 'member') and v_conn is not null
+         and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'chat_messages' and column_name = 'sender_name') then
+        begin
+          execute format('insert into public.chat_messages (connection_id, sender_role, sender_auth_user_id, content, sender_name)
+                          values (%L, ''coach'', auth.uid(), ''perm-check'', ''Made Up'') returning sender_name', v_conn) into col;
+          raise exception using errcode = 'P0001', message = 'perm_check_undo';
+        exception
+          when sqlstate 'P0001' then
+            acc := acc || jsonb_build_object('who', who, 'table_name', 'public.chat_messages', 'check_name', 'write a message under a made-up name', 'expected', 'own name', 'actual', coalesce(col, '-') || ' (undone)', 'status', case when col is distinct from 'Made Up' then 'ok' else 'FAIL' end);
+          when insufficient_privilege or check_violation or foreign_key_violation or not_null_violation then
+            acc := acc || jsonb_build_object('who', who, 'table_name', 'public.chat_messages', 'check_name', 'write a message under a made-up name', 'expected', 'own name', 'actual', 'blocked', 'status', 'ok');
+          when others then
+            acc := acc || jsonb_build_object('who', who, 'table_name', 'public.chat_messages', 'check_name', 'write a message under a made-up name', 'expected', 'own name', 'actual', sqlerrm, 'status', 'ERROR');
+        end;
+      end if;
 
       -- The coach's own programs keep their organization even if the app tries to change it
       if who = 'coach' then

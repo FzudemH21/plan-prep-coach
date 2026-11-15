@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { uploadChatFile } from '@/lib/storage';
 import { ChatAttachmentDisplay } from '@/components/chat/ChatAttachmentDisplay';
 import { ChatQuote } from '@/components/chat/ChatQuote';
+import { ChatSenderName, chatSenderLabels } from '@/components/chat/ChatSenderName';
 
 function formatMessageDate(iso: string): string {
   const d = parseISO(iso);
@@ -56,6 +57,11 @@ function ThreadView({
     connectionId,
     callerRole: 'coach',
   });
+  // Several coaches in this chat: who wrote which message
+  const senderNames = useMemo(
+    () => chatSenderLabels(messages, { viewer: 'coach', myId: user?.id, you: 'You', fallback: 'Coach' }),
+    [messages, user?.id],
+  );
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -154,6 +160,7 @@ function ThreadView({
                 const isOwn = msg.senderRole === 'coach';
                 return (
                   <div key={msg.id} className={cn('flex flex-col', isOwn ? 'items-end' : 'items-start')}>
+                    <ChatSenderName name={senderNames.get(msg.id)} isOwn={isOwn} />
                     {(msg.messageType === 'exercise_comment' || msg.messageType === 'session_note') && msg.reference && (
                       <button
                         onClick={() => navigate('/athletes', {

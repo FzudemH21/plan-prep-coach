@@ -1,10 +1,10 @@
 /**
  * Coach Profile → Organization: name, branding (owner), members with role and a rights grid,
- * invite links (owner), and the deletion log.
+ * invite links (owner), recent changes (who changed what, phase 4) and the deletion log.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Building2, Copy, Link2, Trash2, UserPlus, X, History } from 'lucide-react';
+import { Activity, Building2, Copy, Link2, Trash2, UserPlus, X, History } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,6 +47,7 @@ export function OrganizationTab({ brandingCard }: { brandingCard?: ReactNode }) 
       <NameCard name={org.orgName} isOwner={org.isOwner} onRename={org.rename} />
       {org.isOwner && brandingCard}
       <MembersCard org={org} />
+      {org.members.length > 1 && <ActivityCard members={org.members} />}
       <DeletionLogCard members={org.members} />
     </div>
   );
@@ -353,7 +354,7 @@ interface DeletionRow {
 const LOG_LIMIT = 100;
 
 /** What was deleted, as a translation key */
-function kindKey(row: DeletionRow): string {
+function kindKey(row: { table_name: string; record_id: string | null }): string {
   if (row.table_name === 'coach_records') {
     const [store, id = ''] = (row.record_id ?? '').split('/');
     if (store === 'exercises') return id.startsWith('lib:') ? 'exerciseLibrary' : id.startsWith('ci:') ? 'circuit' : 'exercise';
@@ -366,6 +367,81 @@ function kindKey(row: DeletionRow): string {
     chat_messages: 'chatMessage', coach_session_remarks: 'remark', athlete_assignment_plans: 'assignedPlan',
     program_versions: 'programVersion', program_records: 'program', athlete_records: 'athlete',
   } as Record<string, string>)[row.table_name] ?? 'other';
+}
+
+// ── Recent changes (phase 4) ────────────────────────────────────────────────────────────────────
+
+interface ActivityRow {
+  id: number;
+  actor: string;
+  table_name: string;
+  record_id: string;
+  label: string | null;
+  kind: 'create' | 'change' | 'restore';
+  at: string;
+}
+
+/** Who created, changed or restored which program, athlete or library item — written by the
+ *  database (activity_log), several changes of one item within 30 minutes are one entry */
+function ActivityCard({ members }: { members: OrgMember[] }) {
+  const { t, i18n } = useTranslation();
+  const { user } = useAuth();
+  const [rows, setRows] = useState<ActivityRow[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    supabase
+      .from('activity_log')
+      .select('id, actor, table_name, record_id, label, kind, at')
+      .order('at', { ascending: false })
+      .limit(LOG_LIMIT)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        // Before the phase 4 SQL the table doesn't exist — the card just stays empty
+        if (error) console.warn('[ActivityLog]', error.message);
+        setRows((data ?? []) as ActivityRow[]);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const memberNames = useMemo(() => new Map(members.map((m) => [m.userId, m.name || m.email])), [members]);
+  const byWhom = (actor: string) =>
+    actor === user?.id ? t('organization.members.you') : memberNames.get(actor) ?? t('organization.deletionLog.someoneElse');
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Activity className="h-4 w-4" />
+          {t('organization.activity.title')}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {rows === null ? (
+          <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t('organization.activity.empty')}</p>
+        ) : (
+          <div className="max-h-96 overflow-y-auto -mx-2">
+            {rows.map((row) => (
+              <div key={row.id} className="flex items-baseline gap-3 px-2 py-1.5 text-sm border-b last:border-b-0">
+                <span className="text-xs text-muted-foreground w-28 shrink-0 tabular-nums">
+                  {new Date(row.at).toLocaleString(i18n.language, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </span>
+                <span className="min-w-0 flex-1 truncate">
+                  <span className="text-muted-foreground">
+                    {t(`organization.activity.kinds.${row.kind}`)} · {t(`organization.deletionLog.kinds.${kindKey(row)}`)}
+                  </span>
+                  {row.label && <> · {row.label}</>}
+                </span>
+                <span className="text-xs text-muted-foreground shrink-0">{byWhom(row.actor)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function DeletionLogCard({ members }: { members: OrgMember[] }) {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format, parseISO, isToday, isYesterday } from 'date-fns';
 import {
@@ -17,6 +17,7 @@ import { uploadChatFile } from '@/lib/storage';
 import { ChatAttachmentDisplay } from '@/components/chat/ChatAttachmentDisplay';
 import { useTranslation } from 'react-i18next';
 import { ChatQuote } from '@/components/chat/ChatQuote';
+import { ChatSenderName, chatSenderLabels } from '@/components/chat/ChatSenderName';
 
 function formatMessageDate(iso: string): string {
   const d = parseISO(iso);
@@ -54,6 +55,11 @@ export default function CoachMobileAthleteThreadPage() {
     connectionId,
     callerRole: 'coach',
   });
+  // Several coaches in this chat: who wrote which message
+  const senderNames = useMemo(
+    () => chatSenderLabels(messages, { viewer: 'coach', myId: user?.id, you: t('coachMobile.messages.you'), fallback: t('coachMobile.messages.coach') }),
+    [messages, user?.id, t],
+  );
 
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -184,6 +190,7 @@ export default function CoachMobileAthleteThreadPage() {
                 const isOwn = msg.senderRole === 'coach';
                 return (
                   <div key={msg.id} className={cn('flex flex-col', isOwn ? 'items-end' : 'items-start')}>
+                    <ChatSenderName name={senderNames.get(msg.id)} isOwn={isOwn} />
                     {(msg.messageType === 'exercise_comment' || msg.messageType === 'session_note') && msg.reference && (
                       <span
                         className={cn(
