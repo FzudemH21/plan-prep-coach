@@ -65,22 +65,32 @@ export type CoachFilter = 'mine' | 'all';
 
 const filterKey = (userId: string) => `athlete-coach-filter:${userId}`;
 
-/** "My athletes / All", remembered per coach in this browser (falls back to All) */
-export function useCoachFilter(): [CoachFilter, (f: CoachFilter) => void] {
+/**
+ * "Mine / All", remembered per coach in this browser. list: which list (athletes by default;
+ * 'programs' for the program library and the assign dialog).
+ */
+export function useCoachFilter(list = 'athlete', fallback: CoachFilter = 'all'): [CoachFilter, (f: CoachFilter) => void] {
   const { user } = useAuth();
-  const [filter, setFilterState] = useState<CoachFilter>('all');
+  const key = useCallback((userId: string) => (list === 'athlete' ? filterKey(userId) : `${list}-filter:${userId}`), [list]);
+  const [filter, setFilterState] = useState<CoachFilter>(fallback);
   useEffect(() => {
     if (!user) return;
     try {
-      setFilterState(localStorage.getItem(filterKey(user.id)) === 'mine' ? 'mine' : 'all');
-    } catch { /* storage blocked — keep All */ }
-  }, [user]);
+      const stored = localStorage.getItem(key(user.id));
+      setFilterState(stored === 'mine' || stored === 'all' ? stored : fallback);
+    } catch { /* storage blocked — keep the default */ }
+  }, [user, key, fallback]);
   const setFilter = useCallback((f: CoachFilter) => {
     setFilterState(f);
     if (!user) return;
-    try { localStorage.setItem(filterKey(user.id), f); } catch { /* not remembered */ }
-  }, [user]);
+    try { localStorage.setItem(key(user.id), f); } catch { /* not remembered */ }
+  }, [user, key]);
   return [filter, setFilter];
+}
+
+/** "Mine / All" as two small chips */
+export function mineAllLabels(f: CoachFilter, mine: string, all: string): string {
+  return f === 'mine' ? mine : all;
 }
 
 export function isAssignedTo(athlete: Athlete, userId: string | null): boolean {

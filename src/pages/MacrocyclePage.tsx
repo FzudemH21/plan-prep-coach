@@ -60,6 +60,7 @@ import { isDatabaseAction, useDatabaseAIActions } from "@/hooks/useDatabaseAIAct
 import { applyNotesAction, readNotesHistory, restoreNotesVersion, strategyContext, WRITE_UP_PROMPT, type PlanNotesVersion } from "@/utils/planStrategy";
 import { useWizardData } from "@/contexts/WizardDataContext";
 import { usePersistentSet } from '@/hooks/usePersistentState';
+import { usePlannerProgram } from "@/hooks/useProgramAccess";
 
 // Type for manually added methods with rationale
 interface ManuallyAddedMethod {
@@ -108,6 +109,8 @@ export default function MacrocyclePage() {
   const aiGlobalContext = useMemo(() => `${globalAIContext}\n\n## Parameter Database\n${parameterContext}`, [globalAIContext, parameterContext]);
   const [athleteDropdownOpen, setAthleteDropdownOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  // Another coach's program, opened to look at (PlannerGate): Next only moves on, nothing is checked
+  const { readOnly: plannerReadOnly } = usePlannerProgram();
   const [planName, setPlanName] = useState<string>("");
   const [planNotes, setPlanNotes] = useState<string>("");
   /** "Goal for another measure": the measure the goal dialog starts with */
@@ -1234,7 +1237,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                 <div className="p-4 border border-dashed rounded-lg text-center text-muted-foreground">
                   <User className="h-6 w-6 mx-auto mb-1 opacity-50" />
                   <p className="text-sm">No athletes yet.</p>
-                  <Button 
+                  <Button data-nav 
                     variant="link" 
                     className="text-primary p-0 h-auto"
                     onClick={() => navigate('/athletes')}
@@ -1716,7 +1719,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                     >
                                       <Pencil className="h-3 w-3" />
                                     </Button>
-                                    <Button
+                                    <Button data-nav
                                       variant="ghost"
                                       size="icon"
                                       className="h-6 w-6"
@@ -2980,6 +2983,11 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
   };
 
   const handleNext = () => {
+    if (plannerReadOnly) {
+      if (currentStep === totalSteps) { localStorage.removeItem('mesocycleStep'); navigate('/mesocycle'); }
+      else setCurrentStep(Math.min(totalSteps, currentStep + 1));
+      return;
+    }
     // Validate Step 1 before proceeding
     if (currentStep === 1 && !canProceedFromStep1()) {
       toast({
@@ -3049,7 +3057,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Macrocycle Overview</h1>
           <div className="flex items-center gap-2">
-            <Button 
+            <Button data-nav 
               variant="outline" 
               size="sm" 
               onClick={() => {
@@ -3431,7 +3439,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Macrocycle Planning</h1>
           <div className="flex items-center gap-2">
-            <Button 
+            <Button data-nav 
               variant="outline" 
               size="sm" 
               onClick={() => {
@@ -3459,7 +3467,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
         
         {/* Top Navigation */}
         <div className="flex justify-between">
-          <Button 
+          <Button data-nav 
             variant="outline" 
             size="sm"
             onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
@@ -3468,7 +3476,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             Previous
           </Button>
           
-          <Button 
+          <Button data-nav 
             size="sm"
             onClick={handleNext}
           >
@@ -3502,7 +3510,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
 
       {/* Navigation */}
       <div className="flex justify-between pt-6 pb-24">
-        <Button
+        <Button data-nav
           variant="outline"
           onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
           disabled={currentStep === 1}
@@ -3510,7 +3518,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           Previous
         </Button>
 
-        <Button onClick={handleNext}>
+        <Button data-nav onClick={handleNext}>
           {currentStep === totalSteps ? "Move on to Mesocycle" : "Next"}
         </Button>
       </div>

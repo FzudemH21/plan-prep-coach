@@ -32,6 +32,8 @@ declare
   v_asg     boolean := to_regprocedure('public.my_athlete_ids()') is not null;
   v_assigned text[] := '{}';  -- the data owner's athletes assigned to the member
   v_anams   uuid[] := '{}';   -- their anamneses
+  -- Every coach builds own programs; the Programs right means "edit all" (2026-11-16)
+  v_own_prog boolean := exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'program_records' and column_name = 'created_by');
   v_shared  boolean := to_regprocedure('public.my_data_owner()') is not null;
   v_sh_ath  boolean := exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'athlete_records' and policyname = 'org_read');
   v_sh_prog boolean := exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'program_records' and policyname = 'org_read');
@@ -333,7 +335,8 @@ begin
              'updated_at', format('athlete_anamneses where coach_user_id = %L', v_coach)),
           ('public.athlete_daily_checkins', 'change check-ins', 'never',
              'athlete_connection_id', format('athlete_daily_checkins where athlete_connection_id in (select id from public.athlete_connections where coach_user_id = %L)', v_coach)),
-          ('public.program_records', 'change programs', case when v_sh_prog then coalesce(v_mr->>'programs', 'view') else 'never' end,
+          ('public.program_records', 'change programs', case when v_own_prog then (case when v_mr->>'programs' = 'edit' then 'edit' else 'own' end)
+                                                             when v_sh_prog then coalesce(v_mr->>'programs', 'view') else 'never' end,
              'updated_at', format('program_records where coach_user_id = %L', v_coach)),
           -- Athletes not assigned to it: out of reach
           ('public.athlete_records', 'change athletes not assigned to it', case when v_asg then 'never' when v_sh_ath then coalesce(v_mr->>'athletes', 'view') else 'never' end,
@@ -344,6 +347,9 @@ begin
       loop
         n := 0;
         execute 'select count(*) from public.' || wt.target into v_target;  -- as the member: what it can see
+        if wt.allowed = 'own' then  -- only the rows it created
+          execute 'select count(*) from public.' || wt.target || ' and created_by = auth.uid()' into v_target;
+        end if;
         begin
           execute 'update public.' || regexp_replace(wt.target, ' where ', format(' set %I = %I where ', wt.setcol, wt.setcol));  -- first only
           get diagnostics n = row_count;
@@ -351,9 +357,9 @@ begin
         exception
           when sqlstate 'P0001' or insufficient_privilege then
             acc := acc || jsonb_build_object('who', who, 'table_name', wt.tbl, 'check_name', wt.label,
-              'expected', case when wt.allowed = 'edit' then v_target::text || ' (right: edit)' when wt.allowed = 'view' then '0 (right: view)' else '0' end,
+              'expected', case when wt.allowed = 'edit' then v_target::text || ' (right: edit)' when wt.allowed = 'own' then v_target::text || ' (its own)' when wt.allowed = 'view' then '0 (right: view)' else '0' end,
               'actual', n::text || ' rows (undone)',
-              'status', case when wt.allowed = 'edit' then (case when n = v_target then 'ok' else 'FAIL' end)
+              'status', case when wt.allowed in ('edit', 'own') then (case when n = v_target then 'ok' else 'FAIL' end)
                              else (case when n = 0 then 'ok' else 'FAIL' end) end);
           when others then
             acc := acc || jsonb_build_object('who', who, 'table_name', wt.tbl, 'check_name', wt.label, 'expected', '-', 'actual', sqlerrm, 'status', 'ERROR');
@@ -460,6 +466,24 @@ begin
             acc := acc || jsonb_build_object('who', who, 'table_name', wt.tbl, 'check_name', wt.label, 'expected', '0 rows / blocked', 'actual', sqlerrm, 'status', 'ERROR');
         end;
       end loop;
+
+      -- A program's author can't be changed from the app (own programs, 2026-11-16)
+      if who in ('coach', 'member') and v_own_prog then
+        begin
+          execute 'select count(*) from public.program_records where created_by = auth.uid()' into n0;
+          execute format('update public.program_records set created_by = auth.uid() where coach_user_id = %L', v_coach);
+          execute 'select count(*) from public.program_records where created_by = auth.uid()' into n;
+          raise exception using errcode = 'P0001', message = 'perm_check_undo';
+        exception
+          when sqlstate 'P0001' then
+            acc := acc || jsonb_build_object('who', who, 'table_name', 'public.program_records', 'check_name', 'take over other coaches'' programs',
+              'expected', n0::text || ' own programs', 'actual', n::text || ' (undone)', 'status', case when n = n0 then 'ok' else 'FAIL' end);
+          when insufficient_privilege then
+            acc := acc || jsonb_build_object('who', who, 'table_name', 'public.program_records', 'check_name', 'take over other coaches'' programs', 'expected', 'unchanged', 'actual', 'blocked', 'status', 'ok');
+          when others then
+            acc := acc || jsonb_build_object('who', who, 'table_name', 'public.program_records', 'check_name', 'take over other coaches'' programs', 'expected', 'unchanged', 'actual', sqlerrm, 'status', 'ERROR');
+        end;
+      end if;
 
       -- A chat message can't carry a made-up sender name (phase 4)
       if who in ('coach', 'member') and v_conn is not null

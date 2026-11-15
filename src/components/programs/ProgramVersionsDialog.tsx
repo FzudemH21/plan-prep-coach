@@ -8,6 +8,7 @@ import { useTrainingPrograms, type TrainingProgram } from '@/hooks/useTrainingPr
 import { useWizardData } from '@/contexts/WizardDataContext';
 import { getProgramVersion, listProgramVersions, type ProgramVersionSummary } from '@/lib/programVersions';
 import { useDataScope } from '@/hooks/useDataScope';
+import { useProgramAccess } from '@/hooks/useProgramAccess';
 
 const REASON_LABEL: Record<string, string> = {
   edit: 'Saved',
@@ -24,7 +25,10 @@ interface Props {
 /** Earlier versions of one program — any of them can be restored (the current state is kept first) */
 export function ProgramVersionsDialog({ program, onOpenChange }: Props) {
   // The organization's programs for members (lib/dataScope)
-  const { dataId: programsId, canEdit } = useDataScope('programs');
+  const { dataId: programsId } = useDataScope('programs');
+  // Restoring changes the program: only for programs one may change (own / "edit all")
+  const { canEdit: canEditProgram } = useProgramAccess();
+  const canEdit = canEditProgram(program?.id);
   const { toast } = useToast();
   const { restoreProgramVersion, loadProgramIntoSession } = useTrainingPrograms();
   const { loadWizardSession } = useWizardData();

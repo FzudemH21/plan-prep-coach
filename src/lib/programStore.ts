@@ -19,6 +19,9 @@
  * - saves of the same program run one after another, the newest last (no older version can land
  *   after a newer one)
  * - deleting keeps the program's row with a deletion mark, so it can always be brought back
+ * - organizations: every coach creates programs; a program can be changed by its author, by coaches
+ *   with "edit all" (the Programs right) and by owners — others are refused here before anything
+ *   is written (the database refuses them too, 20261116_own_programs.sql)
  */
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/hooks/use-toast';
@@ -27,9 +30,12 @@ import { areaAccess } from '@/lib/dataScope';
 
 const TABLE = 'program_records';
 const LEGACY_TABLE = 'training_programs';
-/** Loaded from the organization's account (members): no copy from the old table; saving needs the right */
+/** Loaded from the organization's account (members): no copy from the old table */
 let sharedMode = false;
-let editable = true;
+/** May change every program (own account, owners, "edit all"); otherwise only the own ones */
+let editAll = true;
+/** The logged-in person (the author of programs they create) */
+let me: string | null = null;
 /** Newest change of the old shared row this browser has already copied over (per coach) */
 const legacySeenKey = (userId: string) => `programRecordsLegacySeen_${userId}`;
 const LOAD_ATTEMPTS = 3;
@@ -51,6 +57,8 @@ export interface ProgramStoreState {
   deleted: Record<string, string>;
   /** While loading: the list to show meanwhile (see loadSummaries). Never used for saving. */
   summaries: ProgramSummary[];
+  /** Program id → who created it (program_records.created_by; absent before the SQL / for new ones) */
+  authors: Record<string, string>;
 }
 
 /** Thrown by a save before the programs were loaded — nothing was saved */
@@ -67,7 +75,32 @@ interface LegacyData {
   deletedProgramIds?: string[];
 }
 
-const EMPTY: Omit<ProgramStoreState, 'userId'> = { status: 'idle', mode: 'rows', programs: [], deleted: {}, summaries: [] };
+const EMPTY: Omit<ProgramStoreState, 'userId'> = { status: 'idle', mode: 'rows', programs: [], deleted: {}, summaries: [], authors: {} };
+
+/** Thrown when a coach tries to change another coach's program — nothing was saved */
+export class ProgramNotEditableError extends Error {
+  constructor() {
+    super('This program belongs to another coach — nothing was saved');
+    this.name = 'ProgramNotEditableError';
+  }
+}
+
+/** Who created the program (null: unknown — before the SQL, or a program not saved yet) */
+export function programAuthorId(id: string): string | null {
+  return state.authors[id] ?? null;
+}
+
+/** Whether the logged-in person may change this program (new programs: always) */
+export function canEditProgram(id: string | null | undefined): boolean {
+  if (editAll || !id) return true;
+  const author = state.authors[id];
+  return !author || author === me;
+}
+
+/** Who is logged in and whether they may change every program */
+export function programAccess(): { me: string | null; editAll: boolean } {
+  return { me, editAll };
+}
 let state: ProgramStoreState = { userId: null, ...EMPTY };
 const listeners = new Set<() => void>();
 let loadPromise: Promise<void> | null = null;
@@ -254,11 +287,17 @@ async function loadSummaries(userId: string) {
 }
 
 async function loadRowsMode(userId: string): Promise<boolean> {
-  type Meta = { id: string; last_modified_at: string | null; deleted_at: string | null };
+  type Meta = { id: string; last_modified_at: string | null; deleted_at: string | null; created_by?: string | null };
   let metas: Meta[];
   try {
-    metas = await withRetries('loading the program list', async () =>
-      await supabase.from(TABLE).select('id, last_modified_at, deleted_at').eq('coach_user_id', userId)) as Meta[];
+    metas = await withRetries('loading the program list', async () => {
+      const withAuthor = await supabase.from(TABLE).select('id, last_modified_at, deleted_at, created_by').eq('coach_user_id', userId);
+      // Before the own-programs SQL there is no author column
+      if (withAuthor.error && /created_by/.test(withAuthor.error.message ?? '')) {
+        return await supabase.from(TABLE).select('id, last_modified_at, deleted_at').eq('coach_user_id', userId);
+      }
+      return withAuthor;
+    }) as Meta[];
   } catch (err) {
     if (isMissingTable(err as { code?: string; message?: string }) && !sharedMode) return false; // SQL not run yet
     throw err;
@@ -308,7 +347,9 @@ async function loadRowsMode(userId: string): Promise<boolean> {
 
   // The old browser copy of the whole list doesn't fit any more and isn't used
   try { localStorage.removeItem('trainingPrograms_sb_cache'); } catch { /* ignore */ }
-  setState({ mode: 'rows', status: 'loaded', programs: [...byId.values()], deleted, summaries: [] });
+  const authors: Record<string, string> = {};
+  metas.forEach(m => { if (m.created_by) authors[m.id] = m.created_by; });
+  setState({ mode: 'rows', status: 'loaded', programs: [...byId.values()], deleted, summaries: [], authors });
   return true;
 }
 
@@ -316,13 +357,15 @@ async function loadRowsMode(userId: string): Promise<boolean> {
  * Loads the coach's programs once per tab (again after a failed load). userId: the account whose
  * programs to load — for a member of an organization the organization's (see lib/dataScope).
  */
-export function ensureProgramsLoaded(userId: string, options?: { shared?: boolean; canEdit?: boolean }): Promise<void> {
+export function ensureProgramsLoaded(userId: string, options?: { shared?: boolean; canEdit?: boolean; me?: string }): Promise<void> {
   if (state.userId !== userId) {
     state = { userId, ...EMPTY };
     loadPromise = null;
   }
   sharedMode = !!options?.shared;
-  editable = options?.canEdit ?? true;
+  // canEdit: the Programs right — "edit all"; without it a coach changes only their own programs
+  editAll = !sharedMode || (options?.canEdit ?? true);
+  me = options?.me ?? userId;
   if (state.status === 'loaded') return Promise.resolve();
   if (loadPromise) return loadPromise;
   setState({ status: 'loading' });
@@ -356,17 +399,29 @@ function requireLoaded(): string {
     warnNotLoaded();
     throw new ProgramsNotLoadedError();
   }
-  if (!editable) {
-    toast({ title: 'Not saved', description: 'You can view the programs, but not change them.', variant: 'destructive' });
-    throw new Error('No right to change the programs');
-  }
   return state.userId;
+}
+
+/** Refuses (before anything is written) when one of the programs is another coach's */
+function requireEditable(ids: string[]) {
+  if (ids.every(id => canEditProgram(id))) return;
+  toast({ title: 'Not saved', description: "This is another coach's program — duplicate it to make your own copy.", variant: 'destructive' });
+  throw new ProgramNotEditableError();
+}
+
+/** New programs (not stored yet) are the logged-in person's */
+function noteAuthors(programs: TrainingProgram[]) {
+  if (!me) return;
+  const fresh = programs.filter(p => !state.authors[p.id] && !state.programs.some(q => q.id === p.id) && !(p.id in state.deleted));
+  if (fresh.length > 0) setState({ authors: { ...state.authors, ...Object.fromEntries(fresh.map(p => [p.id, me as string])) } });
 }
 
 /** Saves (adds or replaces) programs. The list in this tab updates at once; resolves when stored. */
 export async function putPrograms(programs: TrainingProgram[]): Promise<void> {
   if (programs.length === 0) return;
   const userId = requireLoaded();
+  requireEditable(programs.map(p => p.id));
+  if (sharedMode) noteAuthors(programs);
   const ids = new Set(programs.map(p => p.id));
   const deleted = { ...state.deleted };
   programs.forEach(p => { delete deleted[p.id]; });
@@ -378,6 +433,7 @@ export async function putPrograms(programs: TrainingProgram[]): Promise<void> {
 /** Deletes a program on purpose — its row stays, marked as deleted, so it can be brought back */
 export async function markProgramDeleted(id: string): Promise<void> {
   const userId = requireLoaded();
+  requireEditable([id]);
   const program = state.programs.find(p => p.id === id);
   if (!program) return;
   const deletedAt = new Date().toISOString();
@@ -392,10 +448,11 @@ export async function updateAllPrograms(updater: (program: TrainingProgram) => T
     const { data } = await supabase.auth.getUser();
     if (!data.user) return 0;
     const access = await areaAccess(data.user.id, 'programs');
-    await ensureProgramsLoaded(access.dataId, access);
+    await ensureProgramsLoaded(access.dataId, { ...access, me: data.user.id });
   }
   if (state.status !== 'loaded') throw new ProgramsNotLoadedError();
-  const changed = state.programs.map(updater).filter((next, i) => next !== state.programs[i]);
+  // Only the programs this person may change (an exercise renamed by a coach: their programs)
+  const changed = state.programs.map(updater).filter((next, i) => next !== state.programs[i] && canEditProgram(next.id));
   await putPrograms(changed);
   return changed.length;
 }

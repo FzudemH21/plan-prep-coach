@@ -980,7 +980,7 @@
         "health": "Health",
         "ai": "AI"
       },
-      "legend": "Coaches see the athletes assigned to them, owners all. Unticked: programs / libraries / health data view only, AI off."
+      "legend": "Coaches see the athletes assigned to them and change their own programs, owners everything. Ticked: Programs = may change every program, Libraries = may change them, Health = may change health data, AI on."
     }
   }
 }

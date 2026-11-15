@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useAuth } from './useAuth';
 import {
-  ensureProgramsLoaded, getProgramStoreState, markProgramDeleted, putPrograms, resetProgramStore, subscribeProgramStore,
+  canEditProgram, ensureProgramsLoaded, getProgramStoreState, markProgramDeleted, putPrograms, resetProgramStore, subscribeProgramStore,
 } from '@/lib/programStore';
 import { savePlanMemory } from '@/lib/planMemory';
 import { areaAccess, type AreaAccess } from '@/lib/dataScope';
@@ -194,7 +194,7 @@ export function useTrainingPrograms() {
     return () => { cancelled = true; };
   }, [user]);
   useEffect(() => {
-    if (user && access) void ensureProgramsLoaded(access.dataId, access);
+    if (user && access) void ensureProgramsLoaded(access.dataId, { ...access, me: user.id });
     else if (!user && !authLoading) resetProgramStore();
   }, [user, authLoading, access]);
   const dataId = access?.dataId ?? null;
@@ -223,6 +223,9 @@ export function useTrainingPrograms() {
     if (program.id) {
       // The newest stored version (not this render's copy, which can be a save behind)
       const existing = getProgramStoreState().programs.find(p => p.id === program.id);
+      // Another coach's program, opened to look at (planner read-only): nothing to save — the
+      // planner's auto-save and "Back to library" stay quiet
+      if (existing && !canEditProgram(existing.id)) return existing;
       if (existing) {
         const updated: TrainingProgram = {
           ...existing,

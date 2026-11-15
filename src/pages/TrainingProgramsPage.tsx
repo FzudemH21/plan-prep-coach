@@ -42,7 +42,7 @@ import {
   Target,
   FileText,
   History,
-
+  Eye,
   Loader2
 } from "lucide-react";
 import { ExportPDFButton } from "@/components/pdf/ExportPDFButton";
@@ -55,13 +55,23 @@ import { useToast } from "@/hooks/use-toast";
 import { format, formatDistanceToNow, differenceInCalendarDays } from "date-fns";
 import { useWizardData } from "@/contexts/WizardDataContext";
 import { useAIChatContext } from "@/contexts/AIChatContext";
-import { useReadOnly } from "@/hooks/useDataScope";
-import { ViewOnlyBadge } from "@/components/shared/ViewOnlyBadge";
+import { useProgramAccess } from "@/hooks/useProgramAccess";
+import { useCoachFilter, useOrgCoaches } from "@/hooks/useOrgCoaches";
+import { cn } from "@/lib/utils";
 
 export default function TrainingProgramsPage() {
   const navigate = useNavigate();
-  // Programs unticked in the rights grid: view (PDF, version history) — no create, edit, duplicate, delete
-  const readOnly = useReadOnly('programs');
+  // Organizations: every coach builds their own programs and changes only those (owners and "edit
+  // all" coaches change every program — lib/programStore); the others' open read-only
+  const { canEdit, authorOf, me } = useProgramAccess();
+  const { coaches, enabled: severalCoaches } = useOrgCoaches();
+  const [programFilter, setProgramFilter] = useCoachFilter('programs', 'mine');
+  const isMine = (id: string) => (authorOf(id) ?? me) === me;
+  const authorLabel = (id: string) => {
+    const author = authorOf(id);
+    if (!author || author === me) return null;
+    return coaches.find(c => c.userId === author)?.label ?? 'another coach';
+  };
   const { toast } = useToast();
   const { programs, programSummaries, isLoading, copyProgram, deleteProgram, loadProgramIntoSession, clearSession } = useTrainingPrograms();
   // While the full programs load, the list shows their summaries; opening and the menu wait for the full version
@@ -87,6 +97,7 @@ export default function TrainingProgramsPage() {
 
   // Filter programs by search query
   const filteredPrograms = rows.filter(program => {
+    if (severalCoaches && programFilter === 'mine' && !isMine(program.id)) return false;
     const query = searchQuery.toLowerCase();
     const athleteName = getAthleteName(program.athleteId).toLowerCase();
     return (
@@ -212,17 +223,15 @@ const formatDuration = (program: ProgramSummary) => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">Training Programs <ViewOnlyBadge show={readOnly} /></h1>
+            <h1 className="text-2xl font-bold tracking-tight">Training Programs</h1>
             <p className="text-muted-foreground">Manage your saved training plans</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {!readOnly && (
-            <Button onClick={handleCreateNew}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create New Program
-            </Button>
-          )}
+          <Button onClick={handleCreateNew}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create New Program
+          </Button>
         </div>
       </div>
 
@@ -237,6 +246,23 @@ const formatDuration = (program: ProgramSummary) => {
             className="pl-10"
           />
         </div>
+        {severalCoaches && (
+          <div className="flex gap-1 text-xs">
+            {(['mine', 'all'] as const).map(f => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setProgramFilter(f)}
+                className={cn(
+                  'px-2.5 py-1 rounded-full border font-medium transition-colors',
+                  programFilter === f ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {f === 'mine' ? 'My programs' : 'All programs'}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           {sortedPrograms.length} program{sortedPrograms.length !== 1 ? 's' : ''}
           {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-label="Loading programs" />}
@@ -264,16 +290,17 @@ const formatDuration = (program: ProgramSummary) => {
                 <TableRow
                   key={row.id}
                   className={program ? "cursor-pointer hover:bg-muted/50" : "cursor-progress"}
-                  onClick={() => {
-                    if (!program) return;
-                    // View only: the program opens as its PDF (no editing in the planner)
-                    if (readOnly) { setPdfExportProgram(program); setPdfExportOpen(true); } else handleEditProgram(program);
-                  }}
+                  onClick={() => { if (program) handleEditProgram(program); }}
                 >
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-muted-foreground" />
-                      {row.name}
+                      <div className="min-w-0">
+                        <div className="truncate">{row.name}</div>
+                        {authorLabel(row.id) && (
+                          <div className="text-xs font-normal text-muted-foreground truncate">by {authorLabel(row.id)}</div>
+                        )}
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -299,18 +326,14 @@ const formatDuration = (program: ProgramSummary) => {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        {!readOnly && (
-                          <>
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditProgram(program); }}>
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleCopyProgram(program); }}>
-                              <Copy className="h-4 w-4 mr-2" />
-                              Duplicate
-                            </DropdownMenuItem>
-                          </>
-                        )}
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEditProgram(program); }}>
+                          {canEdit(program.id) ? <Edit className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+                          {canEdit(program.id) ? 'Edit' : 'View'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleCopyProgram(program); }}>
+                          <Copy className="h-4 w-4 mr-2" />
+                          {canEdit(program.id) ? 'Duplicate' : 'Duplicate as my program'}
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setPdfExportProgram(program); setPdfExportOpen(true); }}>
                           <FileText className="h-4 w-4 mr-2" />
                           Export PDF
@@ -319,7 +342,7 @@ const formatDuration = (program: ProgramSummary) => {
                           <History className="h-4 w-4 mr-2" />
                           Version history
                         </DropdownMenuItem>
-                        {!readOnly && (
+                        {canEdit(program.id) && (
                           <>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
@@ -354,7 +377,7 @@ const formatDuration = (program: ProgramSummary) => {
                 : "Get started by creating your first training program"
               }
             </p>
-            {!searchQuery && !readOnly && (
+            {!searchQuery && (
               <Button onClick={handleCreateNew}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create Your First Program

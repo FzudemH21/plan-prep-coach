@@ -4,8 +4,7 @@ import { Save, Check } from "lucide-react";
 import { useTrainingPrograms } from "@/hooks/useTrainingPrograms";
 import { useToast } from "@/hooks/use-toast";
 import { ProgramOpenElsewhereError } from "@/lib/wizardTabProgram";
-import { useReadOnly } from "@/hooks/useDataScope";
-import { ViewOnlyBadge } from "@/components/shared/ViewOnlyBadge";
+import { usePlannerProgram } from "@/hooks/useProgramAccess";
 
 interface SaveProgramButtonProps {
   variant?: "default" | "ghost" | "outline";
@@ -22,8 +21,8 @@ export function SaveProgramButton({
 }: SaveProgramButtonProps) {
   const { toast } = useToast();
   const { saveCurrentSession } = useTrainingPrograms();
-  // Programs unticked in the rights grid: nothing to save — a badge instead (one clear message)
-  const readOnly = useReadOnly('programs');
+  // Another coach's program, opened to look at: nothing to save (the planner shows a banner)
+  const { readOnly } = usePlannerProgram();
 
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -56,7 +55,7 @@ export function SaveProgramButton({
     }
   };
 
-  if (readOnly) return <ViewOnlyBadge show />;
+  if (readOnly) return null;
 
   return (
     <Button

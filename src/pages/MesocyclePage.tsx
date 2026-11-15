@@ -73,6 +73,7 @@ import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
 import { useCoachMemory } from '@/hooks/useCoachMemory';
 import { useAnamnesisAIContext } from '@/hooks/useAnamnesisAIContext';
 import { usePersistentSet } from '@/hooks/usePersistentState';
+import { usePlannerProgram } from "@/hooks/useProgramAccess";
 
 // Helper function for string normalization - robust canonicalization
 const normalizeForComparison = (str: unknown): string => {
@@ -265,10 +266,13 @@ export default function MesocyclePage() {
 
   const totalSteps = 5;
 
+  // Another coach's program, opened to look at (PlannerGate): moving on is never held up
+  const { readOnly: plannerReadOnly } = usePlannerProgram();
+
   // Navigation component for top and bottom
   const NavigationButtons = () => (
     <div className="flex flex-col md:flex-row md:justify-between items-stretch md:items-center gap-3 w-full max-w-full px-2 md:px-0 md:flex-nowrap">
-      <Button 
+      <Button data-nav
         onClick={() => {
           if (currentStep <= 1) {
             // Smart navigation: go to last saved step in macrocycle (clamped to valid range 1-3)
@@ -286,8 +290,8 @@ export default function MesocyclePage() {
       >
         {currentStep <= 1 ? "Back to Macrocycle" : "Previous"}
       </Button>
-      <Button
-        disabled={currentStep === 1 && daysMismatch}
+      <Button data-nav
+        disabled={currentStep === 1 && daysMismatch && !plannerReadOnly}
         onClick={() => {
           if (currentStep >= totalSteps) {
             // CRITICAL: Synchronously save parameterValues before navigating
@@ -1736,7 +1740,7 @@ export default function MesocyclePage() {
               {/* Carousel Navigation */}
               {hasMoreMesocycles && (
                 <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b">
-                  <Button
+                  <Button data-nav
                     variant="outline"
                     size="sm"
                     onClick={() => setMesocycleViewOffset(prev => Math.max(0, prev - 1))}
@@ -1748,7 +1752,7 @@ export default function MesocyclePage() {
                   <span className="text-xs text-muted-foreground">
                     Mesocycles {mesocycleViewOffset + 1}-{Math.min(mesocycleViewOffset + MAX_VISIBLE_MESOCYCLES, mesocycles.length)} of {mesocycles.length}
                   </span>
-                  <Button
+                  <Button data-nav
                     variant="outline"
                     size="sm"
                     onClick={() => setMesocycleViewOffset(prev => 
@@ -1780,7 +1784,7 @@ export default function MesocyclePage() {
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button
+                              <Button data-nav
                                 variant="ghost"
                                 size="icon"
                                 className="h-5 w-5 p-0"
@@ -3372,7 +3376,7 @@ export default function MesocyclePage() {
                <div className="flex items-center justify-between gap-2">
                  <h3 className="text-lg font-semibold">Method Periodization</h3>
                  {allPeriodizationRows.length > 0 && (
-                   <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs"
+                   <Button data-nav variant="outline" size="sm" className="h-7 gap-1.5 text-xs"
                      onClick={() => setExpandedMethods(allRowsExpanded ? new Set() : new Set(allPeriodizationRows))}>
                      <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', allRowsExpanded && 'rotate-180')} />
                      {allRowsExpanded ? 'Collapse all' : 'Expand all'}
@@ -3459,7 +3463,7 @@ export default function MesocyclePage() {
                                         <TooltipProvider>
                                           <Tooltip>
                                             <TooltipTrigger asChild>
-                                              <Button
+                                              <Button data-nav
                                                 variant="ghost"
                                                 size="icon"
                                                 className="h-6 w-6 shrink-0"
@@ -3649,7 +3653,7 @@ export default function MesocyclePage() {
                                               <div className="sticky left-0 z-50 p-3 border-r bg-background rounded-tl shadow-md">
                                                 <div className="flex items-center justify-between group pr-28 relative">
                                                    <div className="flex items-center gap-2 min-w-0">
-                                                    <button
+                                                    <button data-nav
                                                       onClick={(e) => { e.stopPropagation(); toggleMethodCollapse(fullMethodName); }}
                                                       className="p-0.5 hover:bg-muted-foreground/20 rounded flex-shrink-0"
                                                     >
@@ -4947,7 +4951,7 @@ export default function MesocyclePage() {
             
             {/* Mesocycle Navigation */}
             <div className="flex items-center gap-4">
-              <Button
+              <Button data-nav
                 variant="outline"
                 onClick={() => setCurrentMesocycleIndexDailyPlanning(Math.max(0, currentMesocycleIndexDailyPlanning - 1))}
                 disabled={currentMesocycleIndexDailyPlanning === 0}
@@ -4960,7 +4964,7 @@ export default function MesocyclePage() {
               <div className="flex-1 overflow-x-auto min-w-0">
                 <div className="flex items-center justify-center gap-2 py-1">
                   {mesocycles.map((meso, index) => (
-                    <Button
+                    <Button data-nav
                       key={meso.id}
                       variant={index === currentMesocycleIndexDailyPlanning ? "default" : "outline"}
                       size="sm"
@@ -4973,7 +4977,7 @@ export default function MesocyclePage() {
                 </div>
               </div>
               
-              <Button
+              <Button data-nav
                 variant="outline"
                 onClick={() => setCurrentMesocycleIndexDailyPlanning(Math.min(mesocycles.length - 1, currentMesocycleIndexDailyPlanning + 1))}
                 disabled={currentMesocycleIndexDailyPlanning === mesocycles.length - 1}
@@ -5760,7 +5764,7 @@ export default function MesocyclePage() {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Mesocycle Planning</h1>
           <div className="flex items-center gap-2">
-            <Button 
+            <Button data-nav 
               variant="outline" 
               size="sm" 
               onClick={() => {

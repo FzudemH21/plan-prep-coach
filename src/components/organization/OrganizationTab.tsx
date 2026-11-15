@@ -102,9 +102,10 @@ function NameCard({ name, isOwner, onRename }: { name: string; isOwner: boolean;
 
 // ── Members, rights and invites ─────────────────────────────────────────────────────────────────
 
-/** The rights grid: programs / libraries ticked = may change (else view only); health ticked = may
- *  change the health data of their athletes (else view only); AI ticked = on. Athletes aren't in the
- *  grid: a coach reaches the athletes assigned to them, owners all. Owners always have everything. */
+/** The rights grid: programs ticked = may change every program (else only their own — every coach
+ *  creates programs); libraries ticked = may change them (else view only); health ticked = may change
+ *  the health data of their athletes (else view only); AI ticked = on. Athletes aren't in the grid:
+ *  a coach reaches the athletes assigned to them, owners all. Owners always have everything. */
 const GRID_RIGHTS = ['programs', 'libraries', 'health', 'ai'] as const;
 type GridRight = typeof GRID_RIGHTS[number];
 const isOn = (rights: OrgRights, k: GridRight): boolean =>

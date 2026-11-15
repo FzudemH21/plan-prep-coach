@@ -980,7 +980,7 @@
         "health": "Gesundheit",
         "ai": "KI"
       },
-      "legend": "Coaches sehen die ihnen zugewiesenen Athleten, Owner alle. Nicht angehakt: Programme / Bibliotheken / Gesundheitsdaten nur ansehen, KI aus."
+      "legend": "Coaches sehen die ihnen zugewiesenen Athleten und ändern ihre eigenen Programme, Owner alles. Angehakt: Programme = darf alle Programme ändern, Bibliotheken = darf sie ändern, Gesundheit = darf Gesundheitsdaten ändern, KI an."
     }
   }
 }

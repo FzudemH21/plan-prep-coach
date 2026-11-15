@@ -40,6 +40,8 @@ import { useTranslation } from 'react-i18next';
 import type { AssignedMesocycle, ReviewedSubGoal, ReviewedEvent } from '@/types/athlete';
 import type { SubGoal, Event as TrainingEvent } from '@/types/training';
 import { useDataScope } from '@/hooks/useDataScope';
+import { useProgramAccess } from '@/hooks/useProgramAccess';
+import { useOrgCoaches } from '@/hooks/useOrgCoaches';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -357,7 +359,19 @@ export default function CoachMobileAssignProgramPage() {
     value: string;
   } | null>(null);
 
-  const availablePrograms = useMemo(() => programs.filter(isAssignable), [programs]);
+  // Several coaches: own programs first, the others' marked with their author (any can be assigned)
+  const { authorOf, me } = useProgramAccess();
+  const { coaches } = useOrgCoaches();
+  const authorLabel = (id: string) => {
+    const author = authorOf(id);
+    if (!author || author === me) return null;
+    return coaches.find(c => c.userId === author)?.label ?? null;
+  };
+  const availablePrograms = useMemo(() => {
+    const list = programs.filter(isAssignable);
+    const mine = (id: string) => ((authorOf(id) ?? me) === me ? 0 : 1);
+    return [...list].sort((a, b) => mine(a.id) - mine(b.id));
+  }, [programs, authorOf, me]);
 
   const chosenStart = useMemo(() => new Date(startDateStr + 'T12:00:00'), [startDateStr]);
   // The program keeps its weekdays: it starts on the first day on or after the chosen date with
@@ -879,6 +893,7 @@ export default function CoachMobileAssignProgramPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold truncate">{p.name}</p>
+                        {authorLabel(p.id) && <p className="text-xs text-muted-foreground truncate">{authorLabel(p.id)}</p>}
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {p.duration?.weeks ? t('coachMobile.assignProgram.weeks', { count: p.duration.weeks }) : t('coachMobile.assignProgram.durationUnknown')}
                           {orig ? ` · ${t('coachMobile.assignProgram.planned', { date: format(orig, 'MMM d, yyyy') })}` : ''}

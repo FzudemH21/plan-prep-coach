@@ -101,6 +101,7 @@ export function PlanningNavigationMenu({ currentPage, currentPageStep, onChangeC
           return (
             <DropdownMenuItem
               key={step.id}
+              data-nav
               onClick={() => handleStepClick(step)}
               className={cn(isActive && "bg-accent font-semibold")}
             >
@@ -123,6 +124,7 @@ export function PlanningNavigationMenu({ currentPage, currentPageStep, onChangeC
           return (
             <DropdownMenuItem
               key={step.id}
+              data-nav
               onClick={() => handleStepClick(step)}
               className={cn(isActive && "bg-accent font-semibold")}
             >
@@ -145,6 +147,7 @@ export function PlanningNavigationMenu({ currentPage, currentPageStep, onChangeC
           return (
             <DropdownMenuItem
               key={step.id}
+              data-nav
               onClick={() => handleStepClick(step)}
               className={cn(isActive && "bg-accent font-semibold")}
             >

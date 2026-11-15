@@ -3873,7 +3873,7 @@ export default function MicrocyclePlanningPage() {
           {stepLabels[currentStep]}
         </p>
         <div className="flex flex-col md:flex-row md:justify-between items-stretch md:items-center gap-3 w-full">
-          <Button
+          <Button data-nav
             onClick={() => {
               if (currentStep <= 1) {
                 localStorage.setItem('mesocycleStep', '5');
@@ -3891,7 +3891,7 @@ export default function MicrocyclePlanningPage() {
 
           {isLastStep ? (
             <div className="flex gap-2 w-full md:w-auto">
-              <Button
+              <Button data-nav
                 variant="outline"
                 onClick={async () => {
                   const program = await saveCurrentSession();
@@ -3943,7 +3943,7 @@ export default function MicrocyclePlanningPage() {
               </Button>
             </div>
           ) : (
-            <Button
+            <Button data-nav
               onClick={() => goToStep(currentStep + 1)}
               className="w-full md:w-auto"
             >
@@ -3997,7 +3997,7 @@ export default function MicrocyclePlanningPage() {
       <div className="overflow-x-auto scrollbar-thin max-w-full">
         <div className="flex items-center justify-center gap-2 px-2">
           {mesocycles.map((meso, index) => (
-            <Button
+            <Button data-nav
               key={meso.id}
               variant={index === currentMesocycleIndex ? "default" : "outline"}
               size="sm"
@@ -4020,7 +4020,7 @@ export default function MicrocyclePlanningPage() {
         <div className="overflow-x-auto scrollbar-thin max-w-full">
           <div className="flex items-center justify-center gap-2 px-2">
             {microcycles.map((micro, index) => (
-              <Button
+              <Button data-nav
                 key={micro.id}
                 variant={index === currentMicrocycleIndex ? "default" : "outline"}
                 size="sm"
@@ -5477,7 +5477,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Microcycle Planning</h1>
           <div className="flex items-center gap-2">
-            <Button
+            <Button data-nav
               variant="outline"
               size="sm"
               onClick={() => {

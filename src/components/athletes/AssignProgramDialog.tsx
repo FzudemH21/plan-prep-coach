@@ -39,6 +39,8 @@ import { useToast } from '@/hooks/use-toast';
 import { toParameterId } from '@/utils/parameterRef';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { allValuesOf, formatGoalRange, goalBaseline, mainSeries, valuesOfMeasure } from '@/utils/goalMeasures';
+import { useProgramAccess } from '@/hooks/useProgramAccess';
+import { useCoachFilter, useOrgCoaches } from '@/hooks/useOrgCoaches';
 
 interface AssignProgramDialogProps {
   open: boolean;
@@ -469,8 +471,19 @@ export function AssignProgramDialog({
     onAssign(assignment);
   };
 
+  // Several coaches: "My programs / All programs" (any program can be assigned; own ones first)
+  const { authorOf, me } = useProgramAccess();
+  const { coaches, enabled: severalCoaches } = useOrgCoaches();
+  const [programFilter, setProgramFilter] = useCoachFilter('programs', 'mine');
+  const authorLabel = (id: string) => {
+    const author = authorOf(id);
+    if (!author || author === me) return null;
+    return coaches.find(c => c.userId === author)?.label ?? 'another coach';
+  };
+
   // Filter programs that have mesocycle data and some training content
   const availablePrograms = programs.filter(p => {
+    if (severalCoaches && programFilter === 'mine' && (authorOf(p.id) ?? me) !== me) return false;
     // Must have mesocycle data
     if (!p.mesocycleData) return false;
     // Handle both formats: direct array or { mesocycles: [...] } object
@@ -546,7 +559,26 @@ export function AssignProgramDialog({
         {currentStep === 1 && (
           <div className="space-y-5 py-2 min-h-[280px]">
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Program</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-sm font-medium">Program</Label>
+                {severalCoaches && (
+                <div className="flex gap-1 text-xs">
+                  {(['mine', 'all'] as const).map(f => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setProgramFilter(f)}
+                      className={cn(
+                        'px-2.5 py-1 rounded-full border font-medium transition-colors',
+                        programFilter === f ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      {f === 'mine' ? 'My programs' : 'All programs'}
+                    </button>
+                  ))}
+                </div>
+              )}
+              </div>
               {/* Searchable, alphabetical — type to filter */}
               <Popover open={programPickerOpen} onOpenChange={setProgramPickerOpen}>
                 <PopoverTrigger asChild>
@@ -579,6 +611,9 @@ export function AssignProgramDialog({
                             <Check className={cn('mr-2 h-4 w-4 shrink-0', selectedProgramId === program.id ? 'opacity-100' : 'opacity-0')} />
                             <div className="flex flex-col min-w-0">
                               <span className="truncate">{program.name}</span>
+                              {authorLabel(program.id) && (
+                                <span className="text-xs text-muted-foreground truncate">by {authorLabel(program.id)}</span>
+                              )}
                               {program.duration?.weeks && (
                                 <span className="text-xs text-muted-foreground">
                                   {program.duration.weeks} weeks
