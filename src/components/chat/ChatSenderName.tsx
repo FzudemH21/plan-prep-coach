@@ -49,7 +49,7 @@ export function ChatAssignedOnlyNote({ text }: { text: string }) {
   );
 }
 
-/** "Only Lena Berg and Felix write with this athlete." — the names of the assigned coaches */
+/** "Lena Berg and Felix" — the names of the assigned coaches */
 export function joinNames(names: string[], and: string): string {
   if (names.length <= 1) return names[0] ?? '';
   return `${names.slice(0, -1).join(', ')} ${and} ${names[names.length - 1]}`;

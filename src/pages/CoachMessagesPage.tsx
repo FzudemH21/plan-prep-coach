@@ -75,8 +75,9 @@ function ThreadView({
   }, [messages]);
 
   // Several coaches: only the athlete's assigned coaches write and mark as read (hooks/useMyAthletes)
-  const { isMine, coachesOf } = useMyAthletes();
-  const canWrite = isMine(athleteLocalId);
+  const { canWrite: canWriteTo, coachesOf } = useMyAthletes();
+  const canWrite = canWriteTo(athleteLocalId);
+  const coachNames = coachesOf(athleteLocalId).map(c => c.label);
   useEffect(() => {
     if (!loading && canWrite) markRead();
   }, [loading, markRead, canWrite]);
@@ -221,7 +222,9 @@ function ThreadView({
 
       {/* Input or disabled notice */}
       {!canWrite ? (
-        <ChatAssignedOnlyNote text={`Only ${joinNames(coachesOf(athleteLocalId).map(c => c.label), 'and')} write with ${athleteName}.`} />
+        <ChatAssignedOnlyNote text={coachNames.length === 0
+          ? `No coach is assigned to ${athleteName} yet — assign one in the athlete's profile to write here.`
+          : `Only ${joinNames(coachNames, 'and')} write with ${athleteName}.`} />
       ) : chatEnabled ? (
         <div className="shrink-0 border-t px-4 py-3">
           {/* Pending file chips */}

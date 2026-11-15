@@ -74,8 +74,9 @@ export default function CoachMobileAthleteThreadPage() {
   }, [messages]);
 
   // Several coaches: only the athlete's assigned coaches write and mark as read (hooks/useMyAthletes)
-  const { isMine, coachesOf } = useMyAthletes();
-  const canWrite = isMine(athleteId);
+  const { canWrite: canWriteTo, coachesOf } = useMyAthletes();
+  const canWrite = canWriteTo(athleteId);
+  const coachNames = coachesOf(athleteId).map(c => c.label);
   useEffect(() => {
     if (!loading && connectionId && canWrite) markRead();
   }, [loading, connectionId, markRead, canWrite]);
@@ -249,7 +250,9 @@ export default function CoachMobileAthleteThreadPage() {
 
       {/* Input bar or disabled notice */}
       {!canWrite ? (
-        <ChatAssignedOnlyNote text={t('coachMobile.messages.assignedOnly', { coaches: joinNames(coachesOf(athleteId).map(c => c.label), t('coachMobile.messages.and')), name: athleteName })} />
+        <ChatAssignedOnlyNote text={coachNames.length === 0
+          ? t('coachMobile.messages.noCoachAssigned', { name: athleteName })
+          : t('coachMobile.messages.assignedOnly', { coaches: joinNames(coachNames, t('coachMobile.messages.and')), name: athleteName })} />
       ) : chatEnabled ? (
         <div className="shrink-0 border-t px-3 py-2 bg-background">
           {pendingFiles.length > 0 && (

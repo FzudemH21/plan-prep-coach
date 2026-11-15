@@ -355,6 +355,7 @@
       "heading": "Nachrichten",
       "you": "Du",
       "assignedOnly": "Nur {{coaches}} schreiben mit {{name}}.",
+      "noCoachAssigned": "{{name}} ist noch kein Coach zugewiesen — weise in der Desktop-App einen zu, um hier zu schreiben.",
       "and": "und",
       "coach": "Coach",
       "noConnectedAthletes": "Keine verbundenen Athleten",

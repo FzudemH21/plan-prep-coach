@@ -161,8 +161,10 @@ export function AthleteProfileView({
   });
   // Several coaches: only the athlete's assigned coaches write, get the badge and mark as read
   // (hooks/useMyAthletes) — the others read along
-  const { isMine: isMyAthlete, coachesOf } = useMyAthletes();
+  const { isMine: isMyAthlete, canWrite: canWriteTo, coachesOf } = useMyAthletes();
   const chatIsMine = isMyAthlete(athlete.id);
+  const chatCanWrite = canWriteTo(athlete.id);
+  const chatCoachNames = coachesOf(athlete.id).map(c => c.label);
   // Several coaches in this chat: who wrote which message
   const chatSenderNames = useMemo(
     () => chatSenderLabels(chatMessages, { viewer: 'coach', myId: authUser?.id, you: 'You', fallback: 'Coach' }),
@@ -895,7 +897,7 @@ export function AthleteProfileView({
           />
         </TabsContent>
 
-        <TabsContent value="chat" className="flex-1 mt-0 min-h-0 flex flex-col" onFocus={() => { if (chatIsMine) void chatMarkRead(); }}>
+        <TabsContent value="chat" className="flex-1 mt-0 min-h-0 flex flex-col" onFocus={() => { if (chatCanWrite) void chatMarkRead(); }}>
           {!athleteConnection ? (
             <div className="flex flex-col items-center justify-center h-full py-12 text-center px-4">
               <MessageCircle className="h-8 w-8 text-muted-foreground mb-3" />
@@ -955,8 +957,10 @@ export function AthleteProfileView({
                 </div>
                 <div ref={chatBottomRef} />
               </ScrollArea>
-              {!chatIsMine ? (
-                <ChatAssignedOnlyNote text={`Only ${joinNames(coachesOf(athlete.id).map(c => c.label), 'and')} write with ${displayName}.`} />
+              {!chatCanWrite ? (
+                <ChatAssignedOnlyNote text={chatCoachNames.length === 0
+                  ? `No coach is assigned to ${displayName} yet — assign one under Profile → Coaches to write here.`
+                  : `Only ${joinNames(chatCoachNames, 'and')} write with ${displayName}.`} />
               ) : (athleteConnection?.chatEnabled ?? true) ? (
               <div className="shrink-0 border-t px-4 py-3">
                 {/* Pending file chips */}

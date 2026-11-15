@@ -355,6 +355,7 @@
       "heading": "Messages",
       "you": "You",
       "assignedOnly": "Only {{coaches}} write with {{name}}.",
+      "noCoachAssigned": "No coach is assigned to {{name}} yet — assign one in the desktop app to write here.",
       "and": "and",
       "coach": "Coach",
       "noConnectedAthletes": "No connected athletes",

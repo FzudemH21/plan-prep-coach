@@ -1018,7 +1018,7 @@ export default function CoachMobileSessionEditPage() {
   const state = location.state as LocationState | null;
   // Several coaches: only the athlete's assigned coaches reply in the chat (hooks/useMyAthletes)
   const { athleteId: routeAthleteId } = useParams<{ athleteId: string }>();
-  const { isMine } = useMyAthletes();
+  const { canWrite: canWriteTo } = useMyAthletes();
   const originalEntry = useRef<AthleteScheduleEntry | null>(state?.entry ?? null);
   // connectionId from navigation state — used to identify the row by (athlete_connection_id, date)
   // instead of by the row UUID (which changes after every loadSync/autoSync DELETE+UPSERT).
@@ -1758,7 +1758,7 @@ export default function CoachMobileSessionEditPage() {
                     feedback={sessionLog.comment}
                     startedBy={sessionLog.startedBy}
                     exerciseComments={sessionLog.exerciseComments}
-                    canReply={isMine(routeAthleteId)}
+                    canReply={canWriteTo(routeAthleteId)}
                   />
                 )}
 

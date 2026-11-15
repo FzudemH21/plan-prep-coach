@@ -304,7 +304,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   // The account holding the athletes (the organization's for members, lib/dataScope)
   const { dataId: athletesId } = useDataScope('athletes');
   // Several coaches: only the athlete's assigned coaches reply in the chat (hooks/useMyAthletes)
-  const { isMine: isMyAthlete } = useMyAthletes();
+  const { canWrite: canWriteTo } = useMyAthletes();
   const { programs, getProgram } = useTrainingPrograms();
   const athleteData = useAthletes();
   const { data: toolboxData } = useToolboxData();
@@ -3167,7 +3167,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         open={completedSheetOpen}
         onClose={() => { setCompletedSheetOpen(false); setSelectedCompletedLog(null); }}
         connectionId={getConnectionForAthlete(athlete.id)?.id}
-        canReply={isMyAthlete(athlete.id)}
+        canReply={canWriteTo(athlete.id)}
         onTimingChanged={(change, moved) => {
           setSelectedCompletedLog(prev => (prev ? { ...prev, ...change } : prev));
           setSessionLogsVersion(v => v + 1);
