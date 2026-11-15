@@ -183,6 +183,7 @@ const IntensityColumn: React.FC<IntensityColumnProps> = ({
       {dayHeader}
 
       <div
+        data-edit
         className="relative cursor-pointer transition-all duration-200 hover:shadow-md w-full"
         style={{ height: `${chartHeight}px` }}
         onClick={handleColumnClick}

@@ -97,6 +97,7 @@ function NotesEditor({ value, onChange, minHeight, maxViewHeight }: {
   return (
     <div className="relative group rounded-md border bg-background">
       <div
+        data-edit
         className="overflow-y-auto px-3 py-2.5 cursor-text"
         style={{ maxHeight: maxViewHeight }}
         onClick={() => { if (!window.getSelection()?.toString()) setEditing(true); }}

@@ -262,7 +262,9 @@ export default function MesocyclePage() {
 
   // Resolve athlete name from selectedAthleteId
   const selectedAthlete = athletes.find(a => a.id === macrocycleData?.selectedAthleteId);
-  const athleteName = selectedAthlete ? getAthleteDisplayName(selectedAthlete) : undefined;
+  const { athleteName: storedAthleteName } = usePlannerProgram();
+  // An athlete the viewer isn't assigned to isn't in their list — the name stored with the program
+  const athleteName = selectedAthlete ? getAthleteDisplayName(selectedAthlete) : (storedAthleteName ?? undefined);
 
   const totalSteps = 5;
 

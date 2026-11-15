@@ -81,7 +81,7 @@ export function PlanningNavigationMenu({ currentPage, currentPageStep, onChangeC
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon" title="Planning Steps">
+        <Button data-nav variant="outline" size="icon" title="Planning Steps">
           <Menu className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>

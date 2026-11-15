@@ -53,6 +53,7 @@ import { AccumulatedContextDialog } from '@/components/wizard/AccumulatedContext
 import { extractPlanSummary } from '@/lib/planMemory';
 import { SaveToLibraryDialog } from '@/components/session-library/SaveToLibraryDialog';
 import { syncCircuitPlacements } from '@/utils/circuitLibrarySync';
+import { usePlannerProgram } from "@/hooks/useProgramAccess";
 
 // Using ExerciseDistribution, SessionSection, and SupersetMapping from types file
 
@@ -108,7 +109,9 @@ export default function MicrocyclePlanningPage() {
   // Resolve athlete name from selectedAthleteId
   const selectedAthleteId = macrocycleData?.selectedAthleteId;
   const selectedAthlete = athletes.find(a => a.id === selectedAthleteId);
-  const athleteName = selectedAthlete ? getAthleteDisplayName(selectedAthlete) : undefined;
+  const { athleteName: storedAthleteName } = usePlannerProgram();
+  // An athlete the viewer isn't assigned to isn't in their list — the name stored with the program
+  const athleteName = selectedAthlete ? getAthleteDisplayName(selectedAthlete) : (storedAthleteName ?? undefined);
   const anamnesisAIContext = useAnamnesisAIContext(selectedAthleteId ?? null);
   const { user } = useAuth();
   const [accumulatedDialogOpen, setAccumulatedDialogOpen] = useState(false);

@@ -9,6 +9,8 @@ import { snapshotProgram } from '@/lib/programVersions';
 import { bindTabToProgram, programSwitchedElsewhere, ProgramOpenElsewhereError } from '@/lib/wizardTabProgram';
 import { isProgramChatId } from '@/contexts/AIChatContext';
 import { PlanDuration, SmartGoal, SubGoal, Event, TrainableQuality, IntensityLevel } from '@/types/training';
+import { athleteStore } from '@/hooks/useAthletes';
+import { getAthleteDisplayName } from '@/types/athlete';
 
 // Interface for manually added methods
 interface ManuallyAddedMethod {
@@ -422,6 +424,14 @@ export function useTrainingPrograms() {
     if (macrocycleData) {
       name = macrocycleData.planName || 'Untitled Program';
       athleteId = macrocycleData.selectedAthleteId || null;
+      // The athlete's name goes with the program: coaches who aren't assigned to the athlete (and
+      // can't look them up) still see whom the program is for. Unknown here: keep the stored one.
+      if (athleteId) {
+        const athlete = (athleteStore.getState().data?.athletes ?? []).find(a => a.id === athleteId);
+        const activeId = localStorage.getItem('activeProgramId');
+        const stored = activeId ? getProgramStoreState().programs.find(p => p.id === activeId) : undefined;
+        athleteName = athlete ? getAthleteDisplayName(athlete) : (stored?.athleteId === athleteId ? stored.athleteName ?? null : null);
+      }
       if (macrocycleData.smartGoals?.length > 0) primaryGoal = macrocycleData.smartGoals[0].description || '';
       if (macrocycleData.planDuration) {
         const pd = macrocycleData.planDuration;

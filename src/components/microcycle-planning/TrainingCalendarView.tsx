@@ -580,7 +580,7 @@ export function TrainingCalendarView({
             <div className="flex flex-wrap items-center gap-2">
               {/* Main View Toggle: Calendar vs Master Planner */}
               <div className="flex gap-1 border rounded-md p-1">
-                <Button
+                <Button data-nav
                   variant={viewMode !== 'master' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('4week')}
@@ -589,7 +589,7 @@ export function TrainingCalendarView({
                   <LayoutGrid className="h-4 w-4" />
                   Calendar
                 </Button>
-                <Button
+                <Button data-nav
                   variant={viewMode === 'master' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('master')}
@@ -604,7 +604,7 @@ export function TrainingCalendarView({
               {viewMode === 'master' && (
                 <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
                   {([1, 2, 4] as const).map(w => (
-                    <Button
+                    <Button data-nav
                       key={w}
                       variant={masterWeeksToDisplay === w ? 'default' : 'ghost'}
                       size="sm"
@@ -625,12 +625,12 @@ export function TrainingCalendarView({
                   value={viewedMesocycleId}
                   onValueChange={jumpToMesocycle}
                 >
-                  <SelectTrigger className="w-40 h-8">
+                  <SelectTrigger data-nav className="w-40 h-8">
                     <SelectValue placeholder="Mesocycle" />
                   </SelectTrigger>
                   <SelectContent className="z-[200] bg-background border">
                     {mesocycles.map((meso, idx) => (
-                      <SelectItem key={meso.id} value={meso.id}>
+                      <SelectItem data-nav key={meso.id} value={meso.id}>
                         {meso.name || `Mesocycle ${idx + 1}`}
                       </SelectItem>
                     ))}

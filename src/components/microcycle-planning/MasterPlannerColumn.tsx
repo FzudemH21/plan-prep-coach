@@ -404,6 +404,7 @@ const EditableSessionName = memo(({
 
   return (
     <div 
+      data-edit
       className="flex items-center gap-1 cursor-pointer group"
       onClick={(e) => {
         e.stopPropagation();
@@ -479,6 +480,7 @@ const EditableComment = memo(({
         />
       ) : (
         <div 
+          data-edit
           className="text-xs text-muted-foreground bg-muted/30 rounded px-2 py-1 cursor-pointer hover:bg-muted/50"
           onClick={() => setIsExpanded(true)}
         >
@@ -1362,6 +1364,7 @@ export function MasterPlannerColumn({
         {/* Session Header */}
         <div className="flex items-center gap-2 mb-2">
           <button
+            data-open
             type="button"
             className="shrink-0 rounded p-0.5 hover:bg-primary/10"
             title="Open the workout session"
@@ -1424,6 +1427,7 @@ export function MasterPlannerColumn({
               editing the session in place used to open it by accident */}
           {onSessionClick && (
             <Button
+              data-open
               variant="ghost"
               size="sm"
               className="h-6 w-6 p-0 shrink-0 ml-1"

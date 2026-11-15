@@ -4,10 +4,15 @@
  * Organizations: every coach builds their own programs and changes only those (owners and coaches
  * with "edit all" change every program — lib/programStore). Opening someone else's program shows
  * it in the planner with a banner ("Duplicate as my program"), and everything that would change it
- * is blocked: inputs, action buttons, menu actions, drag & drop, typing and paste. Navigation keeps
- * working — buttons marked data-nav (steps, mesocycle / microcycle switching, back to the library),
- * tabs, and anything that only opens or closes (aria-expanded) — so every detail can be looked at.
- * Nothing could be saved anyway: the store and the database refuse changes to the program.
+ * is blocked: inputs, action buttons, menus, dropdowns and pickers, click-to-edit areas (data-edit),
+ * drag & drop, typing and paste. Navigation keeps working — buttons marked data-nav (steps,
+ * mesocycle / microcycle switching, the master planner, back to the library), tabs, expand / collapse
+ * (aria-expanded without a popup, chevron toggles), and opening a session to look at it (data-open,
+ * clicking only — never dragging). Nothing could be saved anyway: the store and the database refuse
+ * changes to the program.
+ *
+ * The listeners are installed once when the app starts (window, capture phase), so they run before
+ * those of any drag & drop library mounted later; they only act while a read-only planner is open.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Copy, Eye, Loader2 } from 'lucide-react';
@@ -17,77 +22,87 @@ import { usePlannerProgram } from '@/hooks/useProgramAccess';
 import { useOrgCoaches } from '@/hooks/useOrgCoaches';
 import { useTrainingPrograms } from '@/hooks/useTrainingPrograms';
 
-/** Elements that act — blocked unless they navigate */
+/** Elements that act — blocked unless they navigate or open something to look at */
 const ACTION = [
   'button', 'input', 'textarea', 'select', 'label', '[role="button"]', '[role="checkbox"]', '[role="switch"]',
   '[role="slider"]', '[role="combobox"]', '[role="option"]', '[role="menuitem"]', '[role="menuitemcheckbox"]',
   '[role="menuitemradio"]', '[role="radio"]', '[role="spinbutton"]', '[contenteditable=""]', '[contenteditable="true"]',
-  '[draggable="true"]', '[aria-roledescription]',
+  '[data-edit]', '[draggable="true"]', '[aria-roledescription]', '[data-rbd-drag-handle-draggable-id]',
 ].join(', ');
-/** Navigation and opening / closing — allowed */
-const NAV = '[data-nav], [role="tab"], [aria-expanded], a[href]';
-/** Content the planner opens outside its own area (dialogs, menus, pickers) */
+/** Things that can be dragged — pressing them is always blocked (a click may still open them) */
+const DRAG = '[draggable="true"], [aria-roledescription], [data-rbd-drag-handle-draggable-id], [data-rbd-draggable-id]';
+/** Content the planner opens outside its own area (dialogs, sheets, menus, pickers) */
 const PORTALS = '[data-radix-popper-content-wrapper], [role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]';
 const TYPING = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
+const PRESS = ['pointerdown', 'mousedown', 'touchstart', 'dragstart'];
+const ACTIVATE = ['click', 'dblclick', 'auxclick', 'mouseup', 'contextmenu', 'drop'];
 
+/** Expand / collapse and stepping buttons: a chevron icon, no popup */
+function isChevronToggle(el: Element): boolean {
+  if (el.hasAttribute('aria-haspopup') || el.getAttribute('role') === 'combobox') return false;
+  return !!el.querySelector(':scope > svg[class*="lucide-chevron-"]');
+}
+
+function navigates(el: Element): boolean {
+  if (el.closest('[data-nav], [data-open], [data-dialog-close]')) return true;
+  if (el.matches('[role="tab"], a[href]')) return true;
+  // Opens / closes a section — but not a dropdown, picker or dialog (those stay closed)
+  if (el.matches('[aria-expanded]') && !el.hasAttribute('aria-haspopup') && el.getAttribute('role') !== 'combobox') return true;
+  return isChevronToggle(el);
+}
+
+const guard: { area: HTMLElement | null } = { area: null };
+
+function inScope(target: EventTarget | null): target is Element {
+  return !!guard.area && target instanceof Element && (guard.area.contains(target) || !!target.closest(PORTALS));
+}
+
+function blocked(target: Element, press: boolean): boolean {
+  if (press && target.closest(DRAG)) return true;
+  const el = target.closest(ACTION);
+  return !!el && !navigates(el);
+}
+
+function stop(e: Event) { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); }
+
+if (typeof window !== 'undefined') {
+  PRESS.forEach(type => window.addEventListener(type, e => { if (inScope(e.target) && blocked(e.target, true)) stop(e); }, { capture: true, passive: false }));
+  ACTIVATE.forEach(type => window.addEventListener(type, e => { if (inScope(e.target) && blocked(e.target, false)) stop(e); }, { capture: true, passive: false }));
+  window.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (!guard.area) return;
+    const t = e.target;
+    if (e.key === 'Escape' || e.key === 'Tab') return;
+    // Shortcuts of the planner (paste, cut, undo, delete) wherever the focus is
+    if ((e.ctrlKey || e.metaKey) && /^[vxzyd]$/i.test(e.key)) { if (!(t instanceof Element) || inScope(t) || t === document.body) stop(e); return; }
+    if (!inScope(t)) {
+      if ((t === document.body || t === document.documentElement) && (e.key === 'Delete' || e.key === 'Backspace')) stop(e);
+      return;
+    }
+    if (t.closest(TYPING) || blocked(t, false)) stop(e);
+  }, { capture: true });
+  ['beforeinput', 'paste', 'cut'].forEach(type => window.addEventListener(type, e => { if (inScope(e.target)) stop(e); }, { capture: true }));
+}
+
+const DIMMED = ':is(button, [role="button"], [role="checkbox"], [role="switch"], [role="radio"], [role="combobox"], [role="menuitem"], [role="option"], [data-edit])'
+  + ':not([data-nav]):not([data-nav] *):not([data-open]):not([data-dialog-close]):not([role="tab"])'
+  + ':not([aria-expanded]:not([aria-haspopup]):not([role="combobox"])):not(:not([aria-haspopup]):not([role="combobox"]):has(> svg[class*="lucide-chevron-"]))';
 const READONLY_CSS = `
-.planner-readonly :is(button, [role="button"], [role="checkbox"], [role="switch"], [role="radio"]):not([data-nav]):not([role="tab"]):not([aria-expanded]),
-body.planner-readonly-open :is([role="dialog"], [data-radix-popper-content-wrapper]) :is(button, [role="button"], [role="menuitem"], [role="option"]):not([data-nav]):not([role="tab"]):not([aria-expanded]):not([data-dialog-close]) {
-  opacity: .45; cursor: not-allowed;
-}
-.planner-readonly :is(input, textarea, select, [aria-roledescription]),
-body.planner-readonly-open [role="dialog"] :is(input, textarea, select) { cursor: not-allowed; }
+.planner-readonly ${DIMMED},
+body.planner-readonly-open :is([role="dialog"], [data-radix-popper-content-wrapper]) ${DIMMED} { opacity: .45; cursor: not-allowed; }
+.planner-readonly :is(input, textarea, select, [aria-roledescription], [data-rbd-drag-handle-draggable-id]),
+body.planner-readonly-open [role="dialog"] :is(input, textarea, select) { cursor: default; }
 `;
-
-function isDialogClose(el: Element): boolean {
-  if (el.hasAttribute('data-dialog-close')) return true;
-  const label = `${el.getAttribute('aria-label') ?? ''} ${el.querySelector('.sr-only')?.textContent ?? ''}`.toLowerCase();
-  return /\bclose\b/.test(label);
-}
 
 function ReadOnlyGuard({ children }: { children: ReactNode }) {
   const area = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
+    guard.area = area.current;
     document.body.classList.add('planner-readonly-open');
-    const inScope = (target: EventTarget | null): target is Element =>
-      target instanceof Element && (!!area.current?.contains(target) || !!target.closest(PORTALS));
-    const blocked = (target: Element): boolean => {
-      const el = target.closest(ACTION);
-      if (!el) return false;
-      if (el.closest(NAV) || isDialogClose(el)) return false;
-      return true;
-    };
-    const stop = (e: Event) => { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); };
-
-    const onPointer = (e: Event) => {
-      if (inScope(e.target) && blocked(e.target)) stop(e);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target;
-      if (e.key === 'Escape' || e.key === 'Tab') return;
-      // Shortcuts of the planner (paste, cut, undo, delete) wherever the focus is
-      if ((e.ctrlKey || e.metaKey) && /^[vxzyd]$/i.test(e.key)) { if (!(t instanceof Element) || inScope(t) || t === document.body) stop(e); return; }
-      if (!inScope(t)) {
-        if ((t === document.body || t === document.documentElement) && (e.key === 'Delete' || e.key === 'Backspace')) stop(e);
-        return;
-      }
-      if (t.closest(TYPING) || blocked(t)) stop(e);
-    };
-    const onInput = (e: Event) => { if (inScope(e.target)) stop(e); };
-
-    const pointerEvents = ['pointerdown', 'mousedown', 'mouseup', 'click', 'dblclick', 'dragstart', 'drop', 'touchstart', 'contextmenu'];
-    pointerEvents.forEach(type => document.addEventListener(type, onPointer, true));
-    document.addEventListener('keydown', onKey, true);
-    ['beforeinput', 'paste', 'cut'].forEach(type => document.addEventListener(type, onInput, true));
     return () => {
+      guard.area = null;
       document.body.classList.remove('planner-readonly-open');
-      pointerEvents.forEach(type => document.removeEventListener(type, onPointer, true));
-      document.removeEventListener('keydown', onKey, true);
-      ['beforeinput', 'paste', 'cut'].forEach(type => document.removeEventListener(type, onInput, true));
     };
   }, []);
-
   return (
     <div ref={area} className="planner-readonly">
       <style>{READONLY_CSS}</style>

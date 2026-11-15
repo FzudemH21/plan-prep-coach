@@ -23,7 +23,7 @@ function activeProgramId(): string | null {
  * The program open in the planner, and whether it's another coach's (then the planner is read-only:
  * only navigation works — see PlannerGate). A program that isn't saved yet is always one's own.
  */
-export function usePlannerProgram(): { readOnly: boolean; programId: string | null; authorId: string | null; name: string } {
+export function usePlannerProgram(): { readOnly: boolean; programId: string | null; authorId: string | null; name: string; athleteName: string | null } {
   const state = useSyncExternalStore(subscribeProgramStore, getProgramStoreState);
   const id = activeProgramId();
   const program = id ? state.programs.find(p => p.id === id) : undefined;
@@ -32,5 +32,7 @@ export function usePlannerProgram(): { readOnly: boolean; programId: string | nu
     programId: program?.id ?? null,
     authorId: program ? programAuthorId(program.id) : null,
     name: program?.name ?? '',
+    // Stored with the program — for athletes the viewer doesn't reach
+    athleteName: program?.athleteName ?? null,
   };
 }

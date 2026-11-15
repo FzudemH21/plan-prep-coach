@@ -110,7 +110,7 @@ export default function MacrocyclePage() {
   const [athleteDropdownOpen, setAthleteDropdownOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   // Another coach's program, opened to look at (PlannerGate): Next only moves on, nothing is checked
-  const { readOnly: plannerReadOnly } = usePlannerProgram();
+  const { readOnly: plannerReadOnly, athleteName: plannerAthleteName } = usePlannerProgram();
   const [planName, setPlanName] = useState<string>("");
   const [planNotes, setPlanNotes] = useState<string>("");
   /** "Goal for another measure": the measure the goal dialog starts with */
@@ -1195,7 +1195,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                     >
                       {selectedAthlete 
                         ? `${getAthleteDisplayName(selectedAthlete)}${selectedAthlete.sport ? ` • ${selectedAthlete.sport}` : ''}`
-                        : "Choose an athlete..."}
+                        : (selectedAthleteId && plannerAthleteName) || "Choose an athlete..."}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>

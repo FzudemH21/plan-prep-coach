@@ -416,6 +416,7 @@ export const TrainingDayCell = React.memo(function TrainingDayCell({
                       
                       return (
                       <div
+                        data-open
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         style={provided.draggableProps.style}
