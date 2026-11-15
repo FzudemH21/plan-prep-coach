@@ -952,16 +952,19 @@
     },
     "rights": {
       "title": "Rights",
-      "titleFor": "Rights of {{name}}",
-      "custom": "custom rights",
       "athletes": "Athletes",
       "programs": "Programs",
       "libraries": "Libraries",
       "health": "Health data (anamnesis, pain)",
       "ai": "AI assistant",
-      "view": "View",
-      "edit": "Edit",
-      "reset": "Back to {{role}} defaults"
+      "short": {
+        "athletes": "Athletes",
+        "programs": "Programs",
+        "libraries": "Libraries",
+        "health": "Health",
+        "ai": "AI"
+      },
+      "legend": "Unticked: view only. Health data and AI unticked: no access."
     }
   }
 }

@@ -1,11 +1,11 @@
 /**
- * Coach Profile → Organization: name, members with roles, invite links (owner), and the deletion
- * log. Phase 3 step 1 — roles are stored, rights and shared data follow in the next step.
+ * Coach Profile → Organization: name, branding (owner), members with role and a rights grid,
+ * invite links (owner), and the deletion log.
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Building2, Copy, Link2, Trash2, UserPlus, X, History, SlidersHorizontal } from 'lucide-react';
-import { Switch } from '@/components/ui/switch';
+import { Building2, Copy, Link2, Trash2, UserPlus, X, History } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -96,7 +96,20 @@ function NameCard({ name, isOwner, onRename }: { name: string; isOwner: boolean;
   );
 }
 
-// ── Members and invites ─────────────────────────────────────────────────────────────────────────
+// ── Members, rights and invites ─────────────────────────────────────────────────────────────────
+
+/** The rights grid: athletes / programs / libraries ticked = may change (else view only), health
+ *  data and AI ticked = on. Owners always have everything. */
+const GRID_RIGHTS = ['athletes', 'programs', 'libraries', 'health', 'ai'] as const;
+type GridRight = typeof GRID_RIGHTS[number];
+const isOn = (rights: OrgRights, k: GridRight): boolean =>
+  k === 'health' || k === 'ai' ? rights[k] : rights[k] === 'edit';
+const toggled = (rights: OrgRights, k: GridRight): OrgRights =>
+  k === 'health' || k === 'ai'
+    ? { ...rights, [k]: !rights[k] }
+    : { ...rights, [k]: rights[k] === 'edit' ? 'view' : 'edit' };
+
+const GRID_COLS = 'grid grid-cols-[minmax(0,1fr)_7rem_repeat(5,3.5rem)_2rem] items-center gap-x-1';
 
 function MembersCard({ org }: { org: ReturnType<typeof useOrganization> }) {
   const { t, i18n } = useTranslation();
@@ -104,7 +117,7 @@ function MembersCard({ org }: { org: ReturnType<typeof useOrganization> }) {
   const { user } = useAuth();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [removing, setRemoving] = useState<OrgMember | null>(null);
-  const [editingRights, setEditingRights] = useState<OrgMember | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
   const fail = (e: unknown) =>
     toast({ title: t(`organization.errors.${(e as Error).message}`, t('organization.errors.unknown')), variant: 'destructive' });
@@ -123,6 +136,12 @@ function MembersCard({ org }: { org: ReturnType<typeof useOrganization> }) {
     org.setRole(m.userId, role).catch(fail);
   };
 
+  const toggleRight = (m: OrgMember, k: GridRight) => {
+    if (!m.rights || busy) return;
+    setBusy(m.userId);
+    org.setRights(m.userId, toggled(m.rights, k)).catch(fail).finally(() => setBusy(null));
+  };
+
   const confirmRemove = () => {
     if (!removing) return;
     org.removeMember(removing.userId)
@@ -130,6 +149,8 @@ function MembersCard({ org }: { org: ReturnType<typeof useOrganization> }) {
       .catch(fail)
       .finally(() => setRemoving(null));
   };
+
+  const hasRights = org.members.some((m) => m.rights);
 
   return (
     <Card>
@@ -142,53 +163,72 @@ function MembersCard({ org }: { org: ReturnType<typeof useOrganization> }) {
           </Button>
         )}
       </CardHeader>
-      <CardContent className="space-y-1">
+      <CardContent>
+        {hasRights && (
+          <div className={`${GRID_COLS} pb-2 border-b text-xs text-muted-foreground`}>
+            <span />
+            <span />
+            {GRID_RIGHTS.map((k) => (
+              <span key={k} className="text-center truncate" title={t(`organization.rights.${k}`)}>
+                {t(`organization.rights.short.${k}`)}
+              </span>
+            ))}
+            <span />
+          </div>
+        )}
         {org.members.map((m) => {
           const isMe = m.userId === user?.id;
+          const canEditRow = org.isOwner && m.role !== 'owner' && !!m.rights;
           return (
-            <div key={m.userId} className="flex items-center gap-3 py-2 border-b last:border-b-0">
-              <div className="min-w-0 flex-1">
+            <div key={m.userId} className={`${GRID_COLS} py-2 border-b last:border-b-0`}>
+              <div className="min-w-0">
                 <p className="text-sm font-medium truncate">
                   {m.name || m.email}
                   {isMe && <span className="text-muted-foreground font-normal"> · {t('organization.members.you')}</span>}
                 </p>
-                {(m.name || m.customRights) && (
-                  <p className="text-xs text-muted-foreground truncate">
-                    {m.name ? m.email : ''}
-                    {m.customRights && <>{m.name ? ' · ' : ''}{t('organization.rights.custom')}</>}
-                  </p>
-                )}
+                {m.name && <p className="text-xs text-muted-foreground truncate">{m.email}</p>}
               </div>
-              {org.isOwner && !isMe ? (
-                <>
+              <div>
+                {org.isOwner && !isMe ? (
                   <Select value={m.role} onValueChange={(v) => changeRole(m, v as OrgRole)}>
-                    <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {(['owner', 'coach', 'intern'] as const).map((r) => (
+                      {(m.role === 'intern' ? ['owner', 'coach', 'intern'] as const : ['owner', 'coach'] as const).map((r) => (
                         <SelectItem key={r} value={r}>{t(`organization.roles.${r}`)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                ) : (
+                  <Badge variant="secondary">{t(`organization.roles.${m.role}`)}</Badge>
+                )}
+              </div>
+              {GRID_RIGHTS.map((k) => (
+                <div key={k} className="flex justify-center">
                   {m.rights && (
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingRights(m)}
-                      aria-label={t('organization.rights.title')}>
-                      <SlidersHorizontal className="h-4 w-4" />
-                    </Button>
+                    <Checkbox
+                      checked={isOn(m.rights, k)}
+                      disabled={!canEditRow || busy === m.userId}
+                      onCheckedChange={() => toggleRight(m, k)}
+                      aria-label={`${t(`organization.rights.${k}`)} — ${m.name || m.email}`}
+                    />
                   )}
+                </div>
+              ))}
+              <div>
+                {org.isOwner && !isMe && (
                   <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setRemoving(m)}
                     aria-label={t('organization.members.remove')}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
-                </>
-              ) : (
-                <Badge variant="secondary">{t(`organization.roles.${m.role}`)}</Badge>
-              )}
+                )}
+              </div>
             </div>
           );
         })}
+        {hasRights && <p className="text-xs text-muted-foreground pt-2">{t('organization.rights.legend')}</p>}
 
         {org.isOwner && org.invites.length > 0 && (
-          <div className="pt-3">
+          <div className="pt-4">
             <p className="text-xs font-medium text-muted-foreground mb-1">{t('organization.invite.open')}</p>
             {org.invites.map((inv) => (
               <div key={inv.id} className="flex items-center gap-3 py-1.5">
@@ -196,7 +236,7 @@ function MembersCard({ org }: { org: ReturnType<typeof useOrganization> }) {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm truncate">{inv.email}</p>
                   <p className="text-xs text-muted-foreground">
-                    {t(`organization.roles.${inv.role}`)} · {t('organization.invite.until', {
+                    {t('organization.invite.until', {
                       date: new Date(inv.expiresAt).toLocaleDateString(i18n.language, { day: 'numeric', month: 'short' }),
                     })}
                   </p>
@@ -214,8 +254,6 @@ function MembersCard({ org }: { org: ReturnType<typeof useOrganization> }) {
           </div>
         )}
       </CardContent>
-
-      <RightsDialog member={editingRights} onClose={() => setEditingRights(null)} onSave={org.setRights} onError={fail} />
 
       <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} createInvite={org.createInvite} onCopy={copy} />
 
@@ -235,67 +273,7 @@ function MembersCard({ org }: { org: ReturnType<typeof useOrganization> }) {
   );
 }
 
-const LEVEL_RIGHTS = ['athletes', 'programs', 'libraries'] as const;
-const SWITCH_RIGHTS = ['health', 'ai'] as const;
-
-function RightsDialog({ member, onClose, onSave, onError }: {
-  member: OrgMember | null;
-  onClose: () => void;
-  onSave: (userId: string, rights: Partial<OrgRights>) => Promise<unknown>;
-  onError: (e: unknown) => void;
-}) {
-  const { t } = useTranslation();
-  const [draft, setDraft] = useState<OrgRights | null>(null);
-  const [busy, setBusy] = useState(false);
-  useEffect(() => setDraft(member?.rights ?? null), [member]);
-
-  const save = async (rights: Partial<OrgRights>) => {
-    if (!member) return;
-    setBusy(true);
-    try { await onSave(member.userId, rights); onClose(); } catch (e) { onError(e); } finally { setBusy(false); }
-  };
-
-  return (
-    <Dialog open={!!member} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{t('organization.rights.titleFor', { name: member?.name || member?.email })}</DialogTitle>
-        </DialogHeader>
-        {draft && (
-          <div className="space-y-3">
-            {LEVEL_RIGHTS.map((k) => (
-              <div key={k} className="flex items-center justify-between gap-3">
-                <Label className="font-normal">{t(`organization.rights.${k}`)}</Label>
-                <Select value={draft[k]} onValueChange={(v) => setDraft({ ...draft, [k]: v as 'view' | 'edit' })}>
-                  <SelectTrigger className="w-28 h-8"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="view">{t('organization.rights.view')}</SelectItem>
-                    <SelectItem value="edit">{t('organization.rights.edit')}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            ))}
-            {SWITCH_RIGHTS.map((k) => (
-              <div key={k} className="flex items-center justify-between gap-3">
-                <Label htmlFor={`right-${k}`} className="font-normal">{t(`organization.rights.${k}`)}</Label>
-                <Switch id={`right-${k}`} checked={draft[k]} onCheckedChange={(c) => setDraft({ ...draft, [k]: c })} />
-              </div>
-            ))}
-          </div>
-        )}
-        <DialogFooter className="gap-2 sm:justify-between">
-          {member?.customRights ? (
-            <Button variant="ghost" onClick={() => save({})} disabled={busy}>
-              {t('organization.rights.reset', { role: t(`organization.roles.${member.role}`) })}
-            </Button>
-          ) : <span />}
-          <Button onClick={() => draft && save(draft)} disabled={busy}>{t('common.save')}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
+/** Everyone joins as Coach with every right; the owner changes rights in the grid afterwards */
 function InviteDialog({ open, onOpenChange, createInvite, onCopy }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -304,20 +282,19 @@ function InviteDialog({ open, onOpenChange, createInvite, onCopy }: {
 }) {
   const { t } = useTranslation();
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<InviteRole>('coach');
   const [code, setCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (open) { setEmail(''); setRole('coach'); setCode(null); setError(null); }
+    if (open) { setEmail(''); setCode(null); setError(null); }
   }, [open]);
 
   const create = async () => {
     setBusy(true);
     setError(null);
     try {
-      setCode(await createInvite(email, role));
+      setCode(await createInvite(email, 'coach'));
     } catch (e) {
       setError(t(`organization.errors.${(e as Error).message}`, t('organization.errors.unknown')));
     } finally {
@@ -349,16 +326,6 @@ function InviteDialog({ open, onOpenChange, createInvite, onCopy }: {
             <div className="space-y-1.5">
               <Label htmlFor="org-invite-email">{t('auth.email')}</Label>
               <Input id="org-invite-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>{t('organization.invite.role')}</Label>
-              <Select value={role} onValueChange={(v) => setRole(v as InviteRole)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="coach">{t('organization.roles.coach')}</SelectItem>
-                  <SelectItem value="intern">{t('organization.roles.intern')}</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <DialogFooter>

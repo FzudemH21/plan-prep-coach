@@ -952,16 +952,19 @@
     },
     "rights": {
       "title": "Rechte",
-      "titleFor": "Rechte von {{name}}",
-      "custom": "eigene Rechte",
       "athletes": "Athleten",
       "programs": "Programme",
       "libraries": "Bibliotheken",
       "health": "Gesundheitsdaten (Anamnese, Schmerz)",
       "ai": "KI-Assistent",
-      "view": "Ansehen",
-      "edit": "Bearbeiten",
-      "reset": "Zurück zu {{role}}-Standard"
+      "short": {
+        "athletes": "Athleten",
+        "programs": "Programme",
+        "libraries": "Bibliotheken",
+        "health": "Gesundheit",
+        "ai": "KI"
+      },
+      "legend": "Nicht angehakt: nur ansehen. Gesundheitsdaten und KI nicht angehakt: kein Zugriff."
     }
   }
 }
