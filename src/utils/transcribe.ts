@@ -28,7 +28,9 @@ export async function transcribeDictation(
   if (!session) throw new Error('Not signed in');
 
   const folder = opts.athleteLocalId || '_dictation';
-  const path = `anamnesis/${opts.coachUserId}/${folder}/dictation_${Date.now()}.${extensionFor(audio.type)}`;
+  // Always in the speaker's own folder (the AI proxy only reads from there; the recording is deleted
+  // right after) — also when a member of an organization dictates into the organization's anamnesis
+  const path = `anamnesis/${session.user.id}/${folder}/dictation_${Date.now()}.${extensionFor(audio.type)}`;
   const { error: upErr } = await supabase.storage
     .from('documents')
     .upload(path, audio, { contentType: audio.type || 'audio/webm', upsert: false });

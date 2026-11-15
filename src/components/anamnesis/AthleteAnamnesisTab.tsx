@@ -68,6 +68,7 @@ import { answerFileCount, contextFor, fieldState, filesKey, formatAnswer } from 
 import { localizeField, localizeSection } from '@/utils/anamnesisI18n';
 import { AnamnesisFieldInput } from '@/components/anamnesis/AnamnesisInputs';
 import { AnswerFiles } from '@/components/anamnesis/AnamnesisFiles';
+import { useDataScope } from '@/hooks/useDataScope';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1332,6 +1333,8 @@ interface AthleteAnamnesisTabProps {
 export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHandled, onUpdateAthlete }: AthleteAnamnesisTabProps) {
   const { toast } = useToast();
   const { user } = useAuth();
+  // The account holding the anamneses (the organization's for members, lib/dataScope)
+  const { dataId: athletesId } = useDataScope('athletes');
   const {
     anamneses, loading, createAnamnesis, updateAnamnesis, deleteAnamnesis,
     sendFormLink, updateFormLink, markProfileApplied,
@@ -1592,7 +1595,7 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
             athlete={athlete}
             consent={selectedRecord ? (anamneses.find(a => a.id === selectedRecord.id) ?? selectedRecord).consent : null}
             formLanguage={selectedRecord?.formLanguage}
-            coachUserId={user?.id ?? ''}
+            coachUserId={athletesId ?? ''}
             onSave={handleSave}
             recordId={selectedRecord?.id}
             onPatch={selectedRecord ? (updates) => updateAnamnesis(selectedRecord.id, updates) : undefined}

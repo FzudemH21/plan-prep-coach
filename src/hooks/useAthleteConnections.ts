@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { patchConnectionProfileData } from '@/utils/athleteProfileSync';
 import { useAuth } from '@/hooks/useAuth';
+import { useDataScope } from '@/hooks/useDataScope';
 import type { MonitoringConfig } from '@/types/athlete';
 
 // ── Metrics snapshot (written by coach app, read by athlete app) ──────────────
@@ -91,23 +92,25 @@ function rowToConnection(row: Record<string, unknown>): AthleteConnection {
 
 export function useAthleteConnections() {
   const { user } = useAuth();
+  // The account holding the athletes (the organization's for members, lib/dataScope)
+  const { dataId: athletesId } = useDataScope('athletes');
   const [connections, setConnections] = useState<AthleteConnection[]>([]);
   const [loading, setLoading] = useState(true);
 
   // `silent`: refresh without the loading state (the page stays as it is meanwhile)
   const load = useCallback(async (silent = false) => {
-    if (!user) return;
+    if (!user || !athletesId) return;
     if (!silent) setLoading(true);
     const { data, error } = await supabase
       .from('athlete_connections')
       .select('*')
-      .eq('coach_user_id', user.id)
+      .eq('coach_user_id', athletesId)
       .order('created_at', { ascending: false });
     if (!error && data) {
       setConnections(data.map(rowToConnection));
     }
     setLoading(false);
-  }, [user]);
+  }, [user, athletesId]);
 
   useEffect(() => { load(); }, [load]);
   const refresh = useCallback(() => load(true), [load]);
@@ -119,11 +122,11 @@ export function useAthleteConnections() {
     athleteEmail?: string,
     initialProfileData?: AthleteProfileData,
   ): Promise<AthleteConnection> => {
-    if (!user) throw new Error('Not authenticated');
+    if (!user || !athletesId) throw new Error('Not authenticated');
     const { data, error } = await supabase
       .from('athlete_connections')
       .insert({
-        coach_user_id: user.id,
+        coach_user_id: athletesId,
         athlete_local_id: athleteLocalId,
         athlete_name: athleteName,
         athlete_email: athleteEmail ?? null,
@@ -135,7 +138,7 @@ export function useAthleteConnections() {
     const conn = rowToConnection(data as Record<string, unknown>);
     setConnections(prev => [conn, ...prev]);
     return conn;
-  }, [user]);
+  }, [user, athletesId]);
 
   /** Sync coach-edited fields into the shared profile_data column: `patch` is merged onto the
    *  current server copy (see patchConnectionProfileData), never a whole copy from this page. */

@@ -507,6 +507,17 @@ export function useRecordStore<T>(store: RecordStore<T>): [T, (next: T) => Promi
 }
 
 /**
+ * Loads a store for the logged-in person from outside a component — in the organization's account
+ * when the store's area is shared (lib/dataScope). Returns the account used.
+ */
+export async function ensureLoadedForUser<T>(store: RecordStore<T>, ownUserId: string): Promise<string> {
+  const scope = await resolveDataScope(ownUserId);
+  const dataId = dataIdFor(scope, store.area);
+  await store.ensureLoaded(dataId, loadOptions(scope, store.area));
+  return dataId;
+}
+
+/**
  * Change a store from outside a component (e.g. an exercise rename carried into every template).
  * Loads the store first if needed; `update` returns the same object when nothing changed.
  */

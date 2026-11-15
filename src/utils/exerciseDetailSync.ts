@@ -10,6 +10,7 @@
  */
 import { supabase } from '@/lib/supabase';
 import type { ExerciseSummary, CircuitExerciseSummary, SessionSummary } from '@/utils/athleteScheduleSync';
+import { currentDataId } from '@/lib/dataScope';
 
 export async function syncExerciseDetailToSchedule(
   exerciseId: string,
@@ -17,14 +18,15 @@ export async function syncExerciseDetailToSchedule(
   description: string | undefined,
 ): Promise<void> {
   try {
-    const { data: authData } = await supabase.auth.getUser();
-    if (!authData.user) return;
+    // The account holding the athletes (the organization's for members, lib/dataScope)
+    const athletesId = await currentDataId('athletes');
+    if (!athletesId) return;
 
     // Get all athlete connections for this coach
     const { data: connections } = await supabase
       .from('athlete_connections')
       .select('id')
-      .eq('coach_user_id', authData.user.id);
+      .eq('coach_user_id', athletesId);
 
     if (!connections?.length) return;
     const connectionIds = connections.map(c => c.id as string);

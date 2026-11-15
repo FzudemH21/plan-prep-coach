@@ -11,6 +11,7 @@
 import { supabase } from '@/lib/supabase';
 import type { AthleteProfileData } from '@/hooks/useAthleteConnections';
 import type { Athlete, CustomMetricBlockConfig, MonitoringBlock, MonitoringConfig } from '@/types/athlete';
+import { currentDataId } from '@/lib/dataScope';
 
 type AthleteUpdates = Partial<Omit<Athlete, 'id' | 'createdAt'>>;
 
@@ -125,8 +126,8 @@ export async function syncAthleteProfileToApp(
   const patch = profileDataPatch(athlete, updates);
   if (Object.keys(patch).length === 0) return [];
 
-  const { data: authData } = await supabase.auth.getUser();
-  const userId = authData.user?.id;
+  // The account holding the athletes (the organization's for members, lib/dataScope)
+  const userId = await currentDataId('athletes');
   if (!userId) return [];
 
   const { data: rows, error } = await supabase

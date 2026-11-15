@@ -16,6 +16,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useDataScope } from '@/hooks/useDataScope';
 
 const PREFIX = 'athlete-assignment-';
 const TABLE = 'athlete_assignment_plans';
@@ -126,8 +127,9 @@ export function ensureAssignmentPlansLoaded(uid: string): Promise<void> {
 
 /** True once the plans are in step for the signed-in coach (the calendar waits for it) */
 export function useAssignmentPlansReady(): boolean {
-  const { user, loading } = useAuth();
-  const uid = user?.id ?? null;
+  const { loading } = useAuth();
+  // The account holding the athletes' plans (the organization's for members, lib/dataScope)
+  const { dataId: uid } = useDataScope('athletes');
   const [readyFor, setReadyFor] = useState<string | null>(null);
   useEffect(() => {
     if (!uid) return;

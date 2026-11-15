@@ -96,6 +96,9 @@ export const calendarEventsStore = createRecordStore<CalendarEventsStore>({
   store: 'calendar_events',
   legacyTable: 'calendar_events',
   label: 'tests and events',
+  // Athlete data: the organization's for members (lib/dataScope); may be empty (no tests / events yet)
+  area: 'athletes',
+  sharedMayBeEmpty: true,
   defaultValue: () => ({}),
   migrate: raw => (raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as CalendarEventsStore : {}),
   split: data => splitMap(data, 'a:'),

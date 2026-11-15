@@ -15,6 +15,7 @@ import type { ToolboxEntry } from '@/types/toolbox';
 import { eventDateList, eventEndDate, isMultiDayEvent, type CalendarEvent } from '@/hooks/useCalendarEvents';
 import { evaluateFormula, parseNumeric } from '@/utils/formulaEvaluator';
 import { isRestIntensity } from '@/utils/intensityScale';
+import { dataIdFor, resolveDataScope } from '@/lib/dataScope';
 
 /** Percentage units — values like 80 represent 0.80 and must be ÷100 before formula evaluation */
 const PCT_UNITS = new Set(['%', '%1RM', '%BW', '%maxV', '%maxHR']);
@@ -338,7 +339,8 @@ export async function syncAthleteSchedule(
 
   const [exerciseDetails, prefetchResult] = await Promise.all([
     coachUser
-      ? buildExerciseDetailMap(coachUser.id)
+      // The organization's exercise library for members (lib/dataScope)
+      ? resolveDataScope(coachUser.id).then(scope => buildExerciseDetailMap(dataIdFor(scope, 'libraries')))
       : Promise.resolve(new Map<string, { videoUrl?: string; description?: string }>()),
     pMin && pMax
       ? supabase

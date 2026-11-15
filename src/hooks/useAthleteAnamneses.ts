@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useDataScope } from '@/hooks/useDataScope';
 import { notifyAnamnesisChanged } from '@/hooks/useAnamnesisCalendarSync';
 import { removeAnamnesisFormFiles } from '@/utils/athleteDataDeletion';
 import type {
@@ -89,19 +90,21 @@ function fromDb(row: DbAnamnesis): AthleteAnamnesis {
 
 export function useAthleteAnamneses(athleteLocalId: string) {
   const { user } = useAuth();
+  // The account holding the athletes (the organization's for members, lib/dataScope)
+  const { dataId: athletesId } = useDataScope('athletes');
   const [anamneses, setAnamneses] = useState<AthleteAnamnesis[]>([]);
   // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
   const [loading, setLoading] = useState(!!athleteLocalId);
 
   const fetchAnamneses = useCallback(async () => {
     if (!athleteLocalId) { setLoading(false); return; }
-    if (!user) return;
+    if (!user || !athletesId) return;
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('athlete_anamneses')
         .select('*')
-        .eq('coach_user_id', user.id)
+        .eq('coach_user_id', athletesId)
         .eq('athlete_local_id', athleteLocalId)
         .order('conducted_at', { ascending: false });
 
@@ -112,7 +115,7 @@ export function useAthleteAnamneses(athleteLocalId: string) {
     } finally {
       setLoading(false);
     }
-  }, [user, athleteLocalId]);
+  }, [user, athletesId, athleteLocalId]);
 
   useEffect(() => {
     fetchAnamneses();
@@ -125,10 +128,10 @@ export function useAthleteAnamneses(athleteLocalId: string) {
 
   const createAnamnesis = useCallback(
     async (payload: Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'createdAt' | 'updatedAt'>): Promise<AthleteAnamnesis | null> => {
-      if (!user) return null;
+      if (!user || !athletesId) return null;
       try {
         const values: Record<string, unknown> = {
-          coach_user_id: user.id,
+          coach_user_id: athletesId,
           athlete_local_id: payload.athleteLocalId,
           template_id: payload.templateId,
           template_snapshot: payload.templateSnapshot,
@@ -211,7 +214,7 @@ export function useAthleteAnamneses(athleteLocalId: string) {
       const { data, error } = await supabase
         .from('athlete_anamneses')
         .insert({
-          coach_user_id: user.id,
+          coach_user_id: athletesId,
           athlete_local_id: athleteLocalId,
           template_id: templateId,
           template_snapshot: templateSnapshot,
@@ -231,7 +234,7 @@ export function useAthleteAnamneses(athleteLocalId: string) {
       setAnamneses((prev) => [created, ...prev]);
       return created;
     },
-    [user, athleteLocalId],
+    [user, athletesId, athleteLocalId],
   );
 
   /** Form link changes: renew (new key, 14 more days) or withdraw (the link stops working) */

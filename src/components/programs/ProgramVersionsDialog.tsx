@@ -3,11 +3,11 @@ import { format } from 'date-fns';
 import { Loader2, RotateCcw } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useTrainingPrograms, type TrainingProgram } from '@/hooks/useTrainingPrograms';
 import { useWizardData } from '@/contexts/WizardDataContext';
 import { getProgramVersion, listProgramVersions, type ProgramVersionSummary } from '@/lib/programVersions';
+import { useDataScope } from '@/hooks/useDataScope';
 
 const REASON_LABEL: Record<string, string> = {
   edit: 'Saved',
@@ -23,7 +23,8 @@ interface Props {
 
 /** Earlier versions of one program — any of them can be restored (the current state is kept first) */
 export function ProgramVersionsDialog({ program, onOpenChange }: Props) {
-  const { user } = useAuth();
+  // The organization's programs for members (lib/dataScope)
+  const { dataId: programsId } = useDataScope('programs');
   const { toast } = useToast();
   const { restoreProgramVersion, loadProgramIntoSession } = useTrainingPrograms();
   const { loadWizardSession } = useWizardData();
@@ -32,13 +33,13 @@ export function ProgramVersionsDialog({ program, onOpenChange }: Props) {
   const [restoringId, setRestoringId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!program || !user) return;
+    if (!program || !programsId) return;
     setVersions(null);
     setError('');
-    listProgramVersions(user.id, program.id)
+    listProgramVersions(programsId, program.id)
       .then(setVersions)
       .catch(() => setError('The version history is not available yet.'));
-  }, [program, user]);
+  }, [program, programsId]);
 
   const restore = async (version: ProgramVersionSummary) => {
     setRestoringId(version.id);

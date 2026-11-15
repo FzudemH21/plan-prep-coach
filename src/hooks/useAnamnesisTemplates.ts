@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useDataScope } from '@/hooks/useDataScope';
 import type { AnamnesisTemplate, AnamnesisSection, AnamnesisLang, AnamnesisTemplateTranslation, AnamnesisProfileSteps } from '@/types/anamnesis';
 
 /** Main language + translation of name / intro (columns of migration 20261019) and the "About
@@ -71,6 +72,8 @@ let inflight: Promise<void> | null = null;
 
 export function useAnamnesisTemplates() {
   const { user } = useAuth();
+  // The account holding the athletes (the organization's for members, lib/dataScope)
+  const { dataId: athletesId } = useDataScope('athletes');
   const [templates, setTemplates] = useState<AnamnesisTemplate[]>(shared);
   // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
   const [loading, setLoading] = useState(shared.length === 0);
@@ -82,7 +85,7 @@ export function useAnamnesisTemplates() {
   }, []);
 
   const fetchTemplates = useCallback(async () => {
-    if (!user) return;
+    if (!user || !athletesId) return;
     if (inflight) { await inflight; setLoading(false); return; }
     setLoading(true);
     inflight = (async () => {
@@ -90,7 +93,7 @@ export function useAnamnesisTemplates() {
         const { data, error } = await supabase
           .from('anamnesis_templates')
           .select('*')
-          .eq('coach_user_id', user.id)
+          .eq('coach_user_id', athletesId)
           .order('created_at', { ascending: true });
 
         if (error) throw error;
@@ -100,7 +103,7 @@ export function useAnamnesisTemplates() {
           const { data: seeded } = await supabase
             .from('anamnesis_templates')
             .insert({
-              coach_user_id: user.id,
+              coach_user_id: athletesId,
               name: DEFAULT_ANAMNESIS_TEMPLATE.name,
               sections: DEFAULT_ANAMNESIS_TEMPLATE.sections,
             })
@@ -115,7 +118,7 @@ export function useAnamnesisTemplates() {
       }
     })();
     try { await inflight; } finally { inflight = null; setLoading(false); }
-  }, [user]);
+  }, [user, athletesId]);
 
   // Fresh from the database whenever a component using the list mounts (dialogs mount on open)
   useEffect(() => {
@@ -124,10 +127,10 @@ export function useAnamnesisTemplates() {
 
   const createTemplate = useCallback(
     async (name: string, sections: AnamnesisSection[], introText?: string, languageInfo?: TemplateLanguageInfo): Promise<AnamnesisTemplate | null> => {
-      if (!user) return null;
+      if (!user || !athletesId) return null;
       try {
         // intro_text only when there is one (the column comes with migration 20261007)
-        const base = { coach_user_id: user.id, name, sections, ...(introText?.trim() ? { intro_text: introText.trim() } : {}) };
+        const base = { coach_user_id: athletesId, name, sections, ...(introText?.trim() ? { intro_text: introText.trim() } : {}) };
         const insert = (row: Record<string, unknown>) => supabase.from('anamnesis_templates').insert(row).select().single();
         let { data, error } = await insert({ ...base, ...languageColumns(languageInfo) });
         if (error && missingLanguageColumn(error.message)) {

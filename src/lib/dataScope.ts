@@ -12,8 +12,8 @@ import { supabase } from '@/lib/supabase';
 
 export type DataArea = 'libraries' | 'programs' | 'athletes';
 
-/** Areas members share with their organization so far */
-const SHARED_AREAS: ReadonlySet<DataArea> = new Set<DataArea>(['libraries']);
+/** Areas members share with their organization */
+const SHARED_AREAS: ReadonlySet<DataArea> = new Set<DataArea>(['libraries', 'athletes', 'programs']);
 
 export interface DataScope {
   /** The logged-in person */
@@ -66,4 +66,23 @@ export function canEditIn(scope: DataScope, area: DataArea | undefined): boolean
 /** Whether the area's data belongs to someone else's account (the organization's) */
 export function isSharedIn(scope: DataScope, area: DataArea | undefined): boolean {
   return dataIdFor(scope, area) !== scope.userId;
+}
+
+/** For loaders: the account to use, whether it is the organization's, and whether saving is allowed */
+export interface AreaAccess {
+  dataId: string;
+  shared: boolean;
+  canEdit: boolean;
+}
+
+export async function areaAccess(ownUserId: string, area: DataArea): Promise<AreaAccess> {
+  const scope = await resolveDataScope(ownUserId);
+  return { dataId: dataIdFor(scope, area), shared: isSharedIn(scope, area), canEdit: canEditIn(scope, area) };
+}
+
+/** The account whose data this area uses for the logged-in person (null when logged out) */
+export async function currentDataId(area: DataArea): Promise<string | null> {
+  const { data } = await supabase.auth.getUser();
+  const ownId = data.user?.id;
+  return ownId ? dataIdFor(await resolveDataScope(ownId), area) : null;
 }

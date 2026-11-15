@@ -23,9 +23,13 @@
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/hooks/use-toast';
 import type { TrainingProgram } from '@/hooks/useTrainingPrograms';
+import { areaAccess } from '@/lib/dataScope';
 
 const TABLE = 'program_records';
 const LEGACY_TABLE = 'training_programs';
+/** Loaded from the organization's account (members): no copy from the old table; saving needs the right */
+let sharedMode = false;
+let editable = true;
 /** Newest change of the old shared row this browser has already copied over (per coach) */
 const legacySeenKey = (userId: string) => `programRecordsLegacySeen_${userId}`;
 const LOAD_ATTEMPTS = 3;
@@ -256,7 +260,7 @@ async function loadRowsMode(userId: string): Promise<boolean> {
     metas = await withRetries('loading the program list', async () =>
       await supabase.from(TABLE).select('id, last_modified_at, deleted_at').eq('coach_user_id', userId)) as Meta[];
   } catch (err) {
-    if (isMissingTable(err as { code?: string; message?: string })) return false; // SQL not run yet
+    if (isMissingTable(err as { code?: string; message?: string }) && !sharedMode) return false; // SQL not run yet
     throw err;
   }
 
@@ -271,7 +275,8 @@ async function loadRowsMode(userId: string): Promise<boolean> {
   const metaById = new Map(metas.map(m => [m.id, m]));
 
   // The old shared row: copy over what is newer there (all of it on the first load)
-  const legacyMeta = await withRetries('checking the old program list', async () =>
+  // (only the account's own person — a member never reads or copies the owner's old row)
+  const legacyMeta = sharedMode ? null : await withRetries('checking the old program list', async () =>
     await supabase.from(LEGACY_TABLE).select('updated_at').eq('user_id', userId).maybeSingle()) as { updated_at: string | null } | null;
   const legacyChangedAt = legacyMeta?.updated_at ?? '';
   let seen = '';
@@ -307,12 +312,17 @@ async function loadRowsMode(userId: string): Promise<boolean> {
   return true;
 }
 
-/** Loads the coach's programs once per tab (again after a failed load) */
-export function ensureProgramsLoaded(userId: string): Promise<void> {
+/**
+ * Loads the coach's programs once per tab (again after a failed load). userId: the account whose
+ * programs to load — for a member of an organization the organization's (see lib/dataScope).
+ */
+export function ensureProgramsLoaded(userId: string, options?: { shared?: boolean; canEdit?: boolean }): Promise<void> {
   if (state.userId !== userId) {
     state = { userId, ...EMPTY };
     loadPromise = null;
   }
+  sharedMode = !!options?.shared;
+  editable = options?.canEdit ?? true;
   if (state.status === 'loaded') return Promise.resolve();
   if (loadPromise) return loadPromise;
   setState({ status: 'loading' });
@@ -346,6 +356,10 @@ function requireLoaded(): string {
     warnNotLoaded();
     throw new ProgramsNotLoadedError();
   }
+  if (!editable) {
+    toast({ title: 'Not saved', description: 'You can view the programs, but not change them.', variant: 'destructive' });
+    throw new Error('No right to change the programs');
+  }
   return state.userId;
 }
 
@@ -377,7 +391,8 @@ export async function updateAllPrograms(updater: (program: TrainingProgram) => T
   if (!state.userId || state.status !== 'loaded') {
     const { data } = await supabase.auth.getUser();
     if (!data.user) return 0;
-    await ensureProgramsLoaded(data.user.id);
+    const access = await areaAccess(data.user.id, 'programs');
+    await ensureProgramsLoaded(access.dataId, access);
   }
   if (state.status !== 'loaded') throw new ProgramsNotLoadedError();
   const changed = state.programs.map(updater).filter((next, i) => next !== state.programs[i]);

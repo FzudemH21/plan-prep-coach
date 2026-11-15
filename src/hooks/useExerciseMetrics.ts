@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useDataScope } from '@/hooks/useDataScope';
 
 // ── Raw shape of sets_logged rows ─────────────────────────────────────────────
 
@@ -90,6 +91,8 @@ const LEGACY_LS_PREFIX = 'exercise_param_tags_';
 
 export function useExerciseMetrics(connectionId: string | null) {
   const { user } = useAuth();
+  // The account holding the athletes (the organization's for members, lib/dataScope)
+  const { dataId: athletesId } = useDataScope('athletes');
   const [rawLogs, setRawLogs] = useState<RawSessionLog[]>([]);
   // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
   const [loading, setLoading] = useState(!!connectionId);
@@ -98,11 +101,11 @@ export function useExerciseMetrics(connectionId: string | null) {
   // ── Load param tags from Supabase (with localStorage migration) ────────────
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !athletesId) return;
     supabase
       .from('exercise_param_tags')
       .select('exercise_name, weight_param, reps_param, rir_param')
-      .eq('coach_user_id', user.id)
+      .eq('coach_user_id', athletesId)
       .then(({ data }) => {
         const dbMap: Record<string, ParamTags> = {};
         for (const row of (data ?? [])) {
@@ -121,7 +124,7 @@ export function useExerciseMetrics(connectionId: string | null) {
             const lsTags = JSON.parse(lsRaw) as Record<string, ParamTags>;
             if (Object.keys(lsTags).length > 0 && Object.keys(dbMap).length === 0) {
               const rows = Object.entries(lsTags).map(([name, tags]) => ({
-                coach_user_id: user.id,
+                coach_user_id: athletesId,
                 exercise_name: name,
                 weight_param: tags.weightParam,
                 reps_param: tags.repsParam,
@@ -140,12 +143,12 @@ export function useExerciseMetrics(connectionId: string | null) {
 
         setParamTagsState(dbMap);
       });
-  }, [user]);
+  }, [user, athletesId]);
 
   // ── Save / delete param tags ───────────────────────────────────────────────
 
   const setParamTags = useCallback((exerciseName: string, tags: ParamTags | null) => {
-    if (!user) return;
+    if (!user || !athletesId) return;
     // Optimistic state update
     setParamTagsState(prev => {
       const next = { ...prev };
@@ -158,14 +161,14 @@ export function useExerciseMetrics(connectionId: string | null) {
       supabase
         .from('exercise_param_tags')
         .delete()
-        .eq('coach_user_id', user.id)
+        .eq('coach_user_id', athletesId)
         .eq('exercise_name', exerciseName)
         .then(() => {});
     } else {
       supabase
         .from('exercise_param_tags')
         .upsert({
-          coach_user_id: user.id,
+          coach_user_id: athletesId,
           exercise_name: exerciseName,
           weight_param: tags.weightParam,
           reps_param: tags.repsParam,
@@ -174,7 +177,7 @@ export function useExerciseMetrics(connectionId: string | null) {
         }, { onConflict: 'coach_user_id,exercise_name' })
         .then(() => {});
     }
-  }, [user]);
+  }, [user, athletesId]);
 
   // ── Fetch session logs ─────────────────────────────────────────────────────
 

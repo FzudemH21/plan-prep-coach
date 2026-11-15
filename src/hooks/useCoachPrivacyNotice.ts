@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useDataScope } from '@/hooks/useDataScope';
 import { useCoachProfile } from '@/hooks/useCoachProfile';
 
 export interface CoachPrivacyNotice {
@@ -24,6 +25,8 @@ const EMPTY: CoachPrivacyNotice = { noticeDe: '', noticeEn: '', contactEmail: ''
 
 export function useCoachPrivacyNotice() {
   const { user } = useAuth();
+  // The account holding the athletes (the organization's for members, lib/dataScope)
+  const { dataId: athletesId } = useDataScope('athletes');
   const { profile } = useCoachProfile();
   const [notice, setNotice] = useState<CoachPrivacyNotice | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,13 +37,13 @@ export function useCoachPrivacyNotice() {
   const contactEmail = notice?.contactEmail?.trim() || profileEmail;
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !athletesId) return;
     let cancelled = false;
     (async () => {
       const { data } = await supabase
         .from('coach_privacy_notices')
         .select('notice_de, notice_en, contact_email, version, updated_at')
-        .eq('coach_user_id', user.id)
+        .eq('coach_user_id', athletesId)
         .maybeSingle();
       if (cancelled) return;
       setNotice(data ? {
@@ -53,7 +56,7 @@ export function useCoachPrivacyNotice() {
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, athletesId]);
 
   const save = useCallback(async (texts: { noticeDe: string; noticeEn: string; contactEmail: string }): Promise<void> => {
     if (!user) throw new Error('Not signed in');
@@ -63,7 +66,7 @@ export function useCoachPrivacyNotice() {
     const version = current.version === 0 ? 1 : changed ? current.version + 1 : current.version;
     const now = new Date().toISOString();
     const { error } = await supabase.from('coach_privacy_notices').upsert({
-      coach_user_id: user.id,
+      coach_user_id: athletesId,
       company_name: companyName,
       contact_email: texts.contactEmail.trim(),
       notice_de: texts.noticeDe,
@@ -77,7 +80,7 @@ export function useCoachPrivacyNotice() {
         : error.message);
     }
     setNotice({ ...texts, contactEmail: texts.contactEmail.trim(), version, updatedAt: now });
-  }, [user, notice, companyName]);
+  }, [user, athletesId, notice, companyName]);
 
   return { notice, companyName, contactEmail, profileEmail, loading, save };
 }

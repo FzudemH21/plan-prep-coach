@@ -9,6 +9,7 @@
  * Needs supabase/migrations/20261011_session_comments.sql — without it these calls fail quietly.
  */
 import { supabase } from '@/lib/supabase';
+import { currentDataId } from '@/lib/dataScope';
 
 export interface ExerciseComment {
   id: string;
@@ -122,12 +123,13 @@ export async function fetchCoachRemarks(sessionLogIds: string[]): Promise<Map<st
 
 /** Upsert only the given columns of the coach's remarks row (the others keep their values) */
 async function upsertRemarks(sessionLogId: string, athleteConnectionId: string, fields: Record<string, unknown>): Promise<string | null> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return 'Not signed in';
+  // The account holding the athletes (the organization's for members, lib/dataScope)
+  const athletesId = await currentDataId('athletes');
+  if (!athletesId) return 'Not signed in';
   const { error } = await supabase
     .from('coach_session_remarks')
     .upsert({
-      coach_user_id: user.id,
+      coach_user_id: athletesId,
       session_log_id: sessionLogId,
       athlete_connection_id: athleteConnectionId,
       ...fields,

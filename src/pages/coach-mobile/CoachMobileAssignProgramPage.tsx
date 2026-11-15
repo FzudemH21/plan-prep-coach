@@ -39,6 +39,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
 import type { AssignedMesocycle, ReviewedSubGoal, ReviewedEvent } from '@/types/athlete';
 import type { SubGoal, Event as TrainingEvent } from '@/types/training';
+import { useDataScope } from '@/hooks/useDataScope';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -328,6 +329,8 @@ export default function CoachMobileAssignProgramPage() {
   const { data: toolboxData } = useToolboxData();
   const { data: parametersData } = useParametersDataV2();
   const { user } = useAuth();
+  // The account holding the athletes (the organization's for members, lib/dataScope)
+  const { dataId: athletesId } = useDataScope('athletes');
 
   const athlete = athletes.find(a => a.id === athleteId);
   const connection = connections.find(c => c.athleteLocalId === athleteId);
@@ -669,7 +672,7 @@ export default function CoachMobileAssignProgramPage() {
               supabase
                 .from('exercise_param_tags')
                 .select('exercise_name, weight_param, reps_param, rir_param')
-                .eq('coach_user_id', user.id),
+                .eq('coach_user_id', athletesId ?? user.id),
               supabase
                 .from('athlete_session_logs')
                 .select('date, sets_logged')

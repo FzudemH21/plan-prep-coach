@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useAuth } from './useAuth';
 import {
   ensureProgramsLoaded, getProgramStoreState, markProgramDeleted, putPrograms, resetProgramStore, subscribeProgramStore,
 } from '@/lib/programStore';
 import { savePlanMemory } from '@/lib/planMemory';
+import { areaAccess, type AreaAccess } from '@/lib/dataScope';
 import { snapshotProgram } from '@/lib/programVersions';
 import { bindTabToProgram, programSwitchedElsewhere, ProgramOpenElsewhereError } from '@/lib/wizardTabProgram';
 import { isProgramChatId } from '@/contexts/AIChatContext';
@@ -184,11 +185,20 @@ export function useTrainingPrograms() {
   const { user, loading: authLoading } = useAuth();
   // One row per program, shared by every component of this tab (see programStore.ts)
   const store = useSyncExternalStore(subscribeProgramStore, getProgramStoreState);
+  // The programs' account: the organization's for members (lib/dataScope)
+  const [access, setAccess] = useState<AreaAccess | null>(null);
   useEffect(() => {
-    if (user) void ensureProgramsLoaded(user.id);
-    else if (!authLoading) resetProgramStore();
-  }, [user, authLoading]);
-  const ownStore = !!user && store.userId === user.id;
+    if (!user) { setAccess(null); return; }
+    let cancelled = false;
+    void areaAccess(user.id, 'programs').then((a) => { if (!cancelled) setAccess(a); });
+    return () => { cancelled = true; };
+  }, [user]);
+  useEffect(() => {
+    if (user && access) void ensureProgramsLoaded(access.dataId, access);
+    else if (!user && !authLoading) resetProgramStore();
+  }, [user, authLoading, access]);
+  const dataId = access?.dataId ?? null;
+  const ownStore = !!dataId && store.userId === dataId;
   const isLoading = user ? !ownStore || store.status === 'idle' || store.status === 'loading' : authLoading;
   const data = useMemo<TrainingProgramsData>(() => ({
     version: 1,
@@ -221,9 +231,9 @@ export function useTrainingPrograms() {
         };
         await putPrograms([updated]);
         // Persist summary to plan_memory in the background (non-blocking)
-        if (user) savePlanMemory(updated, user.id).catch(() => {});
+        if (dataId) savePlanMemory(updated, dataId).catch(() => {});
         // Version history in the background (at most one version per hour; never blocks the save)
-        if (user) void snapshotProgram(updated, user.id);
+        if (dataId) void snapshotProgram(updated, dataId);
         return updated;
       }
     }
@@ -254,10 +264,10 @@ export function useTrainingPrograms() {
 
     await putPrograms([newProgram]);
     // Persist summary to plan_memory in the background (non-blocking)
-    if (user) savePlanMemory(newProgram, user.id).catch(() => {});
-    if (user) void snapshotProgram(newProgram, user.id);
+    if (dataId) savePlanMemory(newProgram, dataId).catch(() => {});
+    if (dataId) void snapshotProgram(newProgram, dataId);
     return newProgram;
-  }, [user]);
+  }, [dataId]);
 
   // Copy a program
   const copyProgram = useCallback(async (id: string): Promise<TrainingProgram | null> => {
@@ -285,10 +295,10 @@ export function useTrainingPrograms() {
 
     // Its last state stays in the version history (and in its row, marked deleted), so a deleted
     // program can be brought back
-    if (user) void snapshotProgram(data.programs[index], user.id, 'deleted');
+    if (dataId) void snapshotProgram(data.programs[index], dataId, 'deleted');
     await markProgramDeleted(id);
     return true;
-  }, [data, user]);
+  }, [data, dataId]);
 
   /**
    * Puts a program back to an earlier version (also a deleted one). The state it has now is kept
@@ -296,11 +306,11 @@ export function useTrainingPrograms() {
    */
   const restoreProgramVersion = useCallback(async (version: TrainingProgram): Promise<TrainingProgram> => {
     const current = data.programs.find(p => p.id === version.id);
-    if (current && user) await snapshotProgram(current, user.id, 'before-restore');
+    if (current && dataId) await snapshotProgram(current, dataId, 'before-restore');
     const restored: TrainingProgram = { ...version, lastModifiedAt: new Date().toISOString() };
     await putPrograms([restored]);
     return restored;
-  }, [data, user]);
+  }, [data, dataId]);
 
   /**
    * Before the session is replaced, write the open program's extra wizard state into it.
@@ -511,7 +521,7 @@ export function useTrainingPrograms() {
       new Date(b.lastModifiedAt).getTime() - new Date(a.lastModifiedAt).getTime()
     );
     return limit ? sorted.slice(0, limit) : sorted;
-  }, [data.programs]);
+  }, [data.programs, dataId]);
 
   return {
     programs: data.programs,

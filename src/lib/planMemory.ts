@@ -155,7 +155,7 @@ export async function savePlanMemory(
   if (athleteId) {
     try {
       const { loadAthletesForCoach } = await import('@/hooks/useAthletes');
-      const athletes = await loadAthletesForCoach(coachId);
+      const athletes = await loadAthletesForCoach();
       const athlete = athletes.find((a) => a.id === athleteId);
       if (athlete) {
         athleteSport = athlete.sport ?? null;

@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useDataScope } from '@/hooks/useDataScope';
 import { eventEndDate, useCalendarEvents, type AnamnesisEventSource, type CalendarEvent } from '@/hooks/useCalendarEvents';
 import { patchScheduleEvents } from '@/utils/athleteScheduleSync';
 import { contextFor, fieldState, parseDateRanges } from '@/utils/anamnesisAnswers';
@@ -42,6 +43,8 @@ function periodTitle(label: string, kind?: string): string {
 
 export function useAnamnesisCalendarSync(athleteLocalId: string, sex: string | null | undefined, connectionId: string | null) {
   const { user } = useAuth();
+  // The account holding the athletes (the organization's for members, lib/dataScope)
+  const { dataId: athletesId } = useDataScope('athletes');
   const { syncAnamnesisEvents, getEventsForAthlete, isLoaded } = useCalendarEvents();
   const [tick, setTick] = useState(0);
   const pushedFor = useRef<string | null>(null);
@@ -60,14 +63,14 @@ export function useAnamnesisCalendarSync(athleteLocalId: string, sex: string | n
   }, [athleteLocalId]);
 
   useEffect(() => {
-    if (!user || !athleteLocalId || !isLoaded) return;
+    if (!user || !athletesId || !athleteLocalId || !isLoaded) return;
     let cancelled = false;
     (async () => {
       const today = format(new Date(), 'yyyy-MM-dd');
       const { data, error } = await supabase
         .from('athlete_anamneses')
         .select('id, form_status, template_snapshot, field_values')
-        .eq('coach_user_id', user.id)
+        .eq('coach_user_id', athletesId)
         .eq('athlete_local_id', athleteLocalId);
       // Without the records nothing is changed — an empty answer here would remove every event
       if (error || cancelled) return;
@@ -116,5 +119,5 @@ export function useAnamnesisCalendarSync(athleteLocalId: string, sex: string | n
       }
     })();
     return () => { cancelled = true; };
-  }, [user, athleteLocalId, sex, connectionId, isLoaded, tick]);
+  }, [user, athletesId, athleteLocalId, sex, connectionId, isLoaded, tick]);
 }

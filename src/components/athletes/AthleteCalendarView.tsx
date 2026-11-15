@@ -75,6 +75,7 @@ import { cn } from '@/lib/utils';
 import { fetchCoachRemarks, parseExerciseComments, remarksAsText, selectWithOptionalColumns } from '@/utils/sessionComments';
 import type { SessionFeedbackEntry } from '@/hooks/useAthleteAIContext';
 import { UnfinishedSessionDialog } from '@/components/workout/UnfinishedSessionDialog';
+import { useDataScope } from '@/hooks/useDataScope';
 
 interface AthleteCalendarViewProps {
   athlete: Athlete;
@@ -299,6 +300,8 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   }, []);
 
   const { user } = useAuth();
+  // The account holding the athletes (the organization's for members, lib/dataScope)
+  const { dataId: athletesId } = useDataScope('athletes');
   const { programs, getProgram } = useTrainingPrograms();
   const athleteData = useAthletes();
   const { data: toolboxData } = useToolboxData();
@@ -380,7 +383,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
         supabase
           .from('exercise_param_tags')
           .select('exercise_name, weight_param, reps_param, rir_param')
-          .eq('coach_user_id', user.id),
+          .eq('coach_user_id', athletesId ?? user.id),
         supabase
           .from('athlete_session_logs')
           .select('date, sets_logged')
@@ -2700,7 +2703,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 .from('athlete_connections')
                 .select('id')
                 .eq('athlete_local_id', athlete.id)
-                .eq('coach_user_id', user.id)
+                .eq('coach_user_id', athletesId ?? user.id)
                 .maybeSingle();
               createConnectionId = connRow?.id;
             }

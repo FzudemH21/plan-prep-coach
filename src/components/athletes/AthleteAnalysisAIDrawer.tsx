@@ -20,6 +20,7 @@ import { allValuesOf, seriesOfValues } from '@/utils/goalMeasures';
 import type { ParameterV2 } from '@/types/parametersV2';
 import type { AnamnesisSection } from '@/types/anamnesis';
 import { contextFor, fieldState, formatAnswer } from '@/utils/anamnesisAnswers';
+import { useDataScope } from '@/hooks/useDataScope';
 
 // ── System prompt ──────────────────────────────────────────────────────────────
 
@@ -334,6 +335,8 @@ export function AthleteAnalysisAIDrawer({
   const { getConnectionForAthlete } = useAthleteConnections();
   const connectionId = getConnectionForAthlete(athleteId)?.id ?? null;
   const { user } = useAuth();
+  // The account holding the athletes (the organization's for members, lib/dataScope)
+  const { dataId: athletesId } = useDataScope('athletes');
 
   const [open, setOpen] = useState(false);
   // displayMessages — what the user sees in the chat UI
@@ -362,14 +365,14 @@ export function AthleteAnalysisAIDrawer({
     if (contextStr !== null || contextLoading || !connectionId) return;
     setContextLoading(true);
     try {
-      const ctx = await fetchAndBuildContext(connectionId, performanceParameters, parametersV2, user?.id ?? '', athleteId);
+      const ctx = await fetchAndBuildContext(connectionId, performanceParameters, parametersV2, athletesId ?? '', athleteId);
       setContextStr(ctx);
     } catch (e) {
       console.error('Failed to build AI context', e);
     } finally {
       setContextLoading(false);
     }
-  }, [connectionId, contextStr, contextLoading, performanceParameters, parametersV2, user, athleteId]);
+  }, [connectionId, contextStr, contextLoading, performanceParameters, parametersV2, athletesId, athleteId]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();

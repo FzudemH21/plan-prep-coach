@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { mainSeries } from '@/utils/goalMeasures';
-import { createRecordStore, useRecordStore } from '@/lib/recordStore';
+import { createRecordStore, ensureLoadedForUser, useRecordStore } from '@/lib/recordStore';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useDataScope } from '@/hooks/useDataScope';
 import { deleteAthleteCloudData, removeAssignmentScopedLocalData, type AthleteDeletionResult } from '@/utils/athleteDataDeletion';
 import { setAthleteNamesForAI } from '@/utils/pseudonymize';
 import { mergeBiometricValues } from '@/utils/biometricsMigration';
@@ -204,6 +205,8 @@ export const athleteStore = createRecordStore<AthleteDatabase>({
   table: 'athlete_records',
   legacyTable: 'athlete_database',
   label: 'athlete data',
+  // Members of an organization work in the organization's athletes (lib/dataScope)
+  area: 'athletes',
   defaultValue: getInitialData,
   migrate: raw => migrateData(raw as LegacyAthleteDatabase | AthleteDatabase),
   split: splitAthleteDatabase,
@@ -215,15 +218,20 @@ export const athleteStore = createRecordStore<AthleteDatabase>({
   oldCacheKeys: ['athlete-database_sb_cache'],
 });
 
-/** The coach's athletes, loaded if needed (for code outside components) */
-export async function loadAthletesForCoach(userId: string): Promise<Athlete[]> {
-  await athleteStore.ensureLoaded(userId);
+/** The logged-in coach's athletes (the organization's for members), loaded if needed — for code
+ *  outside components */
+export async function loadAthletesForCoach(): Promise<Athlete[]> {
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return [];
+  await ensureLoadedForUser(athleteStore, auth.user.id);
   const state = athleteStore.getState();
   return state.status === 'loaded' ? state.data.athletes : [];
 }
 
 export function useAthletes() {
   const { user } = useAuth();
+  // The account holding the athletes (the organization's for members, lib/dataScope)
+  const { dataId: athletesId } = useDataScope('athletes');
   const [rawData, setRawData, isLoading] = useRecordStore(athleteStore);
 
   const data = useMemo(() => migrateData(rawData), [rawData]);
@@ -307,9 +315,9 @@ export function useAthletes() {
       athletePerformanceParameters: prev.athletePerformanceParameters.filter(pp => pp.athleteId !== id),
       calendarAssignments: prev.calendarAssignments.filter(ca => ca.athleteId !== id),
     }));
-    if (!user) return { filesFailed: 0, errors: [] };
-    return deleteAthleteCloudData(user.id, id);
-  }, [setData, user, data.calendarAssignments]);
+    if (!user || !athletesId) return { filesFailed: 0, errors: [] };
+    return deleteAthleteCloudData(athletesId, id);
+  }, [setData, user, athletesId, data.calendarAssignments]);
 
   // ── Move body metrics to the parameter database ───────────────────────────
   // Each athlete's body-metric values become performance-parameter values of the parameter with the
@@ -463,9 +471,9 @@ export function useAthletes() {
         .from('athlete_connections')
         .update({ is_suspended: true })
         .eq('athlete_local_id', id)
-        .eq('coach_user_id', user.id);
+        .eq('coach_user_id', athletesId ?? user.id);
     }
-  }, [setData, user]);
+  }, [setData, user, athletesId]);
 
   const unarchiveAthlete = useCallback(async (id: string) => {
     await setData(prev => ({ ...prev, athletes: prev.athletes.map(a => a.id === id ? { ...a, isArchived: false, updatedAt: new Date().toISOString() } : a) }));
@@ -475,9 +483,9 @@ export function useAthletes() {
         .from('athlete_connections')
         .update({ is_suspended: false })
         .eq('athlete_local_id', id)
-        .eq('coach_user_id', user.id);
+        .eq('coach_user_id', athletesId ?? user.id);
     }
-  }, [setData, user]);
+  }, [setData, user, athletesId]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 

@@ -12,6 +12,7 @@ import { updateRecordStore } from '@/lib/recordStore';
 import { templatesStore } from '@/hooks/useTemplates';
 import { sessionLibraryStore } from '@/hooks/useSessionLibrary';
 import { updateAllPrograms } from '@/lib/programStore';
+import { currentDataId } from '@/lib/dataScope';
 
 /** Browser event fired after a rename so open pages can update what they hold in memory. */
 export const EXERCISE_RENAMED_EVENT = 'ppc:exercise-renamed';
@@ -90,10 +91,11 @@ function renameInLocalStorage(exerciseId: string, newName: string): void {
 }
 
 async function renameInAthleteSchedules(exerciseId: string, newName: string): Promise<void> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) return;
+  // The account holding the athletes (the organization's for members, lib/dataScope)
+  const athletesId = await currentDataId('athletes');
+  if (!athletesId) return;
   const { data: connections } = await supabase
-    .from('athlete_connections').select('id').eq('coach_user_id', authData.user.id);
+    .from('athlete_connections').select('id').eq('coach_user_id', athletesId);
   if (!connections?.length) return;
 
   const { data: rows } = await supabase
@@ -121,8 +123,7 @@ async function renameInAthleteSchedules(exerciseId: string, newName: string): Pr
  * unsynced edit on either side is kept) and written to both, with a new lastModified.
  */
 async function renameInAssignmentPlans(exerciseId: string, newName: string): Promise<void> {
-  const { data: authData } = await supabase.auth.getUser();
-  const uid = authData.user?.id;
+  const uid = await currentDataId('athletes');
   if (!uid) return;
   const PREFIX = 'athlete-assignment-';
   type Plan = Record<string, unknown> & { lastModified?: string; copiedAt?: string };

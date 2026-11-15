@@ -83,7 +83,7 @@ export async function ensureAthleteNamesLoaded(): Promise<void> {
       if (!user) return;
       // The athlete store (loaded once per tab; imported here to avoid an import cycle)
       const { loadAthletesForCoach } = await import('@/hooks/useAthletes');
-      const athletes: NameEntry[] = await loadAthletesForCoach(user.id);
+      const athletes: NameEntry[] = await loadAthletesForCoach();
       if (!entries) setAthleteNamesForAI(athletes);
     })().finally(() => { loading = null; });
   }

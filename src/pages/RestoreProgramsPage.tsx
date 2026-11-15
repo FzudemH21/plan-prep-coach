@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
 import { programsToRestore, useTrainingPrograms, type TrainingProgramsData } from '@/hooks/useTrainingPrograms';
 import { exportAllData, downloadJson } from '@/lib/dataExport';
 import { getProgramVersion, listDeletedPrograms, type ProgramVersionSummary } from '@/lib/programVersions';
 import { Download, Upload, Loader2, RotateCcw } from 'lucide-react';
+import { useDataScope } from '@/hooks/useDataScope';
 
 /** A program list file: a recovered list, or the programs inside an "Export all data" file */
 function programsFromFile(parsed: unknown): TrainingProgramsData | null {
@@ -29,7 +29,7 @@ function programsFromFile(parsed: unknown): TrainingProgramsData | null {
  * older version of it (see mergePrograms).
  */
 export default function RestoreProgramsPage() {
-  const { user } = useAuth();
+  const { dataId: programsId } = useDataScope('programs');
   const { programs, deletedProgramIds, isLoading, restorePrograms, restoreProgramVersion } = useTrainingPrograms();
   const { toast } = useToast();
   const [recovered, setRecovered] = useState<TrainingProgramsData | null>(null);
@@ -41,11 +41,11 @@ export default function RestoreProgramsPage() {
 
   const programIds = programs.map(p => p.id).join('|');
   useEffect(() => {
-    if (!user || isLoading) return;
-    listDeletedPrograms(user.id, new Set(programIds.split('|')))
+    if (!programsId || isLoading) return;
+    listDeletedPrograms(programsId, new Set(programIds.split('|')))
       .then(setDeleted)
       .catch(() => setDeleted([]));
-  }, [user, isLoading, programIds]);
+  }, [programsId, isLoading, programIds]);
 
   const handleExport = async () => {
     setExporting('…');

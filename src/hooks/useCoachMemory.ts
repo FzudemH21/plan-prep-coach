@@ -8,7 +8,6 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '@/hooks/useAuth';
 import {
   fetchRelevantPlans,
   savePlanMemory,
@@ -16,6 +15,7 @@ import {
   PlanMemorySummary,
 } from '@/lib/planMemory';
 import type { TrainingProgram } from '@/hooks/useTrainingPrograms';
+import { useDataScope } from '@/hooks/useDataScope';
 
 interface UseCoachMemoryOptions {
   /** Methods active in the current wizard session — used to prioritise relevant past plans */
@@ -28,19 +28,20 @@ export function useCoachMemory({
   currentMethods = [],
   limit = 20,
 }: UseCoachMemoryOptions = {}) {
-  const { user } = useAuth();
+  // The organization's plans for members (lib/dataScope)
+  const { dataId: programsId } = useDataScope('programs');
   const [plans, setPlans] = useState<PlanMemorySummary[]>([]);
   const [coachMemoryContext, setCoachMemoryContext] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   // Fetch whenever the coach or current methods change
   useEffect(() => {
-    if (!user) return;
+    if (!programsId) return;
 
     let cancelled = false;
     setIsLoading(true);
 
-    fetchRelevantPlans(user.id, { currentMethods, limit })
+    fetchRelevantPlans(programsId, { currentMethods, limit })
       .then((results) => {
         if (cancelled) return;
         setPlans(results);
@@ -53,7 +54,7 @@ export function useCoachMemory({
     return () => { cancelled = true; };
     // Stringify currentMethods so the effect only re-runs when the array content changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, currentMethods.join(','), limit]);
+  }, [programsId, currentMethods.join(','), limit]);
 
   /**
    * Persist a plan to `plan_memory` so future wizard sessions can reference it.
@@ -61,15 +62,15 @@ export function useCoachMemory({
    */
   const saveToMemory = useCallback(
     async (program: TrainingProgram) => {
-      if (!user) return;
-      await savePlanMemory(program, user.id);
+      if (!programsId) return;
+      await savePlanMemory(program, programsId);
       // Refresh context after save
-      const results = await fetchRelevantPlans(user.id, { currentMethods, limit });
+      const results = await fetchRelevantPlans(programsId, { currentMethods, limit });
       setPlans(results);
       setCoachMemoryContext(buildCoachMemoryContext(results));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user?.id, currentMethods.join(','), limit],
+    [programsId, currentMethods.join(','), limit],
   );
 
   return { plans, coachMemoryContext, isLoading, saveToMemory };
