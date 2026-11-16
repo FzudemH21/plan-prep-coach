@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useBiometricsMigration } from '@/hooks/useBiometricsMigration';
 import { useMonitoringSideSync } from '@/hooks/useMonitoringSideSync';
 import { useMyAthletes } from '@/hooks/useMyAthletes';
+import { useLiveRefresh } from '@/hooks/useLiveRefresh';
 
 export function CoachMobileLayout() {
   const { t } = useTranslation();
@@ -21,6 +22,8 @@ export function CoachMobileLayout() {
   // One-time move of body metrics into the parameter database
   useBiometricsMigration();
   useMonitoringSideSync();
+  // Others' changes (other coaches, other devices) come in when the app is in front
+  useLiveRefresh();
 
   const NAV = [
     { label: t('coachMobile.nav.athletes'), icon: Users, path: '/coach-mobile/athletes' },

@@ -13,6 +13,7 @@ import { useBiometricsMigration } from "@/hooks/useBiometricsMigration";
 import { useMonitoringSideSync } from '@/hooks/useMonitoringSideSync';
 import { useEmbeddingUpgrade } from "@/hooks/useEmbeddingUpgrade";
 import { useMyAthletes } from '@/hooks/useMyAthletes';
+import { useLiveRefresh } from '@/hooks/useLiveRefresh';
 
 interface AppLayoutProps {
   children?: React.ReactNode;
@@ -25,6 +26,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   useBiometricsMigration();
   useMonitoringSideSync();
   useEmbeddingUpgrade();
+  // Others' changes (other coaches, other devices) come in when the app is in front
+  useLiveRefresh();
 
   const { connections } = useAthleteConnections();
   // Several coaches: chat badges only for this coach's athletes (hooks/useMyAthletes)

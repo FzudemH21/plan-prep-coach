@@ -116,7 +116,26 @@ export interface RecordStore<T> {
   save: (next: T) => Promise<void>;
   /** Records confirmed as stored in Supabase (ids) */
   savedIds: () => Set<string>;
+  /**
+   * Takes over what others changed meanwhile (another coach, another device): asks for the change
+   * times only, then loads just the changed records. Never while a save is running, never over a
+   * local change that isn't stored yet. True when something changed.
+   */
+  refresh: () => Promise<boolean>;
 }
+
+/** Every store, for refreshing them together (see refreshAllRecordStores) */
+const allStores = new Set<RecordStore<unknown>>();
+
+/** Takes over others' changes in every loaded store (see RecordStore.refresh) */
+export async function refreshAllRecordStores(): Promise<void> {
+  await Promise.all([...allStores].map(s => s.refresh().catch(err => { console.warn(`[recordStore] ${s.label}: refresh failed`, err); return false; })));
+}
+
+const timeOf = (s: string | null | undefined): number => {
+  const t = s ? Date.parse(s) : NaN;
+  return Number.isNaN(t) ? 0 : t;
+};
 
 export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<T> {
   const name = config.store ? `${config.table}/${config.store}` : config.table;
@@ -152,6 +171,10 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
   let loadPromise: Promise<void> | null = null;
   /** Record id → JSON of the version stored in Supabase (what a save compares against) */
   let stored = new Map<string, string>();
+  /** Record id → when it was last stored (updated_at, ms) — what a refresh compares against */
+  let versions = new Map<string, number>();
+  /** Counts saves: a refresh that overlapped a save is dropped */
+  let saveSeq = 0;
   /** Loaded from the organization's account (no old-storage copy, never default data) */
   let sharedMode = false;
   let editable = true;
@@ -204,9 +227,10 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
   };
 
   interface Pending { id: string; data: unknown; json: string; deleted: boolean }
-  const markStored = (userId: string, entry: Pending) => {
+  const markStored = (userId: string, entry: Pending, at: string) => {
     if (state.userId !== userId) return;
     if (entry.deleted) stored.delete(entry.id); else stored.set(entry.id, entry.json);
+    versions.set(entry.id, timeOf(at));
   };
 
   // Per record: the version waiting to be written (only the newest is written, one at a time)
@@ -226,7 +250,7 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
             await sleep(1500);
             await writeRows([row]);
           }
-          markStored(userId, entry);
+          markStored(userId, entry, row.updated_at);
         } catch (err) {
           // Not marked as stored: the next save sees it as changed and writes it again
           console.error(`[recordStore] ${name}/${id} not saved:`, err);
@@ -266,7 +290,7 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
             await sleep(1500);
             await writeRows(rows);
           }
-          chunk.forEach(e => { ok.add(e.id); markStored(userId, e); });
+          chunk.forEach(e => { ok.add(e.id); markStored(userId, e, now); });
         } catch (err) {
           console.error(`[recordStore] ${name}: ${chunk.length} records not saved:`, err);
         }
@@ -310,12 +334,12 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
     return row as { data: unknown; updated_at: string | null } | null;
   };
 
-  type Row = { id: string; data: unknown; deleted_at: string | null };
+  type Row = { id: string; data: unknown; deleted_at: string | null; updated_at?: string | null };
   const fetchRows = async (userId: string): Promise<Row[]> => {
     const all: Row[] = [];
     for (let from = 0; ; from += PAGE) {
       const page = await withRetries(`loading the ${config.label}`, () => {
-        let query = supabase.from(config.table).select('id, data, deleted_at').eq('coach_user_id', userId);
+        let query = supabase.from(config.table).select('id, data, deleted_at, updated_at').eq('coach_user_id', userId);
         if (config.store) query = query.eq('store', config.store);
         return query.order('id').range(from, from + PAGE - 1);
       }) as Row[];
@@ -337,8 +361,10 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
     const records: Record<string, unknown> = {};
     const known = new Set<string>();
     stored = new Map();
+    versions = new Map();
     rows.forEach(r => {
       known.add(r.id);
+      versions.set(r.id, timeOf(r.updated_at));
       if (r.deleted_at) return;
       records[r.id] = r.data;
       stored.set(r.id, JSON.stringify(r.data));
@@ -393,6 +419,7 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
     if (state.userId !== userId) {
       state = fresh(userId);
       stored = new Map();
+      versions = new Map();
       loadPromise = null;
     }
     sharedMode = !!options?.shared;
@@ -428,6 +455,7 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
   };
 
   const save = async (next: T): Promise<void> => {
+    saveSeq++;
     const userId = state.userId;
     if (!userId || state.status !== 'loaded') {
       toast({ title: `Still loading your ${config.label}`, description: 'This change was not saved — please try again in a moment.', variant: 'destructive' });
@@ -469,17 +497,90 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
     if (!results.every(Boolean)) warnSaveFailed();
   };
 
-  return {
+  // ─── Refreshing ─────────────────────────────────────────────────────────────
+
+  const refresh = async (): Promise<boolean> => {
+    const userId = state.userId;
+    if (!userId || state.status !== 'loaded' || state.mode !== 'rows' || loadPromise) return false;
+    if (running.size > 0 || queued.size > 0) return false;
+    const seq = saveSeq;
+    const busy = () => state.userId !== userId || state.status !== 'loaded' || saveSeq !== seq || running.size > 0 || queued.size > 0;
+
+    // 1. The change times only (a few bytes per record)
+    type Meta = { id: string; updated_at: string | null; deleted_at: string | null };
+    const metas: Meta[] = [];
+    for (let from = 0; ; from += PAGE) {
+      let query = supabase.from(config.table).select('id, updated_at, deleted_at').eq('coach_user_id', userId);
+      if (config.store) query = query.eq('store', config.store);
+      const { data, error } = await query.order('id').range(from, from + PAGE - 1);
+      if (error) return false;
+      metas.push(...((data ?? []) as Meta[]));
+      if ((data ?? []).length < PAGE) break;
+    }
+    if (busy()) return false;
+    // An empty answer for the organization's data means "not readable right now" — keep what is shown
+    if (sharedMode && metas.length === 0 && !config.sharedMayBeEmpty) return false;
+    const seen = new Set(metas.map(m => m.id));
+    const changedIds = metas.filter(m => versions.get(m.id) !== timeOf(m.updated_at)).map(m => m.id);
+    const goneIds = [...versions.keys()].filter(id => !seen.has(id));
+    if (changedIds.length === 0 && goneIds.length === 0) return false;
+
+    // 2. Only the changed records
+    const fetched: Row[] = [];
+    for (let i = 0; i < changedIds.length; i += 100) {
+      let query = supabase.from(config.table).select('id, data, deleted_at, updated_at')
+        .eq('coach_user_id', userId).in('id', changedIds.slice(i, i + 100));
+      if (config.store) query = query.eq('store', config.store);
+      const { data, error } = await query;
+      if (error) return false;
+      fetched.push(...((data ?? []) as Row[]));
+    }
+    if (busy()) return false;
+
+    // 3. Take them over — except records with a local change that isn't stored yet
+    const current = config.split(state.data);
+    const unsaved = (id: string) => (id in current ? stored.get(id) !== JSON.stringify(current[id]) : stored.has(id));
+    const records: Record<string, unknown> = { ...current };
+    let touched = false;
+    fetched.forEach(r => {
+      if (unsaved(r.id)) return;
+      versions.set(r.id, timeOf(r.updated_at));
+      if (r.deleted_at) {
+        if (r.id in records) { delete records[r.id]; touched = true; }
+        stored.delete(r.id);
+        return;
+      }
+      const json = JSON.stringify(r.data);
+      if (stored.get(r.id) !== json || !(r.id in records)) { records[r.id] = r.data; touched = true; }
+      stored.set(r.id, json);
+    });
+    goneIds.forEach(id => {
+      if (unsaved(id)) return;
+      versions.delete(id);
+      if (id in records) { delete records[id]; touched = true; }
+      stored.delete(id);
+    });
+    if (!touched) return false;
+    const data = config.join(records);
+    setState({ data });
+    writeCache(userId, data);
+    return true;
+  };
+
+  const store: RecordStore<T> = {
+    refresh,
     label: config.label,
     area: config.area,
     getState: () => state,
     subscribe: (fn) => { listeners.add(fn); return () => { listeners.delete(fn); }; },
     ensureLoaded,
     // Logged out: forget the data, also the browser copy
-    reset: () => { clearCache(); cached = null; state = fresh(null); stored = new Map(); loadPromise = null; listeners.forEach(fn => fn()); },
+    reset: () => { clearCache(); cached = null; state = fresh(null); stored = new Map(); versions = new Map(); loadPromise = null; listeners.forEach(fn => fn()); },
     save,
     savedIds: () => new Set(stored.keys()),
   };
+  allStores.add(store as unknown as RecordStore<unknown>);
+  return store;
 }
 
 /** The store's data for components, loading it once the login is known: [data, save, isLoading] */

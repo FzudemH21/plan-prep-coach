@@ -90,11 +90,26 @@ export function programAuthorId(id: string): string | null {
   return state.authors[id] ?? null;
 }
 
-/** Whether the logged-in person may change this program (new programs: always) */
-export function canEditProgram(id: string | null | undefined): boolean {
+/** Whether the logged-in person may change this program by their rights (new programs: always) */
+export function mayChangeProgram(id: string | null | undefined): boolean {
   if (editAll || !id) return true;
   const author = state.authors[id];
   return !author || author === me;
+}
+
+/** Programs another coach is editing right now (edit lock, see lib/programLock) */
+const lockedOut = new Set<string>();
+
+export function setProgramLockedOut(id: string, out: boolean) {
+  if (lockedOut.has(id) === out) return;
+  if (out) lockedOut.add(id); else lockedOut.delete(id);
+  setState({}); // a new snapshot, so components re-render
+}
+
+/** Whether the logged-in person may change this program now: by their rights, and nobody else
+ *  is editing it (new programs: always) */
+export function canEditProgram(id: string | null | undefined): boolean {
+  return mayChangeProgram(id) && !(id && lockedOut.has(id));
 }
 
 /** Who is logged in and whether they may change every program */
@@ -191,8 +206,13 @@ async function writeRow(userId: string, program: TrainingProgram, deletedAt: str
 // only its newest version is written — an older one can never land after a newer one.
 const queued = new Map<string, { program: TrainingProgram; deletedAt: string | null; waiters: Array<{ resolve: () => void; reject: (e: unknown) => void }> }>();
 const writing = new Set<string>();
+/** Programs whose last write failed: this tab's version is newer than the stored one */
+const unsavedPrograms = new Set<string>();
+/** Counts writes: a refresh that overlapped a write is dropped */
+let writeSeq = 0;
 
 function queueWrite(userId: string, program: TrainingProgram, deletedAt: string | null): Promise<void> {
+  writeSeq++;
   return new Promise((resolve, reject) => {
     const entry = queued.get(program.id);
     if (entry) {
@@ -219,8 +239,10 @@ async function drain(userId: string, id: string) {
           await new Promise(resolve => setTimeout(resolve, 1500));
           await writeRow(userId, entry.program, entry.deletedAt); // one retry (e.g. a network hiccup)
         }
+        unsavedPrograms.delete(id);
         entry.waiters.forEach(w => w.resolve());
       } catch (err) {
+        unsavedPrograms.add(id);
         console.error('[programStore] save failed:', err);
         entry.waiters.forEach(w => w.reject(err));
       }
@@ -383,6 +405,49 @@ export function ensureProgramsLoaded(userId: string, options?: { shared?: boolea
     }
   })();
   return loadPromise;
+}
+
+/**
+ * Takes over what other coaches (or this coach on another device) changed meanwhile: compares the
+ * programs' change times, then loads just the changed ones. Never while a program is being written,
+ * never over a program whose last save failed here. True when something changed.
+ */
+export async function refreshPrograms(): Promise<string[]> {
+  const userId = state.userId;
+  if (!userId || state.status !== 'loaded' || state.mode !== 'rows' || loadPromise) return [];
+  if (queued.size > 0 || writing.size > 0) return [];
+  const seq = writeSeq;
+  const busy = () => state.userId !== userId || state.status !== 'loaded' || writeSeq !== seq || queued.size > 0 || writing.size > 0;
+
+  type Meta = { id: string; last_modified_at: string | null; deleted_at: string | null; created_by?: string | null };
+  let res = await supabase.from(TABLE).select('id, last_modified_at, deleted_at, created_by').eq('coach_user_id', userId);
+  if (res.error && /created_by/.test(res.error.message ?? '')) {
+    res = await supabase.from(TABLE).select('id, last_modified_at, deleted_at').eq('coach_user_id', userId) as typeof res;
+  }
+  if (res.error || busy()) return [];
+  const metas = (res.data ?? []) as Meta[];
+  const local = new Map(state.programs.map(p => [p.id, p]));
+  // Only newer versions are taken over (this tab may be ahead when its last save failed)
+  const changed = metas.filter(m => !m.deleted_at && !unsavedPrograms.has(m.id)
+    && (!local.has(m.id) ? !(m.id in state.deleted) || newer(m.last_modified_at, state.deleted[m.id]) : newer(m.last_modified_at, local.get(m.id)?.lastModifiedAt)));
+  const live = new Set(metas.filter(m => !m.deleted_at).map(m => m.id));
+  const removed = state.programs.filter(p => !live.has(p.id) && !unsavedPrograms.has(p.id)).map(p => p.id);
+  const authors: Record<string, string> = { ...state.authors };
+  let authorsChanged = false;
+  metas.forEach(m => { if (m.created_by && authors[m.id] !== m.created_by) { authors[m.id] = m.created_by; authorsChanged = true; } });
+  if (changed.length === 0 && removed.length === 0 && !authorsChanged) return [];
+
+  const fetched = await inBatches(changed, PARALLEL_FETCHES, async m => {
+    const { data, error } = await supabase.from(TABLE).select('data').eq('coach_user_id', userId).eq('id', m.id).single();
+    return error ? null : (data as { data: TrainingProgram }).data;
+  });
+  if (busy()) return [];
+  const byId = new Map(state.programs.filter(p => !removed.includes(p.id)).map(p => [p.id, p]));
+  fetched.forEach(p => { if (p?.id) byId.set(p.id, p); });
+  const deleted = { ...state.deleted };
+  metas.forEach(m => { if (m.deleted_at) deleted[m.id] = m.deleted_at; else delete deleted[m.id]; });
+  setState({ programs: [...byId.values()], deleted, authors });
+  return fetched.filter((p): p is TrainingProgram => !!p?.id).map(p => p.id);
 }
 
 /** Logged out: forget the programs */
