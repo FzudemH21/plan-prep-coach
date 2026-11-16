@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Dumbbell, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { passwordOk } from '@/lib/passwordPolicy';
+import { useTranslation } from 'react-i18next';
 
 type Step = 'loading' | 'invalid' | 'form' | 'success';
 
@@ -40,6 +42,7 @@ async function fetchInvite(code: string): Promise<InviteRow | null> {
 }
 
 export default function AthleteConnectPage() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const code = searchParams.get('code') ?? '';
@@ -72,7 +75,7 @@ export default function AthleteConnectPage() {
     e.preventDefault();
     setError('');
 
-    if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
+    if (!passwordOk(password)) { setError(t('auth.pw.tooWeak')); return; }
     if (password !== confirmPassword) { setError('Passwords do not match.'); return; }
 
     setSubmitting(true);
@@ -204,7 +207,7 @@ export default function AthleteConnectPage() {
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={e => setPassword(e.target.value)}
-                      placeholder="Min. 8 characters"
+                      placeholder={`${t('auth.pw.ruleLength')}, ${t('auth.pw.ruleMix').toLowerCase()}`}
                       required
                       autoComplete="new-password"
                       className="pr-10"

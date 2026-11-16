@@ -1,6 +1,6 @@
 import { useState, FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -100,6 +100,7 @@ export default function LoginPage() {
                 {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 {t('auth.login.submit')}
               </Button>
+              <Link to="/reset-password" className="text-sm text-muted-foreground hover:text-foreground">{t('auth.pw.forgot')}</Link>
             </CardFooter>
           </form>
         </Card>

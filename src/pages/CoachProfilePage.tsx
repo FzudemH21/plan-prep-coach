@@ -56,6 +56,8 @@ import {
   Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ChangePasswordForm } from '@/components/auth/ChangePasswordForm';
+import { TwoStepLoginCard } from '@/components/auth/TwoStepLogin';
 
 // ─────────────────────────────────────────────
 // Skipped / no-profile warning banner
@@ -799,42 +801,19 @@ function SettingsTab() {
       {/* Privacy notice shown in the anamnesis form link */}
       <PrivacyNoticeCard />
 
-      {/* Security */}
+      {/* Security: password and two-step login */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Lock className="h-4 w-4" />
-            {t('settings.security.title')}
+            {t('auth.pw.changeTitle')}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">{t('settings.security.resetPassword')}</p>
-              <p className="text-xs text-muted-foreground">{t('settings.security.resetHint')}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <ComingSoon />
-              <Button variant="outline" size="sm" disabled>
-                {t('settings.security.reset')}
-              </Button>
-            </div>
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">{t('settings.security.twoFactor')}</p>
-              <p className="text-xs text-muted-foreground">{t('settings.security.twoFactorHint')}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <ComingSoon />
-              <Button variant="outline" size="sm" disabled>
-                {t('settings.security.setup')}
-              </Button>
-            </div>
-          </div>
+        <CardContent className="max-w-sm">
+          <ChangePasswordForm />
         </CardContent>
       </Card>
+      <TwoStepLoginCard />
 
       {/* Billing */}
       <Card>

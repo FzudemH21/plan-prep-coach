@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { orgErrorKey } from '@/hooks/useOrganization';
+import { passwordOk } from '@/lib/passwordPolicy';
 
 interface InviteInfo {
   org_name: string;
@@ -69,7 +70,7 @@ export default function JoinOrganizationPage() {
     e.preventDefault();
     if (!invite) return;
     setError(null);
-    if (password.length < 8) { setError(t('organization.join.passwordTooShort')); return; }
+    if (!passwordOk(password)) { setError(t('auth.pw.tooWeak')); return; }
     if (password !== confirm) { setError(t('auth.signup.passwordMismatch')); return; }
     setBusy(true);
     try {
@@ -180,6 +181,7 @@ export default function JoinOrganizationPage() {
         <div className="space-y-1.5">
           <Label htmlFor="join-password">{t('auth.password')}</Label>
           <Input id="join-password" type="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          <p className="text-xs text-muted-foreground">{t('auth.pw.ruleLength')} · {t('auth.pw.ruleMix')}</p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="join-confirm">{t('auth.signup.confirmPassword')}</Label>

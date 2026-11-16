@@ -57,6 +57,9 @@ import { useEffect, useState } from "react";
 import { LanguagePickerModal } from "./components/LanguagePickerModal";
 import { isFirstOpen } from "./i18n";
 import { ErrorBoundary, RouteErrorBoundary } from './components/ErrorBoundary';
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+import { MfaGate } from "@/components/auth/TwoStepLogin";
+import { WeakPasswordPrompt } from "@/components/auth/WeakPasswordPrompt";
 
 const queryClient = new QueryClient();
 
@@ -68,7 +71,8 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   if (!session) return <Navigate to="/login" replace />;
   // Athletes belong in the athlete app, not the coach app
   if (user?.user_metadata?.role === 'athlete') return <Navigate to="/athlete" replace />;
-  return <>{children}</>;
+  // Two-step login (if set up): the code first; then a weak password is replaced
+  return <MfaGate token={session.access_token}>{children}<WeakPasswordPrompt /></MfaGate>;
 }
 
 /** Blocks athlete app routes until a Supabase session with role=athlete exists. */
@@ -77,7 +81,7 @@ function AthleteAuthGuard({ children }: { children: React.ReactNode }) {
   if (loading) return null;
   if (!session) return <Navigate to="/athlete/login" replace />;
   if (user?.user_metadata?.role !== 'athlete') return <Navigate to="/" replace />;
-  return <>{children}</>;
+  return <>{children}<WeakPasswordPrompt /></>;
 }
 
 /** Redirects to /onboarding if no coach profile exists yet */
@@ -122,6 +126,7 @@ function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/join" element={<JoinOrganizationPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/dev/print-preview" element={<PrintPreviewPage />} />
 

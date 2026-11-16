@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { noteWeakPassword } from '@/lib/passwordPolicy';
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
@@ -28,8 +29,10 @@ export function useAuth() {
   }, []);
 
   const signIn = async (email: string, password: string): Promise<void> => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    // The password no longer meets the rule: the app asks for a new one right away (WeakPasswordPrompt)
+    noteWeakPassword(!!data.weakPassword);
   };
 
   const signUp = async (email: string, password: string): Promise<void> => {

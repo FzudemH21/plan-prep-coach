@@ -17,6 +17,8 @@ import { useAthleteApp } from '@/hooks/useAthleteApp';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
+import { ChangePasswordForm } from '@/components/auth/ChangePasswordForm';
+import { useTranslation } from 'react-i18next';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -228,6 +230,7 @@ function ProfileCard() {
 type ProfileTab = 'overview' | 'progress';
 
 export default function AthleteProfilePage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { connection } = useAthleteApp();
   const { signOut } = useAuth();
@@ -321,6 +324,16 @@ export default function AthleteProfilePage() {
 
             {/* Profile info */}
             <ProfileCard />
+
+            {/* Password */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">{t('auth.pw.changeTitle')}</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <ChangePasswordForm />
+              </CardContent>
+            </Card>
 
             {/* Sign out */}
             <Button

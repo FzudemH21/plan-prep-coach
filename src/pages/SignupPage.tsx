@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Dumbbell, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { passwordOk } from '@/lib/passwordPolicy';
 
 /** Coach accounts are by invitation only (organizations, 2026-11). Athletes sign up through their
  *  invite link (/athlete/connect), not here. The form below comes back with coach invitations. */
@@ -68,8 +69,8 @@ export default function SignupPage() {
       setError(t('auth.signup.passwordMismatch'));
       return;
     }
-    if (password.length < 6) {
-      setError(t('auth.signup.passwordTooShort'));
+    if (!passwordOk(password)) {
+      setError(t('auth.pw.tooWeak'));
       return;
     }
 

@@ -6,8 +6,10 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslation } from 'react-i18next';
 
 export default function AthleteLoginPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
@@ -81,6 +83,9 @@ export default function AthleteLoginPage() {
               <Button type="submit" className="w-full" disabled={submitting}>
                 {submitting ? 'Signing in…' : 'Sign in'}
               </Button>
+              <Link to="/reset-password?app=athlete" className="block text-center text-sm text-muted-foreground hover:text-foreground py-1">
+                {t('auth.pw.forgot')}
+              </Link>
             </form>
 
             <div className="mt-6 text-center">
