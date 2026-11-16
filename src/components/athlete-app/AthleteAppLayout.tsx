@@ -62,8 +62,14 @@ function useAthleteUnread(connectionId: string | null) {
 
   useEffect(() => {
     load();
-    const timer = setInterval(load, 15_000);
-    return () => clearInterval(timer);
+    // Every 5 s while the app is in front, and at once when it comes back
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 5_000);
+    const onFront = () => { if (document.visibilityState === 'visible') void load(); };
+    document.addEventListener('visibilitychange', onFront);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onFront);
+    };
   }, [load]);
 
   const markRead = useCallback(async () => {

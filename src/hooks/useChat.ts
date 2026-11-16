@@ -72,6 +72,8 @@ export function useChat({ connectionId, callerRole }: UseChatOptions) {
   // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
   const [loading, setLoading] = useState(!!connectionId);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  messagesRef.current = messages;
 
   // ── Load history ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -128,6 +130,48 @@ export function useChat({ connectionId, callerRole }: UseChatOptions) {
       channelRef.current = null;
     };
   }, [connectionId, user]);
+
+  // ── Safety net next to realtime ─────────────────────────────────────────────
+  // Every 5 s while the chat is visible (and at once when the app comes back to the front): the
+  // messages newer than the newest one shown — so a live conversation never waits for a reload,
+  // even when the realtime connection dropped.
+  useEffect(() => {
+    if (!connectionId || !user || loading) return;
+    let cancelled = false;
+    let busy = false;
+    const poll = async () => {
+      if (busy || document.visibilityState !== 'visible') return;
+      busy = true;
+      try {
+        const shown = messagesRef.current.filter(m => !m.id.startsWith('optimistic-'));
+        const newest = shown.reduce((a, m) => (m.createdAt > a ? m.createdAt : a), '');
+        let query = supabase.from('chat_messages').select('*').eq('connection_id', connectionId).order('created_at', { ascending: true });
+        if (newest) query = query.gt('created_at', newest);
+        const { data, error } = await query;
+        if (cancelled || error || !data || data.length === 0) return;
+        const fresh = (data as Record<string, unknown>[]).map(rowToMessage);
+        setMessages(prev => {
+          const ids = new Set(prev.map(m => m.id));
+          // A message of mine still being sent shows as its optimistic copy — not twice
+          const sending = prev.some(m => m.id.startsWith('optimistic-'));
+          const add = fresh.filter(m => !ids.has(m.id) && !(sending && m.senderAuthUserId === user.id));
+          return add.length === 0 ? prev : [...prev, ...add].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        });
+      } finally {
+        busy = false;
+      }
+    };
+    const timer = setInterval(() => { void poll(); }, 5000);
+    const onFront = () => { if (document.visibilityState === 'visible') void poll(); };
+    document.addEventListener('visibilitychange', onFront);
+    window.addEventListener('focus', onFront);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onFront);
+      window.removeEventListener('focus', onFront);
+    };
+  }, [connectionId, user, loading]);
 
   // ── Mark messages as read ───────────────────────────────────────────────────
   const markRead = useCallback(async () => {
@@ -257,9 +301,15 @@ export function useUnreadCounts(
 
   useEffect(() => {
     load();
-    // Re-poll every 15 s — lightweight, avoids subscribing N channels
-    const timer = setInterval(load, 15_000);
-    return () => clearInterval(timer);
+    // Re-poll every 5 s while visible (and at once when the app comes back to the front) —
+    // lightweight, avoids subscribing N channels
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 5_000);
+    const onFront = () => { if (document.visibilityState === 'visible') void load(); };
+    document.addEventListener('visibilitychange', onFront);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onFront);
+    };
   }, [load]);
 
   const totalUnread = Array.from(counts.values()).reduce((a, b) => a + b, 0);

@@ -2,7 +2,8 @@
  * Edit lock for the program open in the planner (organizations, phase 5 — see
  * supabase/migrations/20261116_program_locks.sql).
  *
- * Whoever opens a program they may change takes its lock and renews it every 30 s; a lock not
+ * Whoever opens a program they may change takes its lock and renews it every 10 s (and at once when
+ * the tab comes back to the front — browsers slow down timers of background tabs); a lock not
  * renewed for 2 minutes is free. Another coach opening it meanwhile gets it read-only ("… is
  * editing") — the program store then refuses their saves (setProgramLockedOut), so nothing is
  * overwritten. Owners and the program's author can take the lock over.
@@ -19,7 +20,8 @@ import { refreshPrograms, setProgramLockedOut } from '@/lib/programStore';
 
 export type ProgramLockStatus = 'none' | 'checking' | 'mine' | 'other' | 'lost' | 'freed';
 
-const RENEW_MS = 30_000;
+/** Renewing doubles as checking: a takeover or a freed lock shows within ~10 s */
+const RENEW_MS = 10_000;
 /** Moving between the planner pages: the lock is given back only if no planner page takes it again */
 const RELEASE_DELAY_MS = 4_000;
 const releaseTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -80,8 +82,13 @@ export function useProgramLock(programId: string | null, enabled: boolean, onSta
     set('checking');
     void attempt(false);
     const timer = setInterval(() => { void attempt(false); }, RENEW_MS);
+    const onFront = () => { if (document.visibilityState === 'visible') void attempt(false); };
+    document.addEventListener('visibilitychange', onFront);
+    window.addEventListener('focus', onFront);
     return () => {
       clearInterval(timer);
+      document.removeEventListener('visibilitychange', onFront);
+      window.removeEventListener('focus', onFront);
       const wasMine = statusRef.current === 'mine' || statusRef.current === 'freed';
       setProgramLockedOut(programId, false);
       if (wasMine) {
