@@ -58,7 +58,10 @@ function navigates(el: Element): boolean {
 const guard: { area: HTMLElement | null } = { area: null };
 
 function inScope(target: EventTarget | null): target is Element {
-  return !!guard.area && target instanceof Element && (guard.area.contains(target) || !!target.closest(PORTALS));
+  if (!guard.area || !(target instanceof Element)) return false;
+  // The app's own navigation (sidebar, notifications) opens outside the planner too — never blocked
+  if (target.closest('[data-app-chrome]')) return false;
+  return guard.area.contains(target) || !!target.closest(PORTALS);
 }
 
 function blocked(target: Element, press: boolean): boolean {
@@ -89,12 +92,13 @@ if (typeof window !== 'undefined') {
 
 const DIMMED = ':is(button, [role="button"], [role="checkbox"], [role="switch"], [role="radio"], [role="combobox"], [role="menuitem"], [role="option"], [data-edit], [aria-haspopup])'
   + ':not([data-nav]):not([data-nav] *):not([data-open]):not([data-dialog-close]):not([role="tab"])'
-  + ':not([aria-expanded]:not([aria-haspopup]):not([role="combobox"])):not(:not([aria-haspopup]):not([role="combobox"]):has(> svg[class*="lucide-chevron-"]))';
+  + ':not([aria-expanded]:not([aria-haspopup]):not([role="combobox"])):not(:not([aria-haspopup]):not([role="combobox"]):has(> svg[class*="lucide-chevron-"]))'
+  + ':not([data-app-chrome] *)';
 const READONLY_CSS = `
 .planner-readonly ${DIMMED},
 body.planner-readonly-open :is([role="dialog"], [data-radix-popper-content-wrapper]) ${DIMMED} { opacity: .45; cursor: not-allowed; }
 .planner-readonly :is(input, textarea, select, [aria-roledescription], [data-rbd-drag-handle-draggable-id]),
-body.planner-readonly-open [role="dialog"] :is(input, textarea, select) { cursor: default; }
+body.planner-readonly-open [role="dialog"]:not([data-app-chrome]) :is(input, textarea, select) { cursor: default; }
 `;
 
 function ReadOnlyGuard({ children }: { children: ReactNode }) {
@@ -187,7 +191,8 @@ export function PlannerGate({ children }: { children: ReactNode }) {
 
   if (lock.status === 'other' || lock.status === 'lost' || lock.status === 'freed') {
     const who = lock.holderName || 'Another coach';
-    const canTakeOver = isOwner || authorId === myId;
+    // Owners take over from anyone; the author (a coach) from other coaches, not from an owner
+    const canTakeOver = isOwner || (authorId === myId && !lock.holderIsOwner);
     const message = lock.status === 'other'
       ? <>{title}<span className="text-muted-foreground"> — {who} is editing it right now. You can look through it; changes are possible once they're done.</span></>
       : lock.status === 'lost'

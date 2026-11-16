@@ -232,7 +232,7 @@ export function NavigationSidebar({ open, onOpenChange }: NavigationSidebarProps
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="w-72 p-0 flex flex-col">
+      <SheetContent data-app-chrome side="left" className="w-72 p-0 flex flex-col">
         <SheetHeader className="p-4 border-b">
           <SheetTitle className="text-left">{t('nav.title')}</SheetTitle>
         </SheetHeader>

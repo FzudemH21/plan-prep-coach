@@ -24,11 +24,13 @@ const RENEW_MS = 30_000;
 const RELEASE_DELAY_MS = 4_000;
 const releaseTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-interface LockRow { acquired: boolean; holder: string | null; holder_name: string | null }
+interface LockRow { acquired: boolean; holder: string | null; holder_name: string | null; holder_is_owner?: boolean }
 
 export function useProgramLock(programId: string | null, enabled: boolean, onStale: () => void) {
   const [status, setStatus] = useState<ProgramLockStatus>('none');
   const [holderName, setHolderName] = useState('');
+  // Owners' locks can only be taken over by owners (20261116_program_locks_hierarchy.sql)
+  const [holderIsOwner, setHolderIsOwner] = useState(false);
   const statusRef = useRef<ProgramLockStatus>('none');
   const onStaleRef = useRef(onStale);
   onStaleRef.current = onStale;
@@ -65,6 +67,7 @@ export function useProgramLock(programId: string | null, enabled: boolean, onSta
       set('mine');
     } else {
       setHolderName(row.holder_name ?? 'Another coach');
+      setHolderIsOwner(!!row.holder_is_owner);
       setProgramLockedOut(programId, true);
       set(before === 'mine' ? 'lost' : before === 'lost' ? 'lost' : 'other');
     }
@@ -101,5 +104,5 @@ export function useProgramLock(programId: string | null, enabled: boolean, onSta
     return true;
   }, [programId]);
 
-  return { status, holderName, takeOver };
+  return { status, holderName, holderIsOwner, takeOver };
 }

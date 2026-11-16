@@ -71,7 +71,7 @@ export function CoachActivityBell({ connections }: { connections: AthleteConnect
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-[380px] p-0">
+      <PopoverContent data-app-chrome align="end" className="w-[380px] p-0">
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <p className="text-sm font-semibold">Notifications</p>
           {unseenCount > 0 && (
