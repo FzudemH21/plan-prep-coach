@@ -4,7 +4,7 @@
  * editing was taken over.
  */
 import { useCallback, useState, type ReactNode } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Lock } from 'lucide-react';
 import {
   AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -79,6 +79,17 @@ export function useBeginAthleteEdit(athleteId: string | undefined, athleteName: 
   );
 
   return { begin, busy, dialog };
+}
+
+/** Next to an Edit button: someone else is editing this athlete right now */
+export function EditingByChip({ name }: { name: string | null }) {
+  if (!name) return null;
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+      <Lock className="h-3 w-3" />
+      {name} is editing
+    </span>
+  );
 }
 
 /** The coach whose editing was taken over: what happened to their changes */

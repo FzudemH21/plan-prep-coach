@@ -72,7 +72,7 @@ import { useAnamnesisCalendarSync } from '@/hooks/useAnamnesisCalendarSync';
 import { ChatAssignedOnlyNote, ChatSenderName, chatSenderLabels, joinNames } from '@/components/chat/ChatSenderName';
 import { useMyAthletes } from '@/hooks/useMyAthletes';
 import { useAthleteEditSession, useAthleteLockHolder } from '@/lib/athleteLock';
-import { notifyEditTakenOver, useBeginAthleteEdit } from './AthleteEditGate';
+import { EditingByChip, notifyEditTakenOver, useBeginAthleteEdit } from './AthleteEditGate';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -429,6 +429,7 @@ export function AthleteProfileView({
                 </>
               ) : (
                 <>
+                  <EditingByChip name={lockHolder} />
                   <Button variant="outline" size="sm" onClick={startEditing} disabled={editGate.busy}>
                     {editGate.busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
                     Edit

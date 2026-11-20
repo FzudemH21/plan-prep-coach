@@ -69,9 +69,9 @@ import { localizeField, localizeSection } from '@/utils/anamnesisI18n';
 import { AnamnesisFieldInput } from '@/components/anamnesis/AnamnesisInputs';
 import { AnswerFiles } from '@/components/anamnesis/AnamnesisFiles';
 import { useDataScope, useHealthReadOnly } from '@/hooks/useDataScope';
-import { ViewOnlyBadge } from '@/components/shared/ViewOnlyBadge';
-import { useAthleteEditSession } from '@/lib/athleteLock';
-import { notifyEditTakenOver, useBeginAthleteEdit } from '@/components/athletes/AthleteEditGate';
+import { HEALTH_VIEW_ONLY_TITLE, ViewOnlyBadge } from '@/components/shared/ViewOnlyBadge';
+import { useAthleteEditSession, useAthleteLockHolder } from '@/lib/athleteLock';
+import { EditingByChip, notifyEditTakenOver, useBeginAthleteEdit } from '@/components/athletes/AthleteEditGate';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -191,6 +191,8 @@ interface RecordFormProps {
   startInEdit?: boolean;
   /** An owner took over editing of a new, unsaved record: the dialog closes */
   onEditLost?: () => void;
+  /** Someone else is editing this athlete right now (their name) */
+  lockHolder?: string | null;
 }
 
 function RecordForm({
@@ -212,6 +214,7 @@ function RecordForm({
   onBeginEdit,
   startInEdit = false,
   onEditLost,
+  lockHolder = null,
 }: RecordFormProps) {
   const { templates, createTemplate, updateTemplate, deleteTemplate } = useAnamnesisTemplates();
   const { profile: coachProfile } = useCoachProfile();
@@ -1243,12 +1246,15 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
             />
           )}
           {locked ? (
-            <ViewOnlyBadge show />
+            <ViewOnlyBadge show label="health data" title={HEALTH_VIEW_ONLY_TITLE} />
           ) : readOnly ? (
-            <Button size="sm" className="gap-1.5" onClick={() => (onBeginEdit ? onBeginEdit(() => setMode('edit')) : setMode('edit'))}>
-              <Pencil className="h-3.5 w-3.5" />
-              Edit
-            </Button>
+            <>
+              <EditingByChip name={lockHolder} />
+              <Button size="sm" className="gap-1.5" onClick={() => (onBeginEdit ? onBeginEdit(() => setMode('edit')) : setMode('edit'))}>
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </Button>
+            </>
           ) : (
             <>
               {savedAnswers && (
@@ -1407,6 +1413,7 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
 
   // Creating or editing an anamnesis locks the athlete for other coaches (lib/athleteLock)
   const editGate = useBeginAthleteEdit(athlete.id, athleteName);
+  const lockHolder = useAthleteLockHolder(athlete.id, user?.id);
   // Remounts the form (fresh data, edit mode) when editing starts on a newer version of the record
   const [formEpoch, setFormEpoch] = useState(0);
   const [startInEdit, setStartInEdit] = useState(false);
@@ -1516,8 +1523,9 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
             <ShieldCheck className="h-3.5 w-3.5" />
             Privacy notice
           </Button>
-          {healthLocked ? <ViewOnlyBadge show /> : (
+          {healthLocked ? <ViewOnlyBadge show label="health data" title={HEALTH_VIEW_ONLY_TITLE} /> : (
             <>
+              <EditingByChip name={lockHolder} />
               <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => setSendOpen(true)}>
                 <Send className="h-3.5 w-3.5" />
                 Send form link
@@ -1650,6 +1658,7 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
             startInEdit={startInEdit}
             onBeginEdit={beginRecordEdit}
             onEditLost={() => { setFormDirty(false); setSheetOpen(false); }}
+            lockHolder={lockHolder}
             initial={selectedRecord
               ? {
                   athleteLocalId: athlete.id,
