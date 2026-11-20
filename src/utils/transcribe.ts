@@ -47,7 +47,10 @@ export async function transcribeDictation(
       },
       body: JSON.stringify({ path, ...(opts.language ? { language: opts.language } : {}) }),
     });
-    if (!response.ok) throw new Error(`Transcription failed (${response.status}): ${await response.text()}`);
+    if (!response.ok) {
+      const detail = (await response.text().catch(() => '')).replace(/\s+/g, ' ').trim();
+      throw new Error(`Transcription failed (${response.status})${detail ? `: ${detail}` : ''}`);
+    }
     const data = await response.json() as { text?: string };
     return (data.text ?? '').trim();
   } finally {

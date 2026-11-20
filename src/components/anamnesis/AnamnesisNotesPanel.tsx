@@ -117,7 +117,9 @@ export function AnamnesisNotesPanel({ entries, onChange, coachUserId, athleteLoc
       if (!text) setDictationError('No speech was recognised. Try again a bit closer to the microphone.');
     } catch (err) {
       console.error('[AnamnesisNotes] transcription failed', err);
-      setDictationError('The dictation could not be turned into text. Please try again.');
+      // The reason in short, so a failure can be traced (e.g. "Transcription failed (401): …")
+      const reason = err instanceof Error ? err.message.slice(0, 200) : '';
+      setDictationError(`The dictation could not be turned into text. Please try again.${reason ? ` (${reason})` : ''}`);
     } finally {
       setTranscribing(false);
     }
