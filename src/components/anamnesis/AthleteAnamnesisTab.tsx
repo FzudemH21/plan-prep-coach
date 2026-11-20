@@ -963,6 +963,7 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
             onChange={handleNotesChange}
             coachUserId={coachUserId}
             athleteLocalId={athleteLocalId}
+            athleteName={athleteName}
           />
           </fieldset>
 

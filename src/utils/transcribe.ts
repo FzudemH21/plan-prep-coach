@@ -22,7 +22,8 @@ function extensionFor(mimeType: string): string {
 export async function transcribeDictation(
   audio: Blob,
   /** athleteLocalId: the athlete's folder; without one (AI chat, onboarding) the coach's _dictation folder */
-  opts: { coachUserId: string; athleteLocalId?: string; language?: 'de' | 'en' },
+  /** terms: names and words to spell right (e.g. the athlete's name) */
+  opts: { coachUserId: string; athleteLocalId?: string; language?: 'de' | 'en'; terms?: string[] },
 ): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not signed in');
@@ -45,7 +46,11 @@ export async function transcribeDictation(
         'apikey': ANON_KEY,
         'x-target': 'mistral-transcribe',
       },
-      body: JSON.stringify({ path, ...(opts.language ? { language: opts.language } : {}) }),
+      body: JSON.stringify({
+        path,
+        ...(opts.language ? { language: opts.language } : {}),
+        ...(opts.terms?.length ? { terms: opts.terms } : {}),
+      }),
     });
     if (!response.ok) {
       const detail = (await response.text().catch(() => '')).replace(/\s+/g, ' ').trim();

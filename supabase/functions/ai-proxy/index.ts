@@ -6,6 +6,19 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+/** Words dictated anamnesis notes often contain — helps the transcription spell them right */
+const TRANSCRIPTION_TERMS = [
+  'Anamnese', 'Kreuzband', 'Kreuzbandriss', 'Innenband', 'Außenband', 'Meniskus', 'Patellasehne',
+  'Patellaspitzensyndrom', 'Achillessehne', 'Achillodynie', 'Sprunggelenk', 'Supinationstrauma',
+  'Distorsion', 'Plantarfasziitis', 'Fersensporn', 'Schienbeinkantensyndrom', 'Ermüdungsbruch',
+  'Iliosakralgelenk', 'ISG', 'LWS', 'BWS', 'HWS', 'Bandscheibenvorfall', 'Ischias', 'Skoliose',
+  'Tendinopathie', 'Impingement', 'Rotatorenmanschette', 'Labrum', 'Schulterluxation',
+  'Hamstrings', 'Adduktoren', 'Leistenschmerzen', 'Hüftbeuger', 'Gluteus', 'Quadrizeps',
+  'Muskelfaserriss', 'Zerrung', 'Prellung', 'Gehirnerschütterung', 'Arthroskopie', 'MRT',
+  'Physiotherapie', 'Osteopathie', 'Orthopäde', 'Reha', 'Return to Play', 'Return to Sport',
+  'ACL', 'MCL', 'RPE', '1RM', 'VO2max', 'Plyometrie', 'Mobilität', 'Ibuprofen', 'Asthma',
+];
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: CORS_HEADERS });
@@ -78,7 +91,7 @@ Deno.serve(async (req: Request) => {
     if (!mistralKey) {
       return new Response('Server misconfigured: MISTRAL_API_KEY missing', { status: 500, headers: CORS_HEADERS });
     }
-    let payload: { path?: string; language?: string };
+    let payload: { path?: string; language?: string; terms?: unknown };
     try {
       payload = await req.json();
     } catch {
@@ -96,21 +109,43 @@ Deno.serve(async (req: Request) => {
       return new Response('Recording not found', { status: 404, headers: CORS_HEADERS });
     }
 
-    const form = new FormData();
-    form.append('model', 'voxtral-mini-latest');
-    form.append('file_url', signed.signedUrl);
-    if (payload.language === 'de' || payload.language === 'en') form.append('language', payload.language);
+    // Spellings to steer towards (Mistral "context biasing", up to 100): names from the app (e.g. the
+    // athlete) first, then the usual anamnesis vocabulary
+    const fromApp = Array.isArray(payload.terms)
+      ? payload.terms.filter((t): t is string => typeof t === 'string').map((t) => t.trim()).filter((t) => t.length > 1 && t.length <= 60).slice(0, 20)
+      : [];
+    const bias = [...new Set([...fromApp, ...TRANSCRIPTION_TERMS])].slice(0, 100);
+
+    // Best model first (Voxtral Small Transcribe 3); if Mistral refuses the request itself (unknown
+    // model, unsupported field), the next attempt is simpler — the last is the previous setup
+    const attempts: { model: string; bias: boolean }[] = [
+      { model: 'voxtral-small-transcribe-3-0', bias: true },
+      { model: 'voxtral-small-transcribe-3-0', bias: false },
+      { model: 'voxtral-mini-latest', bias: false },
+    ];
 
     try {
-      const upstream = await fetch('https://api.mistral.ai/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${mistralKey}` },
-        body: form,
-      });
-      const text = await upstream.text();
-      await logUsage(upstream.status, text);
+      let status = 500;
+      let text = '';
+      for (const attempt of attempts) {
+        const form = new FormData();
+        form.append('model', attempt.model);
+        form.append('file_url', signed.signedUrl);
+        if (payload.language === 'de' || payload.language === 'en') form.append('language', payload.language);
+        if (attempt.bias) for (const term of bias) form.append('context_bias', term);
+        const upstream = await fetch('https://api.mistral.ai/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${mistralKey}` },
+          body: form,
+        });
+        status = upstream.status;
+        text = await upstream.text();
+        await logUsage(status, text);
+        // Only a refused request is worth another try — not billing, limits or a Mistral outage
+        if (status !== 400 && status !== 404 && status !== 422) break;
+      }
       return new Response(text, {
-        status: upstream.status,
+        status,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       });
     } finally {

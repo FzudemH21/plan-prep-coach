@@ -43,6 +43,8 @@ interface AnamnesisNotesPanelProps {
   onChange: (next: AnamnesisNote[], change: NotesChange) => Promise<boolean>;
   coachUserId: string;
   athleteLocalId: string;
+  /** Helps the transcription spell the athlete's name right */
+  athleteName?: string;
 }
 
 function noteId(): string {
@@ -57,7 +59,7 @@ function mmss(s: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-export function AnamnesisNotesPanel({ entries, onChange, coachUserId, athleteLocalId }: AnamnesisNotesPanelProps) {
+export function AnamnesisNotesPanel({ entries, onChange, coachUserId, athleteLocalId, athleteName }: AnamnesisNotesPanelProps) {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -112,7 +114,8 @@ export function AnamnesisNotesPanel({ entries, onChange, coachUserId, athleteLoc
     setTranscribing(true);
     setDictationError(null);
     try {
-      const text = await transcribeDictation(audio, { coachUserId, athleteLocalId });
+      const terms = athleteName && athleteName !== 'Athlete' ? [athleteName, ...athleteName.split(/\s+/)] : [];
+      const text = await transcribeDictation(audio, { coachUserId, athleteLocalId, terms });
       setTranscript(text);
       if (!text) setDictationError('No speech was recognised. Try again a bit closer to the microphone.');
     } catch (err) {
