@@ -269,7 +269,7 @@ export function AthleteDocumentsTab({ athleteId }: { athleteId: string }) {
       {/* Header row */}
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
-          Files uploaded here are accessible to the athlete in the Athlete App.
+          Only coaches see these files — they are not shown in the athlete app.
         </p>
         <div className="flex items-center gap-2">
           {(uploading || isLoading) && (
