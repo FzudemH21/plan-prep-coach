@@ -198,10 +198,10 @@ begin
                            coalesce((v_mr->>'health')::boolean, false), v_coach::text, coalesce((v_mr->>'health')::boolean, false)) into n;
           elsif t = 'public.coach_records' and v_asg then
             execute format('select count(*) from %s where coach_user_id is distinct from %L and (coach_user_id is distinct from %L
-                            or (store = ''calendar_events'' and not (substr(id, 3) = any(%L::text[]))))', t, uid, v_coach, v_assigned) into n;
+                            or (store in (''calendar_events'', ''athlete_documents'') and not (substr(id, 3) = any(%L::text[]))))', t, uid, v_coach, v_assigned) into n;
           elsif t = 'public.coach_records' then
             execute format('select count(*) from %s where coach_user_id is distinct from %L and (coach_user_id is distinct from %L
-                            or (store = ''calendar_events'' and not %L::boolean))', t, uid, v_coach, v_sh_ath) into n;
+                            or (store in (''calendar_events'', ''athlete_documents'') and not %L::boolean))', t, uid, v_coach, v_sh_ath) into n;
           elsif t in ('public.program_records', 'public.program_versions', 'public.plan_memory') and not v_sh_prog then
             col := case when 'coach_id' = any(cols) then 'coach_id' else 'coach_user_id' end;
             execute format('select count(*) from %s where %I::text is distinct from %L', t, col, uid) into n;
@@ -325,6 +325,8 @@ begin
              'updated_at', format('coach_records where coach_user_id = %L and store = ''exercises''', v_coach)),
           ('public.coach_records', 'change tests / events', case when v_asg then 'edit' when v_sh_ath then coalesce(v_mr->>'athletes', 'view') else 'never' end,
              'updated_at', format('coach_records where coach_user_id = %L and store = ''calendar_events''', v_coach)),
+          ('public.coach_records', 'change athlete documents', case when v_asg then 'edit' when v_sh_ath then coalesce(v_mr->>'athletes', 'view') else 'never' end,
+             'updated_at', format('coach_records where coach_user_id = %L and store = ''athlete_documents''', v_coach)),
           ('public.athlete_records', 'change athletes', case when v_asg then 'edit' when v_sh_ath then coalesce(v_mr->>'athletes', 'view') else 'never' end,
              'updated_at', format('athlete_records where coach_user_id = %L', v_coach)),
           ('public.athlete_session_logs', 'change logged sessions', case when v_asg then 'edit' when v_sh_ath then coalesce(v_mr->>'athletes', 'view') else 'never' end,

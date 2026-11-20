@@ -32,8 +32,8 @@ export interface RecordStoreConfig<T> {
   table: string;
   /** The table holds several stores: this store's value of the `store` column */
   store?: string;
-  /** The old one-row-per-coach table: (user_id, data, updated_at) */
-  legacyTable: string;
+  /** The old one-row-per-coach table: (user_id, data, updated_at); none for stores that never had one */
+  legacyTable?: string;
   /** Shown in messages, e.g. "athlete data" */
   label: string;
   /** The data when nothing has been stored yet */
@@ -317,7 +317,7 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
   let legacyChain: Promise<void> = Promise.resolve();
   const writeLegacy = (userId: string, data: T) => {
     const run = async () => {
-      const { error } = await supabase.from(config.legacyTable)
+      const { error } = await supabase.from(config.legacyTable as string)
         .upsert({ user_id: userId, data, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
       if (error) throw error;
     };
@@ -330,7 +330,7 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
 
   const readLegacy = async (userId: string) => {
     const row = await withRetries(`loading the old ${config.label}`, () =>
-      supabase.from(config.legacyTable).select('data, updated_at').eq('user_id', userId).maybeSingle());
+      supabase.from(config.legacyTable as string).select('data, updated_at').eq('user_id', userId).maybeSingle());
     return row as { data: unknown; updated_at: string | null } | null;
   };
 
@@ -372,8 +372,8 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
 
     // The old row: everything on the first load; later only records missing here (only the
     // account's own person copies it)
-    const legacyMeta = sharedMode ? null : await withRetries(`checking the old ${config.label}`, () =>
-      supabase.from(config.legacyTable).select('updated_at').eq('user_id', userId).maybeSingle()) as { updated_at: string | null } | null;
+    const legacyMeta = sharedMode || !config.legacyTable ? null : await withRetries(`checking the old ${config.label}`, () =>
+      supabase.from(config.legacyTable as string).select('updated_at').eq('user_id', userId).maybeSingle()) as { updated_at: string | null } | null;
     let seen = '';
     try { seen = localStorage.getItem(seenKey(userId)) ?? ''; } catch { /* no browser storage */ }
     const legacyChanged = !!legacyMeta && (rows.length === 0 || (legacyMeta.updated_at ?? '') !== seen);
@@ -429,7 +429,11 @@ export function createRecordStore<T>(config: RecordStoreConfig<T>): RecordStore<
     setState({ status: 'loading' });
     loadPromise = (async () => {
       try {
-        if (!(await loadRows(userId))) await loadLegacy(userId);
+        if (!(await loadRows(userId))) {
+          // No rows table and no old table to fall back to: failed (nothing is saved), never empty
+          if (!config.legacyTable) throw new Error(`the ${config.label} table is missing`);
+          await loadLegacy(userId);
+        }
       } catch (err) {
         console.error(`[recordStore] ${name} load failed:`, err);
         if (state.userId === userId) setState({ status: 'failed' });

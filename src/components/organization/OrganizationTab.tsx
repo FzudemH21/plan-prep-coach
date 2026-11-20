@@ -364,7 +364,7 @@ function kindKey(row: { table_name: string; record_id: string | null }): string 
     const [store, id = ''] = (row.record_id ?? '').split('/');
     if (store === 'exercises') return id.startsWith('lib:') ? 'exerciseLibrary' : id.startsWith('ci:') ? 'circuit' : 'exercise';
     if (store === 'parameters') return id.startsWith('p:') ? 'parameter' : 'parameterLink';
-    return ({ methods: 'method', templates: 'template', workouts: 'workout', calendar_events: 'testsEvents' } as Record<string, string>)[store] ?? 'other';
+    return ({ methods: 'method', templates: 'template', workouts: 'workout', calendar_events: 'testsEvents', athlete_documents: 'athleteDocuments' } as Record<string, string>)[store] ?? 'other';
   }
   return ({
     athlete_session_logs: 'sessionLog', athlete_test_results: 'testResult', athlete_daily_checkins: 'checkin',

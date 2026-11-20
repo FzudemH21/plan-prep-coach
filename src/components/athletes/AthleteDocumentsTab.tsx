@@ -175,6 +175,7 @@ export function AthleteDocumentsTab({ athleteId }: { athleteId: string }) {
     deleteDocument,
     getDocumentUrl,
     documents,
+    isLoading,
   } = useAthleteDocuments(athleteId);
 
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
@@ -231,26 +232,35 @@ export function AthleteDocumentsTab({ athleteId }: { athleteId: string }) {
     [getDocumentUrl]
   );
 
-  const handleCreateFolder = () => {
+  const handleCreateFolder = async () => {
     const name = newFolderName.trim();
     if (!name) return;
-    addFolder(name, currentFolderId);
     setNewFolderName("");
     setCreatingFolder(false);
-    toast({ title: `Folder "${name}" created` });
+    try {
+      await addFolder(name, currentFolderId);
+      toast({ title: `Folder "${name}" created` });
+    } catch {
+      /* the list explains why it wasn't saved */
+    }
   };
 
   const handleDeleteFolder = (folder: DocFolder) => {
     setDeletingFolder(folder);
   };
 
-  const confirmDeleteFolder = () => {
-    if (!deletingFolder) return;
-    deleteFolder(deletingFolder.id);
-    // If we were inside this folder (or a descendant), go back to root
-    if (currentFolderId === deletingFolder.id) setCurrentFolderId(null);
-    toast({ title: `Folder "${deletingFolder.name}" deleted` });
+  const confirmDeleteFolder = async () => {
+    const folder = deletingFolder;
+    if (!folder) return;
     setDeletingFolder(null);
+    try {
+      await deleteFolder(folder.id);
+      // If we were inside this folder (or a descendant), go back to root
+      if (currentFolderId === folder.id) setCurrentFolderId(null);
+      toast({ title: `Folder "${folder.name}" deleted` });
+    } catch {
+      /* the list explains why it wasn't saved */
+    }
   };
 
   return (
@@ -262,10 +272,10 @@ export function AthleteDocumentsTab({ athleteId }: { athleteId: string }) {
           Files uploaded here are accessible to the athlete in the Athlete App.
         </p>
         <div className="flex items-center gap-2">
-          {uploading && (
+          {(uploading || isLoading) && (
             <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Uploading…
+              {uploading ? "Uploading…" : "Loading…"}
             </span>
           )}
           <Button
@@ -273,6 +283,7 @@ export function AthleteDocumentsTab({ athleteId }: { athleteId: string }) {
             size="sm"
             className="gap-1.5"
             onClick={() => { setCreatingFolder(true); setNewFolderName(""); }}
+            disabled={isLoading}
           >
             <FolderPlus className="h-4 w-4" />
             New Folder
@@ -366,7 +377,7 @@ export function AthleteDocumentsTab({ athleteId }: { athleteId: string }) {
               key={doc.id}
               doc={doc}
               onOpen={() => handleOpen(doc)}
-              onDelete={() => deleteDocument(doc.id)}
+              onDelete={() => { deleteDocument(doc.id).catch(() => undefined); }}
             />
           ))}
         </div>
@@ -376,7 +387,7 @@ export function AthleteDocumentsTab({ athleteId }: { athleteId: string }) {
       <AnamnesisFormFilesSection athleteId={athleteId} />
 
       {/* Drop zone — always visible */}
-      <DropZone onFiles={handleFiles} disabled={uploading} />
+      <DropZone onFiles={handleFiles} disabled={uploading || isLoading} />
 
       {/* Inline viewer */}
       <InlineDocumentViewer
