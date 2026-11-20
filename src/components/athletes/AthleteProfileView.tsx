@@ -56,7 +56,7 @@ import { AthleteAnalysisTab } from './AthleteAnalysisTab';
 import { AthleteMonitoringTab } from './AthleteMonitoringTab';
 import { AthleteAnalysisAIDrawer } from './AthleteAnalysisAIDrawer';
 import { AthleteAnamnesisTab } from '@/components/anamnesis/AthleteAnamnesisTab';
-import { useAthletes } from '@/hooks/useAthletes';
+import { athleteStore, useAthletes } from '@/hooks/useAthletes';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
 import { useChat } from '@/hooks/useChat';
@@ -71,6 +71,8 @@ import { ChatQuote } from '@/components/chat/ChatQuote';
 import { useAnamnesisCalendarSync } from '@/hooks/useAnamnesisCalendarSync';
 import { ChatAssignedOnlyNote, ChatSenderName, chatSenderLabels, joinNames } from '@/components/chat/ChatSenderName';
 import { useMyAthletes } from '@/hooks/useMyAthletes';
+import { useAthleteEditSession, useAthleteLockHolder } from '@/lib/athleteLock';
+import { notifyEditTakenOver, useBeginAthleteEdit } from './AthleteEditGate';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -264,9 +266,23 @@ export function AthleteProfileView({
     }
   }, [openNewAnamnesis, athlete.id]);
 
+  // Editing locks the athlete for other coaches (lib/athleteLock): Edit takes the lock first
+  const editGate = useBeginAthleteEdit(athlete.id, getAthleteDisplayName(athlete));
+  const lockHolder = useAthleteLockHolder(athlete.id, authUser?.id);
+  const { lostTo: profileLostTo } = useAthleteEditSession(athlete.id, isEditing);
+  // The profile as it was when editing started: only fields changed since then are saved, so
+  // nothing someone else changed meanwhile (coaches, groups, notes …) is overwritten
+  const editStartRef = useRef<Athlete | null>(null);
+
   const startEditing = () => {
-    setEditedAthlete({ ...athlete });
-    setIsEditing(true);
+    void editGate.begin(async () => {
+      // The newest version (another coach may have saved just before)
+      await athleteStore.refresh().catch(() => false);
+      const fresh = athleteStore.getState().data.athletes.find((a) => a.id === athlete.id) ?? athlete;
+      editStartRef.current = fresh;
+      setEditedAthlete({ ...fresh });
+      setIsEditing(true);
+    });
   };
 
   const cancelEditing = () => {
@@ -274,11 +290,24 @@ export function AthleteProfileView({
     setIsEditing(false);
   };
 
+  // An owner took over: leave edit mode (the changes can't be saved any more)
+  useEffect(() => {
+    if (!profileLostTo || !isEditing) return;
+    notifyEditTakenOver(profileLostTo);
+    setEditedAthlete({});
+    setIsEditing(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileLostTo]);
+
   const saveChanges = () => {
-    const updates = 'billingAddress' in editedAthlete
+    const updates: Partial<Athlete> = 'billingAddress' in editedAthlete
       ? { ...editedAthlete, billingAddress: normalizeBillingAddress(editedAthlete.billingAddress) }
       : editedAthlete;
-    onUpdateAthlete(updates);
+    const start = (editStartRef.current ?? athlete) as unknown as Record<string, unknown>;
+    const changed = Object.fromEntries(
+      Object.entries(updates).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(start[key])),
+    ) as Partial<Athlete>;
+    if (Object.keys(changed).length > 0) onUpdateAthlete(changed);
     setIsEditing(false);
     setEditedAthlete({});
   };
@@ -329,6 +358,12 @@ export function AthleteProfileView({
 
   return (
     <div className="h-full flex flex-col">
+      {editGate.dialog}
+      {lockHolder && (
+        <p className="mx-1 mt-1 shrink-0 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          {lockHolder} is editing this athlete — you can view everything; editing is possible once they are done.
+        </p>
+      )}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col">
         <TabsList className="mx-1 mt-1 w-fit">
           <TabsTrigger value="profile" className="gap-2">
@@ -394,7 +429,8 @@ export function AthleteProfileView({
                 </>
               ) : (
                 <>
-                  <Button variant="outline" size="sm" onClick={startEditing}>
+                  <Button variant="outline" size="sm" onClick={startEditing} disabled={editGate.busy}>
+                    {editGate.busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
                     Edit
                   </Button>
                   <Button

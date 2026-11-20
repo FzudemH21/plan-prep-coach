@@ -70,6 +70,8 @@ import { AnamnesisFieldInput } from '@/components/anamnesis/AnamnesisInputs';
 import { AnswerFiles } from '@/components/anamnesis/AnamnesisFiles';
 import { useDataScope, useHealthReadOnly } from '@/hooks/useDataScope';
 import { ViewOnlyBadge } from '@/components/shared/ViewOnlyBadge';
+import { useAthleteEditSession } from '@/lib/athleteLock';
+import { notifyEditTakenOver, useBeginAthleteEdit } from '@/components/athletes/AthleteEditGate';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -183,6 +185,12 @@ interface RecordFormProps {
   isDeleting: boolean;
   /** Health data may only be viewed (Health unticked in the rights grid) */
   locked?: boolean;
+  /** Before edit mode: takes the athlete's edit lock, then calls go (lib/athleteLock) */
+  onBeginEdit?: (go: () => void) => void;
+  /** Open in edit mode (editing was started on a newer version of the record) */
+  startInEdit?: boolean;
+  /** An owner took over editing of a new, unsaved record: the dialog closes */
+  onEditLost?: () => void;
 }
 
 function RecordForm({
@@ -201,6 +209,9 @@ function RecordForm({
   isSaving,
   isDeleting,
   locked = false,
+  onBeginEdit,
+  startInEdit = false,
+  onEditLost,
 }: RecordFormProps) {
   const { templates, createTemplate, updateTemplate, deleteTemplate } = useAnamnesisTemplates();
   const { profile: coachProfile } = useCoachProfile();
@@ -208,7 +219,7 @@ function RecordForm({
   const changedByName = coachProfile?.name || user?.email || '';
   const [printing, setPrinting] = useState(false);
   // Saved records open read-only; "Edit" switches to the form (no accidental changes)
-  const [mode, setMode] = useState<'view' | 'edit'>(initial ? 'view' : 'edit');
+  const [mode, setMode] = useState<'view' | 'edit'>(initial && !startInEdit ? 'view' : 'edit');
   const conditionSex = initial?.athleteProfileAnswers?.sex ?? athlete?.sex ?? null;
   // Questions and answers in the language the athlete used in the form (switchable when the template
   // has a translation); answers are stored the same way in every language
@@ -709,6 +720,16 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
     setSavedAnswers(answers);
     setMode('view');
   };
+
+  // Edit mode holds the athlete's edit lock; an owner taking it over ends the edit
+  const { lostTo } = useAthleteEditSession(athleteLocalId, mode === 'edit' && !locked);
+  useEffect(() => {
+    if (!lostTo) return;
+    notifyEditTakenOver(lostTo);
+    if (savedAnswers) discardEdits();
+    else onEditLost?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lostTo]);
 
   const conductedLabel = (() => {
     try { return format(parseISO(`${conductedAt}T12:00:00`), 'd MMM yyyy'); } catch { return conductedAt; }
@@ -1224,7 +1245,7 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
           {locked ? (
             <ViewOnlyBadge show />
           ) : readOnly ? (
-            <Button size="sm" className="gap-1.5" onClick={() => setMode('edit')}>
+            <Button size="sm" className="gap-1.5" onClick={() => (onBeginEdit ? onBeginEdit(() => setMode('edit')) : setMode('edit'))}>
               <Pencil className="h-3.5 w-3.5" />
               Edit
             </Button>
@@ -1347,7 +1368,7 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
   // Health unticked in the rights grid: anamneses can be read, not created, changed or deleted
   const healthLocked = useHealthReadOnly();
   const {
-    anamneses, loading, createAnamnesis, updateAnamnesis, deleteAnamnesis,
+    anamneses, loading, refetch, createAnamnesis, updateAnamnesis, deleteAnamnesis,
     sendFormLink, updateFormLink, markProfileApplied,
   } = useAthleteAnamneses(athlete.id);
   const privacy = useCoachPrivacyNotice();
@@ -1384,9 +1405,37 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
     if (!open) setFormDirty(false);
   };
 
+  // Creating or editing an anamnesis locks the athlete for other coaches (lib/athleteLock)
+  const editGate = useBeginAthleteEdit(athlete.id, athleteName);
+  // Remounts the form (fresh data, edit mode) when editing starts on a newer version of the record
+  const [formEpoch, setFormEpoch] = useState(0);
+  const [startInEdit, setStartInEdit] = useState(false);
+
   const openNew = () => {
-    setSelectedRecord(null);
-    setSheetOpen(true);
+    void editGate.begin(() => {
+      setSelectedRecord(null);
+      setStartInEdit(false);
+      setFormEpoch((e) => e + 1);
+      setSheetOpen(true);
+    });
+  };
+
+  /** Edit on a saved record: the lock first, then the newest version of the record */
+  const beginRecordEdit = (go: () => void) => {
+    const record = selectedRecord;
+    void editGate.begin(async () => {
+      if (!record) { go(); return; }
+      const list = await refetch();
+      const fresh = list?.find((a) => a.id === record.id);
+      if (fresh && fresh.updatedAt !== record.updatedAt) {
+        // Someone saved meanwhile: open their version in edit mode
+        setSelectedRecord(fresh);
+        setStartInEdit(true);
+        setFormEpoch((e) => e + 1);
+        return;
+      }
+      go();
+    });
   };
 
   useEffect(() => {
@@ -1399,6 +1448,8 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
 
   const openRecord = (record: AthleteAnamnesis) => {
     setSelectedRecord(record);
+    setStartInEdit(false);
+    setFormEpoch((e) => e + 1);
     setSheetOpen(true);
   };
 
@@ -1448,6 +1499,7 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
 
   return (
     <div className="flex flex-col h-full">
+      {editGate.dialog}
       {/* Header */}
       <div className="flex items-center justify-between px-1 py-2 shrink-0">
         <div>
@@ -1594,6 +1646,10 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
             );
           })()}
           <RecordForm
+            key={`${selectedRecord?.id ?? 'new'}-${formEpoch}`}
+            startInEdit={startInEdit}
+            onBeginEdit={beginRecordEdit}
+            onEditLost={() => { setFormDirty(false); setSheetOpen(false); }}
             initial={selectedRecord
               ? {
                   athleteLocalId: athlete.id,

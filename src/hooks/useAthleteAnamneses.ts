@@ -96,9 +96,9 @@ export function useAthleteAnamneses(athleteLocalId: string) {
   // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
   const [loading, setLoading] = useState(!!athleteLocalId);
 
-  const fetchAnamneses = useCallback(async () => {
-    if (!athleteLocalId) { setLoading(false); return; }
-    if (!user || !athletesId) return;
+  const fetchAnamneses = useCallback(async (): Promise<AthleteAnamnesis[] | null> => {
+    if (!athleteLocalId) { setLoading(false); return null; }
+    if (!user || !athletesId) return null;
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -109,9 +109,12 @@ export function useAthleteAnamneses(athleteLocalId: string) {
         .order('conducted_at', { ascending: false });
 
       if (error) throw error;
-      setAnamneses((data as DbAnamnesis[]).map(fromDb));
+      const list = (data as DbAnamnesis[]).map(fromDb);
+      setAnamneses(list);
+      return list;
     } catch (err) {
       console.error('[useAthleteAnamneses] fetch error', err);
+      return null;
     } finally {
       setLoading(false);
     }
