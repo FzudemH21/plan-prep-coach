@@ -193,6 +193,8 @@ interface RecordFormProps {
   onEditLost?: () => void;
   /** Someone else is editing this athlete right now (their name) */
   lockHolder?: string | null;
+  /** Edit was clicked and the lock is being checked */
+  editBusy?: boolean;
 }
 
 function RecordForm({
@@ -215,6 +217,7 @@ function RecordForm({
   startInEdit = false,
   onEditLost,
   lockHolder = null,
+  editBusy = false,
 }: RecordFormProps) {
   const { templates, createTemplate, updateTemplate, deleteTemplate } = useAnamnesisTemplates();
   const { profile: coachProfile } = useCoachProfile();
@@ -696,6 +699,11 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
 
   const handleSave = async () => {
     const answers = currentAnswers();
+    // A saved record goes back to the read-only view at once and is stored in the background; if
+    // that fails, edit mode comes back with the changes still there (the message says so)
+    const optimistic = !!savedAnswers;
+    const before = savedAnswers;
+    if (optimistic) { setSavingInBackground(true); setSavedAnswers(answers); setMode('view'); }
     const id = await onSave({
       athleteLocalId,
       templateId,
@@ -709,11 +717,15 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
       aiSummary,
       attachments,
     });
-    if (!id) return;
+    setSavingInBackground(false);
+    if (!id) {
+      if (optimistic) { setSavedAnswers(before); setMode('edit'); }
+      return;
+    }
     removedPaths.forEach((p) => { deleteFile(p).catch(() => {}); });
     setRemovedPaths([]);
-    if (savedAnswers) {
-      const changes = diffAnamnesis(savedAnswers, answers);
+    if (before) {
+      const changes = diffAnamnesis(before, answers);
       if (changes.length > 0) {
         void logAnamnesisChange(id, changedByName, `Answers edited (${changes.length} change${changes.length === 1 ? '' : 's'})`, changes);
       }
@@ -725,7 +737,9 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
   };
 
   // Edit mode holds the athlete's edit lock; an owner taking it over ends the edit
-  const { lostTo } = useAthleteEditSession(athleteLocalId, recordId ? `anamnesis:${recordId}` : null, mode === 'edit' && !locked);
+  // (kept while a save is still being stored in the background, so nobody starts editing on top of it)
+  const [savingInBackground, setSavingInBackground] = useState(false);
+  const { lostTo } = useAthleteEditSession(athleteLocalId, recordId ? `anamnesis:${recordId}` : null, (mode === 'edit' || savingInBackground) && !locked);
   useEffect(() => {
     if (!lostTo) return;
     notifyEditTakenOver(lostTo);
@@ -1250,8 +1264,8 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
           ) : readOnly ? (
             <>
               <EditingByChip name={lockHolder} />
-              <Button size="sm" className="gap-1.5" onClick={() => (onBeginEdit ? onBeginEdit(() => setMode('edit')) : setMode('edit'))}>
-                <Pencil className="h-3.5 w-3.5" />
+              <Button size="sm" className="gap-1.5" disabled={editBusy} onClick={() => (onBeginEdit ? onBeginEdit(() => setMode('edit')) : setMode('edit'))}>
+                {editBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
                 Edit
               </Button>
             </>
@@ -1378,7 +1392,7 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
   // Health unticked in the rights grid: anamneses can be read, not created, changed or deleted
   const healthLocked = useHealthReadOnly();
   const {
-    anamneses, loading, refetch, createAnamnesis, updateAnamnesis, deleteAnamnesis,
+    anamneses, loading, createAnamnesis, updateAnamnesis, updateAnamnesisRecord, fetchUpdatedAt, fetchOne, deleteAnamnesis,
     sendFormLink, updateFormLink, markProfileApplied,
   } = useAthleteAnamneses(athlete.id);
   const privacy = useCoachPrivacyNotice();
@@ -1430,19 +1444,30 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
     setSheetOpen(true);
   };
 
-  /** Edit on a saved record: the lock first, then the newest version of the record */
+  /** The stored version the open form shows (its change time) — moves on with this coach's own saves */
+  const basisRef = useRef<{ id: string; updatedAt: string } | null>(null);
+  const noteOwnSave = (stored: AthleteAnamnesis) => {
+    if (basisRef.current?.id === stored.id) basisRef.current = { id: stored.id, updatedAt: stored.updatedAt };
+  };
+
+  /** Edit on a saved record: the lock and "did someone else save it?" at the same time */
   const beginRecordEdit = (go: () => void) => {
     const record = selectedRecord;
     if (!record) { go(); return; }
+    const storedAt = fetchUpdatedAt(record.id);
     void editGate.begin(`anamnesis:${record.id}`, 'this anamnesis', async () => {
-      const list = await refetch();
-      const fresh = list?.find((a) => a.id === record.id);
-      if (fresh && fresh.updatedAt !== record.updatedAt) {
+      const at = await storedAt;
+      const basis = basisRef.current?.id === record.id ? basisRef.current.updatedAt : record.updatedAt;
+      if (at && at !== basis) {
         // Someone saved meanwhile: open their version in edit mode
-        setSelectedRecord(fresh);
-        setStartInEdit(true);
-        setFormEpoch((e) => e + 1);
-        return;
+        const fresh = await fetchOne(record.id);
+        if (fresh) {
+          basisRef.current = { id: fresh.id, updatedAt: fresh.updatedAt };
+          setSelectedRecord(fresh);
+          setStartInEdit(true);
+          setFormEpoch((e) => e + 1);
+          return;
+        }
       }
       go();
     });
@@ -1457,6 +1482,7 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
   }, [autoOpenNew]);
 
   const openRecord = (record: AthleteAnamnesis) => {
+    basisRef.current = { id: record.id, updatedAt: record.updatedAt };
     setSelectedRecord(record);
     setStartInEdit(false);
     setFormEpoch((e) => e + 1);
@@ -1468,8 +1494,9 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
     setIsSaving(true);
     try {
       if (selectedRecord) {
-        const ok = await updateAnamnesis(selectedRecord.id, data);
-        if (ok) {
+        const stored = await updateAnamnesisRecord(selectedRecord.id, data);
+        if (stored) noteOwnSave(stored);
+        if (stored) {
           toast({ title: 'Anamnesis saved' });
           return selectedRecord.id;
         }
@@ -1684,7 +1711,12 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
             coachUserId={athletesId ?? ''}
             onSave={handleSave}
             recordId={selectedRecord?.id}
-            onPatch={selectedRecord ? (updates) => updateAnamnesis(selectedRecord.id, updates) : undefined}
+            onPatch={selectedRecord ? async (updates) => {
+              const stored = await updateAnamnesisRecord(selectedRecord.id, updates);
+              if (stored) noteOwnSave(stored);
+              return !!stored;
+            } : undefined}
+            editBusy={editGate.busy}
             onDirtyChange={setFormDirty}
             onDelete={selectedRecord && !healthLocked ? handleDelete : undefined}
             isSaving={isSaving}

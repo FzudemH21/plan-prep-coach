@@ -284,9 +284,10 @@ export function AthleteProfileView({
   const editStartRef = useRef<Athlete | null>(null);
 
   const startEditing = () => {
+    // The newest version (another coach may have saved just before) — checked while the lock is taken
+    const refreshed = athleteStore.refresh().catch(() => false);
     void editGate.begin('profile', `the profile of ${getAthleteDisplayName(athlete)}`, async () => {
-      // The newest version (another coach may have saved just before)
-      await athleteStore.refresh().catch(() => false);
+      await refreshed;
       const fresh = athleteStore.getState().data.athletes.find((a) => a.id === athlete.id) ?? athlete;
       editStartRef.current = fresh;
       setEditedAthlete({ ...fresh });

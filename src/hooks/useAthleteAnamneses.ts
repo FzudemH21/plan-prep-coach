@@ -167,8 +167,9 @@ export function useAthleteAnamneses(athleteLocalId: string) {
     [user],
   );
 
-  const updateAnamnesis = useCallback(
-    async (id: string, updates: Partial<Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'athleteLocalId' | 'createdAt'>>): Promise<boolean> => {
+  /** Saves changes; resolves with the stored record (null = not saved) */
+  const updateAnamnesisRecord = useCallback(
+    async (id: string, updates: Partial<Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'athleteLocalId' | 'createdAt'>>): Promise<AthleteAnamnesis | null> => {
       try {
         const dbUpdates: Record<string, unknown> = { updated_at: new Date().toISOString() };
         if (updates.templateId !== undefined) dbUpdates.template_id = updates.templateId;
@@ -199,14 +200,36 @@ export function useAthleteAnamneses(athleteLocalId: string) {
         if (error) throw error;
         const updated = fromDb(data as DbAnamnesis);
         setAnamneses((prev) => prev.map((a) => (a.id === id ? updated : a)));
-        return true;
+        return updated;
       } catch (err) {
         console.error('[useAthleteAnamneses] update error', err);
-        return false;
+        return null;
       }
     },
     [],
   );
+
+  const updateAnamnesis = useCallback(
+    async (id: string, updates: Partial<Omit<AthleteAnamnesis, 'id' | 'coachUserId' | 'athleteLocalId' | 'createdAt'>>): Promise<boolean> =>
+      (await updateAnamnesisRecord(id, updates)) !== null,
+    [updateAnamnesisRecord],
+  );
+
+  /** When a record was last stored (a few bytes — to see whether someone else saved it); null = unknown */
+  const fetchUpdatedAt = useCallback(async (id: string): Promise<string | null> => {
+    const { data, error } = await supabase.from('athlete_anamneses').select('updated_at').eq('id', id).maybeSingle();
+    if (error || !data) return null;
+    return (data as { updated_at: string }).updated_at;
+  }, []);
+
+  /** One record, freshly loaded (also put into the list); null = not loaded */
+  const fetchOne = useCallback(async (id: string): Promise<AthleteAnamnesis | null> => {
+    const { data, error } = await supabase.from('athlete_anamneses').select('*').eq('id', id).maybeSingle();
+    if (error || !data) return null;
+    const fresh = fromDb(data as DbAnamnesis);
+    setAnamneses((prev) => prev.map((a) => (a.id === id ? fresh : a)));
+    return fresh;
+  }, []);
 
   /** New record waiting for the athlete: the template's athlete sections are filled in online */
   const sendFormLink = useCallback(
@@ -279,7 +302,8 @@ export function useAthleteAnamneses(athleteLocalId: string) {
   }, []);
 
   return {
-    anamneses, loading, refetch: fetchAnamneses, createAnamnesis, updateAnamnesis, deleteAnamnesis,
+    anamneses, loading, refetch: fetchAnamneses, createAnamnesis, updateAnamnesis, updateAnamnesisRecord,
+    fetchUpdatedAt, fetchOne, deleteAnamnesis,
     sendFormLink, updateFormLink, markProfileApplied,
   };
 }
