@@ -71,7 +71,7 @@ import { ChatQuote } from '@/components/chat/ChatQuote';
 import { useAnamnesisCalendarSync } from '@/hooks/useAnamnesisCalendarSync';
 import { ChatAssignedOnlyNote, ChatSenderName, chatSenderLabels, joinNames } from '@/components/chat/ChatSenderName';
 import { useMyAthletes } from '@/hooks/useMyAthletes';
-import { useAthleteEditSession, useAthleteLockHolder } from '@/lib/athleteLock';
+import { useAthleteEditSession, useAthleteLockHolders } from '@/lib/athleteLock';
 import { EditingByChip, notifyEditTakenOver, useBeginAthleteEdit } from './AthleteEditGate';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,8 +114,17 @@ export function AthleteProfileView({
   defaultCalendarDate,
   defaultCalendarSessionName,
 }: AthleteProfileViewProps) {
-  const [isEditing, setIsEditing] = useState(false);
+  // Edit mode belongs to one athlete: this view stays mounted when another athlete is picked in the
+  // sidebar — it must not carry the edit mode (and its lock, or the half-edited form) over to them
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const isEditing = editingId === athlete.id;
+  const setIsEditing = (on: boolean) => setEditingId(on ? athlete.id : null);
   const [editedAthlete, setEditedAthlete] = useState<Partial<Athlete>>({});
+  useEffect(() => {
+    setEditingId((id) => (id && id !== athlete.id ? null : id));
+    setEditedAthlete({});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [athlete.id]);
 
   // Controlled tab state — Radix unmounts inactive panels so flex-1 layout is unaffected
   const [activeTab, setActiveTab] = useState(defaultTab ?? 'monitoring');
@@ -267,15 +276,15 @@ export function AthleteProfileView({
   }, [openNewAnamnesis, athlete.id]);
 
   // Editing locks the athlete for other coaches (lib/athleteLock): Edit takes the lock first
-  const editGate = useBeginAthleteEdit(athlete.id, getAthleteDisplayName(athlete));
-  const lockHolder = useAthleteLockHolder(athlete.id, authUser?.id);
-  const { lostTo: profileLostTo } = useAthleteEditSession(athlete.id, isEditing);
+  const editGate = useBeginAthleteEdit(athlete.id);
+  const lockHolders = useAthleteLockHolders(athlete.id, authUser?.id);
+  const { lostTo: profileLostTo } = useAthleteEditSession(athlete.id, 'profile', isEditing);
   // The profile as it was when editing started: only fields changed since then are saved, so
   // nothing someone else changed meanwhile (coaches, groups, notes …) is overwritten
   const editStartRef = useRef<Athlete | null>(null);
 
   const startEditing = () => {
-    void editGate.begin(async () => {
+    void editGate.begin('profile', `the profile of ${getAthleteDisplayName(athlete)}`, async () => {
       // The newest version (another coach may have saved just before)
       await athleteStore.refresh().catch(() => false);
       const fresh = athleteStore.getState().data.athletes.find((a) => a.id === athlete.id) ?? athlete;
@@ -359,11 +368,6 @@ export function AthleteProfileView({
   return (
     <div className="h-full flex flex-col">
       {editGate.dialog}
-      {lockHolder && (
-        <p className="mx-1 mt-1 shrink-0 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-          {lockHolder} is editing this athlete — you can view everything; editing is possible once they are done.
-        </p>
-      )}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col">
         <TabsList className="mx-1 mt-1 w-fit">
           <TabsTrigger value="profile" className="gap-2">
@@ -429,7 +433,7 @@ export function AthleteProfileView({
                 </>
               ) : (
                 <>
-                  <EditingByChip name={lockHolder} />
+                  <EditingByChip name={lockHolders.get('profile') ?? null} />
                   <Button variant="outline" size="sm" onClick={startEditing} disabled={editGate.busy}>
                     {editGate.busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
                     Edit

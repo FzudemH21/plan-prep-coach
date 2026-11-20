@@ -70,7 +70,7 @@ import { AnamnesisFieldInput } from '@/components/anamnesis/AnamnesisInputs';
 import { AnswerFiles } from '@/components/anamnesis/AnamnesisFiles';
 import { useDataScope, useHealthReadOnly } from '@/hooks/useDataScope';
 import { HEALTH_VIEW_ONLY_TITLE, ViewOnlyBadge } from '@/components/shared/ViewOnlyBadge';
-import { useAthleteEditSession, useAthleteLockHolder } from '@/lib/athleteLock';
+import { useAthleteEditSession, useAthleteLockHolders } from '@/lib/athleteLock';
 import { EditingByChip, notifyEditTakenOver, useBeginAthleteEdit } from '@/components/athletes/AthleteEditGate';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -725,7 +725,7 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
   };
 
   // Edit mode holds the athlete's edit lock; an owner taking it over ends the edit
-  const { lostTo } = useAthleteEditSession(athleteLocalId, mode === 'edit' && !locked);
+  const { lostTo } = useAthleteEditSession(athleteLocalId, recordId ? `anamnesis:${recordId}` : null, mode === 'edit' && !locked);
   useEffect(() => {
     if (!lostTo) return;
     notifyEditTakenOver(lostTo);
@@ -1283,9 +1283,12 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
 function RecordCard({
   record,
   onClick,
+  editingBy = null,
 }: {
   record: AthleteAnamnesis;
   onClick: () => void;
+  /** Someone else is editing this anamnesis right now */
+  editingBy?: string | null;
 }) {
   const dateLabel = (() => {
     try {
@@ -1340,6 +1343,7 @@ function RecordCard({
               Filled in by athlete
             </Badge>
           )}
+          <EditingByChip name={editingBy} />
         </div>
         {preview && (
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{preview}</p>
@@ -1412,26 +1416,25 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
   };
 
   // Creating or editing an anamnesis locks the athlete for other coaches (lib/athleteLock)
-  const editGate = useBeginAthleteEdit(athlete.id, athleteName);
-  const lockHolder = useAthleteLockHolder(athlete.id, user?.id);
+  const editGate = useBeginAthleteEdit(athlete.id);
+  const lockHolders = useAthleteLockHolders(athlete.id, user?.id);
   // Remounts the form (fresh data, edit mode) when editing starts on a newer version of the record
   const [formEpoch, setFormEpoch] = useState(0);
   const [startInEdit, setStartInEdit] = useState(false);
 
+  // A new anamnesis locks nothing (nobody else can be editing it)
   const openNew = () => {
-    void editGate.begin(() => {
-      setSelectedRecord(null);
-      setStartInEdit(false);
-      setFormEpoch((e) => e + 1);
-      setSheetOpen(true);
-    });
+    setSelectedRecord(null);
+    setStartInEdit(false);
+    setFormEpoch((e) => e + 1);
+    setSheetOpen(true);
   };
 
   /** Edit on a saved record: the lock first, then the newest version of the record */
   const beginRecordEdit = (go: () => void) => {
     const record = selectedRecord;
-    void editGate.begin(async () => {
-      if (!record) { go(); return; }
+    if (!record) { go(); return; }
+    void editGate.begin(`anamnesis:${record.id}`, 'this anamnesis', async () => {
       const list = await refetch();
       const fresh = list?.find((a) => a.id === record.id);
       if (fresh && fresh.updatedAt !== record.updatedAt) {
@@ -1525,7 +1528,6 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
           </Button>
           {healthLocked ? <ViewOnlyBadge show label="health data" title={HEALTH_VIEW_ONLY_TITLE} /> : (
             <>
-              <EditingByChip name={lockHolder} />
               <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => setSendOpen(true)}>
                 <Send className="h-3.5 w-3.5" />
                 Send form link
@@ -1580,7 +1582,7 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
         ))}
 
         {!loading && anamneses.map((record) => (
-          <RecordCard key={record.id} record={record} onClick={() => openRecord(record)} />
+          <RecordCard key={record.id} record={record} onClick={() => openRecord(record)} editingBy={lockHolders.get(`anamnesis:${record.id}`) ?? null} />
         ))}
       </div>
 
@@ -1658,7 +1660,7 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
             startInEdit={startInEdit}
             onBeginEdit={beginRecordEdit}
             onEditLost={() => { setFormDirty(false); setSheetOpen(false); }}
-            lockHolder={lockHolder}
+            lockHolder={selectedRecord ? lockHolders.get(`anamnesis:${selectedRecord.id}`) ?? null : null}
             initial={selectedRecord
               ? {
                   athleteLocalId: athlete.id,

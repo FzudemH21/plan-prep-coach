@@ -1,7 +1,7 @@
 /**
- * Starting to edit an athlete: takes the athlete's edit lock first (lib/athleteLock). When another
- * coach is editing, a dialog says who — owners can take over. Also the message for the coach whose
- * editing was taken over.
+ * Starting to edit something of an athlete (the profile, one anamnesis): takes its edit lock first
+ * (lib/athleteLock). When another coach is editing it, a dialog says who — owners can take over.
+ * Also the message for the coach whose editing was taken over.
  */
 import { useCallback, useState, type ReactNode } from 'react';
 import { Loader2, Lock } from 'lucide-react';
@@ -10,31 +10,34 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { lockAthlete, type AthleteLockResult } from '@/lib/athleteLock';
+import { lockAthlete, type AthleteLockItem, type AthleteLockResult } from '@/lib/athleteLock';
 import { toast } from '@/hooks/use-toast';
 
+type Go = () => void | Promise<void>;
+
 /**
- * begin(go): takes the lock, then runs `go` (enter edit mode). `dialog` must be rendered. `busy`
- * while the lock is being checked.
+ * begin(item, what, go): takes the item's lock, then runs `go` (enter edit mode). `what` names the
+ * item in the dialog ("the profile of Max Muster"). `dialog` must be rendered; `busy` while the lock
+ * is being checked.
  */
-export function useBeginAthleteEdit(athleteId: string | undefined, athleteName: string): {
-  begin: (go: () => void | Promise<void>) => Promise<void>;
+export function useBeginAthleteEdit(athleteId: string | undefined): {
+  begin: (item: AthleteLockItem, what: string, go: Go) => Promise<void>;
   busy: boolean;
   dialog: ReactNode;
 } {
   const [busy, setBusy] = useState(false);
-  const [blocked, setBlocked] = useState<(AthleteLockResult & { go: () => void | Promise<void> }) | null>(null);
-  // Who was editing, kept while the dialog fades out
-  const [shown, setShown] = useState<AthleteLockResult | null>(null);
+  const [blocked, setBlocked] = useState<{ item: AthleteLockItem; go: Go } | null>(null);
+  // Who was editing what, kept while the dialog fades out
+  const [shown, setShown] = useState<(AthleteLockResult & { what: string }) | null>(null);
   const [taking, setTaking] = useState(false);
 
-  const begin = useCallback(async (go: () => void | Promise<void>) => {
+  const begin = useCallback(async (item: AthleteLockItem, what: string, go: Go) => {
     if (!athleteId) { await go(); return; }
     setBusy(true);
     try {
-      const r = await lockAthlete(athleteId);
+      const r = await lockAthlete(athleteId, item);
       if (r.acquired) await go();
-      else { setBlocked({ ...r, go }); setShown(r); }
+      else { setBlocked({ item, go }); setShown({ ...r, what }); }
     } finally {
       setBusy(false);
     }
@@ -43,7 +46,7 @@ export function useBeginAthleteEdit(athleteId: string | undefined, athleteName: 
   const takeOver = async () => {
     if (!athleteId || !blocked) return;
     setTaking(true);
-    const r = await lockAthlete(athleteId, true);
+    const r = await lockAthlete(athleteId, blocked.item, true);
     setTaking(false);
     if (!r.acquired) {
       toast({ title: 'Could not take over', description: 'Please try again in a moment.', variant: 'destructive' });
@@ -58,7 +61,7 @@ export function useBeginAthleteEdit(athleteId: string | undefined, athleteName: 
     <AlertDialog open={!!blocked} onOpenChange={(open) => { if (!open) setBlocked(null); }}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{shown?.holderName} is editing {athleteName}</AlertDialogTitle>
+          <AlertDialogTitle>{shown?.holderName} is editing {shown?.what}</AlertDialogTitle>
           <AlertDialogDescription>
             {shown?.canTakeOver
               ? 'You can edit once they are done — or take over now. Their unsaved changes would not be saved.'
