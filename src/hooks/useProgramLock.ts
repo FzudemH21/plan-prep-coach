@@ -94,7 +94,8 @@ export function useProgramLock(programId: string | null, enabled: boolean, onSta
       if (wasMine) {
         releaseTimers.set(programId, setTimeout(() => {
           releaseTimers.delete(programId);
-          void supabase.rpc('unlock_program', { p_program: programId });
+          // (a Supabase request is only sent once its result is asked for — hence the .then)
+          supabase.rpc('unlock_program', { p_program: programId }).then(() => undefined, () => undefined);
         }, RELEASE_DELAY_MS));
       }
     };

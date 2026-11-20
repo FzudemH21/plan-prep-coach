@@ -128,7 +128,8 @@ function endSession(e: Entry) {
   const lost = !!e.lostTo;
   e.release = setTimeout(() => {
     e.release = null;
-    if (e.sessions === 0 && !lost) void supabase.rpc('unlock_athlete', { p_athlete: e.athleteId, p_item: e.item });
+    // (a Supabase request is only sent once its result is asked for — hence the .then)
+    if (e.sessions === 0 && !lost) supabase.rpc('unlock_athlete', { p_athlete: e.athleteId, p_item: e.item }).then(() => undefined, () => undefined);
   }, RELEASE_DELAY_MS);
 }
 

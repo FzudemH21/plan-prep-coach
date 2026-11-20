@@ -748,7 +748,7 @@ export default function AthleteSessionPage() {
           if (resolved) {
             entry.toExerciseName = resolved;
             // Back-fill in DB so future loads are instant
-            supabase.from('exercise_progressions').update({ to_exercise_name: resolved }).eq('id', entry.id);
+            supabase.from('exercise_progressions').update({ to_exercise_name: resolved }).eq('id', entry.id).then(() => undefined, () => undefined);
           }
         }
       }
