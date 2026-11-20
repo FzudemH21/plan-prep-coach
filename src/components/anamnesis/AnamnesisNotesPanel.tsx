@@ -55,23 +55,6 @@ function stamp(iso: string): string {
   try { return format(parseISO(iso), 'd MMM yyyy, HH:mm'); } catch { return iso; }
 }
 
-/** Language of the dictation: automatic, or set — a set language transcribes more accurately.
- *  Remembered in this browser (a convenience only; without storage it is "Auto"). */
-type DictationLanguage = 'auto' | 'de' | 'en';
-const LANGUAGE_KEY = 'ppc-dictation-language';
-const LANGUAGES: { value: DictationLanguage; label: string; title: string }[] = [
-  { value: 'auto', label: 'Auto', title: 'Recognise the language automatically' },
-  { value: 'de', label: 'DE', title: 'Dictation in German' },
-  { value: 'en', label: 'EN', title: 'Dictation in English' },
-];
-
-function readLanguage(): DictationLanguage {
-  try {
-    const v = localStorage.getItem(LANGUAGE_KEY);
-    return v === 'de' || v === 'en' ? v : 'auto';
-  } catch { return 'auto'; }
-}
-
 function mmss(s: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
@@ -87,11 +70,6 @@ export function AnamnesisNotesPanel({ entries, onChange, coachUserId, athleteLoc
   const [transcribing, setTranscribing] = useState(false);
   const [transcript, setTranscript] = useState<string | null>(null);
   const [dictationError, setDictationError] = useState<string | null>(null);
-  const [language, setLanguageState] = useState<DictationLanguage>(readLanguage);
-  const setLanguage = (v: DictationLanguage) => {
-    setLanguageState(v);
-    try { localStorage.setItem(LANGUAGE_KEY, v); } catch { /* not remembered — fine */ }
-  };
 
   const addNote = async (text: string, source: AnamnesisNote['source']) => {
     const clean = text.trim();
@@ -137,9 +115,7 @@ export function AnamnesisNotesPanel({ entries, onChange, coachUserId, athleteLoc
     setDictationError(null);
     try {
       const terms = athleteName && athleteName !== 'Athlete' ? [athleteName, ...athleteName.split(/\s+/)] : [];
-      const text = await transcribeDictation(audio, {
-        coachUserId, athleteLocalId, terms, ...(language !== 'auto' ? { language } : {}),
-      });
+      const text = await transcribeDictation(audio, { coachUserId, athleteLocalId, terms });
       setTranscript(text);
       if (!text) setDictationError('No speech was recognised. Try again a bit closer to the microphone.');
     } catch (err) {
@@ -160,38 +136,18 @@ export function AnamnesisNotesPanel({ entries, onChange, coachUserId, athleteLoc
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Notes</h3>
         {!dictating && (
-          <div className="flex items-center gap-1.5">
-            <div className="flex rounded-md border p-0.5" role="radiogroup" aria-label="Dictation language">
-              {LANGUAGES.map(l => (
-                <button
-                  key={l.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={language === l.value}
-                  title={l.title}
-                  onClick={() => setLanguage(l.value)}
-                  className={cn(
-                    'h-6 px-2 rounded text-xs transition-colors',
-                    language === l.value ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {l.label}
-                </button>
-              ))}
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 gap-1.5 text-xs"
-              onClick={() => { setDictationError(null); void recorder.start(); }}
-              disabled={busy}
-              title="Record a note — it is turned into text, the audio is not kept"
-            >
-              <Mic className="h-3 w-3" />
-              Dictate
-            </Button>
-          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
+            onClick={() => { setDictationError(null); void recorder.start(); }}
+            disabled={busy}
+            title="Record a note — it is turned into text, the audio is not kept"
+          >
+            <Mic className="h-3 w-3" />
+            Dictate
+          </Button>
         )}
       </div>
 
