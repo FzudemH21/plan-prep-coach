@@ -259,7 +259,9 @@ function RecordForm({
   // What the AI could not make out when summarising — asked here instead of written into the summary
   const [summaryQuestions, setSummaryQuestions] = useState<string[]>([]);
   const [summaryAnswers, setSummaryAnswers] = useState<string[]>([]);
-  const [summaryClarified, setSummaryClarified] = useState<BriefClarification[]>([]);
+  // The coach's answers to the AI's questions — stored with the anamnesis, used by every later summary
+  const [summaryClarified, setSummaryClarified] = useState<BriefClarification[]>(initial?.aiClarifications ?? []);
+  const [showClarified, setShowClarified] = useState(false);
   const [attachments, setAttachments] = useState<AnamnesisAttachment[]>(initial?.attachments ?? []);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -512,8 +514,10 @@ function RecordForm({
       athleteLocalId, templateId, templateSnapshot, conductedAt, customQuestions, fieldValues, customFieldValues,
       notes: '', noteEntries, aiSummary: null, attachments,
     };
-    const clarificationText = clarifications.length
-      ? `\n\nClarifications from the coach (answers to your earlier questions — they count as stated information):\n${clarifications.map((c) => `- Q: ${c.question}\n  A: ${c.answer}`).join('\n')}`
+    // The answers given for the summary count here too
+    const allClarified = [...summaryClarified, ...clarifications];
+    const clarificationText = allClarified.length
+      ? `\n\nClarifications from the coach (answers to your earlier questions — they count as stated information):\n${allClarified.map((c) => `- Q: ${c.question}\n  A: ${c.answer}`).join('\n')}`
       : '';
     const prompt = `${buildSummaryPrompt(dataSnapshot, athleteName, conditionSex)}\n\nReason for referral (written by the coach — context only, do not repeat it):\n${reason.trim() || '(none given)'}${clarificationText}`;
     const german = lang === 'de';
@@ -620,7 +624,7 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
       setAiSummary(summary);
       // A saved record keeps the summary right away (no need to switch to edit mode)
       if (onPatch && recordId) {
-        const ok = await onPatch({ aiSummary: summary });
+        const ok = await onPatch({ aiSummary: summary, aiClarifications: clarified });
         if (ok) {
           void logAnamnesisChange(recordId, changedByName, previous ? 'AI summary updated' : 'AI summary created',
             [{ what: 'AI summary', from: previous ?? '—', to: summary }]);
@@ -632,6 +636,14 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
     } finally {
       setGeneratingSummary(false);
     }
+  };
+
+  /** A remembered answer that no longer holds: not used by the next summary */
+  const forgetClarification = (index: number) => {
+    const next = summaryClarified.filter((_, i) => i !== index);
+    setSummaryClarified(next);
+    if (next.length === 0) setShowClarified(false);
+    if (onPatch && recordId) void onPatch({ aiClarifications: next });
   };
 
   /** PDF of what is in the form right now (also unsaved changes) — for the first appointment */
@@ -715,6 +727,7 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
       notes: notesAsText(noteEntries),
       noteEntries,
       aiSummary,
+      aiClarifications: summaryClarified,
       attachments,
     });
     setSavingInBackground(false);
@@ -1147,6 +1160,33 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
                 <Button size="sm" className="h-7 gap-1.5 text-xs" disabled={!summaryAnswers.some((a) => a.trim())} onClick={handleGenerateSummary}>
                   <Sparkles className="h-3 w-3" />Answer &amp; write again
                 </Button>
+              </div>
+            )}
+            {summaryClarified.length > 0 && (
+              <div className="text-xs">
+                <button type="button" className="text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                  onClick={() => setShowClarified((v) => !v)}>
+                  {summaryClarified.length === 1 ? '1 earlier answer is used' : `${summaryClarified.length} earlier answers are used`}
+                  {showClarified ? ' — hide' : ' — show'}
+                </button>
+                {showClarified && (
+                  <ul className="mt-1.5 space-y-1">
+                    {summaryClarified.map((c, i) => (
+                      <li key={`${i}-${c.question}`} className="flex items-start gap-2 rounded border bg-muted/20 px-2 py-1.5">
+                        <span className="flex-1 min-w-0">
+                          <span className="text-muted-foreground">{c.question}</span>
+                          <span className="block">{c.answer}</span>
+                        </span>
+                        {!locked && (
+                          <button type="button" title="Don't use this answer any more" onClick={() => forgetClarification(i)}
+                            className="shrink-0 p-0.5 text-muted-foreground hover:text-destructive">
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
             {aiSummary ? (
@@ -1700,6 +1740,7 @@ export function AthleteAnamnesisTab({ athlete, autoOpenNew = false, onAutoOpenHa
                   notes: selectedRecord.notes,
                   noteEntries: selectedRecord.noteEntries,
                   aiSummary: selectedRecord.aiSummary,
+                  aiClarifications: selectedRecord.aiClarifications ?? [],
                   attachments: selectedRecord.attachments ?? [],
                 }
               : null}

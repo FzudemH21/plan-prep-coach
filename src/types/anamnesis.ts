@@ -220,6 +220,9 @@ export interface AthleteAnamnesis {
   /** Notes added to the anamnesis, typed or dictated (migration 20261010); older records only have `notes` */
   noteEntries?: AnamnesisNote[];
   aiSummary: string | null;
+  /** The coach's answers to the AI's questions about this anamnesis — used again by every later
+   *  summary (migration 20261121; unset before it is run) */
+  aiClarifications?: Array<{ question: string; answer: string }>;
   attachments: AnamnesisAttachment[];
   /** Online form link: 'sent' = waiting for the athlete, 'submitted' = athlete sent it; null = coach-only record */
   formStatus?: 'sent' | 'submitted' | null;

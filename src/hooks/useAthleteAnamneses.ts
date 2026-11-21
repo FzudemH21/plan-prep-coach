@@ -44,6 +44,8 @@ interface DbAnamnesis {
   // Notes list (migration 20261010) — absent before it is run
   note_entries?: AnamnesisNote[] | null;
   ai_summary: string | null;
+  // The coach's answers to the AI's questions (migration 20261121) — absent before it is run
+  ai_clarifications?: Array<{ question: string; answer: string }> | null;
   attachments: AnamnesisAttachment[];
   // Form link columns (migration 20261002) — absent before it is run
   form_token?: string | null;
@@ -72,6 +74,7 @@ function fromDb(row: DbAnamnesis): AthleteAnamnesis {
     notes: row.notes ?? '',
     noteEntries: row.note_entries ?? [],
     aiSummary: row.ai_summary ?? null,
+    aiClarifications: Array.isArray(row.ai_clarifications) ? row.ai_clarifications : [],
     attachments: row.attachments ?? [],
     formToken: row.form_token ?? null,
     formStatus: row.form_status ?? null,
@@ -85,6 +88,9 @@ function fromDb(row: DbAnamnesis): AthleteAnamnesis {
     updatedAt: row.updated_at,
   };
 }
+
+/** Columns added by later migrations — a save without them still works before they are run */
+const OPTIONAL_COLUMNS = ['note_entries', 'ai_clarifications'] as const;
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
@@ -147,12 +153,16 @@ export function useAthleteAnamneses(athleteLocalId: string) {
           attachments: payload.attachments ?? [],
         };
         if (payload.noteEntries?.length) values.note_entries = payload.noteEntries;
+        if (payload.aiClarifications?.length) values.ai_clarifications = payload.aiClarifications;
         const run = (v: Record<string, unknown>) => supabase.from('athlete_anamneses').insert(v).select().single();
         let { data, error } = await run(values);
-        // Before migration 20261010 there is no note_entries column (the notes are in `notes` too)
-        if (error && 'note_entries' in values && /note_entries/.test(error.message ?? '')) {
-          const { note_entries: _skipped, ...rest } = values;
-          ({ data, error } = await run(rest));
+        // Columns of later migrations that may not exist yet (20261010 notes list — the notes are in
+        // `notes` too; 20261121 AI answers): saved without them
+        for (const col of OPTIONAL_COLUMNS) {
+          if (error && col in values && new RegExp(col).test(error.message ?? '')) {
+            delete values[col];
+            ({ data, error } = await run(values));
+          }
         }
 
         if (error) throw error;
@@ -181,6 +191,7 @@ export function useAthleteAnamneses(athleteLocalId: string) {
         if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
         if (updates.noteEntries !== undefined) dbUpdates.note_entries = updates.noteEntries;
         if (updates.aiSummary !== undefined) dbUpdates.ai_summary = updates.aiSummary;
+        if (updates.aiClarifications !== undefined) dbUpdates.ai_clarifications = updates.aiClarifications;
         if (updates.attachments !== undefined) dbUpdates.attachments = updates.attachments;
 
         const run = (values: Record<string, unknown>) => supabase
@@ -190,11 +201,13 @@ export function useAthleteAnamneses(athleteLocalId: string) {
           .select()
           .single();
         let { data, error } = await run(dbUpdates);
-        // Before migration 20261010 there is no note_entries column: save the rest (the notes
-        // still go into the plain `notes` text)
-        if (error && 'note_entries' in dbUpdates && /note_entries/.test(error.message ?? '')) {
-          const { note_entries: _skipped, ...rest } = dbUpdates;
-          ({ data, error } = await run(rest));
+        // Columns of later migrations that may not exist yet: save the rest (the notes still go into
+        // the plain `notes` text)
+        for (const col of OPTIONAL_COLUMNS) {
+          if (error && col in dbUpdates && new RegExp(col).test(error.message ?? '')) {
+            delete dbUpdates[col];
+            ({ data, error } = await run(dbUpdates));
+          }
         }
 
         if (error) throw error;
