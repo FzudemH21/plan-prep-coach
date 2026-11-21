@@ -76,6 +76,9 @@ import { usePersistentSet } from '@/hooks/usePersistentState';
 import { usePlannerProgram } from "@/hooks/useProgramAccess";
 import { AthleteGlimpseButton } from "@/components/athletes/AthleteGlimpse";
 
+/** Width of one session's cell in a split microcycle (periodization table) */
+const SESSION_CELL_WIDTH = 120;
+
 // Helper function for string normalization - robust canonicalization
 const normalizeForComparison = (str: unknown): string => {
   if (typeof str !== 'string') return '';
@@ -2168,24 +2171,29 @@ export default function MesocyclePage() {
     return 1;
   };
 
-  // Helper function to get microcycle split key (global across all methods)
-  const getMicrocycleSplitKey = (mesocycleId: string, microcycleIndex: number) => {
-    return `${mesocycleId}-${microcycleIndex}`;
+  // Splitting a microcycle into sessions (A, B, …) is per METHOD: core can vary between Monday and
+  // Friday while strength stays one set of values. The microcycle's column is as wide as its widest
+  // split method needs; methods that aren't split keep one cell across it.
+  const getMicrocycleSplitKey = (mesocycleId: string, microcycleIndex: number, methodName: string) =>
+    `${mesocycleId}-${microcycleIndex}::${methodName}`;
+
+  /** Values entered for a session after the first (B, C …) — such a method opens split */
+  const hasLaterSessionValues = (mesocycleId: string, microcycleIndex: number, methodName: string) => {
+    const sessions = parameterValues[mesocycleId]?.[microcycleIndex]?.[methodName];
+    if (!sessions) return false;
+    return Object.entries(sessions).some(([idx, values]) => Number(idx) > 0 && values
+      && Object.entries(values).some(([k, v]) => !k.endsWith('_unit') && v !== '' && v !== null && v !== undefined));
   };
 
-  // Helper function to toggle microcycle split (affects all methods in that microcycle)
-  const toggleMicrocycleSplit = (mesocycleId: string, microcycleIndex: number) => {
-    const key = getMicrocycleSplitKey(mesocycleId, microcycleIndex);
-    setGlobalMicrocycleSplitStates(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
+  const isMicrocycleSplit = (mesocycleId: string, microcycleIndex: number, methodName: string) => {
+    const key = getMicrocycleSplitKey(mesocycleId, microcycleIndex, methodName);
+    return globalMicrocycleSplitStates[key] ?? hasLaterSessionValues(mesocycleId, microcycleIndex, methodName);
   };
 
-  // Helper function to check if microcycle is split (global across all methods)
-  const isMicrocycleSplit = (mesocycleId: string, microcycleIndex: number) => {
-    const key = getMicrocycleSplitKey(mesocycleId, microcycleIndex);
-    return globalMicrocycleSplitStates[key] || false;
+  const toggleMicrocycleSplit = (mesocycleId: string, microcycleIndex: number, methodName: string) => {
+    const key = getMicrocycleSplitKey(mesocycleId, microcycleIndex, methodName);
+    const current = isMicrocycleSplit(mesocycleId, microcycleIndex, methodName);
+    setGlobalMicrocycleSplitStates(prev => ({ ...prev, [key]: !current }));
   };
 
   // Helper function to get number of sessions for a cell
@@ -2326,14 +2334,14 @@ export default function MesocyclePage() {
     getMethodsForAllocatedSubGoals.forEach((method: string) => {
       if (isMethodAllocatedToMesocycle(method, mesocycleId)) {
         const frequency = getCellFrequency(mesocycleId, microcycleIndex, method);
-        const isSplit = isMicrocycleSplit(mesocycleId, microcycleIndex);
+        const isSplit = isMicrocycleSplit(mesocycleId, microcycleIndex, method);
         if (isSplit && frequency > maxFrequency) {
           maxFrequency = frequency;
         }
       }
     });
     
-    return maxFrequency > 1 ? maxFrequency * 120 : 180;
+    return maxFrequency > 1 ? maxFrequency * SESSION_CELL_WIDTH : 180;
   }, [mesocycles, getMethodsForAllocatedSubGoals, isMethodAllocatedToMesocycle, getCellFrequency, isMicrocycleSplit]);
 
   // Get visible mesocycles based on selected IDs (maintains original order)
@@ -2594,7 +2602,7 @@ export default function MesocyclePage() {
     targetMesocycles.forEach(mesocycle => {
       for (let i = 0; i < (mesocycle.microcycles?.length || 0); i++) {
         // Check if this microcycle is split into multiple sessions
-        const isSplit = isMicrocycleSplit(mesocycle.id, i);
+        const isSplit = isMicrocycleSplit(mesocycle.id, i, methodName);
         
         if (isSplit) {
           // When microcycle is split, fill ALL sessions based on frequency
@@ -3106,8 +3114,7 @@ export default function MesocyclePage() {
     
     microcyclesToCheck.forEach(({index: microIndex}) => {
       // Check frequency split for this microcycle
-      const splitKey = `${mesocycleId}-${microIndex}`;
-      const isSplit = globalMicrocycleSplitStates[splitKey] || false;
+      const isSplit = isMicrocycleSplit(mesocycleId, microIndex, fullMethodName);
       
       // Get method parameters for this microcycle
       let methodParams = parameterValues[mesocycleId]?.[microIndex]?.[fullMethodName];
@@ -3891,7 +3898,7 @@ export default function MesocyclePage() {
                                                   {(meso.microcycles || []).map((microcycle, microcycleIndex) => {
                                                 const isAllocated = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
                                                 const frequency = getCellFrequency(meso.id, microcycleIndex, fullMethodName);
-                                                const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
+                                                const isSplit = isMicrocycleSplit(meso.id, microcycleIndex, fullMethodName);
                                                 const sessionsCount = getCellSessions(meso.id, microcycleIndex, fullMethodName);
                                                 const hasFrequencyParam = hasValidFrequencyParameter(baseMethodName);
                                                 return (
@@ -3917,7 +3924,7 @@ export default function MesocyclePage() {
                                                    <div className="flex items-center gap-1">
                                                       {hasFrequencyParam && (isSplit || (frequency > 1 && frequency <= 10)) && (
                                                          <button
-                                                           onClick={() => toggleMicrocycleSplit(meso.id, microcycleIndex)}
+                                                           onClick={() => toggleMicrocycleSplit(meso.id, microcycleIndex, fullMethodName)}
                                                            className="p-0.5 text-current hover:bg-black/20 rounded transition-colors"
                                                           title={`${isSplit ? 'Merge' : 'Split'} sessions (${frequency}×/wk)`}
                                                         >
@@ -3928,7 +3935,9 @@ export default function MesocyclePage() {
                                                   {isSplit && (
                                                     <div className="flex gap-0.5 text-[10px] w-full">
                                                       {Array.from({ length: sessionsCount }, (_, i) => (
-                                                        <span key={i} className="flex-1 text-center px-1 bg-black/20 rounded">
+                                                        // Fixed width per session (the column is as wide as the method with the
+                                                        // most sessions in this microcycle needs) — fewer sessions don't stretch
+                                                        <span key={i} className="flex-none text-center px-1 bg-black/20 rounded" style={{ width: SESSION_CELL_WIDTH - 4 }}>
                                                           {String.fromCharCode(65 + i)}
                                                         </span>
                                                       ))}
@@ -3982,7 +3991,7 @@ export default function MesocyclePage() {
                                                         )}
                                                         {(meso.microcycles || []).map((microcycle, microcycleIndex) => {
                                                         const isAllocated = isMethodAllocatedToMesocycle(fullMethodName, meso.id);
-                                                         const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
+                                                         const isSplit = isMicrocycleSplit(meso.id, microcycleIndex, fullMethodName);
                                                          const sessionsCount = getCellSessions(meso.id, microcycleIndex, fullMethodName);
                                                         const isFrequency = isFrequencyParameter(param.name, fullMethodName);
                                                       // Frequency 0 = no sessions of this method in the microcycle: nothing to fill in
@@ -4009,8 +4018,8 @@ export default function MesocyclePage() {
                                                               return (
                                                                 <div 
                                                                   key={sessionIndex}
-                                                                  className={`relative z-10 p-1 border-l flex-1 ${!isAllocated ? 'bg-muted/20' : ''}`}
-                                                                  style={{ minWidth: '120px' }}
+                                                                  className={`relative z-10 p-1 border-l flex-none ${!isAllocated ? 'bg-muted/20' : ''}`}
+                                                                  style={{ width: SESSION_CELL_WIDTH }}
                                                                   data-drag-cell={cellId}
                                                                   data-allocated={isAllocated ? 'true' : 'false'}
                                                                 >
