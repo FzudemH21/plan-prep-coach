@@ -754,6 +754,13 @@ export default function MesocyclePage() {
   }
 
   // Get tests in date range — combines calendarEvents (athlete-bound) + plan-state (wizard-assigned)
+  // Whole days: an event or test on a microcycle's last day counts (the microcycle ends at midnight,
+  // stored dates are noon — compared as times, the last day fell out)
+  const inRange = (d: Date, start: Date, end: Date) => {
+    const day = format(d, 'yyyy-MM-dd');
+    return day >= format(start, 'yyyy-MM-dd') && day <= format(end, 'yyyy-MM-dd');
+  };
+
   const getTestsInRange = (start: Date, end: Date): TestDetail[] => {
     const testMap = new Map<string, Date[]>();
     const addTest = (name: string, d: Date) => {
@@ -766,14 +773,14 @@ export default function MesocyclePage() {
       .filter(e => e.type === 'test')
       .forEach(e => {
         const d = parseDateStr(e.date);
-        if (d >= start && d <= end) addTest(e.title, d);
+        if (inRange(d, start, end)) addTest(e.title, d);
       });
     // Source 2: plan-state (wizard-assigned sub-goal tests)
     macrocycleData?.subGoals?.forEach((sg: any) => {
       const name = sg.testMethod || sg.description || 'Test';
       sg.testDates?.forEach((td: string) => {
         const d = parseDateStr(td);
-        if (d >= start && d <= end) addTest(name, d);
+        if (inRange(d, start, end)) addTest(name, d);
       });
     });
     // Source 3: plan-state primary SMART goal tests
@@ -781,7 +788,7 @@ export default function MesocyclePage() {
       const name = sg.description || 'Test';
       sg.testDates?.forEach((td: string) => {
         const d = parseDateStr(td);
-        if (d >= start && d <= end) addTest(name, d);
+        if (inRange(d, start, end)) addTest(name, d);
       });
     });
     return Array.from(testMap.entries()).map(([name, dates]) => ({
@@ -803,14 +810,14 @@ export default function MesocyclePage() {
       .filter(e => e.type === 'event')
       .forEach(e => eventDateList(e).forEach(ds => {
         const d = parseDateStr(ds);
-        if (d >= start && d <= end) addEvent(e.title, d);
+        if (inRange(d, start, end)) addEvent(e.title, d);
       }));
     // Source 2: plan-state (wizard-assigned events)
     macrocycleData?.events?.forEach((e: any) => {
       const name = e.name || 'Event';
       e.eventDates?.forEach((ed: string) => {
         const d = parseDateStr(ed);
-        if (d >= start && d <= end) addEvent(name, d);
+        if (inRange(d, start, end)) addEvent(name, d);
       });
     });
     return Array.from(eventMap.entries()).map(([name, dates]) => ({
