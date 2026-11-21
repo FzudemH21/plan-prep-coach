@@ -78,8 +78,8 @@ import { AthleteGlimpseButton } from "@/components/athletes/AthleteGlimpse";
 
 /** Width of one session's cell in a split microcycle (periodization table) */
 const SESSION_CELL_WIDTH = 120;
-// Lines in the periodization table: a clear 2 px line between microcycles (border-r-2 border-r-foreground/30),
-// a thin dashed one between the sessions of a split microcycle
+// Lines in the periodization table, in two levels: a solid 3 px line between microcycles,
+// a lighter dashed 2 px one between the sessions of a split microcycle
 
 // Helper function for string normalization - robust canonicalization
 const normalizeForComparison = (str: unknown): string => {
@@ -3906,7 +3906,7 @@ export default function MesocyclePage() {
                                                 return (
                                                   <div 
                                                     key={`${meso.id}-${microcycleIndex}`} 
-                                                    className={`relative z-10 p-2 text-xs text-center font-medium border-r-2 border-r-foreground/30 ${!isAllocated ? 'opacity-50' : ''} ${!hasFrequencyParam ? 'border-2 border-destructive/50' : ''} flex flex-col items-center gap-1`}
+                                                    className={`relative z-10 p-2 text-xs text-center font-medium border-r-[3px] border-r-foreground/40 ${!isAllocated ? 'opacity-50' : ''} ${!hasFrequencyParam ? 'border-2 border-destructive/50' : ''} flex flex-col items-center gap-1`}
                                                     style={intensityBgStyle(microcycle.intensity)}
                                                  >
                                                    {/* Show warning icon if no frequency parameter */}
@@ -4003,7 +4003,7 @@ export default function MesocyclePage() {
                                                       if (!isFrequency && sessionsCount === 0) {
                                                         return (
                                                           <div key={`${meso.id}-${microcycleIndex}`}
-                                                            className="relative z-10 border-r-2 border-r-foreground/30 flex items-center justify-center text-xs text-muted-foreground bg-muted/20"
+                                                            className="relative z-10 border-r-[3px] border-r-foreground/40 flex items-center justify-center text-xs text-muted-foreground bg-muted/20"
                                                             title="Frequency 0 — no sessions of this method in this microcycle">
                                                             —
                                                           </div>
@@ -4011,7 +4011,7 @@ export default function MesocyclePage() {
                                                       }
                                                       if (isSplit && !isFrequency) {
                                                        return (
-                                                         <div key={`${meso.id}-${microcycleIndex}`} className="flex relative z-10 border-r-2 border-r-foreground/30">
+                                                         <div key={`${meso.id}-${microcycleIndex}`} className="flex relative z-10 border-r-[3px] border-r-foreground/40">
                                                            {Array.from({ length: sessionsCount }, (_, sessionIndex) => {
                                                              const currentValue = getParameterValue(meso.id, microcycleIndex, fullMethodName, param.name, sessionIndex);
                                                              const cellId = `${meso.id}::${microcycleIndex}::${fullMethodName}::${sessionIndex}::${param.name}`;
@@ -4021,7 +4021,7 @@ export default function MesocyclePage() {
                                                               return (
                                                                 <div 
                                                                   key={sessionIndex}
-                                                                  className={`relative z-10 p-1 flex-none ${sessionIndex > 0 ? 'border-l border-dashed border-l-foreground/25' : ''} ${!isAllocated ? 'bg-muted/20' : ''}`}
+                                                                  className={`relative z-10 p-1 flex-none ${sessionIndex > 0 ? 'border-l-2 border-dashed border-l-foreground/30' : ''} ${!isAllocated ? 'bg-muted/20' : ''}`}
                                                                   style={{ width: SESSION_CELL_WIDTH }}
                                                                   data-drag-cell={cellId}
                                                                   data-allocated={isAllocated ? 'true' : 'false'}
@@ -4113,7 +4113,7 @@ export default function MesocyclePage() {
                                                           return (
                                                               <div 
                                                                key={`${meso.id}-${microcycleIndex}-${param.name}`} 
-                                                                className={`relative z-10 p-1 border-r-2 border-r-foreground/30 ${!isAllocated ? 'bg-muted/20' : ''}`}
+                                                                className={`relative z-10 p-1 border-r-[3px] border-r-foreground/40 ${!isAllocated ? 'bg-muted/20' : ''}`}
                                                                data-drag-cell={cellId}
                                                                data-allocated={isAllocated ? 'true' : 'false'}
                                                              >
