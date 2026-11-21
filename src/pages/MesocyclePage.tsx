@@ -3933,11 +3933,12 @@ export default function MesocyclePage() {
                                                       )}
                                                    </div>
                                                   {isSplit && (
-                                                    <div className="flex gap-0.5 text-[10px] w-full">
+                                                    // As wide as this method's sessions below (120 px each, less the cell's own
+                                                    // padding) — fewer sessions than the widest method don't stretch, and the
+                                                    // labels never run past the column
+                                                    <div className="self-start flex gap-0.5 text-[10px] max-w-full" style={{ width: sessionsCount * SESSION_CELL_WIDTH - 16 }}>
                                                       {Array.from({ length: sessionsCount }, (_, i) => (
-                                                        // Fixed width per session (the column is as wide as the method with the
-                                                        // most sessions in this microcycle needs) — fewer sessions don't stretch
-                                                        <span key={i} className="flex-none text-center px-1 bg-black/20 rounded" style={{ width: SESSION_CELL_WIDTH - 4 }}>
+                                                        <span key={i} className="flex-1 min-w-0 text-center px-1 bg-black/20 rounded">
                                                           {String.fromCharCode(65 + i)}
                                                         </span>
                                                       ))}
