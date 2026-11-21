@@ -319,6 +319,29 @@ export function MethodSessionArchitecture({
     return targets;
   }, [getMethodFrequencyTarget, selectedEntry, allMethods]);
 
+  // ── derived: methods switched off in this microcycle — frequency 0 in the periodization table ──
+  // (an empty frequency is not 0). A method already placed here stays visible, so the overage
+  // shows and it can be moved or removed.
+  const offInMicro = useMemo(() => {
+    const off = new Set<string>();
+    if (!getMethodFrequencyTarget || !selectedEntry) return off;
+    const [microId] = selectedEntry;
+    flatAvailable.forEach(key => {
+      if (getMethodFrequencyTarget(key, microId) === 0 && !((methodFrequency[key] ?? 0) > 0)) off.add(key);
+    });
+    allMethods.forEach(methodId => {
+      if (getMethodFrequencyTarget(methodId, microId) === 0 && !((wholeMethodFrequency[methodId] ?? 0) > 0)) off.add(methodId);
+    });
+    return off;
+  }, [getMethodFrequencyTarget, selectedEntry, flatAvailable, allMethods, methodFrequency, wholeMethodFrequency]);
+  /** The method (or one of its exercise categories) is in this microcycle's list */
+  const isShownInMicro = useCallback((methodId: string) => {
+    const cats = methodExerciseCategories?.[methodId];
+    if (cats && cats.length > 0) return cats.some(cat => !offInMicro.has(`${methodId}::${cat}`));
+    return !offInMicro.has(methodId);
+  }, [methodExerciseCategories, offInMicro]);
+  const hiddenInMicroCount = allMethods.filter(m => !isShownInMicro(m)).length;
+
   // ── init: categories start expanded — only newly appearing ones, so a category the coach
   // collapsed stays collapsed when the list is rebuilt (every store refresh / auto-save) ─────
   // ("Seen" is remembered too, so reopening the page doesn't open them again)
@@ -822,7 +845,9 @@ export function MethodSessionArchitecture({
                     </p>
                   )}
 
-                  {Object.entries(methodsByCategory).map(([category, methods]) => {
+                  {Object.entries(methodsByCategory).map(([category, allInCategory]) => {
+                    // Frequency 0 in this microcycle: not in its list
+                    const methods = allInCategory.filter(isShownInMicro);
                     if (methods.length === 0) return null;
                     return (
                       <div key={category}>
@@ -973,7 +998,7 @@ export function MethodSessionArchitecture({
                                     </button>
                                     {isOpen && (
                                       <div className="ml-3 space-y-0.5">
-                                        {keys.map(key => renderCard(key))}
+                                        {keys.filter(key => !offInMicro.has(key)).map(key => renderCard(key))}
                                       </div>
                                     )}
                                   </div>
@@ -988,6 +1013,12 @@ export function MethodSessionArchitecture({
                     );
                   })}
 
+                  {hiddenInMicroCount > 0 && (
+                    <p className="px-1 pt-2 text-[11px] text-muted-foreground"
+                      title="Set to frequency 0 for this microcycle in the periodization table">
+                      {hiddenInMicroCount} method{hiddenInMicroCount === 1 ? '' : 's'} not in this microcycle (frequency 0)
+                    </p>
+                  )}
                   {provided.placeholder}
                 </div>
               )}
