@@ -1027,13 +1027,20 @@ export default function MesocyclePage() {
           <>
             <div className="space-y-4 max-w-full overflow-x-auto">
               <h4 className="font-semibold">Mesocycle Configuration</h4>
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 gap-6">
                 {mesocycles.map((meso, index) => (
-                  <div key={meso.id} className="border rounded-lg">
-                    {/* Mesocycle header: name and intensity (the microcycles open below the aim) */}
-                    <div className="p-4 border-b">
+                  // Each mesocycle a clearly separate card: thicker border, a little shadow, and a bar in
+                  // its intensity colour on the left
+                  <div key={meso.id} className="border-2 rounded-lg shadow-sm overflow-hidden"
+                    style={{ borderLeftWidth: 6, borderLeftColor: getBorgBg(meso.intensity) }}>
+                    {/* Mesocycle header: number, name and intensity (the microcycles open below the aim) */}
+                    <div className="p-4 border-b bg-muted/30">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3 flex-1">
+                          <span className="shrink-0 h-7 w-7 rounded-full bg-foreground text-background text-sm font-semibold flex items-center justify-center"
+                            title={`Mesocycle ${index + 1}`}>
+                            {index + 1}
+                          </span>
                           <Input
                             value={meso.name}
                             onChange={(e) => {
@@ -1044,7 +1051,7 @@ export default function MesocyclePage() {
                             }}
                             onClick={(e) => e.stopPropagation()}
                             placeholder="Phase name, e.g. Accumulation"
-                            className="font-medium flex-1"
+                            className="font-semibold text-base flex-1 bg-background"
                           />
                           <div className="flex items-center space-x-2">
                             <Label>Intensity:</Label>
