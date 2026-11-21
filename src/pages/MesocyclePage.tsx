@@ -1030,18 +1030,10 @@ export default function MesocyclePage() {
               <div className="grid grid-cols-1 gap-4">
                 {mesocycles.map((meso, index) => (
                   <div key={meso.id} className="border rounded-lg">
-                    {/* Mesocycle Header - Clickable */}
-                    <div 
-                      className="p-4 cursor-pointer hover:bg-muted/50 transition-colors border-b"
-                      onClick={() => toggleMesocycleExpansion(meso.id)}
-                    >
+                    {/* Mesocycle header: name and intensity (the microcycles open below the aim) */}
+                    <div className="p-4 border-b">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3 flex-1">
-                          <ChevronDown 
-                            className={`h-4 w-4 transition-transform ${
-                              expandedMesocycles.has(meso.id) ? 'rotate-180' : ''
-                            }`} 
-                          />
                           <Input
                             value={meso.name}
                             onChange={(e) => {
@@ -1084,9 +1076,6 @@ export default function MesocyclePage() {
                               </SelectContent>
                             </Select>
                           </div>
-                          <div className="text-sm text-muted-foreground">
-                            {meso.microcycles?.length || 0} microcycles 
-                          </div>
                         </div>
                       </div>
                     </div>
@@ -1094,7 +1083,7 @@ export default function MesocyclePage() {
                     {/* The phase's aim — the same text as the "Description" row of the periodization table
                         (step 4), so it is clear there what each block should achieve */}
                     <div className="px-4 py-3 border-b bg-muted/20 space-y-1">
-                      <Label htmlFor={`meso-aim-${meso.id}`} className="text-xs text-muted-foreground">Aim of this phase</Label>
+                      <Label htmlFor={`meso-aim-${meso.id}`} className="text-sm font-medium">Aim of this phase</Label>
                       <Textarea
                         id={`meso-aim-${meso.id}`}
                         rows={2}
@@ -1105,20 +1094,32 @@ export default function MesocyclePage() {
                       />
                     </div>
 
-                    {/* Microcycles List - Expandable */}
+                    {/* Microcycles: the bar opens the list right below it */}
+                    {(() => {
+                      const micros = meso.microcycles || [];
+                      const days = micros.reduce((sum, micro) => sum + micro.duration, 0);
+                      const allSame = micros.length > 0 && micros.every(m => m.duration === micros[0].duration);
+                      const open = expandedMesocycles.has(meso.id);
+                      return (
+                        <button
+                          type="button"
+                          data-nav
+                          aria-expanded={open}
+                          onClick={() => toggleMesocycleExpansion(meso.id)}
+                          className={cn("w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-muted/40 transition-colors",
+                            open ? "border-b" : "rounded-b-lg")}
+                        >
+                          <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", !open && "-rotate-90")} />
+                          <span className="text-sm font-medium">Microcycles</span>
+                          <span className="text-xs text-muted-foreground">
+                            {micros.length}{allSame ? ` × ${micros[0].duration} days` : ''} ({days} days)
+                          </span>
+                        </button>
+                      );
+                    })()}
                     {expandedMesocycles.has(meso.id) && (
                       <div className="p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h5 className="font-medium text-sm">Microcycles</h5>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => addMicrocycle(index)}
-                          >
-                            Add Microcycle
-                          </Button>
-                        </div>
-                        
+
                         <div className="space-y-2">
                           {meso.microcycles?.map((micro, microIndex) => (
                             <div key={micro.id} className="flex items-center space-x-3 p-3 border rounded-md bg-muted/20 w-fit">
@@ -1147,9 +1148,13 @@ export default function MesocyclePage() {
                           ))}
                         </div>
 
-                        <div className="text-xs text-muted-foreground">
-                          Total days: {meso.microcycles?.reduce((sum, micro) => sum + micro.duration, 0) || 0}
-                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => addMicrocycle(index)}
+                        >
+                          Add microcycle
+                        </Button>
                       </div>
                     )}
                   </div>
