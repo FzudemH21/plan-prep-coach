@@ -10,6 +10,9 @@ import { withSelfReported } from '@/hooks/useSelfReportedResults';
 import {
   AreaChart,
   Area,
+  LineChart as LineChartRc,
+  Line,
+  Legend,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -126,12 +129,30 @@ const toChartData = (values: ParameterValue[], range: TimeRange) => {
     }));
 };
 
+/** Left and right per day for one chart: { date, L, R } (the latest value of a side per day) */
+const toSideChartData = (values: ParameterValue[], range: TimeRange) => {
+  const rows = new Map<string, { day: string; date: string; L?: number; R?: number }>();
+  for (const v of [...filterByRange(values, range)].sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))) {
+    const n = parseMeasuredNumber(v.value);
+    if (n === null || n === undefined || isNaN(n) || !v.side) continue;
+    const day = v.recordedAt.slice(0, 10);
+    const row = rows.get(day) ?? { day, date: format(parseRecordedAt(v.recordedAt), 'MMM d') };
+    row[v.side] = n;
+    rows.set(day, row);
+  }
+  return [...rows.values()].sort((a, b) => a.day.localeCompare(b.day));
+};
+
+const SIDE_COLORS = { L: 'hsl(var(--primary))', R: '#f97316' } as const;
+const SIDE_NAMES = { L: 'Left', R: 'Right' } as const;
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function MetricRow({
   name,
   unit,
   latestValue,
+  valueText,
   isSelected,
   isSystem,
   onSelect,
@@ -140,6 +161,8 @@ function MetricRow({
   name: string;
   unit?: string | null;
   latestValue: ParameterValue | null;
+  /** Shown instead of the latest value (e.g. "9 / 11 cm" for left / right) */
+  valueText?: string;
   isSelected: boolean;
   isSystem?: boolean;
   onSelect: () => void;
@@ -156,8 +179,8 @@ function MetricRow({
       <span className={cn('flex-1 min-w-0 text-sm font-medium truncate', isSelected && 'text-primary')}>
         {name}
       </span>
-      <span className="w-[72px] shrink-0 text-xs text-muted-foreground text-right truncate">
-        {latestValue ? `${latestValue.value}${unit ? ` ${unit}` : ''}` : '—'}
+      <span className="w-[72px] shrink-0 text-xs text-muted-foreground text-right truncate" title={valueText ? `Left / right: ${valueText}` : undefined}>
+        {valueText ?? (latestValue ? `${latestValue.value}${unit ? ` ${unit}` : ''}` : '—')}
       </span>
       <span className="w-[68px] shrink-0 text-xs text-muted-foreground text-right">
         {latestValue ? format(parseRecordedAt(latestValue.recordedAt), 'MMM d') : '—'}
@@ -205,11 +228,16 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
 
   const [selected, setSelected] = useState<SelectedItem | null>(null);
   // A parameter with several measures / recorded per side: which series is shown (and added to)
-  const [measureView, setMeasureView] = useState<{ measureId?: string; side?: 'L' | 'R' | 'lsi' }>({});
+  // Per-side parameters: unset = left and right together, 'lsi' = limb symmetry index, 'none' = older
+  // values recorded without a side
+  const [measureView, setMeasureView] = useState<{ measureId?: string; side?: 'L' | 'R' | 'lsi' | 'none' }>({});
   const [timeRange, setTimeRange] = useState<TimeRange>('All');
   const [newValue, setNewValue] = useState('');
   const [newDate, setNewDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [newNote, setNewNote] = useState('');
+  // Per-side parameters: left and right are entered together
+  const [newLeft, setNewLeft] = useState('');
+  const [newRight, setNewRight] = useState('');
   // Editing a measurement in the history (coach-entered values)
   const [editingValueId, setEditingValueId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -356,6 +384,12 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
   const measureParam = resolvedSelected?.kind === 'performance' ? resolvedSelected.param : undefined;
   const showMeasureSwitch = !!measureParam && (hasCustomMeasures(measureParam) || !!measureParam.perSide);
   const activeMeasure = measureParam ? measureById(measureParam, measureView.measureId) : undefined;
+  const perSide = !!measureParam?.perSide;
+  /** What is shown: both sides, one side, the LSI, or values without a side */
+  const sideView: 'both' | 'L' | 'R' | 'lsi' | 'none' = !perSide
+    ? 'none'
+    : measureView.side === undefined ? 'both' : measureView.side;
+  const sidesNumeric = activeMeasure?.kind === 'number' || activeMeasure?.kind === 'scale';
   useEffect(() => { setMeasureView({}); }, [resolvedSelected?.kind === 'performance' ? resolvedSelected.pp.id : null]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedValues: ParameterValue[] = useMemo(() => {
@@ -368,11 +402,14 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
         const own = valuesOfMeasure(allValuesOf(resolvedSelected.pp), measureView.measureId, side)
           // "no side" = the values recorded without one (older values)
           .filter(v => side || !v.side);
-        const extra = selfReportedMap.get(measureRef(paramId, measureView.measureId, side)) ?? [];
+        // The athlete's values carry their side too (stored under the side's reference)
+        const extra = (selfReportedMap.get(measureRef(paramId, measureView.measureId, side)) ?? []).map(v => (side ? { ...v, side } : v));
         const ids = new Set(own.map(v => v.id));
         return [...own, ...extra.filter(v => !ids.has(v.id))];
       };
-      if (measureView.side !== 'lsi') return seriesOf(measureView.side);
+      if (sideView === 'both') return [...seriesOf('L'), ...seriesOf('R')];
+      if (sideView === 'L' || sideView === 'R') return seriesOf(sideView);
+      if (sideView === 'none') return seriesOf(undefined);
       const latestByDay = (list: ParameterValue[]) => {
         const m = new Map<string, ParameterValue>();
         for (const v of [...list].sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))) m.set(v.recordedAt.slice(0, 10), v);
@@ -402,7 +439,14 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
       return [...base, ...selfReported.filter(v => !ids.has(v.id))];
     }
     return base;
-  }, [resolvedSelected, selfReportedMap, showMeasureSwitch, measureView]);
+  }, [resolvedSelected, selfReportedMap, showMeasureSwitch, measureView, sideView]);
+
+  /** Older values of a per-side parameter recorded without a side (the "Without side" view only shows when there are any) */
+  const hasSidelessValues = useMemo(() => {
+    if (resolvedSelected?.kind !== 'performance' || !perSide) return false;
+    return valuesOfMeasure(allValuesOf(resolvedSelected.pp), measureView.measureId).some(v => !v.side)
+      || (selfReportedMap.get(measureRef(resolvedSelected.pp.athleticismParameterId, measureView.measureId)) ?? []).length > 0;
+  }, [resolvedSelected, perSide, measureView.measureId, selfReportedMap]);
 
   const selectedUnit = resolvedSelected
     ? resolvedSelected.kind === 'biometric'
@@ -419,12 +463,24 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
       ? resolvedSelected.def.name
       : showMeasureSwitch
         ? [resolvedSelected.param.name, hasCustomMeasures(resolvedSelected.param) ? activeMeasure?.name : '',
-          measureView.side === 'lsi' ? 'LSI' : measureView.side === 'L' ? 'Left' : measureView.side === 'R' ? 'Right' : ''].filter(Boolean).join(' · ')
+          sideView === 'lsi' ? 'LSI' : sideView === 'L' ? 'Left' : sideView === 'R' ? 'Right' : ''].filter(Boolean).join(' · ')
         : resolvedSelected.param.name
     : '';
 
   const latestValue = getLatestValue(selectedValues);
   const chartData = toChartData(selectedValues, timeRange);
+  const sideChartData = sideView === 'both' ? toSideChartData(selectedValues, timeRange) : [];
+  /** Both sides: the latest value of each, and the LSI when both are from the same day */
+  const latestSides = useMemo(() => {
+    if (sideView !== 'both') return null;
+    const l = getLatestValue(selectedValues.filter(v => v.side === 'L'));
+    const r = getLatestValue(selectedValues.filter(v => v.side === 'R'));
+    if (!l && !r) return null;
+    const sameDay = l && r && l.recordedAt.slice(0, 10) === r.recordedAt.slice(0, 10);
+    return { l, r, lsi: sameDay && sidesNumeric ? limbSymmetryIndex(l.value, r.value) : null };
+  }, [sideView, selectedValues, sidesNumeric]);
+  // LSI of what is being typed in
+  const newLsi = sidesNumeric ? limbSymmetryIndex(newLeft.trim() || undefined, newRight.trim() || undefined) : null;
   const isQuantitative = resolvedSelected
     ? resolvedSelected.kind === 'biometric'
       ? resolvedSelected.def.type === 'quantitative'
@@ -436,23 +492,54 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
     (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
   );
 
+  /** The list: a per-side parameter shows its latest left / right ("9 / 11 cm"), else the latest value */
+  const listLatest = (pp: AthletePerformanceParameter, param: { perSide?: boolean; unit?: string }) => {
+    if (!param.perSide) {
+      return { latest: getLatestValue(withSelfReported(pp.values, selfReportedMap.get(pp.athleticismParameterId))), valueText: undefined };
+    }
+    const side = (sd: 'L' | 'R') => getLatestValue(withSelfReported(
+      valuesOfMeasure(allValuesOf(pp), undefined, sd),
+      selfReportedMap.get(measureRef(pp.athleticismParameterId, undefined, sd)),
+    ));
+    const l = side('L');
+    const r = side('R');
+    const latest = getLatestValue([l, r].filter((x): x is ParameterValue => !!x));
+    if (!latest) return { latest: getLatestValue(withSelfReported(pp.values, selfReportedMap.get(pp.athleticismParameterId))), valueText: undefined };
+    return { latest, valueText: `${l?.value ?? '–'} / ${r?.value ?? '–'}${param.unit ? ` ${param.unit}` : ''}` };
+  };
+
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   const handleAddValue = useCallback(() => {
-    if (!resolvedSelected || !newValue.trim()) return;
+    if (!resolvedSelected) return;
     const recordedAt = newDate
       ? new Date(newDate + 'T12:00:00').toISOString()
       : new Date().toISOString();
+    // Per-side parameter: left and right in one go (either may stay empty)
+    if (resolvedSelected.kind === 'performance' && perSide && (sideView === 'both' || sideView === 'lsi')) {
+      const note = newNote.trim() || undefined;
+      if (!newLeft.trim() && !newRight.trim()) return;
+      if (newLeft.trim()) athleteData.addPerformanceParameterValue(resolvedSelected.pp.id, newLeft.trim(), recordedAt, note, { measureId: measureView.measureId, side: 'L' });
+      if (newRight.trim()) athleteData.addPerformanceParameterValue(resolvedSelected.pp.id, newRight.trim(), recordedAt, note, { measureId: measureView.measureId, side: 'R' });
+      setNewLeft('');
+      setNewRight('');
+      setNewDate(format(new Date(), 'yyyy-MM-dd'));
+      setNewNote('');
+      return;
+    }
+    if (!newValue.trim()) return;
     if (resolvedSelected.kind === 'biometric') {
       athleteData.addBiometricValue(resolvedSelected.ab.id, newValue.trim(), recordedAt, newNote.trim() || undefined);
     } else {
       athleteData.addPerformanceParameterValue(resolvedSelected.pp.id, newValue.trim(), recordedAt, newNote.trim() || undefined,
-        showMeasureSwitch && measureView.side !== 'lsi' ? { measureId: measureView.measureId, side: measureView.side } : undefined);
+        showMeasureSwitch && sideView !== 'lsi'
+          ? { measureId: measureView.measureId, side: sideView === 'L' || sideView === 'R' ? sideView : undefined }
+          : undefined);
     }
     setNewValue('');
     setNewDate(format(new Date(), 'yyyy-MM-dd'));
     setNewNote('');
-  }, [resolvedSelected, newValue, newDate, newNote, athleteData, showMeasureSwitch, measureView]);
+  }, [resolvedSelected, newValue, newDate, newNote, newLeft, newRight, athleteData, showMeasureSwitch, measureView, perSide, sideView]);
 
   const handleDeleteValue = useCallback((valueId: string) => {
     if (!resolvedSelected) return;
@@ -494,6 +581,8 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
   useEffect(() => {
     setEditingValueId(null);
     setNewValue('');
+    setNewLeft('');
+    setNewRight('');
     setNewNote('');
   }, [selectedKey, measureView.measureId, measureView.side]);
 
@@ -586,7 +675,26 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="text-lg font-semibold">{selectedName}</h3>
-                {latestValue ? (
+                {latestSides ? (
+                  <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 mt-1">
+                    {(['L', 'R'] as const).map(sd => {
+                      const v = sd === 'L' ? latestSides.l : latestSides.r;
+                      return (
+                        <span key={sd} className="flex items-baseline gap-1">
+                          <span className="text-xs font-medium" style={{ color: SIDE_COLORS[sd] }}>{SIDE_NAMES[sd]}</span>
+                          <span className="text-2xl font-bold">{v ? v.value : '–'}</span>
+                          {v && selectedUnit && <span className="text-muted-foreground text-sm">{selectedUnit}</span>}
+                        </span>
+                      );
+                    })}
+                    {latestSides.lsi !== null && (
+                      <span className="text-sm text-muted-foreground">LSI <span className="font-semibold text-foreground">{latestSides.lsi} %</span></span>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      as of {format(parseRecordedAt(getLatestValue([latestSides.l, latestSides.r].filter((x): x is ParameterValue => !!x))!.recordedAt), 'MMM d, yyyy')}
+                    </span>
+                  </div>
+                ) : latestValue ? (
                   <div className="flex items-baseline gap-1.5 mt-1">
                     <span className="text-3xl font-bold">{latestValue.value}</span>
                     {selectedUnit && (
@@ -619,10 +727,11 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
                 {measureParam.perSide && (
                   <>
                     {hasCustomMeasures(measureParam) && <span className="mx-1 h-4 w-px bg-border" />}
-                    {([[undefined, 'No side'], ['L', 'Left'], ['R', 'Right'], ['lsi', 'LSI']] as const)
-                      .filter(([sd]) => sd !== 'lsi' || activeMeasure?.kind === 'number')
+                    {([[undefined, 'Left & Right'], ['lsi', 'LSI'], ['none', 'Without side']] as const)
+                      .filter(([sd]) => (sd !== 'lsi' || activeMeasure?.kind === 'number') && (sd !== 'none' || hasSidelessValues))
                       .map(([sd, label]) => (
                         <Button key={label} size="sm" variant={measureView.side === sd ? 'default' : 'outline'} className="h-7 text-xs"
+                          title={sd === 'none' ? 'Older values recorded before left / right was set up' : undefined}
                           onClick={() => setMeasureView(v => ({ ...v, side: sd }))}>
                           {label}
                         </Button>
@@ -648,7 +757,27 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
                     </Button>
                   ))}
                 </div>
-                {chartData.length >= 2 ? (
+                {sideView === 'both' && sideChartData.length >= 2 ? (
+                  <div className="h-48 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChartRc data={sideChartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: '6px', fontSize: '12px' }}
+                          formatter={(v: number, name: string) => [`${v}${selectedUnit ? ` ${selectedUnit}` : ''}`, name]}
+                          labelStyle={{ color: 'hsl(var(--muted-foreground))' }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                        {(['L', 'R'] as const).map(sd => (
+                          <Line key={sd} type="monotone" dataKey={sd} name={SIDE_NAMES[sd]} stroke={SIDE_COLORS[sd]} strokeWidth={2}
+                            dot={{ r: 3, fill: SIDE_COLORS[sd] }} activeDot={{ r: 5 }} connectNulls />
+                        ))}
+                      </LineChartRc>
+                    </ResponsiveContainer>
+                  </div>
+                ) : sideView !== 'both' && chartData.length >= 2 ? (
                   <div className="h-48 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
@@ -718,6 +847,36 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
                     className="h-8 text-sm w-36"
                   />
                 </div>
+                {perSide && (sideView === 'both' || sideView === 'lsi') ? (
+                  // Per-side parameter: left and right side by side
+                  (['L', 'R'] as const).map(sd => {
+                    const val = sd === 'L' ? newLeft : newRight;
+                    const setVal = sd === 'L' ? setNewLeft : setNewRight;
+                    // The measure's own unit (not the LSI's %)
+                    const unit = activeMeasure?.kind === 'number' ? (activeMeasure.unit ?? '') : activeMeasure?.kind === 'scale' ? `/${activeMeasure.scaleMax ?? 10}` : '';
+                    return (
+                      <div key={sd} className="space-y-1 flex-1">
+                        <Label className="text-xs" style={{ color: SIDE_COLORS[sd] }}>{SIDE_NAMES[sd]}{unit ? ` (${unit})` : ''}</Label>
+                        {activeMeasure?.kind === 'levels' || activeMeasure?.kind === 'passFail' ? (
+                          <select value={val} onChange={e => setVal(e.target.value)}
+                            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm">
+                            <option value="">Pick…</option>
+                            {(activeMeasure.kind === 'levels' ? (activeMeasure.levels ?? []) : ['Passed', 'Not passed']).map(l => <option key={l} value={l}>{l}</option>)}
+                          </select>
+                        ) : (
+                          <Input
+                            ref={sd === 'L' ? valueInputRef : undefined}
+                            value={val}
+                            onChange={e => setVal(e.target.value)}
+                            placeholder="0.0"
+                            className="h-8 text-sm"
+                            onKeyDown={e => e.key === 'Enter' && !newNote.trim() && handleAddValue()}
+                          />
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
                 <div className="space-y-1 flex-1">
                   <Label className="text-xs">Value{selectedUnit ? ` (${selectedUnit})` : ''}</Label>
                   {showMeasureSwitch && (activeMeasure?.kind === 'levels' || activeMeasure?.kind === 'passFail') && measureView.side !== 'lsi' ? (
@@ -739,10 +898,15 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
                     />
                   )}
                 </div>
-                <Button size="sm" className="h-8" onClick={handleAddValue} disabled={!newValue.trim()}>
+                )}
+                <Button size="sm" className="h-8" onClick={handleAddValue}
+                  disabled={perSide && (sideView === 'both' || sideView === 'lsi') ? !newLeft.trim() && !newRight.trim() : !newValue.trim()}>
                   <Plus className="h-3.5 w-3.5 mr-1" /> Add
                 </Button>
               </div>
+              {perSide && (sideView === 'both' || sideView === 'lsi') && newLsi !== null && (
+                <p className="text-xs text-muted-foreground">LSI {newLsi} %</p>
+              )}
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Note <span className="font-normal">(optional)</span></Label>
                 <Input
@@ -811,6 +975,9 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
                           {format(parseRecordedAt(v.recordedAt), 'MMM d, yyyy')}
                         </span>
                         <span className="font-medium flex-1">
+                          {sideView === 'both' && v.side && (
+                            <span className="text-xs font-medium mr-2" style={{ color: SIDE_COLORS[v.side] }}>{SIDE_NAMES[v.side]}</span>
+                          )}
                           {v.value}{selectedUnit ? ` ${selectedUnit}` : ''}
                         </span>
                         {v.selfReported ? (
@@ -983,7 +1150,7 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
             {filteredBiometricParams.map(pp => {
               const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
               if (!param) return null;
-              const latest = getLatestValue(withSelfReported(pp.values, selfReportedMap.get(pp.athleticismParameterId)));
+              const { latest, valueText } = listLatest(pp, param);
               const isSel = resolvedSelected?.kind === 'performance' && resolvedSelected.pp.id === pp.id;
               return (
                 <MetricRow
@@ -991,6 +1158,7 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
                   name={param.name}
                   unit={param.unit}
                   latestValue={latest}
+                  valueText={valueText}
                   isSelected={isSel}
                   onSelect={() => setSelected({ kind: 'performance', pp, param })}
                   onRemove={() => handleRemovePerformance(pp)}
@@ -1012,7 +1180,7 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
                 const param = athleticismParameters.find(p => p.id === pp.athleticismParameterId);
                 if (!param) return null;
                 // Include the athlete's self-reported values (athlete app), like the detail view
-                const latest = getLatestValue(withSelfReported(pp.values, selfReportedMap.get(pp.athleticismParameterId)));
+                const { latest, valueText } = listLatest(pp, param);
                 const isSel = resolvedSelected?.kind === 'performance' && resolvedSelected.pp.id === pp.id;
                 return (
                   <MetricRow
@@ -1020,6 +1188,7 @@ export function AthletePerformanceTab({ athlete, athleteData, connectionsLoading
                     name={param.name}
                     unit={param.unit}
                     latestValue={latest}
+                    valueText={valueText}
                     isSelected={isSel}
                     onSelect={() => setSelected({ kind: 'performance', pp, param })}
                     onRemove={() => handleRemovePerformance(pp)}
