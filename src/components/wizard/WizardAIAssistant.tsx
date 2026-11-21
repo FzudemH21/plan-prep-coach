@@ -300,6 +300,7 @@ Available types and their fields:
 - remove_goal: {"type":"remove_goal","goalName":"<exact goal name from the Goals list in context>"}
   Removes a goal entirely. Use the EXACT name shown in the Goals list.
 - schedule_tests: {"type":"schedule_tests","schedule":[{"goalDescription":"<exact name>","isMainGoal":<true|false>,"isEvent":<true for events, omit/false for goals>,"action":"add","dates":["YYYY-MM-DD"]}]}
+  Never schedule (or create_event) a test or event that is listed under "Already in the athlete's calendar" — it is already scheduled; say so instead of offering it.
   action is "add" (default) or "remove". Use ISO date strings (YYYY-MM-DD). For goals/sub-goals use the exact name from the Goals list in context. For events: FIRST check the Events list in context — if an event with a similar name exists, use its EXACT name (e.g. coach says "strength test" → use "Strength Test - 1RM Back Squat" if that exists). Only use create_event for brand-new events that have no match. If you are unsure which existing event the coach means, ask for clarification instead of creating a duplicate.
 - create_event: {"type":"create_event","name":"<event name>","description":"<optional description>"}
   Creates a new event entry without scheduling any dates. Use ONLY when the event does not already exist in the Events list in context.
