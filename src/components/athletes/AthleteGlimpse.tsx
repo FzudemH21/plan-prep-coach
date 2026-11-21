@@ -1,16 +1,19 @@
 /**
  * A glimpse into the plan's athlete from the wizard: a button in the planner header opens the full
- * athlete profile (monitoring, performance, anamnesis, calendar, documents, chat …) in a large side
- * panel over the wizard — closing it returns to exactly where the coach was, nothing is navigated.
+ * athlete profile (monitoring, performance, anamnesis, calendar, documents, chat …) in a large window
+ * over the wizard — closing it returns to exactly where the coach was, nothing is navigated.
  *
- * The profile works as on the athlete page (the athlete's own rights apply, not the program's): the
- * panel is marked as app chrome, so a read-only planner (PlannerGate) doesn't block it. Deleting the
- * athlete is left to the athlete page.
+ * A dialog (not a side sheet): sheets sit above dialogs, so an anamnesis or session opened from the
+ * profile would end up behind the sheet's backdrop; on the dialog layer they open on top of it.
+ *
+ * The profile works as on the athlete page (the athlete's own rights apply, not the program's): while
+ * it is open, a read-only planner's guard (PlannerGate) stands aside (body[data-athlete-glimpse]).
+ * Deleting the athlete is left to the athlete page.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { UserRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { AthleteProfileView } from '@/components/athletes/AthleteProfileView';
 import { useAthletes } from '@/hooks/useAthletes';
 import { useAthleteConnections } from '@/hooks/useAthleteConnections';
@@ -55,12 +58,19 @@ function AthleteGlimpseSheet({ athlete, athleteData, onClose }: {
     }
   }, [athleteData, athlete, getConnectionForAthlete, syncProfileToConnection]);
 
+  // A read-only planner's guard stands aside while the profile is open (see PlannerGate)
+  useEffect(() => {
+    document.body.setAttribute('data-athlete-glimpse', '');
+    return () => document.body.removeAttribute('data-athlete-glimpse');
+  }, []);
+
   return (
-    <Sheet open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent side="right" data-app-chrome className="w-[96vw] sm:max-w-[1280px] p-0 flex flex-col gap-0">
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent data-app-chrome
+        className="flex flex-col gap-0 p-0 max-w-none sm:max-w-none w-[calc(100vw-2rem)] h-[calc(100vh-2rem)] sm:rounded-lg overflow-hidden">
         <div className="shrink-0 border-b px-5 py-3 pr-12">
-          <SheetTitle className="text-base">{getAthleteDisplayName(athlete)}</SheetTitle>
-          <SheetDescription className="text-xs">Athlete profile — close to go back to the plan</SheetDescription>
+          <DialogTitle className="text-base">{getAthleteDisplayName(athlete)}</DialogTitle>
+          <DialogDescription className="text-xs">Athlete profile — close to go back to the plan</DialogDescription>
         </div>
         <div className="flex-1 min-h-0 p-3">
           <AthleteProfileView
@@ -72,7 +82,7 @@ function AthleteGlimpseSheet({ athlete, athleteData, onClose }: {
             athleteData={athleteData}
           />
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }

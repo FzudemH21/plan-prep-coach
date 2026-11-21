@@ -61,6 +61,9 @@ function inScope(target: EventTarget | null): target is Element {
   if (!guard.area || !(target instanceof Element)) return false;
   // The app's own navigation (sidebar, notifications) opens outside the planner too — never blocked
   if (target.closest('[data-app-chrome]')) return false;
+  // The athlete's profile opened from the planner (AthleteGlimpse) and everything it opens: athlete
+  // data, not the program — its own rights apply
+  if (document.body.hasAttribute('data-athlete-glimpse')) return false;
   return guard.area.contains(target) || !!target.closest(PORTALS);
 }
 
@@ -96,9 +99,9 @@ const DIMMED = ':is(button, [role="button"], [role="checkbox"], [role="switch"],
   + ':not([data-app-chrome] *)';
 const READONLY_CSS = `
 .planner-readonly ${DIMMED},
-body.planner-readonly-open :is([role="dialog"], [data-radix-popper-content-wrapper]) ${DIMMED} { opacity: .45; cursor: not-allowed; }
+body.planner-readonly-open:not([data-athlete-glimpse]) :is([role="dialog"], [data-radix-popper-content-wrapper]) ${DIMMED} { opacity: .45; cursor: not-allowed; }
 .planner-readonly :is(input, textarea, select, [aria-roledescription], [data-rbd-drag-handle-draggable-id]),
-body.planner-readonly-open [role="dialog"]:not([data-app-chrome]) :is(input, textarea, select) { cursor: default; }
+body.planner-readonly-open:not([data-athlete-glimpse]) [role="dialog"]:not([data-app-chrome]) :is(input, textarea, select) { cursor: default; }
 `;
 
 function ReadOnlyGuard({ children }: { children: ReactNode }) {
