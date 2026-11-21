@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { PlanNotesField, PlanNotesView } from '@/components/shared/PlanNotesField';
 import type { PlanNotesVersion } from '@/utils/planStrategy';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Card } from '@/components/ui/card';
 import { format } from 'date-fns';
-import { Info, User, Calendar, Target, Trophy, ChevronDown, ChevronUp, Layers, FileText } from 'lucide-react';
+import { ChevronDown, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+/**
+ * The plan's strategy at the top of the mesocycle and microcycle pages — like "Plan strategy" in
+ * the macrocycle, but slim: one line (athlete · dates · mesocycles) that opens to the goals and the
+ * strategy document. Closed by default, so the page's own work is at the top; open / closed is
+ * remembered in this browser.
+ */
 interface TrainingPlanOverviewProps {
   athleteName?: string;
   planName?: string;
@@ -30,18 +32,26 @@ interface TrainingPlanOverviewProps {
   onNotesWriteUp?: () => void;
 }
 
+const OPEN_KEY = 'fold:planOverview:open';
+
+function readOpen(fallback: boolean): boolean {
+  try {
+    const v = localStorage.getItem(OPEN_KEY);
+    return v === null ? fallback : v === '1';
+  } catch { return fallback; }
+}
+
 export function TrainingPlanOverview({
   athleteName,
   planName,
   startDate,
   endDate,
   totalWeeks,
-  totalDays,
   totalMesocycles,
   primaryGoal,
   primaryGoals,
   subGoals = [],
-  defaultCollapsed = false,
+  defaultCollapsed = true,
   notes,
   onNotesChange,
   notesHistory,
@@ -50,9 +60,7 @@ export function TrainingPlanOverview({
 }: TrainingPlanOverviewProps) {
   // Merge legacy single-goal prop with the goals array, deduplicate
   const allPrimaryGoals = React.useMemo(() => {
-    const base = primaryGoals && primaryGoals.length > 0
-      ? primaryGoals
-      : primaryGoal ? [primaryGoal] : [];
+    const base = primaryGoals && primaryGoals.length > 0 ? primaryGoals : primaryGoal ? [primaryGoal] : [];
     const seen = new Set<string>();
     return base.filter(g => {
       const t = g?.trim();
@@ -61,180 +69,60 @@ export function TrainingPlanOverview({
       return true;
     });
   }, [primaryGoal, primaryGoals]);
-  const [isOpen, setIsOpen] = useState(!defaultCollapsed);
-  const [showAllSubGoals, setShowAllSubGoals] = useState(false);
-
-  const formatDate = (date: Date | string | undefined) => {
-    if (!date) return '-';
-    const d = typeof date === 'string' ? new Date(date) : date;
-    return format(d, 'MMM dd, yyyy');
+  const [isOpen, setIsOpenState] = useState(() => readOpen(!defaultCollapsed));
+  const setIsOpen = (open: boolean) => {
+    setIsOpenState(open);
+    try { localStorage.setItem(OPEN_KEY, open ? '1' : '0'); } catch { /* only a convenience */ }
   };
 
-  // Get unique sub-goals by description
-  const uniqueSubGoals = React.useMemo(() => {
-    const seen = new Set<string>();
-    return subGoals.filter(sg => {
-      const desc = sg.description || '';
-      if (desc && desc.trim() !== '' && !seen.has(desc)) {
-        seen.add(desc);
-        return true;
-      }
-      return false;
-    });
-  }, [subGoals]);
+  const short = (date: Date | string | undefined) => {
+    if (!date) return '';
+    const d = typeof date === 'string' ? new Date(date) : date;
+    return format(d, 'd MMM yyyy');
+  };
+  const subGoalCount = new Set(subGoals.map(sg => sg.description?.trim()).filter(Boolean)).size;
 
-  const MAX_VISIBLE_SUBGOALS = 4;
-  const visibleSubGoals = showAllSubGoals ? uniqueSubGoals : uniqueSubGoals.slice(0, MAX_VISIBLE_SUBGOALS);
-  const hiddenCount = uniqueSubGoals.length - MAX_VISIBLE_SUBGOALS;
-
-  // Combined timeline string
-  const timelineString = React.useMemo(() => {
-    if (!startDate || !endDate) return '-';
-    const start = formatDate(startDate);
-    const end = formatDate(endDate);
-    
-    const durationParts: string[] = [];
-    if (totalWeeks) durationParts.push(`${totalWeeks} weeks`);
-    if (totalDays) durationParts.push(`${totalDays} days`);
-    
-    const durationStr = durationParts.length > 0 ? ` (${durationParts.join(', ')})` : '';
-    return `${start} - ${end}${durationStr}`;
-  }, [startDate, endDate, totalWeeks, totalDays]);
+  // One line: athlete · dates (weeks) · mesocycles
+  const summary = [
+    athleteName,
+    startDate && endDate ? `${short(startDate)} – ${short(endDate)}${totalWeeks ? ` (${totalWeeks} wk)` : ''}` : '',
+    totalMesocycles ? `${totalMesocycles} mesocycle${totalMesocycles === 1 ? '' : 's'}` : '',
+  ].filter(Boolean).join(' · ');
 
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <Card className="mb-4">
-        <CollapsibleTrigger asChild>
-          <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors rounded-t-lg">
-            <CardTitle className="flex items-center justify-between text-base">
-              <div className="flex items-center space-x-2">
-                <Info className="h-4 w-4" />
-                <span>Training Plan Overview</span>
-              </div>
-              {isOpen ? (
-                <ChevronUp className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              )}
-            </CardTitle>
-          </CardHeader>
-        </CollapsibleTrigger>
-        
-        <CollapsibleContent>
-          <CardContent className="space-y-3 pt-0">
-            {/* Row 1: Key metadata in a compact grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              {/* Athlete */}
-              <div>
-                <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                  <User className="h-3 w-3" /> Athlete
-                </Label>
-                <p className="font-medium truncate">{athleteName || 'Not selected'}</p>
-              </div>
-              
-              {/* Plan Name */}
-              <div>
-                <Label className="text-xs text-muted-foreground">Plan</Label>
-                <p className="font-medium truncate">{planName || 'Unnamed Plan'}</p>
-              </div>
-              
-              {/* Timeline (combined) */}
-              <div>
-                <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Calendar className="h-3 w-3" /> Timeline
-                </Label>
-                <p className="font-medium">{timelineString}</p>
-              </div>
-              
-              {/* Mesocycles */}
-              {totalMesocycles !== undefined && totalMesocycles > 0 && (
-                <div>
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Layers className="h-3 w-3" /> Mesocycles
-                  </Label>
-                  <p className="font-medium">{totalMesocycles}</p>
-                </div>
-              )}
-            </div>
+    <Card className="mb-4">
+      <button
+        type="button"
+        data-nav
+        onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
+        className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-muted/40 transition-colors rounded-lg"
+      >
+        <FileText className="h-4 w-4 shrink-0" />
+        <span className="text-sm font-semibold shrink-0">Plan strategy</span>
+        {summary && <span className="min-w-0 truncate text-xs text-muted-foreground">· {summary}</span>}
+        <ChevronDown className={cn('ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform', isOpen && 'rotate-180')} />
+      </button>
 
-            {/* Row 2: Primary Goals */}
-            {allPrimaryGoals.length > 0 && (
-              <div>
-                <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Target className="h-3 w-3" /> {allPrimaryGoals.length === 1 ? 'Goal' : 'Goals'}
-                </Label>
-                {allPrimaryGoals.length === 1 ? (
-                  <p className="text-sm font-medium">{allPrimaryGoals[0]}</p>
-                ) : (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {allPrimaryGoals.map((goal, i) => (
-                      <Badge key={i} variant="secondary" className="text-xs">
-                        {goal}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Row 3: Sub-goals as compact badges with collapsible overflow */}
-            {uniqueSubGoals.length > 0 && (
-              <div>
-                <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Trophy className="h-3 w-3" /> Sub-goals
-                </Label>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {visibleSubGoals.map((sg) => (
-                    <Badge key={sg.id} variant="secondary" className="text-xs">
-                      {sg.description}
-                    </Badge>
-                  ))}
-                  {hiddenCount > 0 && !showAllSubGoals && (
-                    <Badge
-                      variant="outline"
-                      className="text-xs cursor-pointer hover:bg-muted"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowAllSubGoals(true);
-                      }}
-                    >
-                      +{hiddenCount} more
-                    </Badge>
-                  )}
-                  {showAllSubGoals && uniqueSubGoals.length > MAX_VISIBLE_SUBGOALS && (
-                    <Badge
-                      variant="outline"
-                      className="text-xs cursor-pointer hover:bg-muted"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowAllSubGoals(false);
-                      }}
-                    >
-                      Show less
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Notes */}
-            {(notes !== undefined || onNotesChange) && (
-              <div>
-                <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                  <FileText className="h-3 w-3" /> Plan strategy
-                </Label>
-                {onNotesChange ? (
-                  <PlanNotesField value={notes || ''} onChange={onNotesChange} minHeight={140} className="mt-1"
-                    history={notesHistory} onRestore={onNotesRestore} onWriteUp={onNotesWriteUp}
-                    pdf={{ planName: planName || 'Training plan', athleteName }} />
-                ) : notes ? (
-                  <PlanNotesView text={notes} className="mt-1" />
-                ) : null}
-              </div>
-            )}
-          </CardContent>
-        </CollapsibleContent>
-      </Card>
-    </Collapsible>
+      {isOpen && (
+        <div className="px-4 pb-4 space-y-2">
+          {(allPrimaryGoals.length > 0 || planName) && (
+            <p className="text-xs text-muted-foreground">
+              {planName && <span className="text-foreground font-medium">{planName}</span>}
+              {planName && allPrimaryGoals.length > 0 && ' · '}
+              {allPrimaryGoals.length > 0 && <>{allPrimaryGoals.length === 1 ? 'Goal' : 'Goals'}: <span className="text-foreground">{allPrimaryGoals.join(' · ')}</span></>}
+              {subGoalCount > 0 && ` · ${subGoalCount} sub-goal${subGoalCount === 1 ? '' : 's'}`}
+            </p>
+          )}
+          {onNotesChange ? (
+            <PlanNotesField value={notes || ''} onChange={onNotesChange} minHeight={120} maxViewHeight={320}
+              history={notesHistory} onRestore={onNotesRestore} onWriteUp={onNotesWriteUp}
+              pdf={{ planName: planName || 'Training plan', athleteName }} />
+          ) : notes ? (
+            <PlanNotesView text={notes} />
+          ) : null}
+        </div>
+      )}
+    </Card>
   );
 }

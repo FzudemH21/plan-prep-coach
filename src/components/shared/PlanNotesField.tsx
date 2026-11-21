@@ -120,11 +120,13 @@ function NotesEditor({ value, onChange, minHeight, maxViewHeight }: {
  * conversation into the document — applied like any AI suggestion), versions (kept when the AI
  * rewrites it; restore), a large document view and a PDF.
  */
-export function PlanNotesField({ value, onChange, minHeight = 180, className, history = [], onRestore, onWriteUp, pdf }: {
+export function PlanNotesField({ value, onChange, minHeight = 180, maxViewHeight = 480, className, history = [], onRestore, onWriteUp, pdf }: {
   value: string;
   onChange: (next: string) => void;
   /** Height of the text box while editing (px) */
   minHeight?: number;
+  /** Highest the formatted text gets before it scrolls (px) */
+  maxViewHeight?: number;
   className?: string;
   /** Earlier versions, newest first */
   history?: PlanNotesVersion[];
@@ -209,7 +211,7 @@ export function PlanNotesField({ value, onChange, minHeight = 180, className, hi
   return (
     <div className={cn('space-y-1.5', className)} onClick={(e) => e.stopPropagation()}>
       <div className="flex justify-end">{tools(false)}</div>
-      <NotesEditor value={value} onChange={onChange} minHeight={minHeight} maxViewHeight={480} />
+      <NotesEditor value={value} onChange={onChange} minHeight={minHeight} maxViewHeight={maxViewHeight} />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-4xl h-[88vh] flex flex-col gap-3">
