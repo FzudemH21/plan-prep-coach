@@ -879,17 +879,6 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
       {/* Scrollable form body */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-6 py-4 space-y-6">
-          {/* Notes first — typed or dictated, the input and Dictate side by side; work in the read-only view too (not when health data is view only) */}
-          <fieldset disabled={locked} className="contents">
-          <AnamnesisNotesPanel
-            entries={noteEntries}
-            onChange={handleNotesChange}
-            coachUserId={coachUserId}
-            athleteLocalId={athleteLocalId}
-            athleteName={athleteName}
-          />
-          </fieldset>
-
           {allSections.length === 0 && !initial && (
             <p className="text-sm text-muted-foreground text-center py-6">
               Select a template above to load the form fields.
@@ -1017,6 +1006,18 @@ At most 5 questions (e.g. an ambiguous dictated word, which side, since when, co
           </div>
 
           )}
+
+          {/* Notes — below the answers, above the attachments; typed or dictated (the field and Dictate side by
+              side); work in the read-only view too (not when health data is view only) */}
+          <fieldset disabled={locked} className="contents">
+          <AnamnesisNotesPanel
+            entries={noteEntries}
+            onChange={handleNotesChange}
+            coachUserId={coachUserId}
+            athleteLocalId={athleteLocalId}
+            athleteName={athleteName}
+          />
+          </fieldset>
 
           {/* Attachments */}
           <div className="space-y-2">

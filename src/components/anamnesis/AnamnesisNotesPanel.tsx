@@ -2,11 +2,11 @@
  * AnamnesisNotesPanel — the notes of an anamnesis: typed or dictated, each with its time.
  *
  * Notes are additions, not changes to the answers, so they work in the read-only view as well
- * (no need to switch to edit mode). Shown first in the anamnesis: the note field and Dictate side by side,
- * newest note first. Dictation: record → Mistral Voxtral turns it into text → the coach checks /
+ * (no need to switch to edit mode). Below the answers: the note field and Dictate side by side, newest
+ * note first, each note two lines with "Read more". Dictation: record → Mistral Voxtral turns it into text → the coach checks /
  * corrects the text → saved as a note. The audio is not kept.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Check, Loader2, Mic, Pencil, Plus, Square, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -50,6 +50,34 @@ interface AnamnesisNotesPanelProps {
 
 function noteId(): string {
   return `note_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/** A note's text: two lines, "Read more" when there is more */
+function NoteText({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const [long, setLong] = useState(false);
+  const ref = useRef<HTMLParagraphElement>(null);
+  // Measured again whenever the width changes (layout still settling, window resized)
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || open) return;
+    const measure = () => setLong(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [text, open]);
+  return (
+    <div>
+      <p ref={ref} className={cn('text-sm whitespace-pre-wrap', !open && 'line-clamp-2')}>{text}</p>
+      {(long || open) && (
+        <button type="button" className="mt-0.5 text-xs text-muted-foreground hover:text-foreground"
+          onClick={() => setOpen((v) => !v)}>
+          {open ? 'Show less' : 'Read more'}
+        </button>
+      )}
+    </div>
+  );
 }
 
 function stamp(iso: string): string {
@@ -134,7 +162,18 @@ export function AnamnesisNotesPanel({ entries, onChange, coachUserId, athleteLoc
 
   // The note field grows with its text and shrinks back once the note is added
   const draftRef = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { fitToText(draftRef.current); }, [draft]);
+  useEffect(() => {
+    const el = draftRef.current;
+    if (!el) return;
+    // Empty: back to one line; with text: as tall as the text (again when the width changes)
+    const fit = () => { if (draft) fitToText(el); else el.style.height = ''; };
+    fit();
+    // Only a new width needs a new fit (fitting itself changes the height)
+    let width = el.clientWidth;
+    const ro = new ResizeObserver(() => { if (el.clientWidth !== width) { width = el.clientWidth; fit(); } });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [draft, dictating]);
   const submitDraft = async () => { if (draft.trim() && await addNote(draft, 'typed')) setDraft(''); };
 
   // Newest first — right under the field it was added with
@@ -277,7 +316,7 @@ export function AnamnesisNotesPanel({ entries, onChange, coachUserId, athleteLoc
               </div>
             </div>
           ) : (
-            <p className="text-sm whitespace-pre-wrap">{note.text}</p>
+            <NoteText text={note.text} />
           )}
         </div>
       ))}
