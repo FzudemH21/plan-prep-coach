@@ -1,17 +1,20 @@
-import { useState, useMemo } from "react";
+/**
+ * Step 3 of the macrocycle: add training methods that aren't linked to a goal — several at once.
+ * A searchable list with ticks; each ticked method gets an optional one-line rationale ("why").
+ * (Evidence and its quality are no longer asked here — older methods keep what they have.)
+ */
+import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Check, ChevronsUpDown, AlertTriangle } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToolboxData } from "@/hooks/useToolboxData";
 
 export type EvidenceQuality = "strong" | "moderate" | "preliminary" | "expert_opinion";
 
+/** Labels for evidence ratings stored on older methods (and in the parameter database) */
 export const EVIDENCE_QUALITY_OPTIONS: { value: EvidenceQuality; label: string; description: string }[] = [
   { value: "strong",         label: "Strong",         description: "Systematic review / meta-analysis with consistent results" },
   { value: "moderate",       label: "Moderate",       description: "Single or multiple RCTs / well-controlled studies" },
@@ -19,10 +22,13 @@ export const EVIDENCE_QUALITY_OPTIONS: { value: EvidenceQuality; label: string; 
   { value: "expert_opinion", label: "Expert Opinion", description: "Case reports, coaching practice, or expert consensus" },
 ];
 
+export interface NewManualMethod { methodId: string; rationale: string }
+
 interface AddAdditionalMethodDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAdd: (method: { methodId: string; rationale: string; evidence?: string; evidenceQuality?: EvidenceQuality }) => void;
+  /** The ticked methods, in the order they were ticked */
+  onAdd: (methods: NewManualMethod[]) => void;
   excludedMethods: Set<string>;
 }
 
@@ -33,203 +39,98 @@ export function AddAdditionalMethodDialog({
   excludedMethods,
 }: AddAdditionalMethodDialogProps) {
   const { data: toolboxData } = useToolboxData();
-  const [selectedMethod, setSelectedMethod] = useState<string>("");
-  const [rationale, setRationale] = useState("");
-  const [evidence, setEvidence] = useState("");
-  const [evidenceQuality, setEvidenceQuality] = useState<EvidenceQuality | "">("");
-  const [dropdownOpen, setDropdownOpen] = useState(false);
+  // Ticked methods (in order) and their rationale
+  const [picked, setPicked] = useState<string[]>([]);
+  const [rationales, setRationales] = useState<Record<string, string>>({});
 
-  // Get all unique methods from toolbox, grouped by category
-  const availableMethods = useMemo(() => {
-    const methodSet = new Map<string, { category: string; subCategory: string }>();
-
+  // Methods of the toolbox not in the plan yet, by category
+  const methodsByCategory = useMemo(() => {
+    const grouped: Record<string, Array<{ methodId: string; subCategory: string }>> = {};
+    const seen = new Set<string>();
     toolboxData.entries.forEach(entry => {
       const methodId = `${entry.category} - ${entry.subCategory}`;
-      if (!excludedMethods.has(methodId) && !methodSet.has(methodId)) {
-        methodSet.set(methodId, {
-          category: entry.category,
-          subCategory: entry.subCategory
-        });
-      }
+      if (excludedMethods.has(methodId) || seen.has(methodId)) return;
+      seen.add(methodId);
+      (grouped[entry.category] ??= []).push({ methodId, subCategory: entry.subCategory });
     });
-
-    return Array.from(methodSet.entries()).map(([methodId, info]) => ({
-      methodId,
-      ...info
-    }));
-  }, [toolboxData.entries, excludedMethods]);
-
-  // Group methods by category
-  const methodsByCategory = useMemo(() => {
-    const grouped: Record<string, typeof availableMethods> = {};
-    availableMethods.forEach(method => {
-      if (!grouped[method.category]) {
-        grouped[method.category] = [];
-      }
-      grouped[method.category].push(method);
-    });
-    // Sort categories and methods within each category
-    Object.keys(grouped).forEach(cat => {
-      grouped[cat].sort((a, b) => a.subCategory.localeCompare(b.subCategory));
-    });
+    Object.values(grouped).forEach(list => list.sort((a, b) => a.subCategory.localeCompare(b.subCategory)));
     return grouped;
-  }, [availableMethods]);
+  }, [toolboxData.entries, excludedMethods]);
+  const sortedCategories = useMemo(() => Object.keys(methodsByCategory).sort(), [methodsByCategory]);
 
-  const sortedCategories = useMemo(() =>
-    Object.keys(methodsByCategory).sort(),
-    [methodsByCategory]
-  );
+  const toggle = (methodId: string) =>
+    setPicked(prev => (prev.includes(methodId) ? prev.filter(m => m !== methodId) : [...prev, methodId]));
 
-  const reset = () => {
-    setSelectedMethod("");
-    setRationale("");
-    setEvidence("");
-    setEvidenceQuality("");
-  };
+  const reset = () => { setPicked([]); setRationales({}); };
 
   const handleAdd = () => {
-    if (!selectedMethod) return;
-    onAdd({
-      methodId: selectedMethod,
-      rationale: rationale.trim(),
-      evidence: evidence.trim() || undefined,
-      evidenceQuality: evidenceQuality || undefined,
-    });
-    reset();
-    onOpenChange(false);
-  };
-
-  const handleCancel = () => {
+    if (picked.length === 0) return;
+    onAdd(picked.map(methodId => ({ methodId, rationale: (rationales[methodId] ?? "").trim() })));
     reset();
     onOpenChange(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+    <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o); }}>
+      <DialogContent className="sm:max-w-[560px] max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Add Additional Training Method</DialogTitle>
-          <DialogDescription>
-            Select a training method that isn't linked to any goal. Providing a rationale helps explain why this method is included in your plan.
-          </DialogDescription>
+          <DialogTitle>Add training methods</DialogTitle>
+          <DialogDescription>Methods that aren't linked to a goal — tick one or more.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {/* Method Selection */}
-          <div className="space-y-2">
-            <Label>Training Method</Label>
-            <Popover open={dropdownOpen} onOpenChange={setDropdownOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={dropdownOpen}
-                  className="w-full justify-between"
-                >
-                  {selectedMethod || "Select a method..."}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[450px] p-0 bg-popover z-50" align="start">
-                <Command>
-                  <CommandInput placeholder="Search methods..." />
-                  <CommandList className="max-h-[300px]">
-                    <CommandEmpty>No methods found.</CommandEmpty>
-                    {sortedCategories.map(category => (
-                      <CommandGroup key={category} heading={category}>
-                        {methodsByCategory[category].map(method => (
-                          <CommandItem
-                            key={method.methodId}
-                            value={method.methodId}
-                            onSelect={() => {
-                              setSelectedMethod(method.methodId);
-                              setDropdownOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                selectedMethod === method.methodId ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {method.subCategory}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    ))}
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          </div>
+        <div className="flex-1 min-h-0 flex flex-col gap-3">
+          <Command className="rounded-md border h-auto">
+            <CommandInput placeholder="Search methods..." />
+            <CommandList className="max-h-[260px]">
+              <CommandEmpty>No methods found.</CommandEmpty>
+              {sortedCategories.map(category => (
+                <CommandGroup key={category} heading={category}>
+                  {methodsByCategory[category].map(method => {
+                    const on = picked.includes(method.methodId);
+                    return (
+                      <CommandItem key={method.methodId} value={method.methodId} onSelect={() => toggle(method.methodId)}>
+                        <span className={cn('mr-2 h-4 w-4 shrink-0 rounded border flex items-center justify-center',
+                          on ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40')}>
+                          {on && <Check className="h-3 w-3" />}
+                        </span>
+                        {method.subCategory}
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              ))}
+            </CommandList>
+          </Command>
 
-          {/* Rationale Input */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              Rationale
-              <span className="text-muted-foreground text-xs font-normal">(recommended)</span>
-            </Label>
-            <Textarea
-              value={rationale}
-              onChange={(e) => setRationale(e.target.value)}
-              placeholder="Why are you including this method in your training plan?"
-              className="min-h-[80px]"
-            />
-            {!rationale.trim() && selectedMethod && (
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3 text-yellow-500" />
-                Methods without rationale will show a warning
-              </p>
-            )}
-          </div>
-
-          {/* Evidence Input */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              Evidence
-              <span className="text-muted-foreground text-xs font-normal">(optional)</span>
-            </Label>
-            <Textarea
-              value={evidence}
-              onChange={(e) => setEvidence(e.target.value)}
-              placeholder="Research citations or supporting evidence..."
-              className="min-h-[60px]"
-            />
-          </div>
-
-          {/* Evidence Quality Dropdown */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              Evidence Quality
-              <span className="text-muted-foreground text-xs font-normal">(optional)</span>
-            </Label>
-            <Select
-              value={evidenceQuality}
-              onValueChange={(v) => setEvidenceQuality(v as EvidenceQuality)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Rate the quality of evidence..." />
-              </SelectTrigger>
-              <SelectContent>
-                {EVIDENCE_QUALITY_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{opt.label}</span>
-                      <span className="text-xs text-muted-foreground">{opt.description}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* The ticked methods, each with an optional rationale */}
+          {picked.length > 0 && (
+            <div className="min-h-0 overflow-y-auto space-y-2 pr-1">
+              <p className="text-xs font-medium text-muted-foreground">Selected ({picked.length}) — why each one? (optional)</p>
+              {picked.map(methodId => (
+                <div key={methodId} className="rounded-md border px-2.5 py-2 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="flex-1 min-w-0 text-sm font-medium break-words">{methodId}</span>
+                    <button type="button" className="shrink-0 text-muted-foreground hover:text-destructive" aria-label="Remove from selection"
+                      onClick={() => toggle(methodId)}>
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <Input
+                    value={rationales[methodId] ?? ""}
+                    onChange={(e) => setRationales(prev => ({ ...prev, [methodId]: e.target.value }))}
+                    placeholder="Why is this method in the plan?"
+                    className="h-8 text-sm"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleCancel}>
-            Cancel
-          </Button>
-          <Button onClick={handleAdd} disabled={!selectedMethod}>
-            Add Method
+          <Button variant="outline" onClick={() => { reset(); onOpenChange(false); }}>Cancel</Button>
+          <Button onClick={handleAdd} disabled={picked.length === 0}>
+            {picked.length > 1 ? `Add ${picked.length} methods` : 'Add method'}
           </Button>
         </DialogFooter>
       </DialogContent>

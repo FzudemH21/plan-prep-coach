@@ -2478,6 +2478,17 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     });
   };
 
+  // Several methods from the dialog at once (one message)
+  const handleAddManualMethods = (methods: Array<{ methodId: string; rationale: string }>) => {
+    if (methods.length === 0) return;
+    setManuallyAddedMethods(prev => [...prev, ...methods.filter(m => !prev.some(p => p.methodId === m.methodId))]);
+    setSelectedMethods(prev => new Set([...prev, ...methods.map(m => m.methodId)]));
+    toast({
+      title: methods.length === 1 ? "Method added" : `${methods.length} methods added`,
+      description: methods.length === 1 ? `${methods[0].methodId} has been added to your training plan.` : methods.map(m => m.methodId).join(", "),
+    });
+  };
+
   // Handle removing a manually added method
   const handleRemoveManualMethod = (methodId: string) => {
     setManuallyAddedMethods(prev => prev.filter(m => m.methodId !== methodId));
@@ -2965,7 +2976,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           <AddAdditionalMethodDialog
             open={isAddMethodDialogOpen}
             onOpenChange={setIsAddMethodDialogOpen}
-            onAdd={handleAddManualMethod}
+            onAdd={handleAddManualMethods}
             excludedMethods={new Set([...getLinkedMethodIds(), ...manuallyAddedMethods.map(m => m.methodId)])}
           />
         </CardContent>
