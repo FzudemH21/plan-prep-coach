@@ -3985,6 +3985,18 @@ export default function MesocyclePage() {
                                                          const isSplit = isMicrocycleSplit(meso.id, microcycleIndex);
                                                          const sessionsCount = getCellSessions(meso.id, microcycleIndex, fullMethodName);
                                                         const isFrequency = isFrequencyParameter(param.name, fullMethodName);
+                                                      // Frequency 0 = no sessions of this method in the microcycle: nothing to fill in
+                                                      // (split or not — before, a split microcycle showed no inputs, an unsplit
+                                                      // one still one session). Values entered earlier stay stored.
+                                                      if (!isFrequency && sessionsCount === 0) {
+                                                        return (
+                                                          <div key={`${meso.id}-${microcycleIndex}`}
+                                                            className="relative z-10 border-l border-r flex items-center justify-center text-xs text-muted-foreground bg-muted/20"
+                                                            title="Frequency 0 — no sessions of this method in this microcycle">
+                                                            —
+                                                          </div>
+                                                        );
+                                                      }
                                                       if (isSplit && !isFrequency) {
                                                        return (
                                                          <div key={`${meso.id}-${microcycleIndex}`} className="flex relative z-10 border-r">
