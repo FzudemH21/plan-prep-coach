@@ -88,7 +88,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
         if (dateStr >= startStr && dateStr <= endStr) {
           const existing = testMap.get(testName);
           if (existing) {
-            existing.dates.push(dateStr);
+            if (!existing.dates.includes(dateStr)) existing.dates.push(dateStr);
           } else {
             testMap.set(testName, { goal: sg.goal, dates: [dateStr] });
           }
@@ -117,7 +117,7 @@ const MicrocycleIntensityPlanning: React.FC<MicrocycleIntensityPlanningProps> = 
         if (dateStr >= startStr && dateStr <= endStr) {
           const existing = eventMap.get(eventName);
           if (existing) {
-            existing.push(dateStr);
+            if (!existing.includes(dateStr)) existing.push(dateStr);
           } else {
             eventMap.set(eventName, [dateStr]);
           }

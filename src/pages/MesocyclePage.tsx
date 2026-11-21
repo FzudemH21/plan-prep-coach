@@ -260,6 +260,17 @@ export default function MesocyclePage() {
   const athleteCalendarEvents = macrocycleData?.selectedAthleteId
     ? getEventsForAthlete(macrocycleData.selectedAthleteId)
     : [];
+  // The athlete's tests / events outside this plan: those that came with assigned plans, plus
+  // everything else in the athlete's calendar (entered in the anamnesis form, added by hand) —
+  // shown like the plan's own tests / events
+  const athleteExistingTests: Array<{ testMethod: string; testDates: string[] }> = [
+    ...(macrocycleData?.athleteExistingTests || []),
+    ...athleteCalendarEvents.filter(e => e.type === 'test').map(e => ({ testMethod: e.title, testDates: [e.date] })),
+  ];
+  const athleteExistingEvents: Array<{ name: string; eventDates: string[] }> = [
+    ...(macrocycleData?.athleteExistingEvents || []),
+    ...athleteCalendarEvents.filter(e => e.type === 'event').map(e => ({ name: e.title, eventDates: eventDateList(e) })),
+  ];
 
   // Resolve athlete name from selectedAthleteId
   const selectedAthlete = athletes.find(a => a.id === macrocycleData?.selectedAthleteId);
@@ -1164,9 +1175,9 @@ export default function MesocyclePage() {
                 subGoals={[
                   ...(macrocycleData?.subGoals || []),
                   ...(macrocycleData?.smartGoals || []).map((sg: any) => ({ testDates: sg.testDates || [], testMethod: sg.description || '', description: sg.description || '' })),
-                  ...(macrocycleData?.athleteExistingTests || []).map((t: any) => ({ testDates: t.testDates, testMethod: t.testMethod })),
+                  ...athleteExistingTests,
                 ]}
-                events={[...(macrocycleData?.events || []), ...(macrocycleData?.athleteExistingEvents || []).map((e: any) => ({ eventDates: e.eventDates, name: e.name }))]}
+                events={[...(macrocycleData?.events || []), ...athleteExistingEvents]}
                 planStartDate={planStartDate}
               />
             </div>
@@ -4301,7 +4312,7 @@ export default function MesocyclePage() {
 
     // Also include athlete's existing tests
     // Normalize ISO strings to yyyy-MM-dd to match the map lookup key
-    macrocycleData.athleteExistingTests?.forEach((t: any) => {
+    athleteExistingTests.forEach((t) => {
       const testName = t.testMethod || 'Test';
       t.testDates?.forEach((dateStr: string) => {
         const normalized = dateStr.split('T')[0];
@@ -4324,7 +4335,7 @@ export default function MesocyclePage() {
 
     // Also include athlete's existing events
     // Normalize ISO strings to yyyy-MM-dd to match the map lookup key
-    macrocycleData.athleteExistingEvents?.forEach((e: any) => {
+    athleteExistingEvents.forEach((e) => {
       const eventName = e.name || 'Event';
       e.eventDates?.forEach((dateStr: string) => {
         const normalized = dateStr.split('T')[0];
@@ -4615,9 +4626,9 @@ export default function MesocyclePage() {
       .filter((sg: any) => sg.testDates?.some((td: string) => td.slice(0, 10) === date))
       .map((sg: any) => sg.description || 'Test');
 
-    const athleteTests = (macrocycleData?.athleteExistingTests || [])
-      .filter((t: any) => t.testDates?.some((td: string) => td.slice(0, 10) === date))
-      .map((t: any) => t.testMethod || 'Test');
+    const athleteTests = athleteExistingTests
+      .filter((t) => t.testDates?.some((td: string) => td.slice(0, 10) === date))
+      .map((t) => t.testMethod || 'Test');
 
     const all = [...wizardSubGoalTests, ...wizardSmartGoalTests];
     return [...all, ...athleteTests.filter((t: string) => !all.includes(t))];
@@ -4628,9 +4639,9 @@ export default function MesocyclePage() {
       .filter((event: any) => event.eventDates?.some((ed: string) => ed.slice(0, 10) === date))
       .map((event: any) => event.name || 'Event');
 
-    const athleteEvents = (macrocycleData?.athleteExistingEvents || [])
-      .filter((e: any) => e.eventDates?.some((ed: string) => ed.slice(0, 10) === date))
-      .map((e: any) => e.name || 'Event');
+    const athleteEvents = athleteExistingEvents
+      .filter((e) => e.eventDates?.some((ed: string) => ed.slice(0, 10) === date))
+      .map((e) => e.name || 'Event');
 
     return [...wizardEvents, ...athleteEvents.filter((e: string) => !wizardEvents.includes(e))];
   };
