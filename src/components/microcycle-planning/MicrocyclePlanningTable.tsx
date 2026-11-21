@@ -112,6 +112,13 @@ export const MicrocyclePlanningTable = forwardRef<MicrocyclePlanningTableHandle,
   }));
 
   const [expandedCategories, setExpandedCategories] = usePersistentSet('fold:meso:exerciseSelectionCategories');
+  // A method's exercise categories (Squat, Hinge …) can be folded away — open by default, folded ones remembered
+  const [collapsedMethods, setCollapsedMethods] = usePersistentSet('fold:meso:exerciseSelectionMethodsFolded');
+  const toggleMethodFold = (methodId: string) => setCollapsedMethods(prev => {
+    const next = new Set(prev);
+    if (next.has(methodId)) next.delete(methodId); else next.add(methodId);
+    return next;
+  });
   
   // Mesocycle navigation state for single + comparison view
   
@@ -1683,8 +1690,22 @@ const updateCellData = (
                         // Render exercise category rows with method name spanning
                           <> 
                           <TableRow key={`${method.id}-header`}>
-                            <TableCell className="sticky left-0 bg-background z-30 border-r-2 border-border w-64 pl-8 py-3">
-                              <div className="font-medium text-foreground">{method.name}</div>
+                            <TableCell className="sticky left-0 bg-background z-30 border-r-2 border-border w-64 pl-5 py-1.5">
+                              <button
+                                type="button"
+                                data-nav
+                                aria-expanded={!collapsedMethods.has(method.id)}
+                                onClick={() => toggleMethodFold(method.id)}
+                                className="flex w-full items-center gap-1.5 rounded px-1 py-1.5 text-left font-medium text-foreground hover:bg-muted/50"
+                              >
+                                {collapsedMethods.has(method.id)
+                                  ? <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                  : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                                <span className="min-w-0 truncate">{method.name}</span>
+                                {collapsedMethods.has(method.id) && (
+                                  <span className="shrink-0 text-xs font-normal text-muted-foreground">({method.categories.length})</span>
+                                )}
+                              </button>
                             </TableCell>
                             {columnStructure.map((column) => {
                               if (column.type === 'link-area') {
@@ -1704,7 +1725,7 @@ const updateCellData = (
                               );
                             })}
                           </TableRow>
-                          {method.categories.map((categoryName) => (
+                          {!collapsedMethods.has(method.id) && method.categories.map((categoryName) => (
                             <TableRow key={`${method.id}-${categoryName}`}>
                               <TableCell className="sticky left-0 bg-background z-30 border-r-2 border-border w-64 pl-12 py-3">
                                 <div className="text-sm text-muted-foreground">{categoryName}</div>
