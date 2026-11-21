@@ -61,6 +61,7 @@ import { applyNotesAction, readNotesHistory, restoreNotesVersion, strategyContex
 import { useWizardData } from "@/contexts/WizardDataContext";
 import { usePersistentSet } from '@/hooks/usePersistentState';
 import { usePlannerProgram } from "@/hooks/useProgramAccess";
+import { AthleteGlimpseButton } from "@/components/athletes/AthleteGlimpse";
 
 // Type for manually added methods with rationale
 interface ManuallyAddedMethod {
@@ -3070,6 +3071,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             </Button>
             <AutoSaveIndicator status={autoSaveStatus} />
             <SaveProgramButton />
+            <AthleteGlimpseButton athleteId={selectedAthleteId} />
             <ResourcesButton />
             <PlanningNavigationMenu currentPage="macrocycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
           </div>
@@ -3452,6 +3454,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
             </Button>
             <AutoSaveIndicator status={autoSaveStatus} />
             <SaveProgramButton />
+            <AthleteGlimpseButton athleteId={selectedAthleteId} />
             <ResourcesButton />
             <PlanningNavigationMenu currentPage="macrocycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
           </div>

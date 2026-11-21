@@ -54,6 +54,7 @@ import { extractPlanSummary } from '@/lib/planMemory';
 import { SaveToLibraryDialog } from '@/components/session-library/SaveToLibraryDialog';
 import { syncCircuitPlacements } from '@/utils/circuitLibrarySync';
 import { usePlannerProgram } from "@/hooks/useProgramAccess";
+import { AthleteGlimpseButton } from "@/components/athletes/AthleteGlimpse";
 
 // Using ExerciseDistribution, SessionSection, and SupersetMapping from types file
 
@@ -5493,6 +5494,7 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
             </Button>
             <AutoSaveIndicator status={autoSaveStatus} />
             <SaveProgramButton />
+            <AthleteGlimpseButton athleteId={selectedAthleteId} />
             <ResourcesButton />
             <PlanningNavigationMenu currentPage="microcycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
           </div>

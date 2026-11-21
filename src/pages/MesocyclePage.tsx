@@ -74,6 +74,7 @@ import { useCoachMemory } from '@/hooks/useCoachMemory';
 import { useAnamnesisAIContext } from '@/hooks/useAnamnesisAIContext';
 import { usePersistentSet } from '@/hooks/usePersistentState';
 import { usePlannerProgram } from "@/hooks/useProgramAccess";
+import { AthleteGlimpseButton } from "@/components/athletes/AthleteGlimpse";
 
 // Helper function for string normalization - robust canonicalization
 const normalizeForComparison = (str: unknown): string => {
@@ -5779,6 +5780,7 @@ export default function MesocyclePage() {
             </Button>
             <AutoSaveIndicator status={autoSaveStatus} />
             <SaveProgramButton />
+            <AthleteGlimpseButton athleteId={macrocycleData?.selectedAthleteId} />
             <ResourcesButton />
             <PlanningNavigationMenu currentPage="mesocycle" currentPageStep={currentStep} onChangeCurrentPageStep={setCurrentStep} />
           </div>
