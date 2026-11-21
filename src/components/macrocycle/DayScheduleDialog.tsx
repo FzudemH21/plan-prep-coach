@@ -123,7 +123,8 @@ export function DayScheduleDialog({
       disabled={scheduled}
       onClick={() => togglePicked(key)}
       className={cn(
-        'flex-1 min-w-0 w-full flex items-start gap-2 rounded-md border px-2.5 py-2 text-left text-sm transition-colors',
+        // Takes the rest of its row (next to the expand arrow) — never wider than the dialog
+        'flex-1 min-w-0 flex items-start gap-2 rounded-md border px-2.5 py-2 text-left text-sm transition-colors',
         scheduled ? 'border-amber-200 bg-amber-50/60 dark:bg-amber-950/20 cursor-default'
           : chosen ? 'border-primary bg-primary/5' : 'border-input hover:bg-muted/60',
       )}
@@ -133,15 +134,16 @@ export function DayScheduleDialog({
         {(scheduled || chosen) && <Check className="h-3 w-3" />}
       </span>
       <span className="flex-1 min-w-0">
-        <span className="flex items-center gap-1.5">
-          {opts.main ? <Target className="h-3.5 w-3.5 text-primary shrink-0" /> : <Trophy className="h-3.5 w-3.5 text-amber-600 shrink-0" />}
-          <span className={cn('truncate', opts.main && 'font-medium')}>{label}</span>
-          {opts.main && !scheduled && <span className="text-[11px] text-muted-foreground shrink-0">main goal</span>}
-          {scheduled && <span className="text-[11px] text-amber-700 shrink-0">on this day</span>}
+        <span className="flex items-start gap-1.5">
+          {opts.main ? <Target className="mt-0.5 h-3.5 w-3.5 text-primary shrink-0" /> : <Trophy className="mt-0.5 h-3.5 w-3.5 text-amber-600 shrink-0" />}
+          {/* Long names wrap (whole name visible) */}
+          <span className={cn('min-w-0 break-words', opts.main && 'font-medium')}>{label}</span>
+          {opts.main && !scheduled && <span className="mt-0.5 text-[11px] text-muted-foreground shrink-0">main goal</span>}
+          {scheduled && <span className="mt-0.5 text-[11px] text-amber-700 shrink-0">on this day</span>}
           {/* Baseline → goal on hover, so the list stays short */}
           <Tooltip>
             <TooltipTrigger asChild>
-              <span role="img" aria-label={opts.values ?? 'No values set yet'} className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
+              <span role="img" aria-label={opts.values ?? 'No values set yet'} className="ml-auto mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
                 onClick={e => e.stopPropagation()}>
                 <Info className="h-3.5 w-3.5" />
               </span>
@@ -166,7 +168,8 @@ export function DayScheduleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[88vh] overflow-y-auto">
+      {/* minmax(0,1fr): the dialog's grid column may not grow past the dialog for a long goal name */}
+      <DialogContent className="sm:max-w-[600px] max-h-[88vh] overflow-y-auto overflow-x-hidden grid-cols-[minmax(0,1fr)]">
         <DialogHeader>
           <DialogTitle>Tests & events — {dayLabel}</DialogTitle>
         </DialogHeader>
@@ -265,16 +268,23 @@ export function DayScheduleDialog({
                       )}
                       {isOpen && (
                         <div className="ml-7 space-y-1.5">
-                          {own.map(sg => testRow(`s:${sg.id}`, subGoalLabel(sg), !!sg.testDates?.includes(date),
-                            { dates: sg.testDates, values: valuesText(sg.preTestValue, sg.goalValue, sg.unit, sg.percentChange) }))}
+                          {own.map(sg => (
+                            <div key={sg.id} className="flex">
+                              {testRow(`s:${sg.id}`, subGoalLabel(sg), !!sg.testDates?.includes(date),
+                                { dates: sg.testDates, values: valuesText(sg.preTestValue, sg.goalValue, sg.unit, sg.percentChange) })}
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
                   );
                 })}
-                {unlinkedSubGoals.map(sg =>
-                  testRow(`s:${sg.id}`, subGoalLabel(sg), !!sg.testDates?.includes(date),
-                    { dates: sg.testDates, values: valuesText(sg.preTestValue, sg.goalValue, sg.unit, sg.percentChange) }))}
+                {unlinkedSubGoals.map(sg => (
+                  <div key={sg.id} className="flex">
+                    {testRow(`s:${sg.id}`, subGoalLabel(sg), !!sg.testDates?.includes(date),
+                      { dates: sg.testDates, values: valuesText(sg.preTestValue, sg.goalValue, sg.unit, sg.percentChange) })}
+                  </div>
+                ))}
                 <Button type="button" className="w-full mt-1" disabled={picked.size === 0} onClick={addPicked}>
                   <Plus className="h-4 w-4 mr-1.5" />
                   {picked.size > 1 ? `Add ${picked.size} tests to this day` : 'Add test to this day'}
