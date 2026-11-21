@@ -2483,6 +2483,12 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
     if (methods.length === 0) return;
     setManuallyAddedMethods(prev => [...prev, ...methods.filter(m => !prev.some(p => p.methodId === m.methodId))]);
     setSelectedMethods(prev => new Set([...prev, ...methods.map(m => m.methodId)]));
+    // Their categories open, so the new methods are visible in the list
+    setExpandedMethodCategories(prev => {
+      const next = new Set(prev);
+      methods.forEach(m => next.add(m.methodId.includes(' - ') ? m.methodId.split(' - ')[0] : m.methodId));
+      return next;
+    });
     toast({
       title: methods.length === 1 ? "Method added" : `${methods.length} methods added`,
       description: methods.length === 1 ? `${methods[0].methodId} has been added to your training plan.` : methods.map(m => m.methodId).join(", "),
@@ -2518,7 +2524,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
 
   const renderTrainingMethodsForm = () => {
     const allMethods = getAllMethodsWithAssociations();
-    const hasAnyMethods = allMethods.length > 0;
+    // One list: methods from the goals and methods the coach added (no separate section)
+    const hasAnyMethods = allMethods.length > 0 || manuallyAddedMethods.length > 0;
     // All selectable method IDs — goal-linked + manually-added, deduplicated —
     // used by the Selection Summary bar so its count matches what the
     // hierarchical tree below actually shows (which includes manual methods too).
@@ -2537,7 +2544,7 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
           </CardTitle>
           <CardDescription>
             Select the methods to include in your training plan. Methods linked to primary goals are selected by default.
-            Methods are grouped by category — click a category to see its methods, then "Details" on a method to see the goals it contributes to and its rationale.
+            Click a category to see its methods, then "Details" for the goals a method contributes to and its rationale.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -2627,10 +2634,15 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
 
                 return (
                   <div className="space-y-3">
-                    <Label className="text-sm font-medium flex items-center gap-2">
-                      <Target className="h-4 w-4 text-primary" />
-                      Training Methods
-                    </Label>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label className="text-sm font-medium flex items-center gap-2">
+                        <Target className="h-4 w-4 text-primary" />
+                        Training Methods
+                      </Label>
+                      <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setIsAddMethodDialogOpen(true)}>
+                        <Plus className="h-4 w-4" />Add training method
+                      </Button>
+                    </div>
                     <div className="border rounded-lg divide-y overflow-hidden">
                       {sortedCategories.map(([category, methods]) => {
                         const categorySelectedCount = methods.filter(m => selectedMethods.has(m.methodId)).length;
@@ -2673,9 +2685,8 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                     ? method.methodId.slice(method.methodId.indexOf(' - ') + 3)
                                     : method.methodId;
                                   const detailExpanded = expandedMethodDetails.has(method.methodId);
-                                  const hasDetails = method.isManual
-                                    ? !!(method.manualRationale || method.manualEvidence)
-                                    : method.associations.length > 0;
+                                  // An added method always has details: its rationale (or a place to add one)
+                                  const hasDetails = method.isManual || method.associations.length > 0;
                                   return (
                                     <div key={method.methodId} className="pl-4">
                                       <div
@@ -2703,20 +2714,49 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                                           </button>
                                         )}
                                         {method.isManual && (
-                                          <Badge variant="outline" className="ml-auto shrink-0 text-[10px] px-1.5 py-0 bg-muted text-foreground">
-                                            Manually Added
-                                          </Badge>
+                                          <button
+                                            type="button"
+                                            className="ml-auto shrink-0 p-1 text-muted-foreground hover:text-destructive"
+                                            title="Remove this method from the plan"
+                                            aria-label={`Remove ${subCategory}`}
+                                            onClick={() => handleRemoveManualMethod(method.methodId)}
+                                          >
+                                            <X className="h-3.5 w-3.5" />
+                                          </button>
                                         )}
                                       </div>
                                       {detailExpanded && (
                                         <div className="pl-9 pb-3 pr-4 space-y-1.5">
                                           {method.isManual ? (
-                                            <div className="text-sm border-l-2 border-muted pl-2.5 space-y-0.5">
-                                              {method.manualRationale && <p className="text-muted-foreground italic">"{method.manualRationale}"</p>}
+                                            <div className="text-sm border-l-2 border-muted pl-2.5 space-y-1">
+                                              {editingMethodRationale === method.methodId ? (
+                                                <div className="space-y-2">
+                                                  <Textarea
+                                                    value={editingRationaleValue}
+                                                    onChange={(e) => setEditingRationaleValue(e.target.value)}
+                                                    placeholder="Why is this method in the plan?"
+                                                    className="min-h-[60px] text-sm"
+                                                    autoFocus
+                                                  />
+                                                  <div className="flex gap-2">
+                                                    <Button size="sm" className="h-7 text-xs"
+                                                      onClick={() => handleUpdateMethodRationale(method.methodId, editingRationaleValue)}>Save</Button>
+                                                    <Button size="sm" variant="ghost" className="h-7 text-xs"
+                                                      onClick={() => { setEditingMethodRationale(null); setEditingRationaleValue(""); }}>Cancel</Button>
+                                                  </div>
+                                                </div>
+                                              ) : (
+                                                <div className="flex items-start gap-2">
+                                                  {method.manualRationale
+                                                    ? <p className="flex-1 text-muted-foreground italic">"{method.manualRationale}"</p>
+                                                    : <p className="flex-1 text-xs text-muted-foreground">No rationale yet</p>}
+                                                  <Button variant="ghost" size="sm" className="h-6 text-xs shrink-0"
+                                                    onClick={() => { setEditingMethodRationale(method.methodId); setEditingRationaleValue(method.manualRationale || ""); }}>
+                                                    <Pencil className="h-3 w-3 mr-1" />{method.manualRationale ? "Edit" : "Add rationale"}
+                                                  </Button>
+                                                </div>
+                                              )}
                                               {method.manualEvidence && <p className="text-xs text-muted-foreground">{method.manualEvidence}</p>}
-                                              <p className="text-xs text-muted-foreground">
-                                                Edit or remove this method under "Additional Training Methods" below.
-                                              </p>
                                             </div>
                                           ) : (
                                             method.associations.map((assoc, idx) => (
@@ -2758,217 +2798,17 @@ const [editingSubGoal, setEditingSubGoal] = useState<SubGoal | null>(null);
                 );
               })()}
 
-              {/* Additional Training Methods Section */}
-              <div className="space-y-3">
-                <Label className="text-sm font-medium flex items-center gap-2">
-                  <Plus className="h-4 w-4 text-muted-foreground" />
-                  Additional Training Methods
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Add any other training methods not linked to your goals. Provide a rationale for each.
-                </p>
-                
-                {/* Add Method Button */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsAddMethodDialogOpen(true)}
-                  className="w-full"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Training Method
-                </Button>
-
-                {/* List of manually added methods */}
-                {manuallyAddedMethods.length > 0 && (
-                  <div className="space-y-2">
-                    {manuallyAddedMethods.map(method => (
-                      <div 
-                        key={method.methodId} 
-                        className={cn(
-                          "flex items-start gap-3 p-4 border rounded-lg transition-colors",
-                          selectedMethods.has(method.methodId) 
-                            ? "bg-accent/20 border-accent/50" 
-                            : "bg-background hover:bg-muted/50"
-                        )}
-                      >
-                        <Checkbox 
-                          id={`manual-${method.methodId}`}
-                          checked={selectedMethods.has(method.methodId)}
-                          onCheckedChange={(checked) => toggleMethodSelection(method.methodId, !!checked)}
-                          className="mt-1"
-                        />
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <label 
-                              htmlFor={`manual-${method.methodId}`}
-                              className="font-medium text-sm cursor-pointer"
-                            >
-                              {method.methodId}
-                            </label>
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-xs">
-                                Manually Added
-                              </Badge>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={() => handleRemoveManualMethod(method.methodId)}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                          
-                          {/* Rationale section */}
-                          {editingMethodRationale === method.methodId ? (
-                            <div className="space-y-2">
-                              <Textarea
-                                value={editingRationaleValue}
-                                onChange={(e) => setEditingRationaleValue(e.target.value)}
-                                placeholder="Why are you including this method?"
-                                className="min-h-[60px] text-sm"
-                                autoFocus
-                              />
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleUpdateMethodRationale(method.methodId, editingRationaleValue)}
-                                >
-                                  Save
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setEditingMethodRationale(null);
-                                    setEditingRationaleValue("");
-                                  }}
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="space-y-1">
-                              <div className="flex items-start gap-2">
-                                {method.rationale ? (
-                                  <p className="text-sm text-muted-foreground italic flex-1">
-                                    "{method.rationale}"
-                                  </p>
-                                ) : (
-                                  <p className="text-sm text-yellow-600 dark:text-yellow-500 flex items-center gap-1 flex-1">
-                                    <AlertTriangle className="h-3 w-3" />
-                                    No rationale provided
-                                  </p>
-                                )}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 text-xs"
-                                  onClick={() => {
-                                    setEditingMethodRationale(method.methodId);
-                                    setEditingRationaleValue(method.rationale || "");
-                                  }}
-                                >
-                                  <Pencil className="h-3 w-3 mr-1" />
-                                  {method.rationale ? "Edit" : "Add Rationale"}
-                                </Button>
-                              </div>
-                              {method.evidenceQuality && (
-                                <Badge variant="outline" className="text-xs">
-                                  Evidence: {EVIDENCE_QUALITY_OPTIONS.find(o => o.value === method.evidenceQuality)?.label}
-                                </Badge>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
           ) : (
-            <div className="space-y-6">
-              {/* Empty state but still show Add Method option */}
-              <div className="text-center py-8 text-muted-foreground space-y-2">
-                <CheckSquare className="h-12 w-12 mx-auto opacity-30" />
-                <p className="font-medium">No goal-linked methods yet</p>
-                <p className="text-sm">
-                  Link parameters to your primary goals and add training methods in the Athleticism Database.
-                </p>
-              </div>
-              
-              {/* Still allow adding additional methods */}
-              <div className="space-y-3">
-                <Label className="text-sm font-medium flex items-center gap-2">
-                  <Plus className="h-4 w-4 text-muted-foreground" />
-                  Additional Training Methods
-                </Label>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsAddMethodDialogOpen(true)}
-                  className="w-full"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Training Method
-                </Button>
-
-                {/* List of manually added methods */}
-                {manuallyAddedMethods.length > 0 && (
-                  <div className="space-y-2">
-                    {manuallyAddedMethods.map(method => (
-                      <div 
-                        key={method.methodId} 
-                        className={cn(
-                          "flex items-start gap-3 p-4 border rounded-lg transition-colors bg-accent/20 border-accent/50"
-                        )}
-                      >
-                        <Checkbox 
-                          id={`manual-empty-${method.methodId}`}
-                          checked={selectedMethods.has(method.methodId)}
-                          onCheckedChange={(checked) => toggleMethodSelection(method.methodId, !!checked)}
-                          className="mt-1"
-                        />
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <label 
-                              htmlFor={`manual-empty-${method.methodId}`}
-                              className="font-medium text-sm cursor-pointer"
-                            >
-                              {method.methodId}
-                            </label>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => handleRemoveManualMethod(method.methodId)}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                          {method.rationale ? (
-                            <p className="text-sm text-muted-foreground italic">"{method.rationale}"</p>
-                          ) : (
-                            <p className="text-sm text-yellow-600 dark:text-yellow-500 flex items-center gap-1">
-                              <AlertTriangle className="h-3 w-3" />
-                              No rationale provided
-                            </p>
-                          )}
-                          {method.evidenceQuality && (
-                            <Badge variant="outline" className="text-xs mt-1">
-                              Evidence: {EVIDENCE_QUALITY_OPTIONS.find(o => o.value === method.evidenceQuality)?.label}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+            <div className="text-center py-8 text-muted-foreground space-y-3">
+              <CheckSquare className="h-12 w-12 mx-auto opacity-30" />
+              <p className="font-medium">No training methods yet</p>
+              <p className="text-sm">
+                Methods linked to your goals' parameters (Athleticism Database) appear here — or add methods yourself.
+              </p>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setIsAddMethodDialogOpen(true)}>
+                <Plus className="h-4 w-4" />Add training method
+              </Button>
             </div>
           )}
 
