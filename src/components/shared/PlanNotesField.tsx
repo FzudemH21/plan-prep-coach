@@ -2,14 +2,15 @@
  * PlanNotesField — the plan's strategy document (formerly "Notes & Brainstorming"; shared by all wizard steps). Shown formatted
  * as light Markdown so long notes stay readable: "## " headings, "- " bullets (indented = nested),
  * "1." numbered points, **bold**; a line starting with an UPPERCASE LABEL: gets the label in bold
- * (older notes written that way). Click the text or "Edit" to change it — the stored text stays plain
- * Markdown, which is also what the AI writes (set_plan_notes).
+ * (older notes written that way). Click the text or "Edit" to change it — formatted while editing too
+ * (PlanNotesRichEditor); the stored text stays plain Markdown, which is also what the AI writes
+ * (set_plan_notes).
  */
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { FileDown, History, Loader2, Maximize2, Pencil, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { PlanNotesRichEditor } from '@/components/shared/PlanNotesRichEditor';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -19,7 +20,7 @@ import { useCoachProfile } from '@/hooks/useCoachProfile';
 import type { PlanNotesVersion } from '@/utils/planStrategy';
 import { cn } from '@/lib/utils';
 
-const PLACEHOLDER = 'Notizen, Überlegungen, Ideen zum Plan...';
+const PLACEHOLDER = 'Aim, priorities, phases, ideas for the plan…';
 
 /** **bold** inside a line */
 function renderInline(text: string, key: string): React.ReactNode[] {
@@ -78,19 +79,18 @@ function NotesEditor({ value, onChange, minHeight, maxViewHeight }: {
   if (editing || !value.trim()) {
     return (
       <div className="space-y-1.5">
-        <Textarea
+        {/* Formatted while editing too (no Markdown signs); stored as the same light Markdown */}
+        <PlanNotesRichEditor
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onBlur={() => setEditing(false)}
+          onChange={onChange}
+          // An empty strategy shows the editor right away: typing there counts as editing (the
+          // first letter must not switch to the formatted view)
+          onStart={() => setEditing(true)}
+          onDone={() => setEditing(false)}
           autoFocus={editing}
           placeholder={PLACEHOLDER}
-          className="resize-y text-sm font-mono"
-          // About as tall as the formatted view, so editing doesn't shrink the text
-          style={{ minHeight: Math.max(minHeight, Math.min(maxViewHeight, value.split('\n').length * 20 + 24)) }}
+          minHeight={minHeight}
         />
-        <p className="text-[11px] text-muted-foreground">
-          Formatting: <code>## Heading</code> · <code>- bullet</code> (indent with two spaces for sub-points) · <code>**bold**</code>
-        </p>
       </div>
     );
   }
