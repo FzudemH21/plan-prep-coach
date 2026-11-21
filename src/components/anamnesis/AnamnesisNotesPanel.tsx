@@ -2,10 +2,11 @@
  * AnamnesisNotesPanel — the notes of an anamnesis: typed or dictated, each with its time.
  *
  * Notes are additions, not changes to the answers, so they work in the read-only view as well
- * (no need to switch to edit mode). Dictation: record → Mistral Voxtral turns it into text → the
- * coach checks / corrects the text → saved as a note. The audio is not kept.
+ * (no need to switch to edit mode). Shown first in the anamnesis: the note field and Dictate side by side,
+ * newest note first. Dictation: record → Mistral Voxtral turns it into text → the coach checks /
+ * corrects the text → saved as a note. The audio is not kept.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Check, Loader2, Mic, Pencil, Plus, Square, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -131,16 +132,50 @@ export function AnamnesisNotesPanel({ entries, onChange, coachUserId, athleteLoc
   const recording = recorder.state === 'recording';
   const dictating = recording || transcribing || transcript !== null;
 
+  // The note field grows with its text and shrinks back once the note is added
+  const draftRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { fitToText(draftRef.current); }, [draft]);
+  const submitDraft = async () => { if (draft.trim() && await addNote(draft, 'typed')) setDraft(''); };
+
+  // Newest first — right under the field it was added with
+  const shown = [...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Notes</h3>
-        {!dictating && (
+      </div>
+
+      {/* Typed note and Dictate side by side */}
+      {!dictating && (
+        <div className="flex items-start gap-1.5">
+          <Textarea
+            ref={draftRef}
+            rows={1}
+            className="min-h-[36px] flex-1 resize-none overflow-hidden py-2 text-sm"
+            placeholder="Add a note…"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void submitDraft(); } }}
+          />
+          {draft.trim() && (
+            <Button
+              type="button"
+              size="sm"
+              className="h-9 gap-1 text-xs shrink-0"
+              disabled={busy}
+              onClick={() => void submitDraft()}
+              title="Add the note (Ctrl+Enter)"
+            >
+              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+              Add
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="h-7 gap-1.5 text-xs"
+            className="h-9 gap-1.5 text-xs shrink-0"
             onClick={() => { setDictationError(null); void recorder.start(); }}
             disabled={busy}
             title="Record a note — it is turned into text, the audio is not kept"
@@ -148,8 +183,8 @@ export function AnamnesisNotesPanel({ entries, onChange, coachUserId, athleteLoc
             <Mic className="h-3 w-3" />
             Dictate
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Dictation — right under the Dictate button, above the notes */}
       {dictating && (
@@ -207,14 +242,14 @@ export function AnamnesisNotesPanel({ entries, onChange, coachUserId, athleteLoc
         </p>
       )}
 
-      {entries.map(note => (
+      {shown.map(note => (
         <div key={note.id} className="rounded-md border bg-background p-2.5 space-y-1.5">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <div className="text-xs text-muted-foreground flex items-center gap-1.5">
               {stamp(note.createdAt)}
               {note.source === 'dictated' && <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-normal">Dictated</Badge>}
               {note.updatedAt && <span>· edited {stamp(note.updatedAt)}</span>}
-            </p>
+            </div>
             {editingId !== note.id && (
               <div className="flex gap-0.5 shrink-0">
                 <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={busy}
@@ -246,29 +281,6 @@ export function AnamnesisNotesPanel({ entries, onChange, coachUserId, athleteLoc
           )}
         </div>
       ))}
-
-      {/* Typed note */}
-      <div className="space-y-1.5">
-        <Textarea
-          className="min-h-[64px] resize-y text-sm"
-          placeholder="Add a note…"
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-        />
-        <div className="flex justify-end">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="h-7 gap-1 text-xs"
-            disabled={busy || !draft.trim()}
-            onClick={async () => { if (await addNote(draft, 'typed')) setDraft(''); }}
-          >
-            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-            Add note
-          </Button>
-        </div>
-      </div>
 
       <AlertDialog open={deleteTarget !== null} onOpenChange={o => { if (!o) setDeleteTarget(null); }}>
         <AlertDialogContent>
