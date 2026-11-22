@@ -1,4 +1,5 @@
 import { valuesOfMeasure } from '@/utils/goalMeasures';
+import { hasCustomMeasures, measureById, measureRef, parameterMeasures, parseMeasureRef } from '@/utils/parameterMeasures';
 import type { ParameterMeasure } from '@/types/parametersV2';
 import React, { useState, useEffect } from 'react';
 import {
@@ -77,6 +78,9 @@ export function CalendarEventDialog({
   const [lastDay, setLastDay] = useState('');
   const [notes, setNotes] = useState('');
   const [selectedParameterId, setSelectedParameterId] = useState<string | null>(null);
+  // Like a goal in the wizard: which of the parameter's measures is tested, and which side
+  const [measureId, setMeasureId] = useState<string | undefined>(undefined);
+  const [sideChoice, setSideChoice] = useState<'L' | 'R' | 'both'>('both');
   const [parameterComboOpen, setParameterComboOpen] = useState(false);
   const [targetValue, setTargetValue] = useState('');
   const [baselineValue, setBaselineValue] = useState(''); // display only, never saved
@@ -101,25 +105,46 @@ export function CalendarEventDialog({
     return param ? { name: param.name, unit: param.unit } : undefined;
   };
 
-  /** Latest value of a parameter: coach-recorded (profile) or self-reported by the athlete */
-  const latestRecordedValue = (paramId: string) => {
+  /** Latest value of a parameter's measure (and side): coach-recorded (profile) or self-reported by the athlete */
+  const latestRecordedValue = (paramId: string, mId?: string, side?: 'L' | 'R') => {
     const id = isBioId(paramId) ? bioDefId(paramId) : paramId;
+    const pp = athletePerformanceParameters.find(p => p.athleticismParameterId === id);
     const recorded = [
       ...(athleteBiometrics.find(b => b.biometricDefinitionId === id)?.values ?? []),
-      ...(athletePerformanceParameters.find(p => p.athleticismParameterId === id)?.values ?? []),
+      ...(pp?.allValues ?? pp?.values ?? []),
     ];
-    const own = [...(selfReported.get(id) ?? []), ...(selfReported.get(`bio:${id}`) ?? [])];
-    // The main measure only — values of other measures (e.g. pain) are not this test's baseline
-    return latestValueOf(valuesOfMeasure(withSelfReported(recorded, own), undefined));
+    const own = [...(selfReported.get(measureRef(id, mId, side)) ?? []), ...(mId || side ? [] : selfReported.get(`bio:${id}`) ?? [])];
+    // This measure (and side) only — values of other measures (e.g. pain) are not this test's baseline
+    const mine = valuesOfMeasure(recorded, mId, side).filter(v => side || !v.side);
+    return latestValueOf(withSelfReported(mine, own));
   };
 
-  // Load baseline value from athlete profile when parameter changes
+  // The selected performance parameter, its measures and sides (like a goal in the wizard)
+  const selectedParam = selectedParameterId && !isBioId(selectedParameterId)
+    ? parameters.find(p => p.id === selectedParameterId)
+    : undefined;
+  const measureChoices = selectedParam && hasCustomMeasures(selectedParam) ? parameterMeasures(selectedParam) : [];
+  const perSide = !!selectedParam?.perSide;
+  const activeMeasure = selectedParam ? measureById(selectedParam, measureId) : undefined;
+  /** The sides the test is created for: one, or both (one test per side) */
+  const testSides: Array<'L' | 'R' | undefined> = !perSide ? [undefined] : sideChoice === 'both' ? ['L', 'R'] : [sideChoice];
+
+  // A new parameter: its main measure, both sides
+  useEffect(() => { setMeasureId(undefined); setSideChoice('both'); }, [selectedParameterId]);
+
+  // Load baseline value from athlete profile when parameter, measure or side changes
+  const baselineOf = (side: 'L' | 'R' | undefined) =>
+    selectedParameterId ? latestRecordedValue(selectedParameterId, measureId, side)?.value ?? '' : '';
   useEffect(() => {
     if (!selectedParameterId) { setBaselineValue(''); return; }
-    setBaselineValue(latestRecordedValue(selectedParameterId)?.value ?? '');
-  }, [selectedParameterId, athletePerformanceParameters, athleteBiometrics, selfReported]);
+    setBaselineValue(testSides.map(sd => {
+      const v = baselineOf(sd);
+      return sd ? `${sd === 'L' ? 'Left' : 'Right'} ${v || '–'}` : v;
+    }).filter(Boolean).join(' · '));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedParameterId, measureId, sideChoice, athletePerformanceParameters, athleteBiometrics, selfReported]);
 
-  const hasAthleteBaseline = selectedParameterId !== null && latestRecordedValue(selectedParameterId) !== null;
+  const hasAthleteBaseline = selectedParameterId !== null && testSides.some(sd => !!baselineOf(sd));
 
   // Resolve display name + unit for whatever is selected
   const selectedParameter = isBioId(selectedParameterId ?? '')
@@ -131,6 +156,8 @@ export function CalendarEventDialog({
     setEventTitle('');
     setNotes('');
     setSelectedParameterId(null);
+    setMeasureId(undefined);
+    setSideChoice('both');
     setTargetValue('');
     setBaselineValue('');
     setType('test');
@@ -139,9 +166,18 @@ export function CalendarEventDialog({
   const handleAdd = () => {
     if (type === 'test') {
       if (!selectedParameterId) return;
-      const testTitle = selectedParameter?.name ?? '';
-      if (!testTitle) return;
-      onAdd(type, testTitle, notes.trim() || undefined, selectedParameterId, targetValue.trim() || undefined);
+      const baseTitle = selectedParameter?.name ?? '';
+      if (!baseTitle) return;
+      if (!selectedParam) {
+        onAdd(type, baseTitle, notes.trim() || undefined, selectedParameterId, targetValue.trim() || undefined);
+      } else {
+        // Like an assigned plan: the test is of this measure; per side one test per side
+        const measureName = measureChoices.length > 0 ? activeMeasure?.name : undefined;
+        testSides.forEach(side => {
+          const title = [baseTitle, measureName, side === 'L' ? 'Left' : side === 'R' ? 'Right' : undefined].filter(Boolean).join(' · ');
+          onAdd(type, title, notes.trim() || undefined, measureRef(selectedParam.id, measureId, side), targetValue.trim() || undefined);
+        });
+      }
     } else {
       if (!eventTitle.trim()) return;
       const endDate = lastDay > date ? lastDay : undefined;
@@ -198,11 +234,22 @@ export function CalendarEventDialog({
         const metric = bioMetric(ev.parameterId);
         if (metric) return metric.name;
       } else {
-        const param = parameters.find(p => p.id === ev.parameterId);
-        if (param) return param.name;
+        const ref = parseMeasureRef(ev.parameterId);
+        const param = parameters.find(p => p.id === ref.parameterId);
+        // A test of a measure / side keeps its title — it names them ("Knee-to-Wall · Left")
+        if (param && !ref.measureId && !ref.side) return param.name;
       }
     }
     return ev.title;
+  };
+  /** Unit of a test's target: its measure's (a plain reference: the parameter's) */
+  const unitOfTest = (parameterId: string): string | undefined => {
+    if (isBioId(parameterId)) return bioMetric(parameterId)?.unit;
+    const ref = parseMeasureRef(parameterId);
+    const param = parameters.find(p => p.id === ref.parameterId);
+    if (!param) return undefined;
+    const m = measureById(param, ref.measureId);
+    return m?.kind === 'number' ? m.unit : m?.kind === 'scale' ? `/${m.scaleMax ?? 10}` : undefined;
   };
 
   const endDateError = lastDay !== '' && lastDay < date;
@@ -247,9 +294,7 @@ export function CalendarEventDialog({
                               <p className="text-xs text-muted-foreground mt-0.5">
                                 Target: {ev.targetValue}
                                 {ev.parameterId && (() => {
-                                  const unit = isBioId(ev.parameterId)
-                                    ? bioMetric(ev.parameterId)?.unit
-                                    : parameters.find(p => p.id === ev.parameterId)?.unit;
+                                  const unit = unitOfTest(ev.parameterId);
                                   return unit ? ` ${unit}` : '';
                                 })()}
                               </p>
@@ -429,6 +474,33 @@ export function CalendarEventDialog({
                       </Popover>
                     </div>
 
+                    {/* Measure and side — like a goal in the wizard */}
+                    {measureChoices.length > 0 && (
+                      <div className="space-y-1.5">
+                        <Label>Measure</Label>
+                        <ToggleGroup type="single" value={measureId ?? measureChoices[0].id}
+                          onValueChange={v => { if (v) setMeasureId(v === measureChoices[0].id ? undefined : v); }}
+                          className="flex-wrap justify-start gap-1">
+                          {measureChoices.map(m => (
+                            <ToggleGroupItem key={m.id} value={m.id} size="sm" className="h-8 border data-[state=on]:border-primary">
+                              {m.name}
+                            </ToggleGroupItem>
+                          ))}
+                        </ToggleGroup>
+                      </div>
+                    )}
+                    {perSide && (
+                      <div className="space-y-1.5">
+                        <Label>Side</Label>
+                        <ToggleGroup type="single" value={sideChoice} onValueChange={v => { if (v) setSideChoice(v as 'L' | 'R' | 'both'); }}
+                          className="justify-start gap-1">
+                          <ToggleGroupItem value="L" size="sm" className="h-8 border data-[state=on]:border-primary">Left</ToggleGroupItem>
+                          <ToggleGroupItem value="R" size="sm" className="h-8 border data-[state=on]:border-primary">Right</ToggleGroupItem>
+                          <ToggleGroupItem value="both" size="sm" className="h-8 border data-[state=on]:border-primary">Left &amp; right</ToggleGroupItem>
+                        </ToggleGroup>
+                      </div>
+                    )}
+
                     {/* Baseline: the athlete's latest recorded value, display only — not editable
                         here (a value typed here was never saved; results are recorded through the
                         test itself or the athlete's Performance tab) */}
@@ -465,8 +537,11 @@ export function CalendarEventDialog({
                         value={targetValue}
                         onChange={e => setTargetValue(e.target.value)}
                         placeholder={
-                          selectedParameter?.unit
-                            ? `e.g., 120 ${selectedParameter.unit}`
+                          activeMeasure?.kind === 'levels' ? `e.g., ${activeMeasure.levels?.[activeMeasure.levels.length - 1] ?? 'a level'}`
+                          : activeMeasure?.kind === 'passFail' ? 'e.g., Passed'
+                          : activeMeasure?.kind === 'scale' ? `e.g., ${activeMeasure.scaleMin ?? 0} (of ${activeMeasure.scaleMax ?? 10})`
+                          : (activeMeasure?.unit ?? selectedParameter?.unit)
+                            ? `e.g., 120 ${activeMeasure?.unit ?? selectedParameter?.unit}`
                             : 'e.g., 120 kg'
                         }
                       />
