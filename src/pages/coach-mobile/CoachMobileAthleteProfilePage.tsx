@@ -269,6 +269,7 @@ function CustomMetricMiniChart({
             {withUnit(pt.value)}
             {pt.z !== undefined && <span className="text-muted-foreground"> · {pt.z >= 0 ? '+' : ''}{pt.z.toFixed(1)} SD</span>}
           </p>
+          {pt.mean !== undefined && <p className="text-muted-foreground">Mean: {round1(pt.mean)}{unit ? ` ${unit}` : ''}</p>}
           {pt.band && <p className="text-muted-foreground">Normal: {round1(pt.band[0])}–{round1(pt.band[1])}{unit ? ` ${unit}` : ''}</p>}
         </div>
       );

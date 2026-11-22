@@ -562,6 +562,9 @@ function NumberTrend({ points, unit, label, color }: {
         <p><span className="font-medium">{p.value}{unit ? ` ${unit}` : ''}</span>
           {p.z !== undefined && <span className="text-muted-foreground"> · {p.z >= 0 ? '+' : ''}{p.z.toFixed(1)} SD</span>}
         </p>
+        {p.mean !== undefined && (
+          <p className="text-muted-foreground">Mean: {round1(p.mean)}{unit ? ` ${unit}` : ''}</p>
+        )}
         {p.band && (
           <p className="text-muted-foreground">Normal: {round1(p.band[0])}–{round1(p.band[1])}{unit ? ` ${unit}` : ''}</p>
         )}
