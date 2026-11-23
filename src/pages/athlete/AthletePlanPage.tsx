@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { IntensityBadge } from '@/components/athlete-app/IntensityBadge';
 import { cn } from '@/lib/utils';
 import { eventRangeLabel } from '@/utils/eventRange';
+import { athleteVisibleNotes } from '@/utils/athleteNotes';
 
 /** Session date to return to (the plan shows that week again after the session view) */
 const RETURN_WEEK_KEY = 'athletePlan.returnToDate';
@@ -241,8 +242,8 @@ function DaySection({
               </p>
             ) : null;
           })()}
-          {ev.notes && (
-            <p className="text-muted-foreground mt-0.5 leading-relaxed whitespace-pre-line">{ev.notes}</p>
+          {athleteVisibleNotes(ev.notes) && (
+            <p className="text-muted-foreground mt-0.5 leading-relaxed whitespace-pre-line">{athleteVisibleNotes(ev.notes)}</p>
           )}
         </div>
       </div>

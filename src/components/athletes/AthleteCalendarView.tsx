@@ -2550,9 +2550,11 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                       date,
                       assignmentId: eventsAssignmentId,
                       parameterId: sg.parameterLinkedId ? measureRef(sg.parameterLinkedId, sg.measureId, side) : undefined,
-                      // The LSI goal is not a target per side — it goes into the note
-                      targetValue: sg.side === 'lsi' ? undefined : target,
-                      notes: [sg.comments, sg.side === 'lsi' && target ? `Goal: LSI ${target}` : ''].filter(Boolean).join(' · ') || undefined,
+                      // The LSI goal is not a target per side: it is the coach's calculation (coach-only
+                      // note); the athlete gets the goal's targets per side, if the coach set any
+                      targetValue: sg.side === 'lsi' ? (side ? sg.sideTargets?.[side] : undefined) : target,
+                      notes: sg.comments || undefined,
+                      ...(sg.side === 'lsi' && target ? { coachNote: `LSI goal ${target}` } : {}),
                     });
                   });
                 });

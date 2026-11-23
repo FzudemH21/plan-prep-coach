@@ -245,7 +245,7 @@ export function AssignProgramDialog({
     });
 
     // Also include SMART goals that have test dates (scheduled via selectedSmartGoal in MacrocyclePage)
-    const smartGoals: Array<{ id: string; description: string; baselineValue: number; desiredValue: number; unit: string; linkedParameterId?: string; testDates?: string[]; measureId?: string; side?: 'L' | 'R' | 'both' | 'weaker' | 'lsi' }> = macro.smartGoals || [];
+    const smartGoals: Array<{ id: string; description: string; baselineValue: number; desiredValue: number; unit: string; linkedParameterId?: string; testDates?: string[]; measureId?: string; side?: 'L' | 'R' | 'both' | 'weaker' | 'lsi'; sideTargets?: { L?: string; R?: string } }> = macro.smartGoals || [];
     smartGoals.forEach(sg => {
       if (!sg.testDates || sg.testDates.length === 0) return;
       const shiftedDates = sg.testDates.map(placeDate).filter((d): d is string => d !== null);
@@ -273,6 +273,7 @@ export function AssignProgramDialog({
         ...((sg.measureId || sg.side) && goalParam
           ? { targetText: formatGoalRange({ ...sg, percentChange: 0 }, goalParam).split(' → ').pop() }
           : {}),
+        ...(sg.side === 'lsi' && sg.sideTargets ? { sideTargets: sg.sideTargets } : {}),
       });
     });
 

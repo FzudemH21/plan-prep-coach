@@ -82,6 +82,8 @@ export function AddSmartGoalDialog({
   const [measureId, setMeasureId] = useState<string | undefined>(undefined);
   const [side, setSide] = useState<GoalSide | undefined>(undefined);
   const [phaseNote, setPhaseNote] = useState("");
+  // An LSI goal: what the athlete is asked per side (optional) — the LSI is the coach's calculation
+  const [sideTargets, setSideTargets] = useState<{ L?: string; R?: string }>({});
   const selectedParam = useMemo(() => athleticismParameters.find((p) => p.id === selectedParameterId), [athleticismParameters, selectedParameterId]);
   const measure = selectedParam ? measureById(selectedParam, measureId) : undefined;
   const kind = measure?.kind ?? "number";
@@ -109,6 +111,7 @@ export function AddSmartGoalDialog({
       setMeasureId(editGoal.measureId);
       setSide(editGoal.side);
       setPhaseNote(editGoal.phaseNote ?? "");
+      setSideTargets(editGoal.sideTargets ?? {});
     }
   }, [editGoal]);
 
@@ -123,6 +126,7 @@ export function AddSmartGoalDialog({
       setMeasureId(undefined);
       setSide(undefined);
       setPhaseNote("");
+      setSideTargets({});
     } else if (!editGoal && defaultParameterId) {
       const param = athleticismParameters.find((p) => p.id === defaultParameterId);
       if (param) {
@@ -226,6 +230,9 @@ export function AddSmartGoalDialog({
       measureId: measureId && measureId !== "main" ? measureId : undefined,
       side,
       phaseNote: phaseNote.trim() || undefined,
+      sideTargets: side === "lsi" && (sideTargets.L?.trim() || sideTargets.R?.trim())
+        ? { L: sideTargets.L?.trim() || undefined, R: sideTargets.R?.trim() || undefined }
+        : undefined,
     };
     const name = selectedParam ? goalDescription(selectedParam, measureFields) : description;
     const goalUnitText = selectedParam ? goalUnit(measure, side, selectedParam.unit ?? unit) : unit;
@@ -501,6 +508,20 @@ export function AddSmartGoalDialog({
                   {percentChange > 0 ? "+" : ""}{percentChange.toFixed(1)}%
                 </Badge>
               )}
+            </div>
+          )}
+
+          {/* LSI goal: optional targets the athlete gets per side */}
+          {side === "lsi" && selectedParam && (
+            <div className="space-y-2">
+              <Label>Targets for the athlete <span className="font-normal text-muted-foreground">(optional)</span></Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Input value={sideTargets.L ?? ""} onChange={(e) => setSideTargets(t => ({ ...t, L: e.target.value }))}
+                  placeholder={`Left${selectedParam.unit ? ` (${selectedParam.unit})` : ""}`} aria-label="Target left" />
+                <Input value={sideTargets.R ?? ""} onChange={(e) => setSideTargets(t => ({ ...t, R: e.target.value }))}
+                  placeholder={`Right${selectedParam.unit ? ` (${selectedParam.unit})` : ""}`} aria-label="Target right" />
+              </div>
+              <p className="text-xs text-muted-foreground">The athlete sees one test per side; the LSI goal is only shown to coaches.</p>
             </div>
           )}
 

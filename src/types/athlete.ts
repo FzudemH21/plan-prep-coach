@@ -360,6 +360,8 @@ export interface ReviewedSubGoal {
   side?: 'L' | 'R' | 'both' | 'weaker' | 'lsi';
   /** Text of the target as the athlete sees it ("≤ 0/10", "Clean") — numbers keep goalValue + unit */
   targetText?: string;
+  /** An LSI goal: optional targets per side for the athlete */
+  sideTargets?: { L?: string; R?: string };
 }
 
 export interface ReviewedEvent {

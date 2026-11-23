@@ -308,6 +308,9 @@ export function CalendarEventDialog({
                           <Trophy className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                           <div className="min-w-0">
                             <p className="text-sm font-medium truncate">{getTestDisplayName(ev)}</p>
+                            {ev.coachNote && (
+                              <p className="text-xs text-muted-foreground mt-0.5" title="Only shown to coaches">{ev.coachNote}</p>
+                            )}
                             {ev.targetValue && (
                               <p className="text-xs text-muted-foreground mt-0.5">
                                 Target: {ev.targetValue}

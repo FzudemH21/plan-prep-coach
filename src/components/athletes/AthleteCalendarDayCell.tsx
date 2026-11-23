@@ -260,6 +260,9 @@ export function AthleteCalendarDayCell({
                             {ev.notes && (
                               <span className="ml-1 text-muted-foreground/70">({ev.notes})</span>
                             )}
+                            {ev.coachNote && (
+                              <span className="ml-1 text-muted-foreground/70">· {ev.coachNote}</span>
+                            )}
                           </div>
                         );
                       })}

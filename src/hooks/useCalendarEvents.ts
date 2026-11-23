@@ -9,6 +9,8 @@ export interface CalendarEvent {
   type: 'test' | 'event';
   title: string;
   notes?: string;
+  /** Only for coaches — not in the athlete app (e.g. the LSI goal of a test per side) */
+  coachNote?: string;
   parameterId?: string;
   targetValue?: string;
   /** Set when the test/event came with an assigned program — removed when that assignment is deleted */

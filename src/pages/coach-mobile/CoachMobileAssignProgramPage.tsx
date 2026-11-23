@@ -189,6 +189,7 @@ function buildTestsAndEvents(
       ...((sg.measureId || sg.side) && goalParam
         ? { targetText: formatGoalRange({ ...sg, percentChange: 0 }, goalParam).split(' → ').pop() }
         : {}),
+      ...(sg.side === 'lsi' && sg.sideTargets ? { sideTargets: sg.sideTargets } : {}),
     });
   });
 

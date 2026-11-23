@@ -46,6 +46,8 @@ export interface SmartGoal {
   measureId?: string;
   /** Parameters recorded per side: which side the goal refers to (or the weaker side / the LSI) */
   side?: GoalSide;
+  /** An LSI goal: optional targets the athlete gets per side (the LSI itself stays with the coach) */
+  sideTargets?: { L?: string; R?: string };
   /** When in the plan the goal applies, e.g. "Phase 1–2" */
   phaseNote?: string;
   // Optional scheduled test dates for this goal

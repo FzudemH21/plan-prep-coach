@@ -16,6 +16,7 @@ import { eventDateList, eventEndDate, isMultiDayEvent, type CalendarEvent } from
 import { evaluateFormula, parseNumeric } from '@/utils/formulaEvaluator';
 import { isRestIntensity } from '@/utils/intensityScale';
 import { dataIdFor, resolveDataScope } from '@/lib/dataScope';
+import { athleteVisibleNotes } from '@/utils/athleteNotes';
 
 /** Percentage units — values like 80 represent 0.80 and must be ÷100 before formula evaluation */
 const PCT_UNITS = new Set(['%', '%1RM', '%BW', '%maxV', '%maxHR']);
@@ -226,7 +227,8 @@ export function scheduleEntryOf(ev: SyncCalendarEvent): ScheduleEventEntry {
     id: ev.id,
     type: ev.type,
     title: ev.title,
-    notes: ev.notes ?? undefined,
+    // The LSI goal is the coach's (older tests carried it in the note)
+    notes: athleteVisibleNotes(ev.notes),
     targetValue: ev.targetValue ?? undefined,
     unit: ev.unit ?? undefined,
     parameterId: ev.parameterId ?? undefined,
