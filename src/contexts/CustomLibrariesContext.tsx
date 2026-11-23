@@ -59,6 +59,33 @@ export interface Circuit {
   lastUpdated: string;
 }
 
+// ── The circuit library ───────────────────────────────────────────────────────
+
+/**
+ * New circuits are stored in one library of their own ("Circuits", fixed id — the same for every
+ * coach of the organization), created with its first circuit. It holds no exercises and isn't listed
+ * with the exercise libraries; the Circuits page and the exercise picker's "Circuits" show every
+ * circuit of every library (older ones stay in the exercise library they were made in).
+ */
+export const CIRCUIT_LIBRARY_ID = 'circuit-library';
+export const isCircuitLibrary = (library: { id: string }): boolean => library.id === CIRCUIT_LIBRARY_ID;
+/** The exercise libraries (without the circuit library) */
+export const exerciseLibrariesOnly = <T extends { id: string }>(libraries: T[]): T[] => libraries.filter(l => !isCircuitLibrary(l));
+
+function newCircuitLibrary(now: string): CustomLibrary {
+  return {
+    id: CIRCUIT_LIBRARY_ID,
+    name: 'Circuits',
+    type: 'Circuits',
+    description: 'Circuits',
+    columns: [{ id: 'exercise', name: 'Exercise', type: 'text', required: true }],
+    exercises: [],
+    circuits: [],
+    createdAt: now,
+    lastUpdated: now,
+  };
+}
+
 // ── Library & Exercise types ───────────────────────────────────────────────────
 
 export interface CustomLibrary {
@@ -461,9 +488,13 @@ export const CustomLibrariesProvider: React.FC<{ children: React.ReactNode }> = 
       createdAt: now,
       lastUpdated: now,
     };
+    // The circuit library is created with its first circuit (in the same save)
+    const libraries = libraryId === CIRCUIT_LIBRARY_ID && !data.libraries.some(isCircuitLibrary)
+      ? [...data.libraries, newCircuitLibrary(now)]
+      : data.libraries;
     save({
       ...data,
-      libraries: data.libraries.map(lib =>
+      libraries: libraries.map(lib =>
         lib.id === libraryId
           ? { ...lib, circuits: [...(lib.circuits ?? []), newCircuit], lastUpdated: now }
           : lib

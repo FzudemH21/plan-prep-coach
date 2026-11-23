@@ -20,6 +20,7 @@ import { ColumnDeleteDialog } from '@/components/shared/ColumnDeleteDialog';
 import { ColumnRenameDialog } from '@/components/shared/ColumnRenameDialog';
 import { ExerciseDetailDialog } from '@/components/shared/ExerciseDetailDialog';
 import { BulkImportDialog } from './BulkImportDialog';
+import { useNavigate } from 'react-router-dom';
 
 interface DynamicLibraryTableProps {
   library: CustomLibrary;
@@ -68,6 +69,7 @@ interface ExerciseDetailState {
 }
 
 export function DynamicLibraryTable({ library, readOnly = false }: DynamicLibraryTableProps) {
+  const navigate = useNavigate();
   const {
     libraries,
     addExerciseToLibrary,
@@ -594,7 +596,7 @@ export function DynamicLibraryTable({ library, readOnly = false }: DynamicLibrar
           >
             Exercises ({safeLibrary.exercises.length})
           </button>
-          <button
+          {((library.circuits ?? []).length > 0 || activeTab === 'circuits') && <button
             onClick={() => setActiveTab('circuits')}
             className={cn(
               "px-4 py-1.5 text-sm font-medium rounded-md transition-colors",
@@ -604,7 +606,7 @@ export function DynamicLibraryTable({ library, readOnly = false }: DynamicLibrar
             )}
           >
             Circuits ({(library.circuits ?? []).length})
-          </button>
+          </button>}
         </div>
 
         {/* ── Exercises tab ── */}
@@ -708,14 +710,11 @@ export function DynamicLibraryTable({ library, readOnly = false }: DynamicLibrar
               <span className="text-sm text-muted-foreground">
                 {(library.circuits ?? []).length} circuit{(library.circuits ?? []).length !== 1 ? 's' : ''}
               </span>
-              {!readOnly && <Button
-                size="sm"
-                variant="outline"
-                onClick={() => { setEditingCircuit(undefined); setCircuitBuilderOpen(true); }}
-              >
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                New Circuit
-              </Button>}
+              {/* New circuits are made on the Circuits page (all circuits in one place) */}
+              <Button size="sm" variant="outline" onClick={() => navigate('/templates/circuits')}>
+                <Recycle className="h-3.5 w-3.5 mr-1" />
+                All circuits
+              </Button>
             </div>
 
             {(library.circuits ?? []).length === 0 ? (

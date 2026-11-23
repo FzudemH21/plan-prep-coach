@@ -31,6 +31,7 @@ import AthleticismDatabaseV2 from "./pages/AthleticismDatabaseV2";
 import ToolboxDatabase from "./pages/ToolboxDatabase";
 import LibraryPage from "./pages/LibraryPage";
 import ExerciseLibrariesPage from "./pages/ExerciseLibrariesPage";
+import CircuitsPage from "./pages/CircuitsPage";
 import ProgramTemplatesPage from "./pages/ProgramTemplatesPage";
 import AthleteDatabase from "./pages/AthleteDatabase";
 import NotFound from "./pages/NotFound";
@@ -206,6 +207,7 @@ function AppRoutes() {
                   <Route path="/templates/toolbox" element={<ToolboxDatabase />} />
                   <Route path="/templates/libraries/:libraryName" element={<LibraryPage />} />
                   <Route path="/templates/exercise-libraries" element={<ExerciseLibrariesPage />} />
+                  <Route path="/templates/circuits" element={<CircuitsPage />} />
                   <Route path="/templates/sessions" element={<SessionLibraryPage />} />
                   <Route path="/templates/program-templates" element={<ProgramTemplatesPage />} />
                   <Route path="/coach-profile" element={<CoachProfilePage />} />

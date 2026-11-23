@@ -12,6 +12,7 @@ import { WizardAIAssistant, type ApplySuggestion } from '@/components/wizard/Wiz
 import { useGlobalAIContext } from '@/hooks/useGlobalAIContext';
 import { useCoachMemory } from '@/hooks/useCoachMemory';
 import { useRAGRetrieval } from '@/hooks/useRAGRetrieval';
+import { CIRCUIT_LIBRARY_ID } from '@/contexts/CustomLibrariesContext';
 
 // Convert library name to URL-safe slug
 const createSlug = (name: string): string => {
@@ -60,12 +61,17 @@ export default function LibraryPage() {
 
   const library = findLibraryBySlug(libraries, libraryName || '');
 
-  // Auto-redirect to the overview when the library no longer exists (e.g. deleted)
+  // Auto-redirect to the overview when the library no longer exists (e.g. deleted); the circuit
+  // library is shown as the Circuits page
   useEffect(() => {
+    if (libraryName === CIRCUIT_LIBRARY_ID) {
+      navigate('/templates/circuits', { replace: true });
+      return;
+    }
     if (!isLoading && !library) {
       navigate('/templates/exercise-libraries', { replace: true });
     }
-  }, [isLoading, library, navigate]);
+  }, [isLoading, library, navigate, libraryName]);
 
   useEffect(() => {
     if (!library) return;

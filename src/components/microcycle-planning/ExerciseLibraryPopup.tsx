@@ -28,6 +28,7 @@ import { ColumnFilter } from '@/components/exercises/ColumnFilter';
 import { PlyometricsColumnFilter } from '@/components/plyometrics/PlyometricsColumnFilter';
 import { ExerciseDetailDialog } from '@/components/shared/ExerciseDetailDialog';
 import { useToast } from '@/hooks/use-toast';
+import { exerciseLibrariesOnly, isCircuitLibrary } from '@/contexts/CustomLibrariesContext';
 
 // Define a more flexible column type for the popup
 interface PopupTableColumn {
@@ -52,6 +53,9 @@ type SavedLibraryFilters = Record<string, {
 const readSavedFilters = (): SavedLibraryFilters => {
   try { return JSON.parse(localStorage.getItem(FILTERS_KEY) || '{}') as SavedLibraryFilters; } catch { return {}; }
 };
+
+/** The picker's "Circuits" entry (every circuit of every library) — not a library id */
+const CIRCUITS_TAB = '__circuits__';
 
 interface ExerciseLibraryPopupProps {
   isOpen: boolean;
@@ -100,21 +104,27 @@ export function ExerciseLibraryPopup({
 
   const { libraries, addExerciseToLibrary } = useCustomLibraries();
   const { toast } = useToast();
+  // Exercise libraries only — circuits (of every library, also the circuit library) are under "Circuits"
+  const exerciseLibraries = useMemo(() => exerciseLibrariesOnly(libraries), [libraries]);
+  const allCircuits = useMemo(() => libraries
+    .flatMap(lib => (lib.circuits ?? []).map(circuit => ({ circuit, libraryId: lib.id, libraryName: isCircuitLibrary(lib) ? undefined : lib.name })))
+    .sort((a, b) => a.circuit.name.localeCompare(b.circuit.name)), [libraries]);
+  const onCircuitsTab = activeTab === CIRCUITS_TAB;
 
   // When the popup opens: the caller's default library if given, otherwise the library the
   // coach last had open in this picker (remembered per browser), otherwise the first one.
   useEffect(() => {
-    if (!isOpen || libraries.length === 0) return;
+    if (!isOpen || exerciseLibraries.length === 0) return;
     let lastUsed: string | null = null;
     try { lastUsed = localStorage.getItem(LAST_LIBRARY_KEY); } catch { /* unavailable */ }
-    const exists = (id: string | null | undefined): id is string => !!id && libraries.some(lib => lib.id === id);
-    const target = exists(defaultLibraryId) ? defaultLibraryId : exists(lastUsed) ? lastUsed : libraries[0].id;
+    const exists = (id: string | null | undefined): id is string => !!id && exerciseLibraries.some(lib => lib.id === id);
+    const target = exists(defaultLibraryId) ? defaultLibraryId : exists(lastUsed) ? lastUsed : exerciseLibraries[0].id;
     setActiveTab(target);
-  }, [isOpen, defaultLibraryId, libraries]);
+  }, [isOpen, defaultLibraryId, exerciseLibraries]);
 
   // Remember the library in use so "Add exercises" reopens it next time
   useEffect(() => {
-    if (!isOpen || !activeTab) return;
+    if (!isOpen || !activeTab || activeTab === CIRCUITS_TAB) return;
     try { localStorage.setItem(LAST_LIBRARY_KEY, activeTab); } catch { /* unavailable */ }
   }, [isOpen, activeTab]);
 
@@ -122,7 +132,7 @@ export function ExerciseLibraryPopup({
   const allLibraries = useMemo(() => {
     const result: Record<string, any> = {};
     
-    libraries.forEach(lib => {
+    exerciseLibraries.forEach(lib => {
       result[lib.id] = {
         name: lib.name,
         columns: lib.columns.map(col => ({
@@ -140,7 +150,7 @@ export function ExerciseLibraryPopup({
     });
 
     return result;
-  }, [libraries]);
+  }, [exerciseLibraries]);
 
   const libraryData = useMemo(() => {
     const result: Record<string, any[]> = {};
@@ -363,6 +373,13 @@ export function ExerciseLibraryPopup({
     setSelectedItems(newSelected);
   };
 
+  /** The Circuits list, filtered by the search (circuit or exercise name) */
+  const circuitQuery = filterState.search.trim().toLowerCase();
+  const shownCircuits = circuitQuery
+    ? allCircuits.filter(({ circuit }) => circuit.name.toLowerCase().includes(circuitQuery)
+      || circuit.exercises.some(ex => ex.exerciseName?.toLowerCase().includes(circuitQuery)))
+    : allCircuits;
+
   const handleConfirm = () => {
     // Search across ALL library data, not just the active tab,
     // so selections survive a tab switch before confirming.
@@ -478,7 +495,7 @@ export function ExerciseLibraryPopup({
                       className="w-64 justify-between font-normal"
                     >
                       <span className="truncate">
-                        {activeTab && allLibraries[activeTab] ? allLibraries[activeTab].name : "Select library..."}
+                        {onCircuitsTab ? 'Circuits' : activeTab && allLibraries[activeTab] ? allLibraries[activeTab].name : "Select library..."}
                       </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -488,6 +505,21 @@ export function ExerciseLibraryPopup({
                       <CommandInput placeholder="Search libraries..." />
                       <CommandList>
                         <CommandEmpty>No library found.</CommandEmpty>
+                        {allCircuits.length > 0 && (
+                          <CommandGroup>
+                            <CommandItem
+                              value="Circuits"
+                              onSelect={() => {
+                                setActiveTab(CIRCUITS_TAB);
+                                setLibraryPickerOpen(false);
+                              }}
+                            >
+                              <Recycle className="h-3.5 w-3.5 mr-1.5 text-primary" />
+                              Circuits
+                              <span className="ml-auto text-xs text-muted-foreground">{allCircuits.length}</span>
+                            </CommandItem>
+                          </CommandGroup>
+                        )}
                         <CommandGroup>
                           {Object.entries(allLibraries).sort(([, a], [, b]) => a.name.localeCompare(b.name)).map(([key, library]) => (
                             <CommandItem
@@ -515,12 +547,12 @@ export function ExerciseLibraryPopup({
                     <div className="relative px-1">
                       <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
-                        placeholder={searchAllLibraries ? "Search all libraries..." : "Search exercises..."}
+                        placeholder={onCircuitsTab ? "Search circuits..." : searchAllLibraries ? "Search all libraries..." : "Search exercises..."}
                         value={filterState.search}
                         onChange={(e) => handleSearchChange(e.target.value)}
                         className="pl-8 w-64"
                       />
-                      {filterState.search.trim() && !searchExistsInAllLibraries && filterState.search.trim().length > 2 && (
+                      {!onCircuitsTab && filterState.search.trim() && !searchExistsInAllLibraries && filterState.search.trim().length > 2 && (
                         <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-md p-2 shadow-md z-10">
                           <Button
                             variant="ghost"
@@ -534,14 +566,14 @@ export function ExerciseLibraryPopup({
                         </div>
                       )}
                     </div>
-                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                    {!onCircuitsTab && <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
                       <Checkbox
                         checked={searchAllLibraries}
                         onCheckedChange={(checked) => toggleSearchAllLibraries(checked === true)}
                       />
                       All libraries
-                    </label>
-                    {hasActiveFilters && !searchAllLibraries && (
+                    </label>}
+                    {hasActiveFilters && !searchAllLibraries && !onCircuitsTab && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -555,11 +587,13 @@ export function ExerciseLibraryPopup({
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-sm text-muted-foreground">
-                      {searchAllLibraries
+                      {onCircuitsTab
+                        ? `${shownCircuits.length} circuit${shownCircuits.length !== 1 ? 's' : ''}`
+                        : searchAllLibraries
                         ? (filterState.search.trim() ? `${allLibraryMatches.length} matches in all libraries` : '')
                         : `${filteredAndSortedExercises.length} exercises`}
                     </span>
-                    {activeTab && allLibraries[activeTab] && (
+                    {!onCircuitsTab && activeTab && allLibraries[activeTab] && (
                       <Button variant="outline" size="sm" className="gap-1.5" onClick={handleCreateNewExercise}
                         title={`Create a new exercise in ${allLibraries[activeTab].name}`}>
                         <Plus className="h-3.5 w-3.5" />New exercise
@@ -568,50 +602,56 @@ export function ExerciseLibraryPopup({
                   </div>
                 </div>
 
-                {libraries.map(lib => {
-                  const libCircuits = lib.circuits ?? [];
-                  if (searchAllLibraries || lib.id !== activeTab || libCircuits.length === 0) return null;
-                  return (
-                    <div key={`circuits-${lib.id}`} className="mt-3 shrink-0">
-                      <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 mb-1.5">
-                        <Recycle className="h-3.5 w-3.5" />
-                        Circuits in this library
+                {onCircuitsTab && (
+                  <div className="mt-4 flex-1 border rounded-lg overflow-y-auto max-h-[50vh]" style={{ scrollbarWidth: 'thin' }}>
+                    {shownCircuits.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-8">
+                        {allCircuits.length === 0 ? 'No circuits yet.' : `No circuit matches "${filterState.search}".`}
                       </p>
-                      <div className="flex flex-wrap gap-2">
-                        {libCircuits.map(circuit => (
-                          <button
-                            key={circuit.id}
-                            className="flex items-center gap-2 px-3 py-1.5 border rounded-lg bg-muted/40 hover:bg-primary/10 hover:border-primary/40 transition-colors text-sm"
-                            onClick={() => {
-                              onSelectExercises([{
-                                id: `circuit-${circuit.id}-${Date.now()}`,
-                                exerciseId: circuit.id,
-                                exerciseName: circuit.name,
-                                library: lib.id,
-                                isCircuit: true,
-                                circuitId: circuit.id,
-                                circuitLibraryId: lib.id,
-                                circuitExercises: [...circuit.exercises],
-                                circuitRounds: circuit.rounds,
-                                circuitRestBetweenRounds: circuit.restBetweenRounds,
-                                circuitRestBetweenExercises: circuit.restBetweenExercises,
-                                circuitComments: circuit.comments,
-                              }]);
-                              handleClose();
-                            }}
-                          >
-                            <Recycle className="h-3.5 w-3.5 text-primary shrink-0" />
-                            <span className="font-medium">{circuit.name}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {circuit.exercises.length} ex.
-                            </span>
-                          </button>
+                    ) : (
+                      <ul className="divide-y">
+                        {shownCircuits.map(({ circuit, libraryId, libraryName }) => (
+                          <li key={`${libraryId}-${circuit.id}`}>
+                            <button
+                              type="button"
+                              className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-primary/5 transition-colors"
+                              onClick={() => {
+                                onSelectExercises([{
+                                  id: `circuit-${circuit.id}-${Date.now()}`,
+                                  exerciseId: circuit.id,
+                                  exerciseName: circuit.name,
+                                  library: libraryId,
+                                  isCircuit: true,
+                                  circuitId: circuit.id,
+                                  circuitLibraryId: libraryId,
+                                  circuitExercises: [...circuit.exercises],
+                                  circuitRounds: circuit.rounds,
+                                  circuitRestBetweenRounds: circuit.restBetweenRounds,
+                                  circuitRestBetweenExercises: circuit.restBetweenExercises,
+                                  circuitComments: circuit.comments,
+                                }]);
+                                handleClose();
+                              }}
+                            >
+                              <Recycle className="h-4 w-4 text-primary shrink-0" />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-medium">{circuit.name}</span>
+                                <span className="block truncate text-xs text-muted-foreground">
+                                  {circuit.exercises.map(ex => ex.exerciseName).join(', ')}
+                                </span>
+                              </span>
+                              <span className="shrink-0 text-xs text-muted-foreground">
+                                {circuit.exercises.length} ex.{libraryName ? ` · ${libraryName}` : ''}
+                              </span>
+                            </button>
+                          </li>
                         ))}
-                      </div>
-                    </div>
-                  );
-                })}
+                      </ul>
+                    )}
+                  </div>
+                )}
 
+                {!onCircuitsTab && (
                 <TabsContent value={activeTab} className="mt-4 flex-1 flex flex-col overflow-hidden">
                   {searchAllLibraries ? (
                     // Flat list across all libraries: name + the library it belongs to
@@ -831,6 +871,7 @@ export function ExerciseLibraryPopup({
                   </>
                   )}
                 </TabsContent>
+                )}
               </Tabs>
             </div>
           </div>

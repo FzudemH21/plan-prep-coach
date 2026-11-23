@@ -27,13 +27,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FileText, Activity, Plus, Edit2, Trash2, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown, Copy } from "lucide-react";
+import { FileText, Activity, Plus, Edit2, Trash2, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown, Copy, Recycle } from "lucide-react";
 import { AddLibraryDialog } from "@/components/templates/AddLibraryDialog";
 import { EditLibraryDialog } from "@/components/templates/EditLibraryDialog";
 import { useCustomLibraries, CustomLibrary } from "@/hooks/useCustomLibraries";
 import { useToast } from "@/hooks/use-toast";
 import { useReadOnly } from "@/hooks/useDataScope";
 import { ViewOnlyBadge } from "@/components/shared/ViewOnlyBadge";
+import { exerciseLibrariesOnly } from "@/contexts/CustomLibrariesContext";
 
 export default function ExerciseLibrariesPage() {
   const navigate = useNavigate();
@@ -44,7 +45,10 @@ export default function ExerciseLibrariesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [libraryToDelete, setLibraryToDelete] = useState<CustomLibrary | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | null>(null);
-  const { libraries, deleteLibrary, duplicateLibrary, isLoading } = useCustomLibraries();
+  const { libraries: allLibraries, deleteLibrary, duplicateLibrary, isLoading } = useCustomLibraries();
+  // The circuit library is the "Circuits" row (every circuit of every library), not an exercise library
+  const libraries = exerciseLibrariesOnly(allLibraries);
+  const circuitCount = allLibraries.reduce((n, lib) => n + (lib.circuits?.length ?? 0), 0);
 
   const sortedLibraries = sortOrder === null ? libraries : [...libraries].sort((a, b) => {
     const cmp = a.name.localeCompare(b.name);
@@ -131,6 +135,17 @@ export default function ExerciseLibrariesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
+              <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => navigate('/templates/circuits')}>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">
+                    <Recycle className="h-4 w-4 text-primary" />
+                    Circuits
+                  </div>
+                </TableCell>
+                <TableCell className="text-muted-foreground">All circuits</TableCell>
+                <TableCell>{circuitCount}</TableCell>
+                <TableCell />
+              </TableRow>
               {sortedLibraries.map((library) => {
                 const IconComponent = getLibraryIcon(library);
                 return (

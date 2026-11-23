@@ -31,6 +31,7 @@ import type { Circuit, CircuitExercise } from '@/contexts/CustomLibrariesContext
 import { ExerciseLibraryPopup } from '@/components/microcycle-planning/ExerciseLibraryPopup';
 import type { ExerciseSelection } from '@/types/microcycle-planning';
 import { cn } from '@/lib/utils';
+import { CIRCUIT_LIBRARY_ID } from '@/contexts/CustomLibrariesContext';
 
 interface CircuitBuilderDialogProps {
   isOpen: boolean;
@@ -514,10 +515,10 @@ export function CircuitBuilderDialog({
               <Button
                 variant="outline"
                 disabled={!name.trim()}
-                onClick={() => setLibraryPickerOpen(true)}
+                onClick={() => handleSaveToLibrary(CIRCUIT_LIBRARY_ID)}
               >
                 <Library className="h-4 w-4 mr-1.5" />
-                Save &amp; Add to Library
+                Save to Circuits
               </Button>
             )}
             <Button onClick={handleSave} disabled={!name.trim()}>

@@ -33,6 +33,7 @@ import { findUnfinishedLogId } from '@/utils/unfinishedSession';
 import { useMyAthletes } from '@/hooks/useMyAthletes';
 import { notifyEditTakenOver, useBeginAthleteEdit, useCalendarWriteGate } from '@/components/athletes/AthleteEditGate';
 import { useAthleteEditSession } from '@/lib/athleteLock';
+import { exerciseLibrariesOnly } from '@/contexts/CustomLibrariesContext';
 
 // ── Section helpers ───────────────────────────────────────────────────────────
 
@@ -336,7 +337,9 @@ function ExercisePickerSheet({
     return col ? (String(ex.data[col.id] ?? '') || 'Exercise') : 'Exercise';
   }
 
-  const currentLib = libraries[libIdx] ?? null;
+  // Exercise libraries only (the circuit library holds circuits — those are on the Circuits tab)
+  const exerciseLibs = exerciseLibrariesOnly(libraries);
+  const currentLib = exerciseLibs[libIdx] ?? null;
   const filteredExercises = currentLib
     ? currentLib.exercises.filter(ex => !search || getExName(currentLib, ex).toLowerCase().includes(search.toLowerCase()))
     : [];
@@ -369,9 +372,9 @@ function ExercisePickerSheet({
 
         {tab === 'exercises' ? (
           <div className="flex flex-col flex-1 min-h-0 px-4 pt-3 gap-2">
-            {libraries.length > 1 && (
+            {exerciseLibs.length > 1 && (
               <div className="flex gap-1 flex-wrap shrink-0">
-                {libraries.map((l, i) => (
+                {exerciseLibs.map((l, i) => (
                   <button key={l.id} onClick={() => setLibIdx(i)}
                     className={cn('px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
                       libIdx === i ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>

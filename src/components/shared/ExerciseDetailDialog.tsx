@@ -15,7 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Play, Video, ExternalLink, Link2, X, Pencil, Plus, TrendingUp, TrendingDown, GripVertical, Check } from 'lucide-react';
-import { useCustomLibraries, CustomLibrary, CustomExercise, LibraryColumn, getNameColumnId } from '@/contexts/CustomLibrariesContext';
+import { useCustomLibraries, CustomLibrary, CustomExercise, LibraryColumn, getNameColumnId, exerciseLibrariesOnly } from '@/contexts/CustomLibrariesContext';
 import { useExerciseProgressions, ProgressionDirection, ExerciseProgression } from '@/hooks/useExerciseProgressions';
 import { ExerciseLibraryPopup } from '@/components/microcycle-planning/ExerciseLibraryPopup';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
@@ -667,7 +667,7 @@ export function ExerciseDetailDialog({
           {mode === 'create' && createTab === 'library' ? (
             <div className="flex-1 min-h-0 overflow-y-auto px-1 py-2" role="radiogroup" aria-label="Assigned library">
               <div className="space-y-1.5">
-                {[...libraries].sort((a, b) => a.name.localeCompare(b.name)).map(lib => {
+                {exerciseLibrariesOnly(libraries).sort((a, b) => a.name.localeCompare(b.name)).map(lib => {
                   const selected = lib.id === targetLibraryId;
                   return (
                     <button
