@@ -469,6 +469,8 @@ export function AthleteCalendarDayCell({
                           ref={draggableProvided.innerRef}
                           {...draggableProvided.draggableProps}
                           style={draggableProvided.draggableProps.style}
+                          // Opens the session to look at it — also while the calendar is view-only
+                          data-open
                           onClick={(e) => {
                             e.stopPropagation();
                             const dragEndTime = lastDragEndRef?.current ?? 0;

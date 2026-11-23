@@ -396,6 +396,25 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     });
   }, [buildTrainingDaysFromAssignment, initializeFromAssignment]);
 
+  /**
+   * The open plan again from this browser's stored copy — after another coach changed it
+   * (assignmentPlanStore loaded their version). Not while a change of this tab is still waiting to
+   * be saved (that save finds out itself), unless `discardPending`: this tab's save was refused,
+   * so what it had waiting builds on the old version and must not be saved over theirs.
+   */
+  const reloadOpenAssignment = useCallback((discardPending: boolean): boolean => {
+    if (!selectedAssignmentId || loadedAssignmentIdRef.current !== selectedAssignmentId) return false;
+    if (discardPending) {
+      if (saveTimeoutRef.current) { clearTimeout(saveTimeoutRef.current); saveTimeoutRef.current = null; }
+      pendingSaveRef.current = null;
+    } else if (pendingSaveRef.current) {
+      return false;
+    }
+    lastLoadedAssignmentIdRef.current = null;
+    loadAssignmentForEditing(selectedAssignmentId);
+    return true;
+  }, [selectedAssignmentId, loadAssignmentForEditing]);
+
   // Load when assignment changes; clear state when no assignment (e.g. new athlete with no plan)
   useEffect(() => {
     if (selectedAssignmentId) {
@@ -2400,6 +2419,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     copiedWeek,
     selectedAssignment,
     allAssignmentDays,
+    reloadOpenAssignment,
     
     // Session handlers
     handleAddSession,

@@ -9,7 +9,7 @@ import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Trash2, Calendar, LayoutGrid, Columns, ClipboardList, Bot, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2, Calendar, LayoutGrid, Columns, ClipboardList, Bot, Loader2, Lock, Hand } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Athlete, AthleteCalendarAssignment } from '@/types/athlete';
 import { AssignProgramDialog } from './AssignProgramDialog';
@@ -21,7 +21,10 @@ import { useAthleteCalendarEditing } from '@/hooks/useAthleteCalendarEditing';
 import { useCalendarEvents, CalendarEvent, eventEndDate, groupConsecutiveDates } from '@/hooks/useCalendarEvents';
 import { namespaceProgramForMerge } from '@/utils/assignmentMerge';
 import { anchorOfPackedProgram, buildPackedDateMap, firstSelectedMicrocycleDay, packedDateMapFromRanges, programMicrocycleRanges, remapProgramDates } from '@/utils/assignmentPacking';
-import { persistAssignmentPlan, removeAssignmentPlan, useAssignmentPlansReady } from '@/utils/assignmentPlanStore';
+import { flushAssignmentPlan, onAssignmentPlansChanged, persistAssignmentPlan, refreshAssignmentPlans, removeAssignmentPlan, useAssignmentPlansReady } from '@/utils/assignmentPlanStore';
+import { lockAthlete, useAthleteEditSession, useAthleteLockHolders } from '@/lib/athleteLock';
+import { ReadOnlyGuard } from '@/components/programs/PlannerGate';
+import { useOrgCoaches } from '@/hooks/useOrgCoaches';
 import { isRestIntensity } from '@/utils/intensityScale';
 import { getExerciseVisibility, SESSION_META_CHANGED_EVENT, type SessionVisibilityData } from '@/utils/parameterVisibility';
 import {
@@ -542,6 +545,112 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   // opened, so the calendar never starts from (or syncs) a stale or missing local copy
   const editing = useAthleteCalendarEditing(plansReady ? selectedAssignmentId : null, assignments);
 
+  // Another coach changed a plan of this athlete (live refresh), or a save of this tab was refused
+  // because they had saved first: the calendar shows their version (assignmentPlanStore)
+  const planIdsRef = useRef<Set<string>>(new Set());
+  planIdsRef.current = new Set(assignments.map(a => a.id));
+  const openPlanRef = useRef<{ id: string | null; reload: (discardPending: boolean) => boolean }>({ id: null, reload: () => false });
+  openPlanRef.current = { id: selectedAssignmentId, reload: editing.reloadOpenAssignment };
+  useEffect(() => onAssignmentPlansChanged(({ ids, conflict }) => {
+    const mine = ids.filter(id => planIdsRef.current.has(id));
+    if (mine.length === 0) return;
+    setAssignmentDataCache(prev => {
+      const next = { ...prev };
+      mine.forEach(id => {
+        try {
+          const raw = localStorage.getItem(`athlete-assignment-${id}`);
+          if (raw) next[id] = JSON.parse(raw);
+        } catch { /* keeps the copy shown */ }
+      });
+      return next;
+    });
+    const open = openPlanRef.current;
+    if (open.id && mine.includes(open.id)) open.reload(conflict);
+    // Their changes reached the athlete app too
+    setLiveScheduleVersion(v => v + 1);
+    if (conflict) {
+      toast({
+        title: 'Another coach changed this plan meanwhile',
+        description: 'Their latest version is shown now — your last change was not saved. Please make it again.',
+        variant: 'destructive',
+        duration: 12000,
+      });
+    }
+  }), [toast]);
+
+  // ── Edit lock (lib/athleteLock, item 'calendar'): while a coach changes this calendar — from the
+  // first change until 2 minutes after the last one, or until they leave it — the other coaches
+  // look through it (view only); owners can take over. Without the SQL: no lock, and saves are
+  // still never overwritten (assignmentPlanStore).
+  const { isOwner } = useOrgCoaches();
+  const lockHolders = useAthleteLockHolders(athlete.id, user?.id);
+  // Who is editing as far as this tab knows: whoever took the lock from me (until the next check
+  // says more) — and not the coach I just took over from (the next check no longer lists them)
+  const [lockLostTo, setLockLostTo] = useState<string | null>(null);
+  const [tookOverFrom, setTookOverFrom] = useState<string | null>(null);
+  useEffect(() => { setTookOverFrom(null); setLockLostTo(null); }, [lockHolders]);
+  const holderName = lockHolders.get('calendar') ?? null;
+  const calendarEditor = (holderName && holderName !== tookOverFrom ? holderName : null) ?? lockLostTo;
+  // Changing: from a save of this tab until 2 minutes after the last one
+  const [changeTick, setChangeTick] = useState(0);
+  const [changing, setChanging] = useState(false);
+  // (a ref: a plan opened again resets lastSavedAt — that must not keep the lock forever)
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!editing.lastSavedAt && changeTick === 0) return;
+    setChanging(true);
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    idleTimerRef.current = setTimeout(() => setChanging(false), 2 * 60_000);
+  }, [editing.lastSavedAt, changeTick]);
+  useEffect(() => () => { if (idleTimerRef.current) clearTimeout(idleTimerRef.current); }, []);
+  useEffect(() => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    setChanging(false);
+    setChangeTick(0);
+  }, [athlete.id]);
+  const { lostTo } = useAthleteEditSession(athlete.id, 'calendar', changing && !calendarEditor);
+  useEffect(() => {
+    if (!lostTo) return;
+    setLockLostTo(lostTo);
+    setChanging(false);
+    toast({
+      title: `${lostTo} is editing this calendar`,
+      description: "You can look through it — changes are possible again once they're done.",
+      duration: 12000,
+    });
+    void refreshAssignmentPlans();
+  }, [lostTo, toast]);
+  // While another coach edits, their changes come in every 15 s; once they're done, at once
+  const prevEditorRef = useRef<string | null>(null);
+  useEffect(() => {
+    const was = prevEditorRef.current;
+    prevEditorRef.current = calendarEditor;
+    if (!calendarEditor) {
+      if (was) void refreshAssignmentPlans();
+      return;
+    }
+    const timer = setInterval(() => { void refreshAssignmentPlans(); }, 15_000);
+    return () => clearInterval(timer);
+  }, [calendarEditor]);
+  const [takingOver, setTakingOver] = useState(false);
+  const takeOverCalendar = async () => {
+    setTakingOver(true);
+    try {
+      const r = await lockAthlete(athlete.id, 'calendar', true);
+      if (!r.acquired) {
+        toast({ title: 'Could not take over', description: 'Please try again in a moment.', variant: 'destructive' });
+        return;
+      }
+      // Their latest version first, then it's mine to change
+      await refreshAssignmentPlans();
+      setTookOverFrom(holderName);
+      setLockLostTo(null);
+      setChangeTick(t => t + 1);
+    } finally {
+      setTakingOver(false);
+    }
+  };
+
   // An exercise renamed in its library while this plan wasn't open: the plan takes the current name
   // (the open plan follows renames directly). Waits for the libraries and the plan to be loaded.
   const { libraries: exerciseLibraries, isLoading: librariesLoading } = useCustomLibraries();
@@ -803,22 +912,28 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     syncInProgressRef.current = true;
     // The plan's days — reloaded from the athlete app after the sync (days it no longer has go)
     const syncedDates = editing.trainingDays.map(td => td.date);
-    syncAthleteSchedule(
-      connection.id,
-      assignment,
-      editing.trainingDays,
-      editing.exerciseDistribution,
-      assignment.programName ?? 'Training Plan',
-      editing.parameterValues,
-      editing.sessionSections,
-      toolboxData?.entries,
-      editing.supersets,
-      editing.sessionIntensities,
-      enrichEvents(getEventsForAthlete(athlete.id)),
-      // Pass cached formula data so formula-computed params (e.g. Weight = Intensity * e1RM)
-      // are re-evaluated on every auto-save rather than only at assign time.
-      athleteFormulaDataRef.current ?? undefined,
-    ).then(() => refreshLiveScheduleRange(connection.id, syncedDates)).catch(e => {
+    const ed = editing;
+    // The plan is saved first: when another coach had saved it meanwhile, this copy is refused
+    // (their version is loaded) — and must not reach the athlete app either
+    flushAssignmentPlan(assignment.id).then(saved => {
+      if (!saved) return;
+      return syncAthleteSchedule(
+        connection.id,
+        assignment,
+        ed.trainingDays,
+        ed.exerciseDistribution,
+        assignment.programName ?? 'Training Plan',
+        ed.parameterValues,
+        ed.sessionSections,
+        toolboxData?.entries,
+        ed.supersets,
+        ed.sessionIntensities,
+        enrichEvents(getEventsForAthlete(athlete.id)),
+        // Pass cached formula data so formula-computed params (e.g. Weight = Intensity * e1RM)
+        // are re-evaluated on every auto-save rather than only at assign time.
+        athleteFormulaDataRef.current ?? undefined,
+      ).then(() => refreshLiveScheduleRange(connection.id, syncedDates));
+    }).catch(e => {
       console.error('[autoSync] ✗ sync failed:', e);
       // Show a toast once per mount so the coach knows something is wrong
       if (!syncErrorShownRef.current) {
@@ -2879,6 +2994,26 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
   return (
     <div className="space-y-4">
+      {calendarEditor && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/80 px-4 py-2.5">
+          <div className="flex items-center gap-2 text-sm min-w-0">
+            <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0">
+              <span className="font-medium">{calendarEditor} is editing this calendar.</span>
+              <span className="text-muted-foreground"> You can look through it — changes are possible once they're done.</span>
+            </span>
+          </div>
+          {isOwner && (
+            <Button size="sm" variant="outline" className="gap-1.5" disabled={takingOver}
+              title={`${calendarEditor}'s changes so far are kept`}
+              onClick={() => void takeOverCalendar()}>
+              {takingOver ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Hand className="h-3.5 w-3.5" />}
+              Take over editing
+            </Button>
+          )}
+        </div>
+      )}
+      <ReadOnlyGuard active={!!calendarEditor} glimpseBypass={false} className="space-y-4">
       <Card>
         <CardHeader className="pb-4">
           {/* Navigation and Controls Row */}
@@ -2902,11 +3037,11 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                   setViewMode('4week');
                 }
               }}>
-                <ToggleGroupItem value="calendar" aria-label="Calendar view" className="h-8 px-3 gap-1.5">
+                <ToggleGroupItem value="calendar" aria-label="Calendar view" className="h-8 px-3 gap-1.5" data-nav>
                   <LayoutGrid className="h-4 w-4" />
                   <span className="text-xs">Calendar</span>
                 </ToggleGroupItem>
-                <ToggleGroupItem value="master" aria-label="Master Planner view" className="h-8 px-3 gap-1.5">
+                <ToggleGroupItem value="master" aria-label="Master Planner view" className="h-8 px-3 gap-1.5" data-nav>
                   <Columns className="h-4 w-4" />
                   <span className="text-xs">Master Planner</span>
                 </ToggleGroupItem>
@@ -2947,6 +3082,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                         variant={masterWeeksToDisplay === w ? 'default' : 'ghost'}
                         size="sm"
                         onClick={() => setMasterWeeksToDisplay(w)}
+                        data-nav
                         className="h-7 px-3 text-xs"
                       >
                         {w}W
@@ -2959,10 +3095,10 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                     value={selectedDayOfWeek.toString()} 
                     onValueChange={(v) => setSelectedDayOfWeek(parseInt(v))}
                   >
-                    <SelectTrigger className="w-32 h-8">
+                    <SelectTrigger className="w-32 h-8" data-nav>
                       <SelectValue placeholder="Select Day" />
                     </SelectTrigger>
-                    <SelectContent className="z-[200] bg-background border">
+                    <SelectContent className="z-[200] bg-background border" data-nav>
                       {DAY_NAMES.map((day, idx) => (
                         <SelectItem key={idx} value={(idx + 1).toString()}>{day}</SelectItem>
                       ))}
@@ -2975,10 +3111,10 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                       value={selectedAssignmentId || ''} 
                       onValueChange={setSelectedAssignmentId}
                     >
-                      <SelectTrigger className="w-40 h-8">
+                      <SelectTrigger className="w-40 h-8" data-nav>
                         <SelectValue placeholder="Select Program" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent data-nav>
                         {assignments.map(a => (
                           <SelectItem key={a.id} value={a.id}>{a.programName}</SelectItem>
                         ))}
@@ -2995,7 +3131,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                   <Button variant="outline" size="icon" onClick={handlePrevious}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <Button variant="outline" size="sm" onClick={handleToday}>
+                  <Button variant="outline" size="sm" onClick={handleToday} data-nav>
                     Today
                   </Button>
                   <Button variant="outline" size="icon" onClick={handleNext}>
@@ -3438,6 +3574,7 @@ You can also help with database management (parameters, exercises, toolbox) and 
 When the coach opens the AI from within a session card, the "Currently Viewing" section above shows the exact session — use that context to give session-specific advice.`}
         onApplySuggestion={handleAIApply}
       />
+      </ReadOnlyGuard>
     </div>
   );
 }

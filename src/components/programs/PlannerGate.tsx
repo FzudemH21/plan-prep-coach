@@ -12,7 +12,8 @@
  * changes to the program.
  *
  * The listeners are installed once when the app starts (window, capture phase), so they run before
- * those of any drag & drop library mounted later; they only act while a read-only planner is open.
+ * those of any drag & drop library mounted later; they only act while a read-only area is open.
+ * The same guard (ReadOnlyGuard) keeps an athlete's calendar view-only while another coach edits it.
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Copy, Eye, Hand, Loader2, RefreshCw } from 'lucide-react';
@@ -55,16 +56,25 @@ function navigates(el: Element): boolean {
   return isChevronToggle(el);
 }
 
-const guard: { area: HTMLElement | null } = { area: null };
+/** The read-only areas open right now — the last one opened applies (e.g. a view-only calendar in
+ *  the athlete profile opened from a view-only planner) */
+const guards: Array<{ area: HTMLElement; glimpseBypass: boolean }> = [];
+const activeGuard = () => guards[guards.length - 1] ?? null;
 
 function inScope(target: EventTarget | null): target is Element {
-  if (!guard.area || !(target instanceof Element)) return false;
-  // The app's own navigation (sidebar, notifications) opens outside the planner too — never blocked
-  if (target.closest('[data-app-chrome]')) return false;
+  const guard = activeGuard();
+  if (!guard || !(target instanceof Element)) return false;
+  // The app's own navigation (sidebar, notifications) opens outside the area too — never blocked
+  // (unless the area itself sits in it, like a calendar in the athlete profile opened as a glimpse)
+  const chrome = target.closest('[data-app-chrome]');
+  if (chrome && !chrome.contains(guard.area)) return false;
   // The athlete's profile opened from the planner (AthleteGlimpse) and everything it opens: athlete
   // data, not the program — its own rights apply
-  if (document.body.hasAttribute('data-athlete-glimpse')) return false;
-  return guard.area.contains(target) || !!target.closest(PORTALS);
+  if (guard.glimpseBypass && document.body.hasAttribute('data-athlete-glimpse')) return false;
+  if (guard.area.contains(target)) return true;
+  // Dialogs, menus and pickers the area opened (not one the area itself sits in)
+  const portal = target.closest(PORTALS);
+  return !!portal && !portal.contains(guard.area);
 }
 
 function blocked(target: Element, press: boolean): boolean {
@@ -79,7 +89,7 @@ if (typeof window !== 'undefined') {
   PRESS.forEach(type => window.addEventListener(type, e => { if (inScope(e.target) && blocked(e.target, true)) stop(e); }, { capture: true, passive: false }));
   ACTIVATE.forEach(type => window.addEventListener(type, e => { if (inScope(e.target) && blocked(e.target, false)) stop(e); }, { capture: true, passive: false }));
   window.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (!guard.area) return;
+    if (!activeGuard()) return;
     const t = e.target;
     if (e.key === 'Escape' || e.key === 'Tab') return;
     // Shortcuts of the planner (paste, cut, undo, delete) wherever the focus is
@@ -93,31 +103,46 @@ if (typeof window !== 'undefined') {
   ['beforeinput', 'paste', 'cut'].forEach(type => window.addEventListener(type, e => { if (inScope(e.target)) stop(e); }, { capture: true }));
 }
 
-const DIMMED = ':is(button, [role="button"], [role="checkbox"], [role="switch"], [role="radio"], [role="combobox"], [role="menuitem"], [role="option"], [data-edit], [aria-haspopup])'
+const DIMMED_ANY = ':is(button, [role="button"], [role="checkbox"], [role="switch"], [role="radio"], [role="combobox"], [role="menuitem"], [role="option"], [data-edit], [aria-haspopup])'
   + ':not([data-nav]):not([data-nav] *):not([data-open]):not([data-dialog-close]):not([role="tab"])'
   + ':not([aria-expanded]:not([aria-haspopup]):not([role="combobox"])):not(:not([aria-haspopup]):not([role="combobox"]):has(> svg[class*="lucide-chevron-"]))'
-  + ':not([data-app-chrome] *)';
+  ;
+const DIMMED = DIMMED_ANY + ':not([data-app-chrome] *)';
 const READONLY_CSS = `
 .planner-readonly ${DIMMED},
+.planner-readonly-strict ${DIMMED_ANY},
 body.planner-readonly-open:not([data-athlete-glimpse]) :is([role="dialog"], [data-radix-popper-content-wrapper]) ${DIMMED} { opacity: .45; cursor: not-allowed; }
 .planner-readonly :is(input, textarea, select, [aria-roledescription], [data-rbd-drag-handle-draggable-id]),
 body.planner-readonly-open:not([data-athlete-glimpse]) [role="dialog"]:not([data-app-chrome]) :is(input, textarea, select) { cursor: default; }
 `;
 
-function ReadOnlyGuard({ children }: { children: ReactNode }) {
+/**
+ * Everything inside (and what it opens) is view-only: changing is blocked, navigating and opening
+ * things to look at works. `glimpseBypass`: the athlete profile opened as a glimpse is not covered
+ * (the planner's guard — the athlete's own rights apply there). `active`: only then (the wrapper
+ * stays, so switching it on and off keeps everything inside as it is).
+ */
+export function ReadOnlyGuard({ children, glimpseBypass = true, active = true, className }: {
+  children: ReactNode; glimpseBypass?: boolean; active?: boolean; className?: string;
+}) {
   const area = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    guard.area = area.current;
+    if (!active || !area.current) return;
+    const entry = { area: area.current, glimpseBypass };
+    guards.push(entry);
     document.body.classList.add('planner-readonly-open');
     return () => {
-      guard.area = null;
-      document.body.classList.remove('planner-readonly-open');
+      const i = guards.indexOf(entry);
+      if (i >= 0) guards.splice(i, 1);
+      if (guards.length === 0) document.body.classList.remove('planner-readonly-open');
     };
-  }, []);
+  }, [glimpseBypass, active]);
   return (
-    <div ref={area} className="planner-readonly">
-      <style>{READONLY_CSS}</style>
+    <div ref={area} className={[active ? 'planner-readonly' : '', active && !glimpseBypass ? 'planner-readonly-strict' : '', className ?? '']
+      .filter(Boolean).join(' ') || undefined}>
       {children}
+      {/* after the content: a first child would shift spaced-out content (space-y) */}
+      {active && <style>{READONLY_CSS}</style>}
     </div>
   );
 }

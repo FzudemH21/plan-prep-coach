@@ -1,8 +1,8 @@
 /**
  * Edit locks for athletes, per item (supabase/migrations/20261120_athlete_locks_per_item.sql).
  *
- * Only what is being edited is locked: the athlete's profile form ('profile') or one anamnesis
- * ('anamnesis:<id>'). The lock is taken when the coach clicks Edit and held while that edit mode is
+ * Only what is being edited is locked: the athlete's profile form ('profile'), one anamnesis
+ * ('anamnesis:<id>') or the calendar ('calendar' — while a coach changes it, 2026-11-23). The lock is taken when the coach clicks Edit and held while that edit mode is
  * open — renewed every 10 s (and at once when the tab comes back to the front), given back shortly
  * after the edit mode closes, and at once when the tab is closed or reloaded. A lock not renewed for
  * 2 minutes is free. Other coaches see "… is editing" next to that item's Edit button; owners can
@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 /** 'profile' or `anamnesis:<id>` */
-export type AthleteLockItem = 'profile' | `anamnesis:${string}`;
+export type AthleteLockItem = 'profile' | 'calendar' | `anamnesis:${string}`;
 
 export interface AthleteLockResult {
   acquired: boolean;

@@ -13,6 +13,7 @@ import { templatesStore } from '@/hooks/useTemplates';
 import { sessionLibraryStore } from '@/hooks/useSessionLibrary';
 import { updateAllPrograms } from '@/lib/programStore';
 import { currentDataId } from '@/lib/dataScope';
+import { noteAssignmentPlanSaved } from '@/utils/assignmentPlanStore';
 
 /** Browser event fired after a rename so open pages can update what they hold in memory. */
 export const EXERCISE_RENAMED_EVENT = 'ppc:exercise-renamed';
@@ -156,11 +157,14 @@ async function renameInAssignmentPlans(exerciseId: string, newName: string): Pro
     const next = { ...renamed, lastModified: new Date().toISOString() };
     try { localStorage.setItem(PREFIX + id, JSON.stringify(next)); } catch (err) { console.warn('[exerciseRename] assignment local:', err); }
     if (remoteAvailable) {
-      const { error: upErr } = await supabase.from('athlete_assignment_plans').upsert(
+      const { data: saved, error: upErr } = await supabase.from('athlete_assignment_plans').upsert(
         { assignment_id: id, coach_user_id: uid, data: next, updated_at: new Date().toISOString() },
         { onConflict: 'assignment_id' },
-      );
+      ).select('updated_at');
       if (upErr) console.warn('[exerciseRename] assignment upsert error:', upErr.message);
+      // This version is the one this tab knows now (its next calendar save builds on it)
+      const savedAt = (saved as Array<{ updated_at: string }> | null)?.[0]?.updated_at;
+      if (savedAt) noteAssignmentPlanSaved(id, savedAt);
     }
   }
 }
