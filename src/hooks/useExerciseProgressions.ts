@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useDataScope } from '@/hooks/useDataScope';
+import { useOnLiveRefresh, sameOrNew } from '@/hooks/useLiveRefresh';
 
 export type ProgressionDirection = 'progression' | 'regression';
 
@@ -86,10 +87,10 @@ export function useExerciseProgressions(exerciseId: string | null) {
   // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
   const [loading, setLoading] = useState(!!exerciseId);
 
-  const fetch = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     if (!exerciseId) { setLoading(false); return; }
     if (!dataId) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     const { data, error } = await supabase
       .from('exercise_progressions')
       .select('*')
@@ -98,7 +99,7 @@ export function useExerciseProgressions(exerciseId: string | null) {
       .order('direction')
       .order('level');
     if (!error && data) {
-      setProgressions(data.map(row => ({
+      setProgressions(prev => sameOrNew(prev, data.map(row => ({
         id: row.id as string,
         fromExerciseId: row.from_exercise_id as string,
         toExerciseId: row.to_exercise_id as string,
@@ -106,12 +107,15 @@ export function useExerciseProgressions(exerciseId: string | null) {
         direction: row.direction as ProgressionDirection,
         level: row.level as number,
         notes: row.notes as string | null,
-      })));
+      }))));
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, [exerciseId, dataId]);
+  const fetch = useCallback(() => load(false), [load]);
 
   useEffect(() => { fetch(); }, [fetch]);
+  // Progressions other coaches added meanwhile — quietly
+  useOnLiveRefresh(() => { void load(true); });
 
   const add = useCallback(async (params: {
     toExerciseId: string;

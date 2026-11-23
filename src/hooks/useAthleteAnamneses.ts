@@ -8,6 +8,7 @@ import type {
   AthleteAnamnesis, AnamnesisField, AnamnesisTemplateSnapshot, AnamnesisAttachment, AnamnesisConsent, AnamnesisProfileAnswers,
   AnamnesisNote,
 } from '@/types/anamnesis';
+import { useOnLiveRefresh, sameOrNew } from '@/hooks/useLiveRefresh';
 
 /** Days an anamnesis form link stays open */
 export const FORM_LINK_DAYS = 14;
@@ -102,10 +103,11 @@ export function useAthleteAnamneses(athleteLocalId: string) {
   // Loading until the first fetch is done (when there is something to fetch) — lists show a spinner, not "nothing here"
   const [loading, setLoading] = useState(!!athleteLocalId);
 
-  const fetchAnamneses = useCallback(async (): Promise<AthleteAnamnesis[] | null> => {
+  // `silent`: the live refresh — no loading state, unchanged data stays as it is
+  const load = useCallback(async (silent = false): Promise<AthleteAnamnesis[] | null> => {
     if (!athleteLocalId) { setLoading(false); return null; }
     if (!user || !athletesId) return null;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const { data, error } = await supabase
         .from('athlete_anamneses')
@@ -116,15 +118,18 @@ export function useAthleteAnamneses(athleteLocalId: string) {
 
       if (error) throw error;
       const list = (data as DbAnamnesis[]).map(fromDb);
-      setAnamneses(list);
+      setAnamneses(prev => sameOrNew(prev, list));
       return list;
     } catch (err) {
       console.error('[useAthleteAnamneses] fetch error', err);
       return null;
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [user, athletesId, athleteLocalId]);
+  const fetchAnamneses = useCallback(() => load(false), [load]);
+  // Anamneses other coaches saved (or the athlete filled in) meanwhile
+  useOnLiveRefresh(() => { void load(true); });
 
   useEffect(() => {
     fetchAnamneses();

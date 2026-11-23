@@ -56,6 +56,7 @@ import {
 } from 'recharts';
 import type { AthletePerformanceParameter } from '@/types/athlete';
 import type { ParameterV2 } from '@/types/parametersV2';
+import { useAthleteOverviewLayout } from '@/hooks/useAthleteOverviewLayout';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -718,15 +719,10 @@ export function AthleteAnalysisTab({
   }, [ovLogs, scheduleMethodLookup]);
 
   // ── Stimulus & Performance state ──────────────────────────────────────────
-  const [overviewPanels, setOverviewPanels] = useState<OverviewMethodPanel[]>(() => {
-    try { return JSON.parse(localStorage.getItem(`ov_panels_${athleteId}`) ?? '[]'); } catch { return []; }
-  });
-  const [overviewPerf, setOverviewPerf] = useState<OverviewPerfSeries[]>(() => {
-    try { return JSON.parse(localStorage.getItem(`ov_perf_${athleteId}`) ?? '[]'); } catch { return []; }
-  });
-
-  useEffect(() => { localStorage.setItem(`ov_panels_${athleteId}`, JSON.stringify(overviewPanels)); }, [overviewPanels, athleteId]);
-  useEffect(() => { localStorage.setItem(`ov_perf_${athleteId}`, JSON.stringify(overviewPerf)); }, [overviewPerf, athleteId]);
+  // The pinned charts — stored per athlete, the same for every coach (hooks/useAthleteOverviewLayout)
+  const {
+    panels: overviewPanels, perf: overviewPerf, setPanels: setOverviewPanels, setPerf: setOverviewPerf,
+  } = useAthleteOverviewLayout<OverviewMethodPanel, OverviewPerfSeries>(athleteId);
 
   const [ovPickerOpen, setOvPickerOpen]     = useState(false);
   const [ovPickerMode, setOvPickerMode]     = useState<'method' | 'performance'>('method');

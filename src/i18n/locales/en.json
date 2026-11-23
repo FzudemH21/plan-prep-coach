@@ -975,6 +975,7 @@
         "workout": "Session",
         "testsEvents": "Tests & events",
         "athleteDocuments": "Athlete documents",
+        "monitoringTemplate": "Monitoring template",
         "other": "Item"
       }
     },

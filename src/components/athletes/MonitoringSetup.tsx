@@ -43,34 +43,10 @@ import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import type { ParameterV2 } from '@/types/parametersV2';
 import { MEASURE_KIND_LABELS, hasCustomMeasures, measureById, measureLabel, measureSummary, parameterMeasures } from '@/utils/parameterMeasures';
 import { useAthletes } from '@/hooks/useAthletes';
+import { useMonitoringTemplates, type MonitoringTemplate } from '@/hooks/useMonitoringTemplates';
+import { useReadOnly } from '@/hooks/useDataScope';
+import { toast } from '@/hooks/use-toast';
 
-// ── Monitoring templates (localStorage) ──────────────────────────────────────
-
-interface MonitoringTemplate {
-  id: string;
-  name: string;
-  blocks: MonitoringBlock[];
-  createdAt: string;
-}
-
-const TEMPLATE_KEY = 'monitoring_templates_v1';
-
-function loadTemplates(): MonitoringTemplate[] {
-  try {
-    const raw = localStorage.getItem(TEMPLATE_KEY);
-    return raw ? (JSON.parse(raw) as MonitoringTemplate[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function persistTemplates(templates: MonitoringTemplate[]) {
-  try {
-    localStorage.setItem(TEMPLATE_KEY, JSON.stringify(templates));
-  } catch {
-    // quota or private mode — ignore
-  }
-}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -132,7 +108,9 @@ export function MonitoringSetup({ athlete, onChanged }: {
   const [creating, setCreating] = useState(false);
 
   // ── Templates ─────────────────────────────────────────────────────────────
-  const [templates, setTemplates] = useState<MonitoringTemplate[]>(loadTemplates);
+  // Shared with the organization (a library); without the libraries right: load only
+  const { templates, addTemplate, deleteTemplate } = useMonitoringTemplates();
+  const templatesReadOnly = useReadOnly('libraries');
   const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false);
   const [showLoadTemplateDialog, setShowLoadTemplateDialog] = useState(false);
   const [templateName, setTemplateName] = useState('');
@@ -313,23 +291,19 @@ export function MonitoringSetup({ athlete, onChanged }: {
 
   const handleSaveTemplate = () => {
     if (!templateName.trim()) return;
-    const newTemplate: MonitoringTemplate = {
-      id: String(Date.now()),
-      name: templateName.trim(),
-      blocks: config.blocks,
-      createdAt: new Date().toISOString(),
-    };
-    const updated = [...templates, newTemplate];
-    setTemplates(updated);
-    persistTemplates(updated);
+    addTemplate(templateName.trim(), config.blocks).catch(err => {
+      console.error('[monitoring] template not saved', err);
+      toast({ title: 'Template not saved', description: 'Please try again.', variant: 'destructive' });
+    });
     setShowSaveTemplateDialog(false);
     setTemplateName('');
   };
 
   const handleDeleteTemplate = (id: string) => {
-    const updated = templates.filter(t => t.id !== id);
-    setTemplates(updated);
-    persistTemplates(updated);
+    deleteTemplate(id).catch(err => {
+      console.error('[monitoring] template not deleted', err);
+      toast({ title: 'Template not deleted', description: 'Please try again.', variant: 'destructive' });
+    });
   };
 
   const handleApplyTemplate = (template: MonitoringTemplate) => {
@@ -466,15 +440,17 @@ export function MonitoringSetup({ athlete, onChanged }: {
                 >
                   <BookOpen className="h-3.5 w-3.5" /> Load Template
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => { setTemplateName(''); setShowSaveTemplateDialog(true); }}
-                  title="Save current blocks as a template"
-                >
-                  <BookmarkPlus className="h-3.5 w-3.5" /> Save as Template
-                </Button>
+                {!templatesReadOnly && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => { setTemplateName(''); setShowSaveTemplateDialog(true); }}
+                    title="Save current blocks as a template"
+                  >
+                    <BookmarkPlus className="h-3.5 w-3.5" /> Save as Template
+                  </Button>
+                )}
               </div>
 
               <div className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
@@ -767,13 +743,15 @@ export function MonitoringSetup({ athlete, onChanged }: {
                     <Button size="sm" variant="outline" onClick={() => handleApplyTemplate(t)}>
                       Apply
                     </Button>
-                    <button
-                      onClick={() => handleDeleteTemplate(t.id)}
-                      className="text-muted-foreground/50 hover:text-destructive transition-colors"
-                      title="Delete template"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    {!templatesReadOnly && (
+                      <button
+                        onClick={() => handleDeleteTemplate(t.id)}
+                        className="text-muted-foreground/50 hover:text-destructive transition-colors"
+                        title="Delete template"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

@@ -5,10 +5,30 @@
  * refreshed while a save is running, and local changes that aren't stored yet are kept
  * (see recordStore.refresh / programStore.refreshPrograms).
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { refreshAllRecordStores } from '@/lib/recordStore';
 import { refreshPrograms } from '@/lib/programStore';
 import { refreshAssignmentPlans } from '@/utils/assignmentPlanStore';
+
+/** Fired on every live refresh — screens that load their own data (anamneses, app connections, …)
+ *  reload it quietly (useOnLiveRefresh) */
+export const LIVE_REFRESH_EVENT = 'ppc:live-refresh';
+
+/** Runs `reload` on every live refresh (once a minute while the app is visible, and on coming back) */
+export function useOnLiveRefresh(reload: () => void): void {
+  const ref = useRef(reload);
+  ref.current = reload;
+  useEffect(() => {
+    const handler = () => ref.current();
+    window.addEventListener(LIVE_REFRESH_EVENT, handler);
+    return () => window.removeEventListener(LIVE_REFRESH_EVENT, handler);
+  }, []);
+}
+
+/** The same data again: keep the old value, so nothing that depends on it runs again */
+export function sameOrNew<T>(prev: T, next: T): T {
+  return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+}
 
 const MIN_GAP_MS = 15_000;
 const EVERY_MS = 60_000;
@@ -21,6 +41,7 @@ export function useLiveRefresh() {
       if (document.visibilityState !== 'visible' || running || Date.now() - last < MIN_GAP_MS) return;
       last = Date.now();
       running = true;
+      window.dispatchEvent(new Event(LIVE_REFRESH_EVENT));
       void Promise.all([refreshAllRecordStores(), refreshPrograms().catch(() => []), refreshAssignmentPlans()])
         .finally(() => { running = false; });
     };

@@ -1,10 +1,11 @@
 // Coach-side hook — parses athlete_session_logs into per-exercise history
 // and manages 1RM param tags in Supabase (with one-time localStorage migration).
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useDataScope } from '@/hooks/useDataScope';
+import { useOnLiveRefresh, sameOrNew } from '@/hooks/useLiveRefresh';
 
 // ── Raw shape of sets_logged rows ─────────────────────────────────────────────
 
@@ -98,6 +99,12 @@ export function useExerciseMetrics(connectionId: string | null) {
   const [loading, setLoading] = useState(!!connectionId);
   const [paramTags, setParamTagsState] = useState<Record<string, ParamTags>>({});
 
+  // Reloaded quietly on every live refresh (tags another coach set, sessions the athlete logged);
+  // a different athlete loads with the loading state
+  const [liveTick, setLiveTick] = useState(0);
+  useOnLiveRefresh(() => setLiveTick(t => t + 1));
+  const logsLoadedForRef = useRef<string | null>(null);
+
   // ── Load param tags from Supabase (with localStorage migration) ────────────
 
   useEffect(() => {
@@ -141,9 +148,9 @@ export function useExerciseMetrics(connectionId: string | null) {
           localStorage.removeItem(lsKey);
         }
 
-        setParamTagsState(dbMap);
+        setParamTagsState(prev => sameOrNew(prev, dbMap));
       });
-  }, [user, athletesId]);
+  }, [user, athletesId, liveTick]);
 
   // ── Save / delete param tags ───────────────────────────────────────────────
 
@@ -184,7 +191,8 @@ export function useExerciseMetrics(connectionId: string | null) {
   useEffect(() => {
     if (!connectionId) { setRawLogs([]); setLoading(false); return; }
     let cancelled = false;
-    setLoading(true);
+    const quiet = logsLoadedForRef.current === connectionId;
+    if (!quiet) setLoading(true);
     supabase
       .from('athlete_session_logs')
       .select('id, date, session_name, sets_logged')
@@ -193,12 +201,13 @@ export function useExerciseMetrics(connectionId: string | null) {
       .order('date', { ascending: false })
       .then(({ data }) => {
         if (!cancelled) {
-          setRawLogs((data ?? []) as RawSessionLog[]);
+          setRawLogs(prev => sameOrNew(prev, (data ?? []) as RawSessionLog[]));
+          logsLoadedForRef.current = connectionId;
           setLoading(false);
         }
       });
     return () => { cancelled = true; };
-  }, [connectionId]);
+  }, [connectionId, liveTick]);
 
   // ── Key helpers ────────────────────────────────────────────────────────────
 

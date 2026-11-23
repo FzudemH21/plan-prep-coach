@@ -485,11 +485,14 @@ export function WorkoutSessionSheet({
       // athlete), then whatever was set for this session here
       const fromExercises: Record<string, ParameterVisibilityOverrides> = {};
       exercises.forEach(ex => {
-        if (ex.parameterVisibility && Object.keys(ex.parameterVisibility).length > 0) {
+        if (ex.parameterVisibility && (storageScope || Object.keys(ex.parameterVisibility).length > 0)) {
           fromExercises[ex.id || ex.exerciseId] = ex.parameterVisibility;
         }
       });
-      return { ...fromExercises, ...(readSessionMeta(mesocycleId, dayDate, sessionIndex, storageScope).parameterVisibilityByExercise ?? {}) };
+      const stored = readSessionMeta(mesocycleId, dayDate, sessionIndex, storageScope).parameterVisibilityByExercise ?? {};
+      // Athlete calendar: the plan's setting wins (the same for every coach) — this browser's copy
+      // can be older and would put another coach's change back
+      return storageScope ? { ...stored, ...fromExercises } : { ...fromExercises, ...stored };
     }
   );
   const getVisibilityOverrides = React.useCallback(

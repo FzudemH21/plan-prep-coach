@@ -10,6 +10,7 @@ import { patchConnectionProfileData } from '@/utils/athleteProfileSync';
 import { useAuth } from '@/hooks/useAuth';
 import { useDataScope } from '@/hooks/useDataScope';
 import type { MonitoringConfig } from '@/types/athlete';
+import { useOnLiveRefresh, sameOrNew } from '@/hooks/useLiveRefresh';
 
 // ── Metrics snapshot (written by coach app, read by athlete app) ──────────────
 
@@ -107,13 +108,16 @@ export function useAthleteConnections() {
       .eq('coach_user_id', athletesId)
       .order('created_at', { ascending: false });
     if (!error && data) {
-      setConnections(data.map(rowToConnection));
+      const next = data.map(rowToConnection);
+      setConnections(prev => sameOrNew(prev, next));
     }
     setLoading(false);
   }, [user, athletesId]);
 
   useEffect(() => { load(); }, [load]);
   const refresh = useCallback(() => load(true), [load]);
+  // What other coaches (or the athlete) changed meanwhile — quietly, unchanged data stays as it is
+  useOnLiveRefresh(() => { void load(true); });
 
   /** Create a connection for an athlete and return the new row (with invite code). */
   const createConnection = useCallback(async (

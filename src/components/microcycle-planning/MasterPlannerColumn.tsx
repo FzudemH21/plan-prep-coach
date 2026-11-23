@@ -599,6 +599,9 @@ export function MasterPlannerColumn({
   const [, setVisibilityVersion] = useState(0);
   const getExerciseParamVisibility = useCallback((exercise: ExerciseDistribution): ParameterVisibilityOverrides => {
     if (!currentMesocycle) return exercise.parameterVisibility ?? {};
+    // Athlete calendar: the plan's setting first (every coach's), this browser's copy only for
+    // exercises the plan has none for
+    if (sessionMetaScope && exercise.parameterVisibility) return exercise.parameterVisibility;
     return placementVisibility(readSessionMeta(currentMesocycle.id, day.dateString, exercise.sessionIndex, sessionMetaScope), exercise);
   }, [currentMesocycle, day.dateString, sessionMetaScope]);
   const updateExerciseParamVisibility = useCallback((

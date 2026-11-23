@@ -711,8 +711,10 @@ export async function syncAthleteSchedule(
       const ownVisibility = (ex.parameterVisibility && typeof ex.parameterVisibility === 'object')
         ? ex.parameterVisibility as Record<string, boolean>
         : null;
-      const overrides: Record<string, boolean> = parsed.parameterVisibilityByExercise?.[exKey]
-        ?? ownVisibility
+      // The plan's setting first (saved with the plan, the same for every coach) — this browser's
+      // copy can be an older choice and would otherwise put it back over another coach's change
+      const overrides: Record<string, boolean> = ownVisibility
+        ?? parsed.parameterVisibilityByExercise?.[exKey]
         ?? parsed.parameterVisibility
         ?? {};
       // A method parameter the coach switched on is shown even when this exercise has no entry for it
