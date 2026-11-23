@@ -632,6 +632,19 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     const timer = setInterval(() => { void refreshAssignmentPlans(); }, 15_000);
     return () => clearInterval(timer);
   }, [calendarEditor]);
+  // The athlete app's copy (sessions, their notes, mobile edits) as other coaches change it: reloaded
+  // every 30 s while the calendar is shown (15 s while another coach edits) and when the app comes
+  // to the front — live updates alone didn't always arrive (e.g. another coach's session notes,
+  // which change only the app copy, not the plan). Not while this tab is changing the calendar
+  // itself (its own sync reloads the days it wrote).
+  useEffect(() => {
+    if (changing) return;
+    const reload = () => { if (document.visibilityState === 'visible') setLiveScheduleVersion(v => v + 1); };
+    const timer = setInterval(reload, calendarEditor ? 15_000 : 30_000);
+    window.addEventListener('focus', reload);
+    return () => { clearInterval(timer); window.removeEventListener('focus', reload); };
+  }, [changing, calendarEditor]);
+
   const [takingOver, setTakingOver] = useState(false);
   const takeOverCalendar = async () => {
     setTakingOver(true);
