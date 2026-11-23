@@ -315,12 +315,17 @@ export default function MicrocyclePlanningPage() {
           const validIds = mesoIds.filter(mesoId => {
             const mesoData = parsedParams[mesoId];
             if (!mesoData) return false;
-            // Keep if this method appears in at least one microcycle slot of the meso
+            // Keep if this method appears in at least one microcycle slot of the meso — as a whole
+            // or split into exercise categories ("Method::Category"). Before, split methods never
+            // matched, lost their allocation and were then taken from any mesocycle with values in
+            // the periodization table — so copying carried them into mesocycles they're not in.
             return Object.values(mesoData).some(
-              (microData: any) => microData && methodId in microData
+              (microData: any) => microData && Object.keys(microData).some(key => key === methodId || key.startsWith(`${methodId}::`))
             );
           });
-          if (validIds.length > 0) validatedAllocations[methodId] = validIds;
+          // Kept even when empty: the method is allocated in Phase 2 (just not to any mesocycle left),
+          // so it is never taken from leftover periodization values instead
+          validatedAllocations[methodId] = validIds;
         });
         setMethodAllocations(validatedAllocations);
       } catch { /* ignore */ }
@@ -914,6 +919,12 @@ export default function MicrocyclePlanningPage() {
 
     return result;
   }, [methodAllocations, parameterValues, mesocycles]);
+
+  /** A method ("Method" or "Method::Category") is planned in a mesocycle (Phase 2 Step 3) — copies
+   *  only carry those; no allocation data at all = every method counts */
+  const isMethodInMesocycle = (method: string, mesocycleId: string | undefined): boolean =>
+    !mesocycleId || Object.keys(resolvedMethodAllocations).length === 0
+    || (resolvedMethodAllocations[method.split('::')[0]] ?? []).includes(mesocycleId);
 
   // Get exercises allocated to current mesocycle from Step 6, de-duplicated and with proper hierarchy
   const allocatedExercises = useMemo(() => {
@@ -4978,8 +4989,10 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
         });
       }
 
-      // Copy method assignments from source session to new target slot
-      const srcMethods = dayMethodAssignments[`${sourceDayDate}_${sourceSessionIndex}`] ?? [];
+      // Copy method assignments from source session to new target slot — only methods planned in
+      // the target day's mesocycle
+      const srcMethods = (dayMethodAssignments[`${sourceDayDate}_${sourceSessionIndex}`] ?? [])
+        .filter(m => isMethodInMesocycle(m, mesocycleIdOfDay(targetDayDate)));
       const newAssignments = { ...dayMethodAssignments, [`${targetDayDate}_${newSi}`]: [...srcMethods] };
       setDayMethodAssignments(newAssignments);
       localStorage.setItem('dayMethodAssignments', JSON.stringify(newAssignments));
@@ -5045,7 +5058,8 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
 
       // Use the source session's method assignments (already in display-name format)
       // rather than e.methodId fields which may be stored as slugified IDs
-      const srcSlotMethods = dayMethodAssignments[`${sourceDayDate}_${sourceSessionIndex}`] ?? [];
+      const srcSlotMethods = (dayMethodAssignments[`${sourceDayDate}_${sourceSessionIndex}`] ?? [])
+        .filter(m => isMethodInMesocycle(m, mesocycleIdOfDay(targetDayDate)));
       const tSlotKey = `${targetDayDate}_${targetSessionIndex}`;
       const existingTMethods = dayMethodAssignments[tSlotKey] ?? [];
       const mergedMethods = [...new Set([...existingTMethods, ...srcSlotMethods])];
@@ -5360,6 +5374,8 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
       const exIdMap: Record<string, string> = {};
       const newExercises = exerciseDistribution
         .filter(e => srcDates.has(e.dayDate) && dateMap.has(e.dayDate))
+        // An exercise of a method not planned in the target mesocycle stays behind
+        .filter(e => e.isCircuit || !e.methodId || isMethodInMesocycle(e.methodId, tgtMesoId))
         .map(e => {
           const newId = `ex-cw-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
           exIdMap[e.id] = newId;
@@ -5396,8 +5412,9 @@ Exception: if the coach's request already specifies a section (e.g. "put RDL in 
         const srcDay2 = trainingDays.find(d => d.date === srcDay.date);
         const sessCount = srcDay2?.sessions ?? 1;
         for (let s = 0; s < sessCount; s++) {
-          const methods = dayMethodAssignments[`${srcDay.date}_${s}`] ?? [];
-          newAssignments[`${tgtDate}_${s}`] = [...methods];
+          const methods = (dayMethodAssignments[`${srcDay.date}_${s}`] ?? []).filter(m => isMethodInMesocycle(m, tgtMesoId));
+          if (methods.length > 0) newAssignments[`${tgtDate}_${s}`] = methods;
+          else delete newAssignments[`${tgtDate}_${s}`];
         }
       });
 

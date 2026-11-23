@@ -561,8 +561,9 @@ export function MethodSessionArchitecture({
 
           if (filteredMethods.length > 0) {
             assignments[targetKey] = filteredMethods;
-          } else if (si < targetSessionCount) {
-            // Clear target slot if nothing to copy into it
+          } else {
+            // Nothing to copy into it: empty — also a slot beyond the target day's sessions, whose
+            // hidden old methods would otherwise reappear when the copy adds the session
             delete assignments[targetKey];
           }
         }
