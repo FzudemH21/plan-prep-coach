@@ -31,6 +31,8 @@ import { UnfinishedSessionDialog } from '@/components/workout/UnfinishedSessionD
 import { EditLoggedTiming, EditTimingButton } from '@/components/workout/SessionTiming';
 import { findUnfinishedLogId } from '@/utils/unfinishedSession';
 import { useMyAthletes } from '@/hooks/useMyAthletes';
+import { notifyEditTakenOver, useBeginAthleteEdit, useCalendarWriteGate } from '@/components/athletes/AthleteEditGate';
+import { useAthleteEditSession } from '@/lib/athleteLock';
 
 // ── Section helpers ───────────────────────────────────────────────────────────
 
@@ -1026,6 +1028,19 @@ export default function CoachMobileSessionEditPage() {
 
   const [mode, setMode] = useState<Mode>('view');
   const [entry, setEntry] = useState<AthleteScheduleEntry | null>(state?.entry ?? null);
+
+  // Several coaches: editing takes the athlete calendar's edit lock (the desktop calendar's) and holds
+  // it while the edit mode is open; while another coach edits the calendar a dialog says who
+  // (owners can take over). The quick intensity changes take it for the moment of the change.
+  const { begin: beginCalendarEdit, dialog: beginEditDialog } = useBeginAthleteEdit(routeAthleteId);
+  const { allowWrite: allowCalendarWrite, dialog: calendarBusyDialog } = useCalendarWriteGate(routeAthleteId);
+  const { lostTo: calendarLostTo } = useAthleteEditSession(routeAthleteId, 'calendar', mode === 'edit');
+  const startEdit = () => { void beginCalendarEdit('calendar', "this athlete's calendar", () => setMode('edit')); };
+  useEffect(() => {
+    if (!calendarLostTo) return;
+    setMode('view');
+    notifyEditTakenOver(calendarLostTo);
+  }, [calendarLostTo]);
   const sessionIdx = state?.sessionIdx ?? 0;
   const [saving, setSaving] = useState(false);
 
@@ -1553,6 +1568,7 @@ export default function CoachMobileSessionEditPage() {
   }
 
   async function autoSaveDayIntensity(newIntensity: string | null) {
+    if (!(await allowCalendarWrite())) { setDayIntensityOpen(false); return; }
     const updated = { ...entry, intensity: newIntensity };
     setEntry(updated);
     try {
@@ -1563,6 +1579,7 @@ export default function CoachMobileSessionEditPage() {
   }
 
   async function autoSaveSessionIntensity(newIntensity: string | null) {
+    if (!(await allowCalendarWrite())) { setSessionIntensityOpen(false); return; }
     const updatedSessions = entry.sessions.map((s, i) => i !== sessionIdx ? s : { ...s, intensity: newIntensity ?? undefined });
     setEntry(prev => prev ? { ...prev, sessions: updatedSessions } : prev);
     try {
@@ -1688,7 +1705,7 @@ export default function CoachMobileSessionEditPage() {
             <h1 className="font-semibold text-base truncate">{session?.name || t('coachMobile.sessionEdit.sessionLabel')}</h1>
             {entry?.date && <p className="text-xs text-muted-foreground">{sessionDateLabel(entry.date)}</p>}
           </div>
-          <button onClick={() => setMode('edit')}
+          <button onClick={startEdit}
             className="text-sm font-medium text-primary hover:opacity-80 active:opacity-60 transition-opacity w-8 text-right shrink-0">
             {t('coachMobile.sessionEdit.edit')}
           </button>
@@ -1698,7 +1715,7 @@ export default function CoachMobileSessionEditPage() {
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
             <Dumbbell className="h-8 w-8 opacity-30" />
             <p className="text-sm">{t('coachMobile.sessionEdit.noExercises')}</p>
-            <Button size="sm" variant="outline" onClick={() => setMode('edit')}>{t('coachMobile.sessionEdit.editSession')}</Button>
+            <Button size="sm" variant="outline" onClick={startEdit}>{t('coachMobile.sessionEdit.editSession')}</Button>
           </div>
         ) : (
           <>
@@ -1876,7 +1893,7 @@ export default function CoachMobileSessionEditPage() {
                 <Button variant="outline" className="w-full" onClick={() => navigate(-1)}>{t('coachMobile.sessionEdit.close')}</Button>
               ) : (
                 <>
-                  <Button variant="outline" className="flex-1" disabled={!!sessionLock} onClick={() => setMode('edit')}>{t('coachMobile.sessionEdit.editSession')}</Button>
+                  <Button variant="outline" className="flex-1" disabled={!!sessionLock} onClick={startEdit}>{t('coachMobile.sessionEdit.editSession')}</Button>
                   <Button className="flex-1 gap-1.5" disabled={!!sessionLock} onClick={() => navigate(
                     `/coach-mobile/athletes/${connectionId ?? 'unknown'}/session/log`,
                     { state: { entry, sessionIdx, connectionId, returnPath: location.pathname, returnState: state } }
@@ -1912,6 +1929,8 @@ export default function CoachMobileSessionEditPage() {
             athleteConnectionId={connectionId}
           />
         )}
+        {beginEditDialog}
+        {calendarBusyDialog}
       </div>
     );
   }
@@ -2315,6 +2334,7 @@ export default function CoachMobileSessionEditPage() {
           setCircuitEditTarget(null);
         }}
       />
+      {beginEditDialog}
     </div>
   );
 }

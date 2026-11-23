@@ -42,6 +42,9 @@ import type { SubGoal, Event as TrainingEvent } from '@/types/training';
 import { useDataScope } from '@/hooks/useDataScope';
 import { useProgramAccess } from '@/hooks/useProgramAccess';
 import { useOrgCoaches } from '@/hooks/useOrgCoaches';
+import { useCalendarEvents } from '@/hooks/useCalendarEvents';
+import { assignmentTestsEvents, enrichEventsForSync } from '@/utils/assignmentEvents';
+import { useCalendarWriteGate } from '@/components/athletes/AthleteEditGate';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -351,6 +354,10 @@ export default function CoachMobileAssignProgramPage() {
   const [reviewedTests, setReviewedTests] = useState<ReviewedSubGoal[]>([]);
   const [reviewedEvents, setReviewedEvents] = useState<ReviewedEvent[]>([]);
   const [assigning, setAssigning] = useState(false);
+  // The plan's tests / events go into the athlete's tests & events (as on the desktop)
+  const { getEventsForAthlete, addEvents: addCalendarEvents } = useCalendarEvents();
+  // Assigning changes the athlete's calendar: takes its edit lock first (another coach editing it → dialog)
+  const { allowWrite: allowCalendarWrite, dialog: calendarBusyDialog } = useCalendarWriteGate(athleteId);
 
   // Date edit modal
   const [dateModal, setDateModal] = useState<{
@@ -486,6 +493,7 @@ export default function CoachMobileAssignProgramPage() {
       toast({ title: t('coachMobile.assignProgram.toastNoConnectionTitle'), description: t('coachMobile.assignProgram.toastNoConnectionDesc'), variant: 'destructive' });
       return;
     }
+    if (!(await allowCalendarWrite())) return;
 
     setAssigning(true);
     try {
@@ -649,6 +657,16 @@ export default function CoachMobileAssignProgramPage() {
         reviewedEvents: reviewedEvents.length > 0 ? reviewedEvents : undefined,
       });
 
+      // The plan's tests and events into the athlete's tests & events — before, only the desktop
+      // transferred them (utils/assignmentEvents, the same rules)
+      let athleteEvents = getEventsForAthlete(athlete.id);
+      try {
+        const toAdd = assignmentTestsEvents(assignment, athleteEvents, parametersData?.parameters, assignment.id);
+        if (toAdd.length > 0) athleteEvents = [...athleteEvents, ...await addCalendarEvents(athlete.id, toAdd)];
+      } catch (evtError) {
+        console.error('[assign] tests / events not transferred:', evtError);
+      }
+
       if (connection.connectedAt) {
         // Build athlete formula data so calculated params (e.g. Weight = Intensity × e1RM)
         // are pre-computed at assign time, matching the desktop assign flow.
@@ -740,7 +758,7 @@ export default function CoachMobileAssignProgramPage() {
           toolboxData?.entries,
           filteredSupersets,
           undefined,
-          undefined,
+          enrichEventsForSync(athleteEvents, parametersData?.parameters),
           athleteFormulaData,
         );
       }
@@ -1174,6 +1192,7 @@ export default function CoachMobileAssignProgramPage() {
         onRemove={handleDateRemove}
         onClose={closeDateModal}
       />
+      {calendarBusyDialog}
     </div>
   );
 }

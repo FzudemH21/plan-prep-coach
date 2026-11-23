@@ -43,6 +43,7 @@ import { dayIntensityFromSessions } from '@/utils/dayIntensity';
 import { TestDetailsDialog } from '@/components/athlete-app/TestDetailsDialog';
 import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
 import { measureById, parseMeasureRef } from '@/utils/parameterMeasures';
+import { CalendarBusyError, isCalendarBusy, useCalendarWriteGate } from '@/components/athletes/AthleteEditGate';
 
 // ── Monitoring helpers ─────────────────────────────────────────────────────────
 
@@ -459,6 +460,9 @@ type Tab = 'overview' | 'training' | 'progress' | 'settings';
 export default function CoachMobileAthleteProfilePage() {
   const { t } = useTranslation();
   const { athleteId } = useParams<{ athleteId: string }>();
+  // Changes to the calendar take its edit lock first (the desktop calendar's) — while another coach
+  // edits it, a dialog says who and the change is not made
+  const { allowWrite: allowCalendarWrite, dialog: calendarBusyDialog } = useCalendarWriteGate(athleteId);
   const navigate = useNavigate();
   const location = useLocation();
   // Restore the tab the user was on before navigating into a session (returnState from session edit)
@@ -768,6 +772,7 @@ export default function CoachMobileAthleteProfilePage() {
     patch: Partial<{ intensity: string | null; sessions: SessionSummary[] }>,
   ) => {
     if (!connection) return;
+    if (!(await allowCalendarWrite())) throw new CalendarBusyError();
 
     // Always attempt UPDATE first using the stable composite key.
     // Returning 'id' lets us detect whether any row was matched.
@@ -851,7 +856,7 @@ export default function CoachMobileAthleteProfilePage() {
         }].sort((a, b) => a.date.localeCompare(b.date));
       });
     }
-  }, [connection, setSchedule]);
+  }, [connection, setSchedule, allowCalendarWrite]);
 
   const handleSetDayIntensity = useCallback(async (intensity: string | null) => {
     if (!dayActionTarget) return;
@@ -860,8 +865,8 @@ export default function CoachMobileAthleteProfilePage() {
       await upsertDayRow(dayActionTarget, { intensity });
       setDayIntensityPickerOpen(false);
       setDayActionTarget(null);
-    } catch {
-      toast({ title: 'Error', description: 'Could not update intensity.', variant: 'destructive' });
+    } catch (e) {
+      if (!isCalendarBusy(e)) toast({ title: 'Error', description: 'Could not update intensity.', variant: 'destructive' });
     } finally {
       setMutating(false);
     }
@@ -887,8 +892,8 @@ export default function CoachMobileAthleteProfilePage() {
       setNewSessionDialogOpen(false);
       setNewSessionName('');
       setDayActionTarget(null);
-    } catch {
-      toast({ title: 'Error', description: 'Could not create session.', variant: 'destructive' });
+    } catch (e) {
+      if (!isCalendarBusy(e)) toast({ title: 'Error', description: 'Could not create session.', variant: 'destructive' });
     } finally {
       setMutating(false);
     }
@@ -905,8 +910,8 @@ export default function CoachMobileAthleteProfilePage() {
       await upsertDayRow(dayActionTarget, { sessions });
       setSessionLibraryPickerOpen(false);
       setDayActionTarget(null);
-    } catch {
-      toast({ title: 'Error', description: 'Could not add session from library.', variant: 'destructive' });
+    } catch (e) {
+      if (!isCalendarBusy(e)) toast({ title: 'Error', description: 'Could not add session from library.', variant: 'destructive' });
     } finally {
       setMutating(false);
     }
@@ -921,8 +926,8 @@ export default function CoachMobileAthleteProfilePage() {
     setMutating(true);
     try {
       await upsertDayRow(dateStr, { sessions: newSessions });
-    } catch {
-      toast({ title: 'Error', description: 'Could not delete session.', variant: 'destructive' });
+    } catch (e) {
+      if (!isCalendarBusy(e)) toast({ title: 'Error', description: 'Could not delete session.', variant: 'destructive' });
     } finally {
       setMutating(false);
     }
@@ -930,6 +935,7 @@ export default function CoachMobileAthleteProfilePage() {
 
   const handleClearDay = useCallback(async (dateStr: string) => {
     if (!connection) return;
+    if (!(await allowCalendarWrite())) return;
     setSchedule(prev => prev.filter(e => e.date !== dateStr));
     setMutating(true);
     try {
@@ -938,15 +944,16 @@ export default function CoachMobileAthleteProfilePage() {
         .delete()
         .eq('athlete_connection_id', connection.id)
         .eq('date', dateStr);
-    } catch {
-      toast({ title: 'Error', description: 'Could not clear day.', variant: 'destructive' });
+    } catch (e) {
+      if (!isCalendarBusy(e)) toast({ title: 'Error', description: 'Could not clear day.', variant: 'destructive' });
     } finally {
       setMutating(false);
     }
-  }, [connection, toast]);
+  }, [connection, toast, allowCalendarWrite]);
 
   const handleClearWeek = useCallback(async () => {
     if (!connection) return;
+    if (!(await allowCalendarWrite())) return;
     const days = Array.from({ length: 7 }, (_, i) => addDays(weekMonday, i));
     setSchedule(prev => prev.filter(e => !days.includes(e.date)));
     setMutating(true);
@@ -956,12 +963,12 @@ export default function CoachMobileAthleteProfilePage() {
         .delete()
         .eq('athlete_connection_id', connection.id)
         .in('date', days);
-    } catch {
-      toast({ title: 'Error', description: 'Could not clear week.', variant: 'destructive' });
+    } catch (e) {
+      if (!isCalendarBusy(e)) toast({ title: 'Error', description: 'Could not clear week.', variant: 'destructive' });
     } finally {
       setMutating(false);
     }
-  }, [connection, weekMonday, toast]);
+  }, [connection, weekMonday, toast, allowCalendarWrite]);
 
   const onSessionDragEnd = useCallback(async (result: DropResult) => {
     const { source, destination } = result;
@@ -988,10 +995,10 @@ export default function CoachMobileAthleteProfilePage() {
       setMutating(true);
       try {
         await upsertDayRow(sourceDate, { sessions: reordered });
-      } catch {
+      } catch (err) {
         // Rollback
         setSchedule(prev => prev.map(e => e.date === sourceDate ? { ...e, sessions: srcEntry.sessions } : e));
-        toast({ title: 'Error', description: 'Could not reorder session.', variant: 'destructive' });
+        if (!isCalendarBusy(err)) toast({ title: 'Error', description: 'Could not reorder session.', variant: 'destructive' });
       } finally {
         setMutating(false);
       }
@@ -1069,7 +1076,7 @@ export default function CoachMobileAthleteProfilePage() {
         if (e.date === destDate)   return { ...e, sessions: dstEntry?.sessions ?? [], intensity: dstEntry?.intensity ?? null };
         return e;
       }));
-      toast({ title: 'Error', description: 'Could not move session.', variant: 'destructive' });
+      if (!isCalendarBusy(err)) toast({ title: 'Error', description: 'Could not move session.', variant: 'destructive' });
     } finally {
       setMutating(false);
     }
@@ -2237,6 +2244,7 @@ export default function CoachMobileAthleteProfilePage() {
           </div>
         </SheetContent>
       </Sheet>
+      {calendarBusyDialog}
     </div>
   );
 }

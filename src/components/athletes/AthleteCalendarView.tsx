@@ -1,5 +1,4 @@
 import { getNameColumnId, useCustomLibraries } from '@/contexts/CustomLibrariesContext';
-import { measureRef, parseMeasureRef, testMeasureSpec } from '@/utils/parameterMeasures';
 import { parseMeasuredNumber } from '@/utils/latestParameterValue';
 import { useState, useMemo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { addDays, format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isSameMonth, isWithinInterval } from 'date-fns';
@@ -18,7 +17,7 @@ import { useTrainingPrograms, TrainingProgram } from '@/hooks/useTrainingProgram
 import { useAthletes } from '@/hooks/useAthletes';
 import { useToolboxData } from '@/hooks/useToolboxData';
 import { useAthleteCalendarEditing } from '@/hooks/useAthleteCalendarEditing';
-import { useCalendarEvents, CalendarEvent, eventEndDate, groupConsecutiveDates } from '@/hooks/useCalendarEvents';
+import { useCalendarEvents, CalendarEvent, eventEndDate } from '@/hooks/useCalendarEvents';
 import { namespaceProgramForMerge } from '@/utils/assignmentMerge';
 import { anchorOfPackedProgram, buildPackedDateMap, firstSelectedMicrocycleDay, packedDateMapFromRanges, programMicrocycleRanges, remapProgramDates } from '@/utils/assignmentPacking';
 import { flushAssignmentPlan, onAssignmentPlansChanged, persistAssignmentPlan, refreshAssignmentPlans, removeAssignmentPlan, useAssignmentPlansReady } from '@/utils/assignmentPlanStore';
@@ -80,6 +79,7 @@ import type { SessionFeedbackEntry } from '@/hooks/useAthleteAIContext';
 import { UnfinishedSessionDialog } from '@/components/workout/UnfinishedSessionDialog';
 import { useDataScope } from '@/hooks/useDataScope';
 import { useMyAthletes } from '@/hooks/useMyAthletes';
+import { assignmentTestsEvents, enrichEventsForSync } from '@/utils/assignmentEvents';
 
 interface AthleteCalendarViewProps {
   athlete: Athlete;
@@ -332,20 +332,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
   /** Enrich calendar events with the unit from the parameter database so the
    *  athlete app can display "Goal: 10.5 s" rather than just "Goal: 10.5". */
   const enrichEvents = useCallback((events: ReturnType<typeof getEventsForAthlete>) =>
-    events.map(ev => {
-      // A test of a measure / side has a reference "<id>::m:<measure>::s:L" — its parameter is the id
-      const ref = ev.parameterId ? parseMeasureRef(ev.parameterId) : undefined;
-      const param = ref ? parametersData?.parameters.find(p => p.id === ref.parameterId) : undefined;
-      const measure = param && ev.parameterId ? testMeasureSpec(param, ev.parameterId) : undefined;
-      return {
-        ...ev,
-        unit: measure ? measure.unit : param?.unit,
-        // Test details from the parameter database, shown in the athlete app
-        instructions: param?.testInstructions,
-        videoUrl: param?.testVideoUrl,
-        ...(measure ? { measure } : {}),
-      };
-    }),
+    enrichEventsForSync(events, parametersData?.parameters),
   [parametersData]);
 
   // ── Helper: build AthleteFormulaData for formula pre-computation ─────────────────
@@ -941,8 +928,10 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       const meta = readSessionMeta(mesoId, dayDate, sessionIndex, selectedAssignmentId);
       writeSessionMeta(mesoId, dayDate, sessionIndex, { ...meta, comments: comment }, selectedAssignmentId);
     }
+    // In the plan (every coach sees it, also for an athlete without the app) and in the app copy
+    editing.setSessionNote(dayDate, sessionIndex, comment);
     saveNotesToApp(dayDate, sessionIndex, { session: comment });
-  }, [editing.trainingDays, selectedAssignmentId, saveNotesToApp]);
+  }, [editing.trainingDays, editing.setSessionNote, selectedAssignmentId, saveNotesToApp]);
   // Master planner: a section's notes — in the plan and in the app copy
   const handleSectionNotesChange = useCallback((sectionId: string, comment: string) => {
     editing.handleSectionCommentChange(sectionId, comment);
@@ -950,10 +939,13 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     if (section) saveNotesToApp(section.dayDate, section.sessionIndex, { sections: { [sectionId]: comment } });
   }, [editing.handleSectionCommentChange, editing.sessionSections, saveNotesToApp]);
   // A session's notes as the app copy has them (undefined: the app has no copy of the day / session)
+  // — else as the plan has them (athlete without the app; undefined: the plan has none for the day)
   const sessionNoteOf = useCallback((dayDate: string, sessionIndex: number): string | undefined => {
     const session = liveScheduleMap.get(dayDate)?.sessions[sessionIndex];
-    return session ? (session.notes ?? '') : undefined;
-  }, [liveScheduleMap]);
+    if (session) return session.notes ?? '';
+    const planNotes = editing.trainingDays.find(td => td.date === dayDate)?.sessionNotes;
+    return planNotes ? (planNotes[sessionIndex] ?? '') : undefined;
+  }, [liveScheduleMap, editing.trainingDays]);
 
   // Auto-sync to athlete_schedule whenever the editing hook persists a change to localStorage.
   // This ensures manually-added sessions and exercises appear in the athlete app without
@@ -2733,60 +2725,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           const transferTestsEvents = async (): Promise<CalendarEvent[]> => {
             const existingEvents = getEventsForAthlete(athlete.id);
             try {
-              const existingKey = (type: string, title: string, date: string) =>
-                `${type}|${title}|${date}`;
-              const existingSet = new Set(
-                existingEvents.map(e => existingKey(e.type, e.title, e.date))
-              );
-
-              // Collect all events first, then write in a single store update to avoid
-              // stale-closure races where sequential addCalendarEvent calls all read the
-              // same snapshot and only the last one survives.
-              const toAdd: Array<Omit<CalendarEvent, 'id'>> = [];
-
-              (assignment.reviewedSubGoals || []).forEach(sg => {
-                // A goal per measure: the test is of that measure; per side: one test per side
-                // (left / right — both sides, the weaker side and the LSI need both values)
-                const param = sg.parameterLinkedId ? parametersData?.parameters.find(p => p.id === sg.parameterLinkedId) : undefined;
-                const sides: Array<'L' | 'R' | undefined> = !param?.perSide || !sg.side ? [undefined]
-                  : sg.side === 'L' || sg.side === 'R' ? [sg.side] : ['L', 'R'];
-                const split = sides.length > 1;
-                sg.scheduledDates.forEach(d => {
-                  const date = d.substring(0, 10);
-                  sides.forEach(side => {
-                    const title = split ? `${sg.testMethod.replace(/ · (Both sides|Weaker side|LSI)$/, '')} · ${side === 'L' ? 'Left' : 'Right'}` : sg.testMethod;
-                    if (existingSet.has(existingKey('test', title, date))) return;
-                    const target = sg.targetText ?? (sg.goalValue ? String(sg.goalValue) : undefined);
-                    toAdd.push({
-                      type: 'test',
-                      title,
-                      date,
-                      assignmentId: eventsAssignmentId,
-                      parameterId: sg.parameterLinkedId ? measureRef(sg.parameterLinkedId, sg.measureId, side) : undefined,
-                      // The LSI goal is not a target per side: it is the coach's calculation (coach-only
-                      // note); the athlete gets the goal's targets per side, if the coach set any
-                      targetValue: sg.side === 'lsi' ? (side ? sg.sideTargets?.[side] : undefined) : target,
-                      notes: sg.comments || undefined,
-                      ...(sg.side === 'lsi' && target ? { coachNote: `LSI goal ${target}` } : {}),
-                    });
-                  });
-                });
-              });
-              // Consecutive days of an event become one event over several days
-              (assignment.reviewedEvents || []).forEach(evt => {
-                groupConsecutiveDates(evt.scheduledDates).forEach(([date, last]) => {
-                  if (existingSet.has(existingKey('event', evt.name, date))) return;
-                  toAdd.push({
-                    type: 'event',
-                    title: evt.name,
-                    date,
-                    ...(last !== date ? { endDate: last } : {}),
-                    assignmentId: eventsAssignmentId,
-                    notes: evt.comments || undefined,
-                  });
-                });
-              });
-
+              // The plan's tests and events the athlete doesn't have yet (utils/assignmentEvents —
+              // the coach mobile app assigns them the same way)
+              const toAdd = assignmentTestsEvents(assignment, existingEvents, parametersData?.parameters, eventsAssignmentId);
               const added = toAdd.length > 0 ? await addCalendarEvents(athlete.id, toAdd) : [];
               return [...existingEvents, ...added];
             } catch (evtError) {
@@ -3619,7 +3560,14 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           sessionSections={editing.sessionSections}
           supersets={editing.supersets}
           onSectionsChange={(sections) => editing.setSessionSections(sections)}
-          onNotesSaved={(notes) => saveNotesToApp(selectedSessionInfo.dayDate, selectedSessionInfo.sessionIndex, notes)}
+          onNotesSaved={(notes) => {
+            editing.setSessionNote(selectedSessionInfo.dayDate, selectedSessionInfo.sessionIndex, notes.session);
+            saveNotesToApp(selectedSessionInfo.dayDate, selectedSessionInfo.sessionIndex, notes);
+          }}
+          planSessionNote={(() => {
+            const planNotes = editing.trainingDays.find(td => td.date === selectedSessionInfo.dayDate)?.sessionNotes;
+            return planNotes ? (planNotes[selectedSessionInfo.sessionIndex] ?? '') : undefined;
+          })()}
           onSupersetsChange={(s) => editing.setSupersets(s)}
           toolboxData={toolboxData}
           allExerciseDistribution={editing.exerciseDistribution.map(ex => ({

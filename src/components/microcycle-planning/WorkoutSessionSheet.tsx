@@ -114,6 +114,8 @@ interface WorkoutSessionSheetProps {
   onSectionsChange?: (sections: SessionSectionProp[]) => void;
   /** Saved: the session's notes and each section's notes (athlete calendar: into the app copy) */
   onNotesSaved?: (notes: { session: string; sections: Record<string, string> }) => void;
+  /** The session's notes as saved in the plan (athlete calendar) — undefined: the plan has none for the day */
+  planSessionNote?: string;
   onSupersetsChange?: (supersets: SupersetMappingProp) => void;
   // Toolbox data for parameter visibility
   toolboxData?: ToolboxDatabase;
@@ -360,6 +362,7 @@ export function WorkoutSessionSheet({
   supersets: supersetsProp,
   onSectionsChange,
   onNotesSaved,
+  planSessionNote,
   onSupersetsChange,
   toolboxData,
   allExerciseDistribution,
@@ -1552,6 +1555,9 @@ export function WorkoutSessionSheet({
       const liveSession = useExternalIntensityOnly ? liveScheduleEntry?.sessions[sessionIndex] : undefined;
       if (liveSession) {
         setSessionComments(liveSession.notes ?? '');
+      } else if (planSessionNote !== undefined) {
+        // Not in the athlete app (e.g. an athlete without the app): the notes saved in the plan
+        setSessionComments(planSessionNote);
       } else {
         // Not in the athlete app (yet): the notes saved in this browser
         const stored = readScoped('workoutSessions_');

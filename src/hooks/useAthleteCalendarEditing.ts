@@ -20,6 +20,7 @@ interface CopiedSession {
   sourceDate: string;
   sessionIndex: number;
   sessionName?: string;
+  sessionNote?: string;
   sourceSessionIntensity?: IntensityLevel;
   // Metadata for creating complete days when pasting outside range
   sourceMesocycleId?: string;
@@ -559,11 +560,14 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
           const sessions = (day.sessions || 0) + 1;
           const sessionNames = [...(day.sessionNames || [])];
           sessionNames.push(`Session ${sessions}`);
+          // The new session starts without notes (none left over at its position)
+          const sessionNotes = day.sessionNotes ? [...day.sessionNotes] : undefined;
+          if (sessionNotes && sessionNotes.length >= sessions) sessionNotes[sessions - 1] = '';
           // If the day was 'off', promote it to 'moderate' so the session
           // is visible in the calendar (display logic hides 'off' days with
           // no exercises).
           const intensity = day.intensity === 'off' ? 'moderate' as IntensityLevel : day.intensity;
-          return { ...day, sessions, sessionNames, intensity, isTrainingDay: true };
+          return { ...day, sessions, sessionNames, ...(sessionNotes ? { sessionNotes } : {}), intensity, isTrainingDay: true };
         });
       }
       // Date is outside the original plan range (not in trainingDays).
@@ -610,7 +614,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       newDaySplitStates = { ...daySplitStates, [dayDate]: 0 };
       newTrainingDays = trainingDays.map(day =>
         day.date === dayDate
-          ? { ...day, sessions: 0, sessionNames: [], intensity: 'off' as IntensityLevel }
+          ? { ...day, sessions: 0, sessionNames: [], sessionNotes: undefined, intensity: 'off' as IntensityLevel }
           : day
       );
       newDailyIntensityData = dailyIntensityData.map(di =>
@@ -643,7 +647,9 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         if (day.date !== dayDate) return day;
         const sessionNames = [...(day.sessionNames ?? [])];
         sessionNames.splice(sessionIndex, 1);
-        return { ...day, sessions: currentSessions - 1, sessionNames };
+        const sessionNotes = day.sessionNotes ? [...day.sessionNotes] : undefined;
+        sessionNotes?.splice(sessionIndex, 1);
+        return { ...day, sessions: currentSessions - 1, sessionNames, ...(sessionNotes ? { sessionNotes } : {}) };
       });
       newDailyIntensityData = dailyIntensityData;
       // Shift session intensities: remove deleted, decrement indices above it
@@ -871,6 +877,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     // Update session names in trainingDays
     const sourceDay = trainingDays.find(d => d.date === sourceDayDate);
     const movedSessionName = sourceDay?.sessionNames?.[sourceSessionIndex] || `Session ${sourceSessionIndex + 1}`;
+    const movedSessionNote = sourceDay?.sessionNotes?.[sourceSessionIndex] || '';
     
     setTrainingDays(prev => {
       const updated = [...prev];
@@ -883,9 +890,12 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         // From the real session count (daySplitStates) — the day's own count could carry the
         // program's default "1" without a session, which left an empty session behind
         const srcRemaining = Math.max(0, (daySplitStates[sourceDayDate] || 0) - 1);
+        const srcNotes = updated[sourceIdx].sessionNotes ? [...(updated[sourceIdx].sessionNotes ?? [])] : undefined;
+        srcNotes?.splice(sourceSessionIndex, 1);
         updated[sourceIdx] = {
           ...updated[sourceIdx],
           sessionNames: newNames.slice(0, srcRemaining),
+          ...(srcNotes ? { sessionNotes: srcNotes.slice(0, srcRemaining) } : {}),
           sessions: srcRemaining,
           isTrainingDay: srcRemaining > 0,
           ...(newSrcDayIntensity ? { intensity: newSrcDayIntensity } : {}),
@@ -898,9 +908,13 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
         const destCount = (daySplitStates[destDayDate] || 0) + 1;
         const newNames = [...(updated[destIdx].sessionNames || [])].slice(0, destCount - 1);
         newNames.push(movedSessionName);
+        const destNotes = [...(updated[destIdx].sessionNotes || [])].slice(0, destCount - 1);
+        while (destNotes.length < destCount - 1) destNotes.push('');
+        destNotes.push(movedSessionNote);
         updated[destIdx] = {
           ...updated[destIdx],
           sessionNames: newNames,
+          sessionNotes: destNotes.some(n => n) ? destNotes : undefined,
           sessions: destCount,
           isTrainingDay: true,
           ...(newDstDayIntensity ? { intensity: newDstDayIntensity } : {}),
@@ -921,6 +935,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
           intensity: newDstDayIntensity ?? sourceDay?.intensity ?? '5',
           sessions: 1,
           sessionNames: [movedSessionName],
+          ...(movedSessionNote ? { sessionNotes: [movedSessionNote] } : {}),
         });
       }
       
@@ -955,6 +970,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
       sourceDate: dayDate,
       sessionIndex,
       sessionName: sourceDay?.sessionNames?.[sessionIndex] || `Session ${sessionIndex + 1}`,
+      sessionNote: sourceDay?.sessionNotes?.[sessionIndex] || undefined,
       sourceSessionIntensity: sessionIntensities[`${dayDate}-${sessionIndex}`],
       sourceMesocycleId: sourceDay?.mesocycleId,
       sourceMicrocycleId: sourceDay?.microcycleId,
@@ -1056,10 +1072,14 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
           sessionNames.push(`Session ${sessionNames.length + 1}`);
         }
         sessionNames[newSessionIndex] = copiedSession.sessionName || `Session ${newSessionIndex + 1}`;
+        const sessionNotes = [...(existingDay.sessionNotes || [])];
+        while (sessionNotes.length <= newSessionIndex) sessionNotes.push('');
+        sessionNotes[newSessionIndex] = copiedSession.sessionNote || '';
         updated[existingIdx] = {
           ...existingDay,
           sessions: newSplitState,
           sessionNames,
+          sessionNotes: sessionNotes.some(n => n) ? sessionNotes : undefined,
           isTrainingDay: true,
           intensity, // Apply copied intensity
         };
@@ -1079,6 +1099,9 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
           intensity,
           sessions: newSplitState,
           sessionNames,
+          ...(copiedSession.sessionNote ? {
+            sessionNotes: Array.from({ length: newSplitState }, (_, i) => (i === newSessionIndex ? copiedSession.sessionNote ?? '' : '')),
+          } : {}),
         } as TrainingDay);
       }
       
@@ -1214,7 +1237,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     // both treat the day as a rest day — prevents ghost sessions from re-appearing.
     const newTrainingDays = trainingDays.map(day =>
       day.date === dayDate
-        ? { ...day, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false, intensity: 'off' as IntensityLevel, isTrainingDay: false }
+        ? { ...day, sessions: 0, sessionNames: [], sessionNotes: undefined, testNames: [], eventNames: [], isTestDay: false, isEventDay: false, intensity: 'off' as IntensityLevel, isTrainingDay: false }
         : day
     );
     // Clear daily intensity entry for the day so it renders as rest.
@@ -1282,7 +1305,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     // so syncAthleteSchedule and calendarDays treat them as rest days.
     const newTrainingDays = trainingDays.map(day =>
       dateSet.has(day.date)
-        ? { ...day, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false, intensity: 'off' as IntensityLevel, isTrainingDay: false }
+        ? { ...day, sessions: 0, sessionNames: [], sessionNotes: undefined, testNames: [], eventNames: [], isTestDay: false, isEventDay: false, intensity: 'off' as IntensityLevel, isTrainingDay: false }
         : day
     );
     // Clear daily intensity entries for cleared dates.
@@ -1512,7 +1535,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     // Set intensity to 'off' and isTrainingDay to false for all cleared dates.
     const newTrainingDays = trainingDays.map(day =>
       weekDateSet.has(day.date)
-        ? { ...day, sessions: 0, sessionNames: [], testNames: [], eventNames: [], isTestDay: false, isEventDay: false, intensity: 'off' as IntensityLevel, isTrainingDay: false }
+        ? { ...day, sessions: 0, sessionNames: [], sessionNotes: undefined, testNames: [], eventNames: [], isTestDay: false, isEventDay: false, intensity: 'off' as IntensityLevel, isTrainingDay: false }
         : day
     );
     // Clear daily intensity for cleared dates.
@@ -2126,6 +2149,21 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     );
   }, []);
 
+  /** A session's notes, saved with the plan (trainingDays[].sessionNotes — every coach sees them) */
+  const setSessionNote = useCallback((dayDate: string, sessionIndex: number, note: string) => {
+    setTrainingDays(prev => prev.map(day => {
+      if (day.date !== dayDate) return day;
+      const current = day.sessionNotes?.[sessionIndex] ?? '';
+      if (current === note.trim()) return day;
+      const sessionNotes = [...(day.sessionNotes || [])];
+      while (sessionNotes.length <= sessionIndex) sessionNotes.push('');
+      sessionNotes[sessionIndex] = note.trim();
+      // Kept even when empty: a cleared note stays cleared (the plan's notes count, not an older
+      // copy in some browser)
+      return { ...day, sessionNotes };
+    }));
+  }, []);
+
   const handleSessionCommentChange = useCallback((dayDate: string, sessionIndex: number, comment: string) => {
     // Store in localStorage for this assignment
     if (selectedAssignmentId) {
@@ -2459,6 +2497,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     handleExerciseNotesChange,
     handleExerciseEachSideChange,
     handleExerciseVisibilityChange,
+    setSessionNote,
     handleSupersetRestChange,
     syncExerciseNames,
     handleExerciseChange,

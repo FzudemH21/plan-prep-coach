@@ -44,6 +44,8 @@ interface TrainingDay {
   intensity: string;
   sessions: number;
   sessionNames?: string[];
+  /** Each session's notes as saved in the plan (athlete calendar) */
+  sessionNotes?: string[];
   isTrainingDay: boolean;
   mesocycleId?: string;
   microcycleId?: string;
@@ -950,8 +952,10 @@ export async function syncAthleteSchedule(
         // Session notes (comments) from localStorage — the key the session window saves to: in the
         // athlete calendar it carries the plan's id (before, only the key without it was read, so
         // notes saved in the calendar never reached the app); older notes without it as fallback
-        let sessionNotes: string | undefined;
-        try {
+        // The plan's notes when it has them for the day (saved there since 2026-11-23, also cleared
+        // ones), else this browser's from before
+        let sessionNotes: string | undefined = td.sessionNotes ? (td.sessionNotes[i]?.trim() || undefined) : undefined;
+        if (!td.sessionNotes) try {
           const mesoId = mesoByDate.get(td.date)?.mesocycleId;
           if (mesoId) {
             const stored = localStorage.getItem(sessionMetaKey(mesoId, td.date, i, assignment.id))

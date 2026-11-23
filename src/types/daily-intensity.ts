@@ -24,4 +24,7 @@ export interface TrainingDay {
   intensity: IntensityLevel; // Daily intensity level
   sessions?: number; // Number of sessions in the day
   sessionNames?: string[]; // Names of each session
+  /** Each session's notes (athlete calendar) — saved with the plan, so every coach sees them, also
+   *  for athletes without the app; moved / removed with the sessions like sessionNames */
+  sessionNotes?: string[];
 }
