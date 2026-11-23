@@ -877,6 +877,33 @@ const updateCellData = (
     };
   };
 
+  /** An exercise dragged from one cell to another (e.g. put into the wrong exercise category by
+   *  mistake): taken out of its cell and added to the target — once, if it's there already */
+  const moveExercise = (fromCellId: string, exerciseEntryId: string, to: { methodId: string; categoryName: string | undefined; columnId: string }) => {
+    const toCellId = getCellId(to.methodId, to.categoryName, to.columnId);
+    if (toCellId === fromCellId) return;
+    const emptyTarget = getCellData(to.methodId, to.categoryName, to.columnId);
+    const moved = planningState.cellData[fromCellId]?.exercises.find(ex => ex.id === exerciseEntryId);
+    setPlanningState(prev => {
+      const source = prev.cellData[fromCellId];
+      const exercise = source?.exercises.find(ex => ex.id === exerciseEntryId);
+      if (!source || !exercise) return prev;
+      const target = prev.cellData[toCellId] ?? emptyTarget;
+      const alreadyThere = target.exercises.some(ex => ex.exerciseId === exercise.exerciseId && !!ex.isCircuit === !!exercise.isCircuit);
+      return {
+        ...prev,
+        cellData: {
+          ...prev.cellData,
+          [fromCellId]: { ...source, exercises: source.exercises.filter(ex => ex.id !== exerciseEntryId) },
+          [toCellId]: { ...target, exercises: alreadyThere ? target.exercises : [...target.exercises, exercise] },
+        },
+      };
+    });
+    if (moved) {
+      toast({ title: `Moved ${moved.exerciseName}`, description: `to ${to.categoryName ?? to.methodId}` });
+    }
+  };
+
   // Check if there are previous columns (show copy button for all columns except first)
   /** Whether the method is assigned to a mesocycle (Step 3) — no allocations at all = every one */
   const isAllocated = (methodId: string, mesocycleId: string): boolean =>
@@ -1681,6 +1708,8 @@ const updateCellData = (
                                      undefined
                                    )}
                                    disabled={Object.keys(methodAllocations).length > 0 && !(methodAllocations[method.id] ?? []).includes(column.mesocycleId)}
+                                   cellId={getCellId(method.id, undefined, column.id)}
+                                   onDropExercise={(fromCellId, entryId) => moveExercise(fromCellId, entryId, { methodId: method.id, categoryName: undefined, columnId: column.id })}
                                  />
                               </TableCell>
                             );
@@ -1765,6 +1794,8 @@ const updateCellData = (
                                         categoryName
                                       )}
                                       disabled={Object.keys(methodAllocations).length > 0 && !(methodAllocations[method.id] ?? []).includes(column.mesocycleId)}
+                                      cellId={getCellId(method.id, categoryName, column.id)}
+                                      onDropExercise={(fromCellId, entryId) => moveExercise(fromCellId, entryId, { methodId: method.id, categoryName, columnId: column.id })}
                                     />
                                   </TableCell>
                                 );

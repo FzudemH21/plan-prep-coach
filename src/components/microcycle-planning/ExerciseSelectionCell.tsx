@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { GripVertical } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,7 +18,14 @@ interface ExerciseSelectionCellProps {
   parameterInfo?: string;
   /** When true the method is not assigned to this mesocycle — cell is locked */
   disabled?: boolean;
+  /** This cell's id — its exercises can be dragged to another cell (e.g. another exercise category) */
+  cellId?: string;
+  /** An exercise of another cell was dropped here: move it into this cell */
+  onDropExercise?: (fromCellId: string, exerciseEntryId: string) => void;
 }
+
+/** Drag data of an exercise dragged between Exercise Selection cells */
+const DRAG_TYPE = 'application/x-ppc-selection-exercise';
 
 export function ExerciseSelectionCell({
   cellData,
@@ -26,8 +34,14 @@ export function ExerciseSelectionCell({
   hasPreviousExercises = false,
   parameterInfo,
   disabled = false,
+  cellId,
+  onDropExercise,
 }: ExerciseSelectionCellProps) {
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+  // An exercise from another cell is dragged over this one
+  const [dropActive, setDropActive] = useState(false);
+  const canDrag = !!cellId && !!onDropExercise;
+  const isOurDrag = (e: React.DragEvent) => canDrag && Array.from(e.dataTransfer.types).includes(DRAG_TYPE);
   const [openExercise, setOpenExercise] = useState<ExerciseSelection | null>(null);
   const { libraries } = useCustomLibraries();
 
@@ -64,7 +78,27 @@ export function ExerciseSelectionCell({
   }
 
   return (
-    <div className="space-y-3 min-h-[60px] flex flex-col relative">
+    <div
+      className={`space-y-3 min-h-[60px] flex flex-col relative rounded transition-colors ${dropActive ? 'bg-primary/10 ring-2 ring-primary/40' : ''}`}
+      onDragOver={(e) => {
+        if (!isOurDrag(e)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (!dropActive) setDropActive(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropActive(false);
+      }}
+      onDrop={(e) => {
+        if (!isOurDrag(e)) return;
+        e.preventDefault();
+        setDropActive(false);
+        try {
+          const { fromCellId, exerciseEntryId } = JSON.parse(e.dataTransfer.getData(DRAG_TYPE)) as { fromCellId: string; exerciseEntryId: string };
+          if (fromCellId && exerciseEntryId && fromCellId !== cellId) onDropExercise?.(fromCellId, exerciseEntryId);
+        } catch { /* not ours */ }
+      }}
+    >
       {/* Info icon - top right (only show if parameterInfo exists and is not empty) */}
       {parameterInfo && parameterInfo.trim() !== '' && (
         <TooltipProvider>
@@ -111,7 +145,18 @@ export function ExerciseSelectionCell({
       {/* Selected exercises */}
       <div className="space-y-1 flex-1">
         {cellData.exercises.map((exercise) => (
-          <div key={exercise.id} className="flex items-center justify-between bg-muted/50 rounded px-2 py-1">
+          <div
+            key={exercise.id}
+            className={`group flex items-center justify-between bg-muted/50 rounded px-2 py-1 ${canDrag ? 'cursor-grab active:cursor-grabbing' : ''}`}
+            draggable={canDrag}
+            onDragStart={(e) => {
+              if (!canDrag) return;
+              e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ fromCellId: cellId, exerciseEntryId: exercise.id }));
+              e.dataTransfer.effectAllowed = 'move';
+            }}
+            title={canDrag ? 'Drag to another row to move it' : undefined}
+          >
+            {canDrag && <GripVertical className="h-3 w-3 shrink-0 -ml-1 mr-0.5 text-muted-foreground/40 group-hover:text-muted-foreground" />}
             {exercise.isCircuit ? (
               <span className="text-xs font-medium truncate flex-1">
                 {exercise.exerciseName}

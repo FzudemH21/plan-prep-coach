@@ -415,8 +415,9 @@ export function ExerciseLibraryPopup({
   };
 
   /** Saved: added to the open library and ticked, so "Add Exercises" puts it into the cell */
-  const handleNewExerciseSaved = (data: { name: string; data: Record<string, unknown>; videoUrl?: string; description?: string }) => {
-    const lib = libraries.find(l => l.id === activeTab);
+  const handleNewExerciseSaved = (data: { name: string; data: Record<string, unknown>; videoUrl?: string; description?: string; libraryId?: string }) => {
+    // The library chosen under "Assigned library" (the open one by default) — shown, with it ticked
+    const lib = libraries.find(l => l.id === (data.libraryId ?? activeTab));
     if (!lib) return;
     const firstColumnId = lib.columns[0]?.id;
     const created = addExerciseToLibrary(lib.id, {
@@ -425,6 +426,7 @@ export function ExerciseLibraryPopup({
       description: data.description || undefined,
     });
     setSelectedItems(prev => (singleSelect ? new Set([created.id]) : new Set(prev).add(created.id)));
+    if (lib.id !== activeTab) setActiveTab(lib.id);
     // Shown in the list (the search finds it), ticked
     setFilterState(prev => ({ ...prev, search: data.name }));
     setIsNewExerciseDialogOpen(false);

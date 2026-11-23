@@ -69,6 +69,7 @@ interface ExerciseDetailState {
 
 export function DynamicLibraryTable({ library, readOnly = false }: DynamicLibraryTableProps) {
   const {
+    libraries,
     addExerciseToLibrary,
     updateExerciseInLibrary,
     deleteExerciseFromLibrary,
@@ -888,14 +889,20 @@ export function DynamicLibraryTable({ library, readOnly = false }: DynamicLibrar
         mode="create"
         columns={safeLibrary.columns}
         onSave={(data) => {
-          const firstColumnId = safeLibrary.columns[0]?.id;
-          addExerciseToLibrary(library.id, {
+          // The library chosen under "Assigned library" (this one by default)
+          const target = (data.libraryId && libraries.find(l => l.id === data.libraryId)) || null;
+          const targetId = target?.id ?? library.id;
+          const firstColumnId = (target ?? safeLibrary).columns[0]?.id;
+          addExerciseToLibrary(targetId, {
             data: { ...data.data, ...(firstColumnId ? { [firstColumnId]: data.name } : {}) },
             videoUrl: data.videoUrl || undefined,
             description: data.description || undefined,
           });
           setIsCreatingNewExercise(false);
-          toast({ title: "Success", description: "Exercise added successfully" });
+          toast({
+            title: "Success",
+            description: target && target.id !== library.id ? `Exercise added to ${target.name}` : "Exercise added successfully",
+          });
         }}
       />
 
