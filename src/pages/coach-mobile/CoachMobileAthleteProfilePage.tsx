@@ -2076,7 +2076,7 @@ export default function CoachMobileAthleteProfilePage() {
           events={eventDialogDate ? getEventsForAthlete(athleteId).filter(e => eventCoversDate(e, eventDialogDate)) : []}
           onAdd={(type, title, notes, parameterId, targetValue, endDate) => {
             if (eventDialogDate) {
-              handleAddEvent({ date: eventDialogDate, type, title, notes, parameterId, targetValue, ...(endDate ? { endDate } : {}) });
+              return handleAddEvent({ date: eventDialogDate, type, title, notes, parameterId, targetValue, ...(endDate ? { endDate } : {}) });
             }
           }}
           onDelete={handleDeleteEvent}

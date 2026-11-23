@@ -43,8 +43,10 @@ interface CalendarEventDialogProps {
   onOpenChange: (open: boolean) => void;
   date: string; // ISO date
   events: CalendarEvent[]; // events already on this day
-  /** endDate: last day of an event over several days (inclusive), only for events */
-  onAdd: (type: 'test' | 'event', title: string, notes?: string, parameterId?: string, targetValue?: string, endDate?: string) => void;
+  /** endDate: last day of an event over several days (inclusive), only for events. Return the save's
+   *  promise: tests for both sides are added one after the other (each also goes into the athlete
+   *  app's schedule — two at once overwrote each other there) */
+  onAdd: (type: 'test' | 'event', title: string, notes?: string, parameterId?: string, targetValue?: string, endDate?: string) => void | Promise<unknown>;
   onDelete: (eventId: string) => void;
   athletePerformanceParameters?: AthletePerformanceParameter[];
   /** The athlete (for values they reported themselves in the athlete app) */
@@ -85,6 +87,7 @@ export function CalendarEventDialog({
   const [targetValue, setTargetValue] = useState('');
   const [baselineValue, setBaselineValue] = useState(''); // display only, never saved
   const [createParamDialogOpen, setCreateParamDialogOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   const parameters = parametersData?.parameters || [];
   // Body metrics are parameters marked "Biometric"; the old separate list is empty once moved
@@ -163,7 +166,10 @@ export function CalendarEventDialog({
     setType('test');
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
+    if (adding) return;
+    setAdding(true);
+    try {
     if (type === 'test') {
       if (!selectedParameterId) return;
       const baseTitle = selectedParameter?.name ?? '';
@@ -173,15 +179,19 @@ export function CalendarEventDialog({
       } else {
         // Like an assigned plan: the test is of this measure; per side one test per side
         const measureName = measureChoices.length > 0 ? activeMeasure?.name : undefined;
-        testSides.forEach(side => {
+        for (const side of testSides) {
           const title = [baseTitle, measureName, side === 'L' ? 'Left' : side === 'R' ? 'Right' : undefined].filter(Boolean).join(' · ');
-          onAdd(type, title, notes.trim() || undefined, measureRef(selectedParam.id, measureId, side), targetValue.trim() || undefined);
-        });
+          // One after the other — see onAdd
+          await onAdd(type, title, notes.trim() || undefined, measureRef(selectedParam.id, measureId, side), targetValue.trim() || undefined);
+        }
       }
     } else {
       if (!eventTitle.trim()) return;
       const endDate = lastDay > date ? lastDay : undefined;
-      onAdd(type, eventTitle.trim(), notes.trim() || undefined, undefined, undefined, endDate);
+      await onAdd(type, eventTitle.trim(), notes.trim() || undefined, undefined, undefined, endDate);
+    }
+    } finally {
+      setAdding(false);
     }
     setLastDay('');
     setEventTitle('');
@@ -253,7 +263,7 @@ export function CalendarEventDialog({
   };
 
   const endDateError = lastDay !== '' && lastDay < date;
-  const isAddDisabled = type === 'test' ? !selectedParameterId : (!eventTitle.trim() || endDateError);
+  const isAddDisabled = adding || (type === 'test' ? !selectedParameterId : (!eventTitle.trim() || endDateError));
   /** "1 Aug – 14 Aug 2026" for an event over several days */
   const rangeLabel = (ev: CalendarEvent) =>
     `${format(parseDateStr(ev.date), 'd MMM')} – ${format(parseDateStr(eventEndDate(ev)), 'd MMM yyyy')}`;
@@ -264,12 +274,12 @@ export function CalendarEventDialog({
         <DialogPortal>
           <DialogOverlay className="z-[150] bg-black/30" />
           <DialogContent
-            className="sm:max-w-[460px] z-[160]"
+            className="w-[calc(100vw-1.5rem)] sm:max-w-[460px] max-h-[88dvh] overflow-y-auto overflow-x-hidden grid-cols-[minmax(0,1fr)] gap-3 p-4 sm:p-6 z-[160]"
             onClick={e => e.stopPropagation()}
           >
-            <DialogHeader>
-              <DialogTitle>
-                Tests & Events — {format(parseDateStr(date), 'PPP')}
+            <DialogHeader className="pr-6 text-left">
+              <DialogTitle className="text-base sm:text-lg">
+                Tests & events — {format(parseDateStr(date), 'EEE, d MMM yyyy')}
               </DialogTitle>
             </DialogHeader>
 

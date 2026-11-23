@@ -91,7 +91,7 @@ interface AthleteCalendarDayCellProps {
   athleteBiometrics?: import('@/types/athlete').AthleteBiometric[];
   // Parent-owned event callbacks — use these so mutations go through the
   // authoritative hook instance, not the DayCell's own stale store.
-  onAddCalendarEvent?: (athleteId: string, event: Omit<import('@/hooks/useCalendarEvents').CalendarEvent, 'id'>) => void;
+  onAddCalendarEvent?: (athleteId: string, event: Omit<import('@/hooks/useCalendarEvents').CalendarEvent, 'id'>) => void | Promise<unknown>;
   onDeleteCalendarEvent?: (athleteId: string, eventId: string) => void;
   // Completed session logs — keyed by "${date}-${sessionIndex}" = session_id
   sessionLogs?: Map<string, CoachSessionLog>;
@@ -750,8 +750,7 @@ export function AthleteCalendarDayCell({
         onAdd={(type, title, notes, parameterId, targetValue, endDate) => {
           if (athleteId) {
             const payload = { date: day.dateString, type, title, notes, parameterId, targetValue, ...(endDate ? { endDate } : {}) };
-            if (onAddCalendarEvent) onAddCalendarEvent(athleteId, payload);
-            else addEvent(athleteId, payload);
+            return onAddCalendarEvent ? onAddCalendarEvent(athleteId, payload) : addEvent(athleteId, payload);
           }
         }}
         onDelete={(eventId) => {
