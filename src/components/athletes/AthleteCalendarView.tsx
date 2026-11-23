@@ -1670,10 +1670,23 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
 
     // Hoist per-assignment lookups that are constant across all days
     const selectedAssignment = assignments.find(a => a.id === selectedAssignmentId);
+    // A session added on a day outside every plan is stored in the plan the coach had open, but
+    // that plan's dates stay as they are — such days count as the plan's too (otherwise only a
+    // coach with that same plan open saw them, e.g. not another coach of the athlete)
+    const sessionDatesOf = (cachedData: any): Set<string> => {
+      const dates = new Set<string>();
+      for (const ex of (cachedData?.exerciseDistribution ?? [])) if (ex?.dayDate) dates.add(ex.dayDate);
+      for (const [d, n] of Object.entries(cachedData?.daySplitStates ?? {})) if ((n as number) > 0) dates.add(d);
+      for (const td of (cachedData?.trainingDays ?? [])) if (td?.date && (td.sessions ?? 0) > 0) dates.add(td.date);
+      // A day cleared in the plan (0 sessions) has none
+      for (const [d, n] of Object.entries(cachedData?.daySplitStates ?? {})) if (n === 0 && !(cachedData?.exerciseDistribution ?? []).some((ex: any) => ex?.dayDate === d)) dates.delete(d);
+      return dates;
+    };
     const assignmentBounds = assignments.map(a => ({
       assignment: a,
       start: parseDateStr(a.startDate),
       end: parseDateStr(a.endDate),
+      sessionDates: sessionDatesOf(assignmentDataCache[a.id]),
     }));
 
     return calendarDateRange.map(date => {
@@ -1749,9 +1762,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
       // Skip selectedAssignmentId here only if live editing already handled it —
       // otherwise (usedLiveEditingState=false) it still needs to run through this path.
       {
-        const dayAssignments = assignmentBounds.filter(({ assignment, start, end }) => {
+        const dayAssignments = assignmentBounds.filter(({ assignment, start, end, sessionDates }) => {
           if (assignment.id === selectedAssignmentId && usedLiveEditingState) return false;
-          return isWithinInterval(date, { start, end });
+          return isWithinInterval(date, { start, end }) || sessionDates.has(dateString);
         });
 
         dayAssignments.forEach(({ assignment }) => {
