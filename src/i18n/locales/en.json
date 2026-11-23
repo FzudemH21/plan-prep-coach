@@ -501,6 +501,7 @@
       "resultSaved": "Result saved!",
       "resultValue": "Result value",
       "testDate": "Date of the test",
+      "manageTests": "Manage tests & events",
       "testsToday_one": "1 test today",
       "testsToday_other": "{{count}} tests today",
       "testsOnDay_one": "1 test on this day",

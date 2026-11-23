@@ -501,6 +501,7 @@
       "resultSaved": "Ergebnis gespeichert!",
       "resultValue": "Ergebniswert",
       "testDate": "Datum des Tests",
+      "manageTests": "Tests & Events verwalten",
       "testsToday_one": "1 Test heute",
       "testsToday_other": "{{count}} Tests heute",
       "testsOnDay_one": "1 Test an diesem Tag",

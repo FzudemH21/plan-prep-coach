@@ -85,6 +85,9 @@ export function CalendarEventDialog({
   const [sideChoice, setSideChoice] = useState<'L' | 'R' | 'both'>('both');
   const [parameterComboOpen, setParameterComboOpen] = useState(false);
   const [targetValue, setTargetValue] = useState('');
+  // "Left & right": a target per side (sides often differ, e.g. after an injury)
+  const [targetLeft, setTargetLeft] = useState('');
+  const [targetRight, setTargetRight] = useState('');
   const [baselineValue, setBaselineValue] = useState(''); // display only, never saved
   const [createParamDialogOpen, setCreateParamDialogOpen] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -162,6 +165,8 @@ export function CalendarEventDialog({
     setMeasureId(undefined);
     setSideChoice('both');
     setTargetValue('');
+    setTargetLeft('');
+    setTargetRight('');
     setBaselineValue('');
     setType('test');
   };
@@ -182,7 +187,8 @@ export function CalendarEventDialog({
         for (const side of testSides) {
           const title = [baseTitle, measureName, side === 'L' ? 'Left' : side === 'R' ? 'Right' : undefined].filter(Boolean).join(' · ');
           // One after the other — see onAdd
-          await onAdd(type, title, notes.trim() || undefined, measureRef(selectedParam.id, measureId, side), targetValue.trim() || undefined);
+          const target = testSides.length > 1 ? (side === 'L' ? targetLeft : targetRight) : targetValue;
+          await onAdd(type, title, notes.trim() || undefined, measureRef(selectedParam.id, measureId, side), target.trim() || undefined);
         }
       }
     } else {
@@ -198,6 +204,8 @@ export function CalendarEventDialog({
     setNotes('');
     setSelectedParameterId(null);
     setTargetValue('');
+    setTargetLeft('');
+    setTargetRight('');
     setBaselineValue('');
   };
 
@@ -536,26 +544,41 @@ export function CalendarEventDialog({
                       )
                     )}
 
-                    {/* Target Value */}
-                    <div className="space-y-1.5">
-                      <Label htmlFor="cal-target">
-                        Target Value{' '}
-                        <span className="text-xs text-muted-foreground">(optional)</span>
-                      </Label>
-                      <Input
-                        id="cal-target"
-                        value={targetValue}
-                        onChange={e => setTargetValue(e.target.value)}
-                        placeholder={
-                          activeMeasure?.kind === 'levels' ? `e.g., ${activeMeasure.levels?.[activeMeasure.levels.length - 1] ?? 'a level'}`
-                          : activeMeasure?.kind === 'passFail' ? 'e.g., Passed'
-                          : activeMeasure?.kind === 'scale' ? `e.g., ${activeMeasure.scaleMin ?? 0} (of ${activeMeasure.scaleMax ?? 10})`
-                          : (activeMeasure?.unit ?? selectedParameter?.unit)
-                            ? `e.g., 120 ${activeMeasure?.unit ?? selectedParameter?.unit}`
-                            : 'e.g., 120 kg'
-                        }
-                      />
-                    </div>
+                    {/* Target value — one per side when both sides are added */}
+                    {(() => {
+                      const placeholder =
+                        activeMeasure?.kind === 'levels' ? `e.g., ${activeMeasure.levels?.[activeMeasure.levels.length - 1] ?? 'a level'}`
+                        : activeMeasure?.kind === 'passFail' ? 'e.g., Passed'
+                        : activeMeasure?.kind === 'scale' ? `e.g., ${activeMeasure.scaleMin ?? 0} (of ${activeMeasure.scaleMax ?? 10})`
+                        : (activeMeasure?.unit ?? selectedParameter?.unit)
+                          ? `e.g., 120 ${activeMeasure?.unit ?? selectedParameter?.unit}`
+                          : 'e.g., 120 kg';
+                      return testSides.length > 1 ? (
+                        <div className="space-y-1.5">
+                          <Label>
+                            Target{' '}<span className="text-xs text-muted-foreground">(optional)</span>
+                          </Label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <Label htmlFor="cal-target-l" className="text-xs text-muted-foreground">Left</Label>
+                              <Input id="cal-target-l" value={targetLeft} onChange={e => setTargetLeft(e.target.value)} placeholder={placeholder} />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor="cal-target-r" className="text-xs text-muted-foreground">Right</Label>
+                              <Input id="cal-target-r" value={targetRight} onChange={e => setTargetRight(e.target.value)} placeholder={placeholder} />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="cal-target">
+                            Target Value{' '}
+                            <span className="text-xs text-muted-foreground">(optional)</span>
+                          </Label>
+                          <Input id="cal-target" value={targetValue} onChange={e => setTargetValue(e.target.value)} placeholder={placeholder} />
+                        </div>
+                      );
+                    })()}
                   </>
                 ) : (
                   /* Event: free text title */

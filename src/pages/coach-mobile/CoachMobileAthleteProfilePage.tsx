@@ -4,7 +4,7 @@ import { metricRefOf, monitoringRefsOf, monitoringSideOf } from '@/utils/paramet
 const metricSeriesKey = (ref: string, side?: 'L' | 'R') => (side ? `${ref}::${side}` : ref);
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, BookOpen, Check, GripVertical, Trash2, MessageCircle, Trophy, Calendar, ClipboardCheck, Loader2, ArrowUp, ArrowDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Dumbbell, Link2, CheckCircle2, Clock, BedDouble, Activity, AlertTriangle, Plus, BookOpen, Check, GripVertical, Trash2, MessageCircle, Trophy, Calendar, ClipboardCheck, Loader2, ArrowUp, ArrowDown, Settings2 } from 'lucide-react';
 import { CoachAthleteProgressTab } from '@/components/coach-mobile/CoachAthleteProgressTab';
 import { CoachAthleteSettingsTab } from '@/components/coach-mobile/CoachAthleteSettingsTab';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
@@ -40,6 +40,9 @@ import type { SessionLibraryEntry } from '@/types/sessionLibrary';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from 'react-i18next';
 import { dayIntensityFromSessions } from '@/utils/dayIntensity';
+import { TestDetailsDialog } from '@/components/athlete-app/TestDetailsDialog';
+import { useParametersDataV2 } from '@/hooks/useParametersDataV2';
+import { measureById, parseMeasureRef } from '@/utils/parameterMeasures';
 
 // ── Monitoring helpers ─────────────────────────────────────────────────────────
 
@@ -554,6 +557,21 @@ export default function CoachMobileAthleteProfilePage() {
 
   // Tests & events
   const [eventDialogDate, setEventDialogDate] = useState<string | null>(null);
+  // A test tapped: how it is done (instructions + demo video from the parameter database)
+  const [detailsTest, setDetailsTest] = useState<AthleteCalendarEvent | null>(null);
+  const { data: parametersData } = useParametersDataV2();
+  const openTestDetails = (ev: AthleteCalendarEvent) => {
+    // The newest instructions / video from the parameter database (the schedule's copy as fallback)
+    const ref = ev.parameterId ? parseMeasureRef(ev.parameterId) : undefined;
+    const param = ref ? parametersData?.parameters.find(p => p.id === ref.parameterId) : undefined;
+    const m = param ? measureById(param, ref?.measureId) : undefined;
+    setDetailsTest({
+      ...ev,
+      unit: ev.unit ?? (m?.kind === 'number' ? m.unit : m?.kind === 'scale' ? `/${m.scaleMax ?? 10}` : undefined),
+      instructions: param?.testInstructions || ev.instructions,
+      videoUrl: param?.testVideoUrl || ev.videoUrl,
+    });
+  };
   const [testResultTarget, setTestResultTarget] = useState<{ event: AthleteCalendarEvent; date: string } | null>(null);
   const [testResultDate, setTestResultDate] = useState('');
   // Days whose tests are unfolded in the calendar (folded by default, like in the athlete app)
@@ -1622,6 +1640,7 @@ export default function CoachMobileAthleteProfilePage() {
                         {/* Tests — folded behind one button, like in the athlete app */}
                         {dayTests.length > 0 && (
                           <div className="space-y-1.5">
+                            <div className={cn('flex items-stretch gap-1.5', isPast && 'opacity-60')}>
                             <button
                               type="button"
                               onClick={() => setOpenTestDays(prev => {
@@ -1631,9 +1650,8 @@ export default function CoachMobileAthleteProfilePage() {
                               })}
                               aria-expanded={testsOpen}
                               className={cn(
-                                'w-full min-h-[44px] flex items-center gap-2 rounded-lg px-3 py-2 border text-left transition-colors',
+                                'flex-1 min-w-0 min-h-[44px] flex items-center gap-2 rounded-lg px-3 py-2 border text-left transition-colors',
                                 'border-amber-200 bg-amber-50/80 hover:bg-amber-100 active:bg-amber-200',
-                                isPast && 'opacity-60',
                               )}
                             >
                               <Trophy className="h-4 w-4 text-amber-600 shrink-0" />
@@ -1647,13 +1665,24 @@ export default function CoachMobileAthleteProfilePage() {
                               )}
                               <ChevronDown className={cn('h-4 w-4 text-amber-700 shrink-0 transition-transform', testsOpen && 'rotate-180')} />
                             </button>
+                            {/* Add, change or remove this day's tests and events */}
+                            <button
+                              type="button"
+                              onClick={() => setEventDialogDate(dateStr)}
+                              aria-label={t('coachMobile.athleteProfile.manageTests')}
+                              title={t('coachMobile.athleteProfile.manageTests')}
+                              className="shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg border border-amber-200 bg-amber-50/80 text-amber-700 hover:bg-amber-100 active:bg-amber-200"
+                            >
+                              <Settings2 className="h-4 w-4" />
+                            </button>
+                            </div>
                             {testsOpen && dayTests.map(ev => {
                               const resultValue = ev.parameterId ? existingTestResults.get(`${ev.parameterId}:${dateStr}`) : undefined;
                               const hasResult = resultValue !== undefined;
                               return (
                                 <button
                                   key={ev.id}
-                                  onClick={() => setEventDialogDate(dateStr)}
+                                  onClick={() => (ev.type === 'test' ? openTestDetails(ev) : setEventDialogDate(dateStr))}
                                   className={cn(
                                     'w-full text-left rounded-lg border p-2.5 active:opacity-70 transition-opacity',
                                     ev.type === 'test' ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200',
@@ -2084,6 +2113,9 @@ export default function CoachMobileAthleteProfilePage() {
           athleteBiometrics={getAthleteBiometrics(athleteId)}
         />
       )}
+
+      {/* ── How a test is done ── */}
+      <TestDetailsDialog event={detailsTest} onClose={() => setDetailsTest(null)} />
 
       {/* ── Test result entry sheet ── */}
       <Sheet
