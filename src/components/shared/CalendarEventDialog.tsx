@@ -26,7 +26,6 @@ import { useAthletes } from '@/hooks/useAthletes';
 import { latestValueOf, useSelfReportedResults, withSelfReported } from '@/hooks/useSelfReportedResults';
 import { AthletePerformanceParameter, AthleteBiometric } from '@/types/athlete';
 import { AddParameterDialogV2 } from '@/components/goals/AddParameterDialogV2';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Command,
   CommandEmpty,
@@ -91,6 +90,7 @@ export function CalendarEventDialog({
   const [baselineValue, setBaselineValue] = useState(''); // display only, never saved
   const [createParamDialogOpen, setCreateParamDialogOpen] = useState(false);
   const [adding, setAdding] = useState(false);
+  const isTouch = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
 
   const parameters = parametersData?.parameters || [];
   // Body metrics are parameters marked "Biometric"; the old separate list is empty once moved
@@ -401,24 +401,26 @@ export function CalendarEventDialog({
                     {/* Parameter Dropdown */}
                     <div className="space-y-1.5">
                       <Label>Parameter</Label>
-                      <Popover open={parameterComboOpen} onOpenChange={setParameterComboOpen}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={parameterComboOpen}
-                            className="w-full justify-between font-normal"
-                          >
-                            <span className={cn(!selectedParameter && 'text-muted-foreground')}>
-                              {selectedParameter?.name ?? 'Select a parameter...'}
-                            </span>
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[200]" align="start">
-                          <Command>
-                            <CommandInput placeholder="Search parameters..." />
-                            <CommandList>
+                      {/* The list opens inside the dialog (not as a layer above it): on a phone a layer
+                          over a dialog can't be scrolled, and the keyboard would cover it */}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={parameterComboOpen}
+                        onClick={() => setParameterComboOpen(o => !o)}
+                        className="w-full justify-between font-normal min-h-[44px] sm:min-h-0"
+                      >
+                        <span className={cn('min-w-0 truncate', !selectedParameter && 'text-muted-foreground')}>
+                          {selectedParameter?.name ?? 'Select a parameter...'}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                      {parameterComboOpen && (
+                          <Command className="rounded-md border h-auto">
+                            {/* No automatic focus on a touch screen — the keyboard would cover the list */}
+                            <CommandInput placeholder="Search parameters..." autoFocus={!isTouch} />
+                            <CommandList className="max-h-[45dvh] overscroll-contain">
                               <CommandEmpty>No parameters found.</CommandEmpty>
                               {performanceParams.length > 0 && (
                                 <CommandGroup heading="Performance Parameters">
@@ -488,8 +490,7 @@ export function CalendarEventDialog({
                               </CommandGroup>
                             </CommandList>
                           </Command>
-                        </PopoverContent>
-                      </Popover>
+                      )}
                     </div>
 
                     {/* Measure and side — like a goal in the wizard */}
@@ -500,7 +501,7 @@ export function CalendarEventDialog({
                           onValueChange={v => { if (v) setMeasureId(v === measureChoices[0].id ? undefined : v); }}
                           className="flex-wrap justify-start gap-1">
                           {measureChoices.map(m => (
-                            <ToggleGroupItem key={m.id} value={m.id} size="sm" className="h-8 border data-[state=on]:border-primary">
+                            <ToggleGroupItem key={m.id} value={m.id} size="sm" className="h-11 sm:h-8 px-3 border data-[state=on]:border-primary">
                               {m.name}
                             </ToggleGroupItem>
                           ))}
@@ -512,9 +513,9 @@ export function CalendarEventDialog({
                         <Label>Side</Label>
                         <ToggleGroup type="single" value={sideChoice} onValueChange={v => { if (v) setSideChoice(v as 'L' | 'R' | 'both'); }}
                           className="justify-start gap-1">
-                          <ToggleGroupItem value="L" size="sm" className="h-8 border data-[state=on]:border-primary">Left</ToggleGroupItem>
-                          <ToggleGroupItem value="R" size="sm" className="h-8 border data-[state=on]:border-primary">Right</ToggleGroupItem>
-                          <ToggleGroupItem value="both" size="sm" className="h-8 border data-[state=on]:border-primary">Left &amp; right</ToggleGroupItem>
+                          <ToggleGroupItem value="L" size="sm" className="h-11 sm:h-8 px-3 border data-[state=on]:border-primary">Left</ToggleGroupItem>
+                          <ToggleGroupItem value="R" size="sm" className="h-11 sm:h-8 px-3 border data-[state=on]:border-primary">Right</ToggleGroupItem>
+                          <ToggleGroupItem value="both" size="sm" className="h-11 sm:h-8 px-3 border data-[state=on]:border-primary">Left &amp; right</ToggleGroupItem>
                         </ToggleGroup>
                       </div>
                     )}
