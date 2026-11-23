@@ -112,6 +112,8 @@ interface WorkoutSessionSheetProps {
   sessionSections?: SessionSectionProp[];
   supersets?: SupersetMappingProp;
   onSectionsChange?: (sections: SessionSectionProp[]) => void;
+  /** Saved: the session's notes and each section's notes (athlete calendar: into the app copy) */
+  onNotesSaved?: (notes: { session: string; sections: Record<string, string> }) => void;
   onSupersetsChange?: (supersets: SupersetMappingProp) => void;
   // Toolbox data for parameter visibility
   toolboxData?: ToolboxDatabase;
@@ -357,6 +359,7 @@ export function WorkoutSessionSheet({
   sessionSections: sessionSectionsProp,
   supersets: supersetsProp,
   onSectionsChange,
+  onNotesSaved,
   onSupersetsChange,
   toolboxData,
   allExerciseDistribution,
@@ -1082,20 +1085,26 @@ export function WorkoutSessionSheet({
     }));
   };
 
+  // Section notes stored for this session — the plan's (saved with it, on every device) over the
+  // copy in this browser; buildSectionsFromExercises leaves them out
+  const withSavedSectionComments = (sections: WorkoutSection[]): WorkoutSection[] => {
+    const planComments = new Map(
+      (sessionSectionsProp ?? [])
+        .filter(s => s.dayDate === dayDate && s.sessionIndex === sessionIndex && typeof s.comments === 'string')
+        .map(s => [s.id, s.comments as string]),
+    );
+    let localComments = new Map<string, string | undefined>();
+    try {
+      const saved = readScoped('workoutSections_');
+      if (saved) localComments = new Map((JSON.parse(saved) as WorkoutSection[]).map(s => [s.id, s.comments]));
+    } catch { /* ignore */ }
+    if (planComments.size === 0 && localComments.size === 0) return sections;
+    return sections.map(s => ({ ...s, comments: planComments.get(s.id) ?? localComments.get(s.id) ?? s.comments }));
+  };
+
   const [workoutSections, setWorkoutSections] = useState<WorkoutSection[]>(() => {
     if (exercises.length > 0) {
-      const built = buildSectionsFromExercises(exercises, parameterValues);
-      // Merge saved section comments back — buildSectionsFromExercises only touches
-      // exercise parameters, so section-level comments are stripped on every rebuild.
-      try {
-        const saved = readScoped('workoutSections_');
-        if (saved) {
-          const savedSects = JSON.parse(saved) as WorkoutSection[];
-          const commentMap = new Map(savedSects.map(s => [s.id, s.comments]));
-          return built.map(s => ({ ...s, comments: commentMap.get(s.id) ?? s.comments }));
-        }
-      } catch { /* ignore */ }
-      return built;
+      return withSavedSectionComments(buildSectionsFromExercises(exercises, parameterValues));
     }
 
     // Only use localStorage if exercises prop is empty (backward compatibility)
@@ -1157,17 +1166,7 @@ export function WorkoutSessionSheet({
         // as that would overwrite the restored values with old blank ones.
         const newSections = buildSectionsFromExercises(exercises, parameterValues);
         // Merge saved section comments — they're stripped by buildSectionsFromExercises
-        const sectionsWithComments = (() => {
-          try {
-            const saved = readScoped('workoutSections_');
-            if (saved) {
-              const savedSects = JSON.parse(saved) as WorkoutSection[];
-              const commentMap = new Map(savedSects.map(s => [s.id, s.comments]));
-              return newSections.map(s => ({ ...s, comments: commentMap.get(s.id) ?? s.comments }));
-            }
-          } catch { /* ignore */ }
-          return newSections;
-        })();
+        const sectionsWithComments = withSavedSectionComments(newSections);
         // Apply live athlete_schedule overrides (from mobile coach edits) on top of
         // plan-derived data so desktop sees ALL changes made in the mobile coach app.
         let sectionsToSet = sectionsWithComments;
@@ -1547,10 +1546,11 @@ export function WorkoutSessionSheet({
       // Load comments: in Athlete Calendar context prefer live Supabase session notes
       // (set by mobile coach app) — same pattern as session intensity above.
       // Fall back to localStorage in the standard Training Wizard context.
-      if (useExternalIntensityOnly) {
-        const liveNotes = liveScheduleEntry?.sessions[sessionIndex]?.notes;
-        setSessionComments(liveNotes != null ? liveNotes : '');
+      const liveSession = useExternalIntensityOnly ? liveScheduleEntry?.sessions[sessionIndex] : undefined;
+      if (liveSession) {
+        setSessionComments(liveSession.notes ?? '');
       } else {
+        // Not in the athlete app (yet): the notes saved in this browser
         const stored = readScoped('workoutSessions_');
         if (stored) {
           try {
@@ -2092,6 +2092,12 @@ export function WorkoutSessionSheet({
       }));
       onSectionsChange([...otherSections, ...thisSections]);
     }
+
+    // The notes as saved — the athlete calendar writes them into the athlete app's copy right away
+    onNotesSaved?.({
+      session: sessionComments,
+      sections: Object.fromEntries(workoutSections.map(section => [section.id, section.comments ?? ''])),
+    });
 
     toast({
       title: "Changes saved",

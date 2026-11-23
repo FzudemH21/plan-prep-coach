@@ -26,7 +26,7 @@ import { lockAthlete, useAthleteEditSession, useAthleteLockHolders } from '@/lib
 import { ReadOnlyGuard } from '@/components/programs/PlannerGate';
 import { useOrgCoaches } from '@/hooks/useOrgCoaches';
 import { isRestIntensity } from '@/utils/intensityScale';
-import { getExerciseVisibility, SESSION_META_CHANGED_EVENT, type SessionVisibilityData } from '@/utils/parameterVisibility';
+import { getExerciseVisibility, SESSION_META_CHANGED_EVENT, type SessionVisibilityData, readSessionMeta, writeSessionMeta } from '@/utils/parameterVisibility';
 import {
   shiftExerciseDates,
   shiftDailyIntensityDates,
@@ -869,6 +869,78 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing.daySplitStates, selectedAssignmentId]);
+
+  // Notes saved on the desktop (session window, master planner) → straight into the athlete app's
+  // copy, where every coach's calendar reads them from (and the athlete sees them). Before, session
+  // notes only stayed in this browser and never reached the app, and the app's older notes came
+  // back on the next opening. Holds the sync lock, so a sync running at that moment can't put the
+  // old notes back; a sync after it keeps them. A session not in the app yet gets them with its
+  // first sync (this plan's stored session note, the plan's section notes).
+  type AppScheduleSession = { notes?: string; exercises?: Array<{ sectionId?: string; sectionNotes?: string } & Record<string, unknown>> } & Record<string, unknown>;
+  const saveNotesToApp = useCallback((dayDate: string, sessionIndex: number, notes: { session?: string; sections?: Record<string, string> }) => {
+    // A change of the calendar: holds its edit lock like any other
+    setChangeTick(t => t + 1);
+    const connection = getConnectionForAthlete(athlete.id);
+    if (!connection) return;
+    let tries = 0;
+    const run = async (): Promise<void> => {
+      if (syncInProgressRef.current) {
+        if (++tries <= 60) setTimeout(() => { void run(); }, 500);
+        return;
+      }
+      syncInProgressRef.current = true;
+      try {
+        const { data: row, error } = await supabase.from('athlete_schedule').select('id, sessions')
+          .eq('athlete_connection_id', connection.id).eq('date', dayDate).maybeSingle();
+        if (error || !row) return;
+        const sessions = [...(((row as { sessions: AppScheduleSession[] | null }).sessions) ?? [])];
+        const session = sessions[sessionIndex];
+        if (!session) return;
+        sessions[sessionIndex] = {
+          ...session,
+          ...(notes.session !== undefined ? { notes: notes.session.trim() || undefined } : {}),
+          exercises: (session.exercises ?? []).map(ex =>
+            ex.sectionId && notes.sections && ex.sectionId in notes.sections
+              ? { ...ex, sectionNotes: notes.sections[ex.sectionId].trim() || undefined }
+              : ex),
+        };
+        const { error: saveError } = await supabase.from('athlete_schedule').update({ sessions }).eq('id', (row as { id: string }).id);
+        if (saveError) {
+          console.error('[notes] not saved to the athlete app:', saveError.message);
+          toast({ title: 'Notes not sent to the athlete app', description: 'Please try again.', variant: 'destructive' });
+          return;
+        }
+        await refreshLiveScheduleRange(connection.id, [dayDate]);
+      } catch (e) {
+        console.error('[notes] not saved to the athlete app:', e);
+      } finally {
+        finishSync();
+      }
+    };
+    void run();
+  }, [athlete.id, getConnectionForAthlete, refreshLiveScheduleRange, finishSync, toast]);
+
+  // Master planner: a session's notes — stored for this plan (key with its id, read by the sync)
+  // and sent to the app copy
+  const handleSessionNotesChange = useCallback((dayDate: string, sessionIndex: number, comment: string) => {
+    const mesoId = editing.trainingDays.find(td => td.date === dayDate)?.mesocycleId;
+    if (mesoId && selectedAssignmentId) {
+      const meta = readSessionMeta(mesoId, dayDate, sessionIndex, selectedAssignmentId);
+      writeSessionMeta(mesoId, dayDate, sessionIndex, { ...meta, comments: comment }, selectedAssignmentId);
+    }
+    saveNotesToApp(dayDate, sessionIndex, { session: comment });
+  }, [editing.trainingDays, selectedAssignmentId, saveNotesToApp]);
+  // Master planner: a section's notes — in the plan and in the app copy
+  const handleSectionNotesChange = useCallback((sectionId: string, comment: string) => {
+    editing.handleSectionCommentChange(sectionId, comment);
+    const section = editing.sessionSections.find(sec => sec.id === sectionId);
+    if (section) saveNotesToApp(section.dayDate, section.sessionIndex, { sections: { [sectionId]: comment } });
+  }, [editing.handleSectionCommentChange, editing.sessionSections, saveNotesToApp]);
+  // A session's notes as the app copy has them (undefined: the app has no copy of the day / session)
+  const sessionNoteOf = useCallback((dayDate: string, sessionIndex: number): string | undefined => {
+    const session = liveScheduleMap.get(dayDate)?.sessions[sessionIndex];
+    return session ? (session.notes ?? '') : undefined;
+  }, [liveScheduleMap]);
 
   // Auto-sync to athlete_schedule whenever the editing hook persists a change to localStorage.
   // This ensures manually-added sessions and exercises appear in the athlete app without
@@ -3205,8 +3277,9 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 sessionSections={editing.sessionSections}
                 supersets={editing.supersets}
                 onSessionNameChange={editing.handleSessionNameChange}
-                onSessionCommentChange={editing.handleSessionCommentChange}
-                onSectionCommentChange={editing.handleSectionCommentChange}
+                onSessionCommentChange={handleSessionNotesChange}
+                onSectionCommentChange={handleSectionNotesChange}
+                sessionNoteOf={sessionNoteOf}
                 onExerciseNotesChange={editing.handleExerciseNotesChange}
                 onExerciseEachSideChange={editing.handleExerciseEachSideChange}
                 onExerciseVisibilityChange={editing.handleExerciseVisibilityChange}
@@ -3533,6 +3606,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
           sessionSections={editing.sessionSections}
           supersets={editing.supersets}
           onSectionsChange={(sections) => editing.setSessionSections(sections)}
+          onNotesSaved={(notes) => saveNotesToApp(selectedSessionInfo.dayDate, selectedSessionInfo.sessionIndex, notes)}
           onSupersetsChange={(s) => editing.setSupersets(s)}
           toolboxData={toolboxData}
           allExerciseDistribution={editing.exerciseDistribution.map(ex => ({

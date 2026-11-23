@@ -144,6 +144,8 @@ interface MasterPlannerColumnProps {
   onSessionNameChange?: (dayDate: string, sessionIndex: number, newName: string) => void;
   onSessionCommentChange?: (dayDate: string, sessionIndex: number, comment: string) => void;
   onSectionCommentChange?: (sectionId: string, comment: string) => void;
+  /** A session's notes as the athlete app has them (athlete calendar) — undefined: not known there */
+  sessionNoteOf?: (dayDate: string, sessionIndex: number) => string | undefined;
   totalWeeks?: number;
   // New props for Phase 2 - editable notes and eachSide
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
@@ -511,6 +513,7 @@ export function MasterPlannerColumn({
   supersets,
   onSessionNameChange,
   onSessionCommentChange,
+  sessionNoteOf,
   onSectionCommentChange,
   totalWeeks = 6,
   onExerciseNotesChange,
@@ -675,19 +678,15 @@ export function MasterPlannerColumn({
     return filtered;
   }, [sessionSections, day.dateString]);
 
-  // Get session comment from localStorage
+  // Session notes: as the athlete app has them (athlete calendar), else the copy in this browser —
+  // the athlete calendar's under its plan's key (sessionMetaScope), older ones without it
   const getSessionComment = useCallback((sessionIndex: number): string => {
+    const fromApp = sessionNoteOf?.(day.dateString, sessionIndex);
+    if (fromApp !== undefined) return fromApp;
     if (!currentMesocycle) return '';
-    const key = `workoutSessions_${currentMesocycle.id}_${day.dateString}_${sessionIndex}`;
-    try {
-      const stored = localStorage.getItem(key);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        return parsed.comments || '';
-      }
-    } catch {}
-    return '';
-  }, [currentMesocycle, day.dateString]);
+    const comments = readSessionMeta(currentMesocycle.id, day.dateString, sessionIndex, sessionMetaScope).comments;
+    return typeof comments === 'string' ? comments : '';
+  }, [currentMesocycle, day.dateString, sessionNoteOf, sessionMetaScope]);
 
   // Helper to normalize method keys for consistent lookup
   const normalizeMethodKey = (key: string | undefined): string => {

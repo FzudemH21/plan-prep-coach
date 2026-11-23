@@ -945,13 +945,15 @@ export async function syncAthleteSchedule(
             };
           });
 
-        // Read session notes (comments) from localStorage — same key used by WorkoutSessionSheet
+        // Session notes (comments) from localStorage — the key the session window saves to: in the
+        // athlete calendar it carries the plan's id (before, only the key without it was read, so
+        // notes saved in the calendar never reached the app); older notes without it as fallback
         let sessionNotes: string | undefined;
         try {
           const mesoId = mesoByDate.get(td.date)?.mesocycleId;
           if (mesoId) {
-            const metaKey = `workoutSessions_${mesoId}_${td.date}_${i}`;
-            const stored = localStorage.getItem(metaKey);
+            const stored = localStorage.getItem(sessionMetaKey(mesoId, td.date, i, assignment.id))
+              ?? localStorage.getItem(sessionMetaKey(mesoId, td.date, i));
             if (stored) {
               const parsed = JSON.parse(stored) as { comments?: string };
               if (parsed.comments && parsed.comments.trim()) {

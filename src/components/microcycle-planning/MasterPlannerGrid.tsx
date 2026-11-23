@@ -77,6 +77,8 @@ interface MasterPlannerGridProps {
   onSessionNameChange?: (dayDate: string, sessionIndex: number, newName: string) => void;
   onSessionCommentChange?: (dayDate: string, sessionIndex: number, comment: string) => void;
   onSectionCommentChange?: (sectionId: string, comment: string) => void;
+  /** A session's notes as the athlete app has them (athlete calendar) — undefined: not known there */
+  sessionNoteOf?: (dayDate: string, sessionIndex: number) => string | undefined;
   // New props for Phase 2 - editable notes and eachSide
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
   onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
@@ -167,6 +169,7 @@ export function MasterPlannerGrid({
   onSessionNameChange,
   onSessionCommentChange,
   onSectionCommentChange,
+  sessionNoteOf,
   onExerciseNotesChange,
   onExerciseEachSideChange,
   onExerciseVisibilityChange,
@@ -339,6 +342,7 @@ export function MasterPlannerGrid({
               onSessionNameChange={onSessionNameChange}
               onSessionCommentChange={onSessionCommentChange}
               onSectionCommentChange={onSectionCommentChange}
+              sessionNoteOf={sessionNoteOf}
               totalWeeks={filteredDays.length}
               onExerciseNotesChange={onExerciseNotesChange}
               onExerciseEachSideChange={onExerciseEachSideChange}
