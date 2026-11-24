@@ -39,7 +39,11 @@ export interface MethodRemapResult {
  * - Another assigned method of the target mesocycle has the exercise in Exercise Selection →
  *   switched to that method (same base method with another category preferred), so it uses that
  *   method's periodization values.
- * - Otherwise kept only if its method is assigned to the target mesocycle at all; dropped if not.
+ * - Otherwise dropped when the target mesocycle has an exercise setup (Exercise Selection) for the
+ *   method that doesn't include the exercise — before, it was kept whenever the method was assigned,
+ *   so exercises not selected for that mesocycle came along with copies. Kept only when its method is
+ *   assigned there and has no exercise setup at all (nothing selected yet), or it is an exercise
+ *   added straight from the toolbox (never in Exercise Selection).
  */
 export function fitExercisesToMesocycleMethods(
   exercises: ExerciseDistribution[],
@@ -88,8 +92,13 @@ export function fitExercisesToMesocycleMethods(
       return;
     }
     if (isAssigned(ex.methodId)) {
-      result.push(ex);
-      return;
+      const isToolboxExercise = ex.parameterSource === 'toolbox';
+      const methodHasSetup = cells.some(cell =>
+        methodKeyOf(cell.methodId, cell.categoryName).base === own.base && cell.exercises.length > 0);
+      if (isToolboxExercise || !methodHasSetup) {
+        result.push(ex);
+        return;
+      }
     }
     dropped.push(ex.exerciseName);
   });
@@ -103,7 +112,7 @@ export function describeMethodFit(fit: MethodRemapResult): string | null {
   if (fit.remapped > 0) parts.push(`${fit.remapped} exercise(s) switched to the method used in this mesocycle`);
   if (fit.dropped.length > 0) {
     const names = [...new Set(fit.dropped)];
-    parts.push(`left out (method not assigned here): ${names.slice(0, 4).join(', ')}${names.length > 4 ? ` +${names.length - 4} more` : ''}`);
+    parts.push(`left out (not planned in this mesocycle): ${names.slice(0, 4).join(', ')}${names.length > 4 ? ` +${names.length - 4} more` : ''}`);
   }
   return parts.length > 0 ? parts.join(' · ') : null;
 }
