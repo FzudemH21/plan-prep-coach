@@ -225,16 +225,20 @@ type LiveExerciseForDesktop = {
 };
 
 /**
- * Computes ParameterVisibilityOverrides from mobile-set visibleParams.
- * Params in visibleParams → true, all others found in plannedParams → false.
+ * Each exercise's ParameterVisibilityOverrides from the athlete app copy's visibleParams (exercise
+ * id → overrides): params in visibleParams → true, all others found in plannedParams → false.
+ * Per exercise — before, all exercises went into one map for the whole session, so an exercise
+ * that hides a parameter (e.g. Weight) showed it again when another exercise of the session (e.g.
+ * its superset partner) shows it.
  */
 function computeLiveVisibilityOverrides(
   liveExercises: LiveExerciseForDesktop[]
-): ParameterVisibilityOverrides {
-  const overrides: ParameterVisibilityOverrides = {};
+): Record<string, ParameterVisibilityOverrides> {
+  const byExercise: Record<string, ParameterVisibilityOverrides> = {};
   for (const ex of liveExercises) {
-    if (!ex.visibleParams || ex.visibleParams.length === 0) continue;
+    if (!ex.id || !ex.visibleParams || ex.visibleParams.length === 0) continue;
     const visible = new Set(ex.visibleParams);
+    const overrides: ParameterVisibilityOverrides = {};
     // Collect all parameter base names from plannedParams
     for (const key of Object.keys(ex.plannedParams ?? {})) {
       if (/^sets?$/i.test(key)) continue;
@@ -243,8 +247,9 @@ function computeLiveVisibilityOverrides(
       const base = m ? m[1] : key;
       overrides[base] = visible.has(base);
     }
+    byExercise[ex.id] = overrides;
   }
-  return overrides;
+  return byExercise;
 }
 
 /**
@@ -1333,7 +1338,7 @@ export function WorkoutSessionSheet({
             // Restore mobile-set column visibility so hidden params stay hidden on desktop
             const visOverrides = computeLiveVisibilityOverrides(liveSession.exercises);
             if (Object.keys(visOverrides).length > 0) {
-              setParameterVisibilityOverrides(visOverrides);
+              setExerciseVisibilityOverrides(prev => ({ ...visOverrides, ...prev }));
             }
           }
         }
@@ -1378,7 +1383,7 @@ export function WorkoutSessionSheet({
       setWorkoutSections(liveSecs);
       const visOverrides = computeLiveVisibilityOverrides(liveSession.exercises);
       if (Object.keys(visOverrides).length > 0) {
-        setParameterVisibilityOverrides(prev => ({ ...prev, ...visOverrides }));
+        setExerciseVisibilityOverrides(prev => ({ ...visOverrides, ...prev }));
       }
       return;
     }
@@ -1461,7 +1466,7 @@ export function WorkoutSessionSheet({
     // Restore mobile-set column visibility for the appended exercises
     const visOverrides = computeLiveVisibilityOverrides(liveSession.exercises ?? []);
     if (Object.keys(visOverrides).length > 0) {
-      setParameterVisibilityOverrides(prev => ({ ...prev, ...visOverrides }));
+      setExerciseVisibilityOverrides(prev => ({ ...visOverrides, ...prev }));
     }
   }, [isOpen, liveScheduleEntry, sessionIndex]);
 
