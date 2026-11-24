@@ -3236,6 +3236,7 @@ export function AthleteCalendarView({ athlete, initialDate, autoOpenSession, onA
                 sessionNoteOf={sessionNoteOf}
                 onExerciseNotesChange={editing.handleExerciseNotesChange}
                 onExerciseEachSideChange={editing.handleExerciseEachSideChange}
+                onExerciseSessionSlotChange={editing.handleExerciseSessionSlotChange}
                 onExerciseVisibilityChange={editing.handleExerciseVisibilityChange}
                 onSupersetRestChange={editing.handleSupersetRestChange}
                 onDayIntensityChange={editing.handleDayIntensityChange}

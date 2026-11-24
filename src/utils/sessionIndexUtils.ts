@@ -9,7 +9,15 @@ interface ExerciseForSessionIndex {
   dayDate: string;
   sessionIndex: number;
   order?: number;
+  /** Chosen by the coach: the method's periodization session to take the values from (0-based) */
+  methodSessionSlot?: number;
 }
+
+/** The coach's choice of periodization session for an exercise, if any (a whole number ≥ 0) */
+export const pinnedSessionSlot = (ex: { methodSessionSlot?: unknown } | null | undefined): number | undefined => {
+  const slot = ex?.methodSessionSlot;
+  return typeof slot === 'number' && Number.isInteger(slot) && slot >= 0 ? slot : undefined;
+};
 
 /**
  * Calculate the chronological session index for an exercise within its method
@@ -30,12 +38,18 @@ export function getMethodSessionIndex(
   allExercises: ExerciseForSessionIndex[],
   microcycleDates: string[]
 ): number {
+  // The coach chose the session for this exercise ("Values from" in its menu)
+  const pinned = pinnedSessionSlot(exercise);
+  if (pinned !== undefined) return pinned;
+
   if (!exercise || !allExercises || allExercises.length === 0 || !microcycleDates || microcycleDates.length === 0) {
     return 0;
   }
 
-  // Filter exercises with the same methodId and categoryName within the microcycle
+  // Filter exercises with the same methodId and categoryName within the microcycle — exercises with
+  // a chosen session don't count for the automatic order
   const sameMethodExercises = allExercises.filter(ex => {
+    if (pinnedSessionSlot(ex) !== undefined && ex.id !== exercise.id) return false;
     // Must be same method
     if (ex.methodId !== exercise.methodId) return false;
     

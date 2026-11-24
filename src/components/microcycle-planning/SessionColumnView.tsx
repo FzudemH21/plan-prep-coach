@@ -39,6 +39,7 @@ import { ExerciseDistribution, SessionSection } from '@/types/microcycle-plannin
 import { displayMethodLabel, methodColorClasses } from './methodLabelUtils';
 import { sessionSupersetLabels } from '@/utils/supersetUtils';
 import { usePersistentSet, usePersistentFlags } from '@/hooks/usePersistentState';
+import { SessionSlotBadge, SessionSlotSubmenu, showsSessionSlot } from './SessionSlotPicker';
 
 /** A method (+ exercise category) of the current mesocycle that contains a given exercise */
 export interface ExerciseMethodOption {
@@ -76,6 +77,10 @@ interface SessionColumnViewProps {
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
   /** Toggle "each side" (unilateral: the reps count per side) */
   onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
+  /** How many periodization sessions the exercise's method has in this microcycle ("Values from") */
+  sessionSlotCountFor?: (exercise: ExerciseDistribution) => number;
+  /** "Values from": the periodization session the exercise takes its values from (undefined = automatic) */
+  onExerciseSessionSlotChange?: (exerciseId: string, slot: number | undefined) => void;
   /** Which parameters an exercise shows later (calendar, session sheet, athlete app): the method's
    *  parameters, the exercise's current choice, and the change (kept on the exercise, copied with it) */
   visibilityParamsFor?: (exercise: ExerciseDistribution) => Array<{ name: string; showInGridByDefault: boolean }>;
@@ -134,6 +139,8 @@ export function SessionColumnView({
   onMoveSessionDown,
   onExerciseNotesChange,
   onExerciseEachSideChange,
+  sessionSlotCountFor,
+  onExerciseSessionSlotChange,
   visibilityParamsFor,
   visibilityOf,
   onExerciseVisibilityChange,
@@ -475,6 +482,8 @@ export function SessionColumnView({
                         L/R
                       </span>
                     )}
+                    {/* Values from a chosen periodization session (set in the ⋮ menu) */}
+                    <SessionSlotBadge slot={exercise.methodSessionSlot} />
                     </div>
                   </div>
 
@@ -500,6 +509,8 @@ export function SessionColumnView({
                     const canSetSupersetRest = !!onSupersetRestChange && supersetMembers.length > 1;
                     const { after: restAfter, between: restBetween } = supersetRestOf(supersetMembers, allExercises);
                     const setSupersetRest = (rest: { after?: number; between?: number }) => onSupersetRestChange!(supersetMembers, rest);
+                    const slotCount = sessionSlotCountFor?.(exercise) ?? 0;
+                    const canChooseSlot = !!onExerciseSessionSlotChange && !exercise.isCircuit && showsSessionSlot(slotCount, exercise.methodSessionSlot);
                     return (
                       <Popover open={menuPanel?.exerciseId === exercise.id} onOpenChange={open => { if (!open) setMenuPanel(null); }}>
                         {/* Not modal: a modal menu keeps focus while it closes and would close the checklist again */}
@@ -520,6 +531,13 @@ export function SessionColumnView({
                                 Each side (L/R)
                               </DropdownMenuCheckboxItem>
                             )}
+                            {canChooseSlot && (
+                              <SessionSlotSubmenu
+                                count={slotCount}
+                                slot={exercise.methodSessionSlot}
+                                onChange={slot => onExerciseSessionSlotChange!(exercise.id, slot)}
+                              />
+                            )}
                             {params.length > 0 && (
                               <DropdownMenuItem onSelect={() => {
                                 openingVisibility.current = true;
@@ -538,7 +556,7 @@ export function SessionColumnView({
                                 Superset rest{restAfter || restBetween ? ` (${restAfter ?? '–'} s / ${restBetween ?? '–'} s)` : '…'}
                               </DropdownMenuItem>
                             )}
-                            {(onExerciseEachSideChange || params.length > 0 || canSetSupersetRest) && <DropdownMenuSeparator />}
+                            {(onExerciseEachSideChange || canChooseSlot || params.length > 0 || canSetSupersetRest) && <DropdownMenuSeparator />}
                             <DropdownMenuItem
                               onClick={() => onDeleteExercise(exercise.id)}
                               className="text-destructive"

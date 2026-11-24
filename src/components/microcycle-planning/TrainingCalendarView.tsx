@@ -800,6 +800,13 @@ export function TrainingCalendarView({
                   ? { ...ex, supersetRestAfter: rest.after, supersetRestBetween: rest.between }
                   : ex)))
                 : undefined}
+              onExerciseSessionSlotChange={onDistributionChange
+                ? (exerciseId, slot) => onDistributionChange(exerciseDistribution.map(ex => {
+                  if ((ex.id || ex.exerciseId) !== exerciseId) return ex;
+                  const { methodSessionSlot: _old, ...rest } = ex as typeof ex & { methodSessionSlot?: number };
+                  return slot === undefined ? rest : { ...rest, methodSessionSlot: slot };
+                }))
+                : undefined}
               onExerciseEachSideChange={(exerciseId, eachSide) => {
                 // This placement and every later placement of the same exercise (the following weeks);
                 // earlier weeks keep theirs

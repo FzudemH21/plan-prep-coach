@@ -1657,6 +1657,29 @@ export function EnhancedExerciseDistribution({
       : ex)));
   }, [exerciseDistribution, onDistributionChange]);
 
+  // "Values from": how many periodization sessions the exercise's method has in its microcycle
+  const sessionSlotCountFor = useCallback((exercise: ExerciseDistribution): number => {
+    const microcycleId = trainingDays.find(d => d.date === exercise.dayDate)?.microcycleId;
+    const microcycleIndex = Math.max(0, mesocycle.microcycles.findIndex(m => m.id === microcycleId));
+    const byMethod = parameterValues?.[mesocycle.id]?.[microcycleIndex] ?? {};
+    const keys = [...(exercise.categoryName ? [`${exercise.methodId}::${exercise.categoryName}`] : []), exercise.methodId];
+    for (const key of keys) {
+      const sessions = byMethod[key];
+      if (sessions && typeof sessions === 'object') {
+        const n = Object.keys(sessions).filter(k => !isNaN(Number(k))).length;
+        if (n > 0) return n;
+      }
+    }
+    return 0;
+  }, [trainingDays, mesocycle, parameterValues]);
+  const handleExerciseSessionSlotChange = useCallback((exerciseId: string, slot: number | undefined) => {
+    onDistributionChange(exerciseDistribution.map(ex => {
+      if (ex.id !== exerciseId) return ex;
+      const { methodSessionSlot: _old, ...rest } = ex;
+      return slot === undefined ? rest : { ...rest, methodSessionSlot: slot };
+    }));
+  }, [exerciseDistribution, onDistributionChange]);
+
   const handleExerciseEachSideChange = useCallback((exerciseId: string, eachSide: boolean) => {
     onDistributionChange(exerciseDistribution.map(ex => ex.id === exerciseId ? { ...ex, eachSide } : ex));
   }, [exerciseDistribution, onDistributionChange]);
@@ -2759,6 +2782,8 @@ export function EnhancedExerciseDistribution({
                                     onMoveSessionDown={handleMoveSessionDownLocal}
                                     onExerciseNotesChange={handleExerciseNotesChange}
                                     onExerciseEachSideChange={handleExerciseEachSideChange}
+                                    sessionSlotCountFor={sessionSlotCountFor}
+                                    onExerciseSessionSlotChange={handleExerciseSessionSlotChange}
                                     visibilityParamsFor={visibilityParamsFor}
                                     visibilityOf={visibilityOf}
                                     onExerciseVisibilityChange={handleExerciseVisibilityChange}

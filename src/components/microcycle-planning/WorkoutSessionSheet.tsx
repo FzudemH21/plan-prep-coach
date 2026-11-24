@@ -654,6 +654,7 @@ export function WorkoutSessionSheet({
                   dayDate: ex.dayDate,
                   sessionIndex: ex.sessionIndex,
                   order: ex.order ?? idx,
+                  methodSessionSlot: (ex as { methodSessionSlot?: number }).methodSessionSlot,
                 };
                 
                 const rawChronologicalIndex = getMethodSessionIndex(
@@ -666,6 +667,7 @@ export function WorkoutSessionSheet({
                     dayDate: e.dayDate,
                     sessionIndex: e.sessionIndex,
                     order: e.order ?? 0,
+                    methodSessionSlot: (e as { methodSessionSlot?: number }).methodSessionSlot,
                   })),
                   microcycleDates || []
                 );
@@ -954,6 +956,7 @@ export function WorkoutSessionSheet({
         dayDate: ex.dayDate,
         sessionIndex: ex.sessionIndex,
         order: (ex as any).order ?? index,
+        methodSessionSlot: (ex as { methodSessionSlot?: number }).methodSessionSlot,
       };
       
       const rawChronologicalIndex = getMethodSessionIndex(
@@ -966,6 +969,7 @@ export function WorkoutSessionSheet({
           dayDate: e.dayDate,
           sessionIndex: e.sessionIndex,
           order: (e as any).order ?? 0,
+          methodSessionSlot: (e as { methodSessionSlot?: number }).methodSessionSlot,
         })),
         microcycleDates || []
       );

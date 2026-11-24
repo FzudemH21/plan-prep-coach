@@ -104,6 +104,12 @@ export interface ExerciseDistribution {
   supersetRestBetween?: number;
   notes?: string;
   eachSide?: boolean; // Mark exercise as unilateral (perform reps on each side)
+  /**
+   * The method's periodization session this exercise takes its values from (0 = "Session 1"), set by
+   * the coach ("Values from" in the exercise menu) — e.g. a hold (Session 1) and a push (Session 2)
+   * in the same session. Unset = automatic: the method's Nth session of the week gets Session N.
+   */
+  methodSessionSlot?: number;
   // Source of parameter values: 'toolbox' = use blank grid, 'periodization' = use program method periodization
   parameterSource?: 'toolbox' | 'periodization';
   // Circuit block fields — present when this entry represents a circuit

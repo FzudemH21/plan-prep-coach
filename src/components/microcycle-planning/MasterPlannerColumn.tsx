@@ -64,6 +64,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { usePersistentFlags } from '@/hooks/usePersistentState';
+import { SessionSlotInline } from './SessionSlotPicker';
 
 interface TrainingDay {
   date: string;
@@ -150,6 +151,8 @@ interface MasterPlannerColumnProps {
   // New props for Phase 2 - editable notes and eachSide
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
   onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
+  /** "Values from": the periodization session the exercise takes its values from (undefined = automatic) */
+  onExerciseSessionSlotChange?: (exerciseId: string, slot: number | undefined) => void;
   /** An exercise's parameter visibility changed — kept on its distribution entry (copied with it) */
   onExerciseVisibilityChange?: (exerciseId: string, overrides: Record<string, boolean>) => void;
   /** A superset's rest (after its round / between its exercises) — set on all its exercises */
@@ -518,6 +521,7 @@ export function MasterPlannerColumn({
   totalWeeks = 6,
   onExerciseNotesChange,
   onExerciseEachSideChange,
+  onExerciseSessionSlotChange,
   onExerciseVisibilityChange,
   onSupersetRestChange,
   onExerciseOverridesReset,
@@ -714,7 +718,7 @@ export function MasterPlannerColumn({
   // Get parameters for an exercise from toolbox data
   const getExerciseParams = useCallback((exercise: ExerciseDistribution) => {
     if (!currentMesocycle || !parameterValues) {
-      return { storedParams: {}, methodParams: [] as MethodParameter[], chronologicalSessionIndex: 0 };
+      return { storedParams: {}, methodParams: [] as MethodParameter[], chronologicalSessionIndex: 0, sessionCount: 0 };
     }
 
     const trainingDay = trainingDays?.find(td => td.date === day.dateString);
@@ -854,7 +858,7 @@ export function MasterPlannerColumn({
     // Toolbox order (same as the Periodization Table)
     methodParams.sort((a, b) => tbIndex(a.name) - tbIndex(b.name));
 
-    return { storedParams, methodParams, chronologicalSessionIndex };
+    return { storedParams, methodParams, chronologicalSessionIndex, sessionCount };
   }, [currentMesocycle, parameterValues, trainingDays, day.dateString, toolboxData, weekNumber, getMicrocycleDates, allExerciseDistribution]);
 
   // Superset labels (A1, A2, B1 …) per session: letters in session order — sections top to bottom,
@@ -1725,6 +1729,15 @@ export function MasterPlannerColumn({
                                             {exercise.methodId}
                                             {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
                                           </p>
+                                          {!exercise.isCircuit && (
+                                            <div onClick={(e) => e.stopPropagation()}>
+                                              <SessionSlotInline
+                                                count={getExerciseParams(exercise).sessionCount}
+                                                slot={exercise.methodSessionSlot}
+                                                onChange={onExerciseSessionSlotChange ? (slot) => onExerciseSessionSlotChange(exercise.id || exercise.exerciseId, slot) : undefined}
+                                              />
+                                            </div>
+                                          )}
                                           {renderExerciseParams(exercise)}
                                           {/* Editable Each Side Toggle - below parameter grid */}
                                           <div className={cn("flex items-center gap-1.5 mt-1.5", exercise.isCircuit && "hidden")} onClick={(e) => e.stopPropagation()}>
@@ -1946,6 +1959,15 @@ export function MasterPlannerColumn({
                                   {exercise.methodId}
                                   {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
                                 </p>
+                                {!exercise.isCircuit && (
+                                  <div onClick={(e) => e.stopPropagation()}>
+                                    <SessionSlotInline
+                                      count={getExerciseParams(exercise).sessionCount}
+                                      slot={exercise.methodSessionSlot}
+                                      onChange={onExerciseSessionSlotChange ? (slot) => onExerciseSessionSlotChange(exercise.id || exercise.exerciseId, slot) : undefined}
+                                    />
+                                  </div>
+                                )}
                                 {renderExerciseParams(exercise)}
                                 {/* Editable Each Side Toggle - below parameter grid */}
                                 <div className={cn("flex items-center gap-1.5 mt-1.5", exercise.isCircuit && "hidden")} onClick={(e) => e.stopPropagation()}>
@@ -2059,6 +2081,15 @@ export function MasterPlannerColumn({
                         {exercise.methodId}
                         {exercise.categoryName && exercise.categoryName !== 'Uncategorized' && exercise.categoryName !== '' && ` • ${exercise.categoryName}`}
                       </p>
+                      {!exercise.isCircuit && (
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <SessionSlotInline
+                            count={getExerciseParams(exercise).sessionCount}
+                            slot={exercise.methodSessionSlot}
+                            onChange={onExerciseSessionSlotChange ? (slot) => onExerciseSessionSlotChange(exercise.id || exercise.exerciseId, slot) : undefined}
+                          />
+                        </div>
+                      )}
                       {renderExerciseParams(exercise)}
                       {/* Editable Each Side Toggle - below parameter grid */}
                       <div className={cn("flex items-center gap-1.5 mt-1.5", exercise.isCircuit && "hidden")} onClick={(e) => e.stopPropagation()}>

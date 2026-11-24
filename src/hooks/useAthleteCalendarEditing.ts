@@ -2018,6 +2018,15 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     setExerciseDistribution(prev => withExerciseVisibility(prev, exerciseId, overrides));
   }, []);
 
+  /** "Values from": the periodization session this placement takes its values from (undefined = automatic) */
+  const handleExerciseSessionSlotChange = useCallback((exerciseId: string, slot: number | undefined) => {
+    setExerciseDistribution(prev => prev.map(ex => {
+      if ((ex.id || ex.exerciseId) !== exerciseId) return ex;
+      const { methodSessionSlot: _old, ...rest } = ex;
+      return slot === undefined ? rest : { ...rest, methodSessionSlot: slot };
+    }));
+  }, []);
+
   /** This placement and every later placement of the same exercise (the following weeks) */
   const handleExerciseEachSideChange = useCallback((exerciseId: string, eachSide: boolean) => {
     setExerciseDistribution(prev => {
@@ -2498,6 +2507,7 @@ export function useAthleteCalendarEditing(selectedAssignmentId: string | null, a
     handleExerciseEachSideChange,
     handleExerciseVisibilityChange,
     setSessionNote,
+    handleExerciseSessionSlotChange,
     handleSupersetRestChange,
     syncExerciseNames,
     handleExerciseChange,

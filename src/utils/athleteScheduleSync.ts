@@ -17,6 +17,7 @@ import { evaluateFormula, parseNumeric } from '@/utils/formulaEvaluator';
 import { isRestIntensity } from '@/utils/intensityScale';
 import { dataIdFor, resolveDataScope } from '@/lib/dataScope';
 import { athleteVisibleNotes } from '@/utils/athleteNotes';
+import { pinnedSessionSlot } from '@/utils/sessionIndexUtils';
 
 /** Percentage units — values like 80 represent 0.80 and must be ÷100 before formula evaluation */
 const PCT_UNITS = new Set(['%', '%1RM', '%BW', '%maxV', '%maxHR']);
@@ -138,6 +139,8 @@ export interface SessionSummary {
 interface ExerciseEntry {
   id: string;
   exerciseId: string;
+  /** The method's periodization session chosen by the coach (0-based) — see ExerciseDistribution */
+  methodSessionSlot?: number;
   exerciseName?: string;
   methodId?: string;
   categoryName?: string;
@@ -526,6 +529,8 @@ export async function syncAthleteSchedule(
   for (const e of exercises) {
     const key = methodSlotKey(e);
     if (!key) continue;
+    // An exercise with a chosen session ("Values from") doesn't count for the automatic order
+    if (pinnedSessionSlot(e) !== undefined) continue;
     const slot = `${e.dayDate}#${e.sessionIndex ?? 0}`;
     const list = methodSlots.get(key) ?? [];
     if (!list.includes(slot)) list.push(slot);
@@ -533,6 +538,8 @@ export async function syncAthleteSchedule(
   }
   methodSlots.forEach(list => list.sort());
   const methodSessionIndexOf = (ex: ExerciseEntry): number => {
+    const pinned = pinnedSessionSlot(ex);
+    if (pinned !== undefined) return pinned;
     const list = methodSlots.get(methodSlotKey(ex)) ?? [];
     return Math.max(0, list.indexOf(`${ex.dayDate}#${ex.sessionIndex ?? 0}`));
   };
