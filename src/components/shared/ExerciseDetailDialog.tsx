@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Play, Video, ExternalLink, Link2, X, Pencil, Plus, TrendingUp, TrendingDown, GripVertical, Check } from 'lucide-react';
+import { Play, Video, ExternalLink, Link2, X, Pencil, Plus, TrendingUp, TrendingDown, GripVertical } from 'lucide-react';
 import { useCustomLibraries, CustomLibrary, CustomExercise, LibraryColumn, getNameColumnId, exerciseLibrariesOnly } from '@/contexts/CustomLibrariesContext';
 import { useExerciseProgressions, ProgressionDirection, ExerciseProgression } from '@/hooks/useExerciseProgressions';
 import { ExerciseLibraryPopup } from '@/components/microcycle-planning/ExerciseLibraryPopup';
@@ -121,8 +121,7 @@ export function ExerciseDetailDialog({
   const [localData, setLocalData] = useState<Record<string, any>>({});
   const [showVideoEmbed, setShowVideoEmbed] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  // Create mode: "Details" / "Assigned library" — the library the new exercise goes into (one)
-  const [createTab, setCreateTab] = useState<'details' | 'library'>('details');
+  // Create mode: the library the new exercise goes into (one)
   const [targetLibraryId, setTargetLibraryId] = useState<string | undefined>(libraryId);
 
   // Progressions & Regressions
@@ -289,7 +288,6 @@ export function ExerciseDetailDialog({
   useEffect(() => {
     if (isOpen && !hasInitialized.current) {
       hasInitialized.current = true;
-      setCreateTab('details');
       setTargetLibraryId(libraryId);
       setLocalName(exerciseName);
       setLocalDescription(description);
@@ -644,57 +642,6 @@ export function ExerciseDetailDialog({
             )}
           </DialogHeader>
 
-          {mode === 'create' && (
-            <div className="flex gap-1 border-b" role="tablist">
-              {([['details', 'Details'], ['library', 'Assigned library']] as const).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  role="tab"
-                  aria-selected={createTab === key}
-                  onClick={() => setCreateTab(key)}
-                  className={cn(
-                    '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
-                    createTab === key ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {mode === 'create' && createTab === 'library' ? (
-            <div className="flex-1 min-h-0 overflow-y-auto px-1 py-2" role="radiogroup" aria-label="Assigned library">
-              <div className="space-y-1.5">
-                {exerciseLibrariesOnly(libraries).sort((a, b) => a.name.localeCompare(b.name)).map(lib => {
-                  const selected = lib.id === targetLibraryId;
-                  return (
-                    <button
-                      key={lib.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      onClick={() => assignToLibrary(lib.id)}
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left transition-colors',
-                        selected ? 'border-primary bg-primary/5' : 'hover:bg-muted/50',
-                      )}
-                    >
-                      <span className={cn(
-                        'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border',
-                        selected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40',
-                      )}>
-                        {selected && <Check className="h-3 w-3" />}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{lib.name}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">{lib.exercises.length} exercises</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
           <div className="flex-1 min-h-0 overflow-y-auto px-1">
             <div className="space-y-6 px-1 pb-4">
               {/* Exercise Name - Editable in create/edit modes */}
@@ -707,6 +654,23 @@ export function ExerciseDetailDialog({
                     placeholder="Enter exercise name..."
                     className="font-medium"
                   />
+                </div>
+              )}
+
+              {/* New exercise: the library it goes into (one; the open one by default) */}
+              {mode === 'create' && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Library</Label>
+                  <Select value={targetLibraryId ?? ''} onValueChange={assignToLibrary}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Select a library..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {exerciseLibrariesOnly(libraries).sort((a, b) => a.name.localeCompare(b.name)).map(lib => (
+                        <SelectItem key={lib.id} value={lib.id}>{lib.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
 
@@ -1015,7 +979,6 @@ export function ExerciseDetailDialog({
               })()}
             </div>
           </div>
-          )}
 
           <DialogFooter className="mt-4">
             {!isEditable ? (

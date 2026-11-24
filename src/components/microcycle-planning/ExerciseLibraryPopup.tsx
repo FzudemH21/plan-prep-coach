@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Dialog, DialogPortal, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -113,14 +113,23 @@ export function ExerciseLibraryPopup({
 
   // When the popup opens: the caller's default library if given, otherwise the library the
   // coach last had open in this picker (remembered per browser), otherwise the first one.
+  // Only when it opens (or the open library is gone) — not on every library change: adding an
+  // exercise changes the libraries, and the picker jumped back to the default library (the new
+  // exercise was gone until the coach switched libraries and cleared the filters)
+  const openedRef = useRef(false);
   useEffect(() => {
-    if (!isOpen || exerciseLibraries.length === 0) return;
+    if (!isOpen) { openedRef.current = false; return; }
+    if (exerciseLibraries.length === 0) return;
+    const exists = (id: string | null | undefined): id is string => !!id && exerciseLibraries.some(lib => lib.id === id);
+    if (openedRef.current && (exists(activeTab) || activeTab === CIRCUITS_TAB)) return;
+    openedRef.current = true;
     let lastUsed: string | null = null;
     try { lastUsed = localStorage.getItem(LAST_LIBRARY_KEY); } catch { /* unavailable */ }
-    const exists = (id: string | null | undefined): id is string => !!id && exerciseLibraries.some(lib => lib.id === id);
     const target = exists(defaultLibraryId) ? defaultLibraryId : exists(lastUsed) ? lastUsed : exerciseLibraries[0].id;
     setActiveTab(target);
-  }, [isOpen, defaultLibraryId, exerciseLibraries]);
+  }, [isOpen, defaultLibraryId, exerciseLibraries, activeTab]);
+  // A new exercise to show when its library opens: its name searched, no column filters hiding it
+  const revealRef = useRef<{ libraryId: string; name: string } | null>(null);
 
   // Remember the library in use so "Add exercises" reopens it next time
   useEffect(() => {
@@ -308,9 +317,11 @@ export function ExerciseLibraryPopup({
   useEffect(() => {
     if (!isOpen || !activeTab) return;
     const saved = readSavedFilters()[activeTab];
+    const reveal = revealRef.current?.libraryId === activeTab ? revealRef.current : null;
+    revealRef.current = null;
     setFilterState({
-      search: '',
-      columnFilters: saved?.columnFilters ?? {},
+      search: reveal?.name ?? '',
+      columnFilters: reveal ? {} : (saved?.columnFilters ?? {}),
       sortColumn: saved?.sortColumn ?? null,
       sortDirection: saved?.sortDirection ?? 'asc',
     });
@@ -443,9 +454,14 @@ export function ExerciseLibraryPopup({
       description: data.description || undefined,
     });
     setSelectedItems(prev => (singleSelect ? new Set([created.id]) : new Set(prev).add(created.id)));
-    if (lib.id !== activeTab) setActiveTab(lib.id);
-    // Shown in the list (the search finds it), ticked
-    setFilterState(prev => ({ ...prev, search: data.name }));
+    // Shown in its library right away, ticked: its name searched and no column filter hiding it
+    // (the saved filters stay — they come back next time)
+    if (lib.id !== activeTab) {
+      revealRef.current = { libraryId: lib.id, name: data.name };
+      setActiveTab(lib.id);
+    } else {
+      setFilterState(prev => ({ ...prev, search: data.name, columnFilters: {} }));
+    }
     setIsNewExerciseDialogOpen(false);
     setNewExerciseName('');
     toast({ title: 'Exercise created', description: `"${data.name}" was added to ${lib.name} and is selected.` });
