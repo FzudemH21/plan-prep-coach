@@ -71,6 +71,9 @@ interface EnhancedExerciseDistributionProps {
   onPasteSession?: (dayDate: string) => void;
   onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
   onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
+  /** A session dragged to another day / position — everything of it moves along (methods, exercises,
+   *  sections, supersets, name, intensity, notes) */
+  onMoveSession?: (fromDate: string, fromIndex: number, toDate: string, toIndex: number) => void;
   onUpdateTrainingDay?: (dayDate: string, updates: Partial<TrainingDay>) => void;
   /** Method distribution (step 1) assignments — copies mirror them, see mirrorDayStructure */
   onDayMethodAssignmentsChange?: (assignments: Record<string, string[]>) => void;
@@ -124,6 +127,7 @@ export function EnhancedExerciseDistribution({
   onPasteSession,
   onMoveSessionUp,
   onMoveSessionDown,
+  onMoveSession,
   onUpdateTrainingDay,
   dayMethodAssignments,
   onDayMethodAssignmentsChange,
@@ -659,6 +663,16 @@ export function EnhancedExerciseDistribution({
     const { source, destination, draggableId, type } = result;
 
     if (!destination) return;
+
+    // A session dragged to another day (or another position on its day)
+    if (type === 'SESSION') {
+      const dayOf = (droppableId: string) => droppableId.replace('day-sessions::', '');
+      const fromDate = dayOf(source.droppableId);
+      const toDate = dayOf(destination.droppableId);
+      if (fromDate === toDate && source.index === destination.index) return;
+      onMoveSession?.(fromDate, source.index, toDate, destination.index);
+      return;
+    }
 
     // Handle dragging from library to session area - auto-create section if needed
     if (type === 'EXERCISE' && source.droppableId.startsWith('library-') && destination.droppableId.startsWith('session-')) {
@@ -2696,8 +2710,15 @@ export function EnhancedExerciseDistribution({
                               </div>
                             )}
 
-                            {/* Sessions - Multiple can exist under one day */}
+                            {/* Sessions - Multiple can exist under one day; dragged by their grip to another day */}
                             <div className="flex flex-col gap-2">
+                              <Droppable droppableId={`day-sessions::${day.date}`} type="SESSION" isDropDisabled={!onMoveSession}>
+                                {(dropProvided, dropSnapshot) => (
+                              <div
+                                ref={dropProvided.innerRef}
+                                {...dropProvided.droppableProps}
+                                className={cn('flex flex-col gap-2 rounded-md', dropSnapshot.isDraggingOver && 'bg-primary/5 ring-2 ring-primary/30', sessionsCount === 0 && 'min-h-[48px]')}
+                              >
                               {Array.from({ length: sessionsCount }).map((_, sessionIndex) => {
                                 const sessionExercises = exerciseDistribution
                                   .filter(ex => ex.dayDate === day.date && ex.sessionIndex === sessionIndex)
@@ -2733,9 +2754,17 @@ export function EnhancedExerciseDistribution({
                                 })();
 
                                 return (
-                                  <SessionColumnView
+                                  <Draggable
                                     key={`${day.date}-${sessionIndex}`}
+                                    draggableId={`session::${day.date}::${sessionIndex}`}
+                                    index={sessionIndex}
+                                    isDragDisabled={!onMoveSession}
+                                  >
+                                    {(dragProvided) => (
+                                  <div ref={dragProvided.innerRef} {...dragProvided.draggableProps}>
+                                  <SessionColumnView
                                     day={day}
+                                    sessionDragHandleProps={onMoveSession ? dragProvided.dragHandleProps : null}
                                     sessionIndex={sessionIndex}
                                     methodMatchState={methodMatchState}
                                     assignedMethods={sessionMethods}
@@ -2795,8 +2824,15 @@ export function EnhancedExerciseDistribution({
                                     methodOptionsByExercise={methodOptionsByExercise}
                                     onChangeExerciseMethod={handleChangeExerciseMethod}
                                   />
+                                  </div>
+                                    )}
+                                  </Draggable>
                                 );
                               })}
+                              {dropProvided.placeholder}
+                              </div>
+                                )}
+                              </Droppable>
                               
                               <Button
                                 variant="outline"

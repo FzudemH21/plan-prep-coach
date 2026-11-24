@@ -4091,6 +4091,7 @@ export default function MicrocyclePlanningPage() {
           onPasteSession={handlePasteSession}
           onMoveSessionUp={handleMoveSessionUp}
           onMoveSessionDown={handleMoveSessionDown}
+          onMoveSession={handleMoveSessionAcrossDays}
           onUpdateTrainingDay={handleUpdateTrainingDay}
           onDayMethodAssignmentsChange={setDayMethodAssignments}
           dayMethodAssignments={dayMethodAssignments}

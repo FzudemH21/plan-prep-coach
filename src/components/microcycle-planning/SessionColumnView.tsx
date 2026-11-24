@@ -2,7 +2,7 @@ import { SupersetRestPanel, supersetRestOf } from './SupersetRestControl';
 import { ParameterVisibilityPanel, visibleParameterCount } from './ParameterVisibilityPopover';
 import React, { useState, useMemo, useRef } from 'react';
 import { BorgLevel, BORG_LEVELS, getBorgBg, getBorgFg, getBorgLabel, getBorgLabelFull, migrateLegacyIntensity } from '@/utils/intensityScale';
-import { Droppable, Draggable } from '@hello-pangea/dnd';
+import { Droppable, Draggable, type DraggableProvidedDragHandleProps } from '@hello-pangea/dnd';
 import { CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -74,6 +74,8 @@ interface SessionColumnViewProps {
   onCopySession?: (dayDate: string, sessionIndex: number) => void;
   onMoveSessionUp?: (dayDate: string, sessionIndex: number) => void;
   onMoveSessionDown?: (dayDate: string, sessionIndex: number) => void;
+  /** Drag handle of the session (drag it to another day or position) */
+  sessionDragHandleProps?: DraggableProvidedDragHandleProps | null;
   onExerciseNotesChange?: (exerciseId: string, notes: string) => void;
   /** Toggle "each side" (unilateral: the reps count per side) */
   onExerciseEachSideChange?: (exerciseId: string, eachSide: boolean) => void;
@@ -137,6 +139,7 @@ export function SessionColumnView({
   onCopySession,
   onMoveSessionUp,
   onMoveSessionDown,
+  sessionDragHandleProps,
   onExerciseNotesChange,
   onExerciseEachSideChange,
   sessionSlotCountFor,
@@ -651,6 +654,15 @@ export function SessionColumnView({
             <div className="flex items-center justify-between gap-2">
               {/* Left side: fold toggle + editable session name */}
               <div className="flex items-center gap-1 flex-1">
+                {sessionDragHandleProps && (
+                  <span
+                    {...sessionDragHandleProps}
+                    className="-ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
+                    title="Drag to another day or position"
+                  >
+                    <GripVertical className="h-4 w-4" />
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={toggleCollapsed}
