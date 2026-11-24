@@ -1651,7 +1651,15 @@ export function EnhancedExerciseDistribution({
   const visibilityParamsFor = useCallback((exercise: ExerciseDistribution) => {
     if (exercise.isCircuit) return [];
     const planned = plannedParamsOf(exercise);
-    return methodVisibilityParams(toolboxForVisibility?.entries ?? [], exercise.methodId, name => hasParam(planned, name));
+    // A calculated parameter (e.g. Weight = %1RM × e1RM) counts as present: the session window,
+    // the Master Planner and the athlete app show it by default — before, it showed as hidden here
+    // and appeared there
+    const [main = '', sub = ''] = exercise.methodId.split('::')[0].split(' - ');
+    const calculated = new Set((toolboxForVisibility?.entries ?? [])
+      .filter(e => e.category === main && (sub ? e.subCategory === sub : !e.subCategory) && e.isCalculated && !!e.formula)
+      .map(e => e.parameterName));
+    return methodVisibilityParams(toolboxForVisibility?.entries ?? [], exercise.methodId,
+      name => hasParam(planned, name) || calculated.has(name));
   }, [toolboxForVisibility, plannedParamsOf]);
   const visibilityOf = useCallback((exercise: ExerciseDistribution) =>
     placementVisibility(readSessionMeta(mesocycle.id, exercise.dayDate, exercise.sessionIndex), exercise),
